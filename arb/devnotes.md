@@ -161,3 +161,22 @@ outside material enters through `technical_reports`.
 The ACP-side validation errors now carry the attempted count and the remaining
 side capacity.  That keeps the model close to the actual engine rule and avoids
 wasting retries on blind correction attempts.
+
+### Configurable attorney model and capability-aware prompts
+
+`aar case` now accepts `--attorney-model`.  The value is an explicit xproxy
+model id such as `openai://gpt-5` or `openai://gpt-5?tools=search`.  The
+runner validates that model id up front, stages it into the temporary PI home,
+and records the effective attorney model and search flag in the run metadata.
+
+The attorney prompts no longer hardcode web-search availability.  They render
+one capability section from the configured model and one phase-specific
+investigation section that changes when native search is unavailable.  That
+keeps one prompt family while making the runtime state explicit.  It also
+removes the earlier mismatch where the prompt told counsel to use native search
+even when the configured model lacked it.
+
+The `arb` Makefile now chooses attorney models explicitly by example.  `demo`,
+`ex2`, and `ex3` use `openai://gpt-5` without native search.  `ex4` keeps
+`openai://gpt-5?tools=search`, because that example depends on public-source
+investigation.

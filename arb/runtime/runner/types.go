@@ -39,6 +39,7 @@ type Config struct {
 	OutputDir        string
 	CommonRoot       string
 	CouncilPoolPath  string
+	AttorneyModel    string
 	Policy           Policy
 	Runtime          RuntimeLimits
 	XProxyConfigPath string
@@ -58,6 +59,8 @@ type Result struct {
 	Resolution       string         `json:"resolution"`
 	Complaint        spec.Complaint `json:"complaint"`
 	EvidenceStandard string         `json:"evidence_standard"`
+	AttorneyModel    string         `json:"attorney_model"`
+	AttorneySearch   bool           `json:"attorney_search_enabled"`
 	CaseFiles        []CaseFileMeta `json:"case_files"`
 	Council          []CouncilSeat  `json:"council"`
 	Events           []Event        `json:"events"`

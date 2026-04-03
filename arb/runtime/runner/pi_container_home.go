@@ -7,16 +7,42 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	xproxy "adjudication/common/xproxy"
 )
 
-const attorneySearchModel = "openai://gpt-5?tools=search"
+const DefaultAttorneyModel = "openai://gpt-5?tools=search"
 
 func usesPIContainerWrapper(command string) bool {
 	base := strings.TrimSpace(filepath.Base(command))
 	return base == "acp-podman.sh" || base == "pi-podman.sh"
 }
 
-func prepareEphemeralPIHome(commonRoot string) (string, func() error, error) {
+func ParseAttorneyModelForCLI(model string) (xproxy.ModelSpec, error) {
+	return parseAttorneyModel(model)
+}
+
+func parseAttorneyModel(model string) (xproxy.ModelSpec, error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		model = DefaultAttorneyModel
+	}
+	spec, err := xproxy.ParseXProxyModel(model)
+	if err != nil {
+		return xproxy.ModelSpec{}, fmt.Errorf("parse attorney model %q: %w", model, err)
+	}
+	return spec, nil
+}
+
+func prepareEphemeralPIHome(commonRoot string, model string) (string, func() error, error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		model = DefaultAttorneyModel
+	}
+	spec, err := parseAttorneyModel(model)
+	if err != nil {
+		return "", nil, err
+	}
 	homeDir, err := os.MkdirTemp("", "agentarbitration-pi-home-")
 	if err != nil {
 		return "", nil, fmt.Errorf("create PI home dir: %w", err)
@@ -42,7 +68,7 @@ func prepareEphemeralPIHome(commonRoot string) (string, func() error, error) {
 	if err != nil {
 		return fail(fmt.Errorf("read pi settings: %w", err))
 	}
-	settingsRaw, err = stageAttorneyPISettings(settingsRaw, attorneySearchModel)
+	settingsRaw, err = stageAttorneyPISettings(settingsRaw, model)
 	if err != nil {
 		return fail(err)
 	}
@@ -53,7 +79,7 @@ func prepareEphemeralPIHome(commonRoot string) (string, func() error, error) {
 	if err != nil {
 		return fail(fmt.Errorf("read pi model catalog: %w", err))
 	}
-	modelsRaw, err = stageAttorneyPIModelCatalog(modelsRaw, attorneySearchModel)
+	modelsRaw, err = stageAttorneyPIModelCatalog(modelsRaw, model, spec)
 	if err != nil {
 		return fail(err)
 	}
@@ -80,7 +106,7 @@ func stageAttorneyPISettings(raw []byte, model string) ([]byte, error) {
 	return append(updated, '\n'), nil
 }
 
-func stageAttorneyPIModelCatalog(raw []byte, model string) ([]byte, error) {
+func stageAttorneyPIModelCatalog(raw []byte, model string, _ xproxy.ModelSpec) ([]byte, error) {
 	var catalog map[string]any
 	if err := json.Unmarshal(raw, &catalog); err != nil {
 		return nil, fmt.Errorf("parse pi model catalog: %w", err)

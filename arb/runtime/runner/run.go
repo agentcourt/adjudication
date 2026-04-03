@@ -26,6 +26,13 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 	if cfg.Engine.Command == nil {
 		return Result{}, fmt.Errorf("lean engine command is required")
 	}
+	if strings.TrimSpace(cfg.AttorneyModel) == "" {
+		cfg.AttorneyModel = DefaultAttorneyModel
+	}
+	attorneyModelSpec, err := parseAttorneyModel(cfg.AttorneyModel)
+	if err != nil {
+		return Result{}, err
+	}
 	if err := ValidatePolicy(cfg.Policy); err != nil {
 		return Result{}, err
 	}
@@ -94,6 +101,8 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 	if err := rc.recordEvent("run_initialized", "system", currentPhase(rc.state), map[string]any{
 		"complaint":         complaint,
 		"evidence_standard": cfg.Policy.EvidenceStandard,
+		"attorney_model":    cfg.AttorneyModel,
+		"attorney_search":   attorneyModelSpec.SearchRequested,
 		"council":           council,
 	}); err != nil {
 		return Result{}, err
@@ -114,6 +123,8 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 				Resolution:       currentResolution(rc.state),
 				Complaint:        complaint,
 				EvidenceStandard: currentEvidenceStandard(rc.state, cfg.Policy),
+				AttorneyModel:    cfg.AttorneyModel,
+				AttorneySearch:   attorneyModelSpec.SearchRequested,
 				CaseFiles:        caseFileMetas(caseFiles),
 				Council:          council,
 				Events:           rc.events,

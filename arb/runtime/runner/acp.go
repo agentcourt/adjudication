@@ -323,7 +323,7 @@ func (rc *runContext) ensureACPSession(ctx context.Context, role string, session
 	workspaceDir := ""
 	workProductDir := ""
 	if usesPIContainerWrapper(rc.cfg.ACPCommand) {
-		containerHomeDir, closeHome, err := prepareEphemeralPIHome(rc.cfg.CommonRoot)
+		containerHomeDir, closeHome, err := prepareEphemeralPIHome(rc.cfg.CommonRoot, rc.cfg.AttorneyModel)
 		if err != nil {
 			return nil, err
 		}
@@ -672,6 +672,7 @@ func (rc *runContext) attorneyView(opportunity Opportunity) map[string]any {
 	return map[string]any{
 		"proposition":       rc.complaint.Proposition,
 		"evidence_standard": currentEvidenceStandard(rc.state, rc.cfg.Policy),
+		"attorney_model":    rc.cfg.AttorneyModel,
 		"phase":             currentPhase(rc.state),
 		"opportunity": map[string]any{
 			"id":            opportunity.ID,
@@ -695,6 +696,39 @@ func (rc *runContext) attorneyView(opportunity Opportunity) map[string]any {
 	}
 }
 
+func (rc *runContext) attorneyCapabilitySection() (string, error) {
+	spec, err := parseAttorneyModel(rc.cfg.AttorneyModel)
+	if err != nil {
+		return "", err
+	}
+	if spec.SearchRequested {
+		return "Model capabilities for this run:\nNative web search through the model is available. If public investigation matters, use it. To invoke it, ask explicitly for a web search on the precise question, topic, names, dates, terms, and source type you need.", nil
+	}
+	return "Model capabilities for this run:\nNative web search through the model is not available. Do not ask the model to browse the web, retrieve public sources, or inspect URLs on its own. Use the current record, visible case files, local analysis, and other allowed runtime tools instead.", nil
+}
+
+func (rc *runContext) attorneyPhaseInvestigationSection(phase string) (string, error) {
+	spec, err := parseAttorneyModel(rc.cfg.AttorneyModel)
+	if err != nil {
+		return "", err
+	}
+	searchEnabled := spec.SearchRequested
+	switch phase {
+	case "arguments":
+		if searchEnabled {
+			return "When a decisive factual question can likely be resolved by web search, source retrieval, local analysis, or a direct technical check, do the work.\nYou may search for evidence, inspect source material, analyze data, and use native web search through the model when public sources matter.\nLook for related evidence, not only favorable evidence. Search for the full source behind an excerpt, the official rule behind a disputed interpretation, the primary record behind a summary, and contemporaneous materials that fix timing, authorship, location, or sequence.\nExamples of useful searches: the full transcript behind a quoted line, the official rules or market guidance behind a disputed term, source audio or video behind a paraphrased event, a filing or docket entry behind a claim about procedure, metadata or timestamps behind a timing dispute, or the original file needed for a technical verification.\nGood web-search instruction: \"Search the web for the official market rules for X, dated around Y, and prefer the primary source.\"\nBad web-search instruction: \"Look around online and tell me what people say.\"", nil
+		}
+		return "When a decisive factual question can likely be resolved from the current record, visible case files, local analysis, or a direct technical check, do the work.\nYou may inspect source material already in the record, analyze data, and use local tools when they materially sharpen a disputed point.\nLook for related evidence, not only favorable evidence. Read the full source behind an excerpt, the governing rule behind a disputed interpretation, the primary record behind a summary, and the exact file needed for a technical verification.\nIf a decisive point depends on public material that you cannot retrieve in this run, say so and narrow the claim to what the record and your local analysis support.", nil
+	case "rebuttals":
+		if searchEnabled {
+			return "If a targeted investigation would materially test the opponent's strongest factual premise, run it here.\nYou may do targeted additional investigation here if it directly helps answer those points.\nUse web search, source retrieval, local analysis, or direct technical checks where they bear directly on the opponent's position.\nSearch for related evidence that bears on the opponent's key premise. Examples: the full source behind an excerpt they relied on, the rule or clarification behind their interpretation, the original file behind a technical claim, or contemporaneous materials that fix timing or authorship.", nil
+		}
+		return "If a targeted investigation would materially test the opponent's strongest factual premise, run it here.\nYou may do targeted additional investigation here if it directly helps answer those points.\nUse source material already in the record, visible case files, local analysis, or direct technical checks where they bear directly on the opponent's position.\nSearch is not available through the model in this run. If answering the point would require new public-source retrieval, say so and limit the rebuttal to what the present record and your local checks support.", nil
+	default:
+		return "", nil
+	}
+}
+
 func (rc *runContext) buildAttorneyPrompt(opportunity Opportunity) (string, error) {
 	view := rc.attorneyView(opportunity)
 	visibleFilesSection := ""
@@ -707,12 +741,17 @@ func (rc *runContext) buildAttorneyPrompt(opportunity Opportunity) (string, erro
 	if usesPIContainerWrapper(rc.cfg.ACPCommand) {
 		workProductSection = "Private work product: Use `/home/user/work-product/` for internal notes, timelines, source leads, adverse facts, unresolved questions, and draft analyses. This directory is not part of the record unless you later turn material from it into an exhibit or technical report. Its contents may be exported after the proceeding for review.\n"
 	}
+	capabilitySection, err := rc.attorneyCapabilitySection()
+	if err != nil {
+		return "", err
+	}
 	common, err := renderPromptFile("attorney-common.md", map[string]string{
 		"ROLE":                       opportunity.Role,
 		"PHASE":                      opportunity.Phase,
 		"OBJECTIVE":                  opportunity.Objective,
 		"PROPOSITION":                rc.complaint.Proposition,
 		"EVIDENCE_STANDARD":          currentEvidenceStandard(rc.state, rc.cfg.Policy),
+		"MODEL_CAPABILITIES_SECTION": capabilitySection,
 		"CURRENT_RECORD":             marshalIndented(view["record"]),
 		"LIMITS_SECTION":             rc.attorneyLimitsSection(opportunity),
 		"COUNCIL":                    marshalIndented(view["council"]),
@@ -724,11 +763,17 @@ func (rc *runContext) buildAttorneyPrompt(opportunity Opportunity) (string, erro
 	if err != nil {
 		return "", err
 	}
+	phaseInvestigationSection, err := rc.attorneyPhaseInvestigationSection(opportunity.Phase)
+	if err != nil {
+		return "", err
+	}
 	phaseFile, err := attorneyPromptFile(opportunity.Phase)
 	if err != nil {
 		return "", err
 	}
-	phaseText, err := renderPromptFile(phaseFile, map[string]string{})
+	phaseText, err := renderPromptFile(phaseFile, map[string]string{
+		"PHASE_INVESTIGATION_SECTION": phaseInvestigationSection,
+	})
 	if err != nil {
 		return "", err
 	}

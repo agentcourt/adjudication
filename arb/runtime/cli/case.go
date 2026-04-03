@@ -41,6 +41,7 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	commonRoot := fs.String("common-root", defaultCommonRoot(), "Path to the sibling shared common directory")
 	legacyCommonRoot := fs.String("agentcourt-root", "", "Deprecated alias for --common-root")
 	councilPool := fs.String("council-pool", "", "Council model/persona pool file. Default: <common-root>/etc/personas.csv")
+	attorneyModel := fs.String("attorney-model", runner.DefaultAttorneyModel, "Attorney ACP model id. Use an explicit xproxy model such as openai://gpt-5 or openai://gpt-5?tools=search")
 	acpCommand := fs.String("acp-command", "", "ACP command. Default: <common-root>/pi-container/acp-podman.sh")
 	xproxyConfig := fs.String("xproxy-config", "", "xproxy config path. Default: <common-root>/etc/xproxy.json")
 	xproxyPort := fs.Int("xproxy-port", 18459, "xproxy port")
@@ -108,6 +109,10 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err := runner.ValidateRuntimeLimits(runtimeLimits); err != nil {
 		return reportCaseError(stdout, err)
 	}
+	effectiveAttorneyModel := strings.TrimSpace(*attorneyModel)
+	if _, err := runner.ParseAttorneyModelForCLI(effectiveAttorneyModel); err != nil {
+		return reportCaseError(stdout, err)
+	}
 	councilPoolPath := strings.TrimSpace(*councilPool)
 	if councilPoolPath == "" {
 		councilPoolPath = filepath.Join(commonRootResolved, "etc", "personas.csv")
@@ -135,6 +140,7 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		OutputDir:        *outDir,
 		CommonRoot:       commonRootResolved,
 		CouncilPoolPath:  councilPoolPath,
+		AttorneyModel:    effectiveAttorneyModel,
 		Policy:           policy,
 		Runtime:          runtimeLimits,
 		XProxyConfigPath: xproxyConfigPath,

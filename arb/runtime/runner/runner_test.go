@@ -392,14 +392,66 @@ func TestBuildAttorneyPromptStatesCouncilForum(t *testing.T) {
 	if !strings.Contains(prompt, "Text limit for this submission: 4000 characters.") {
 		t.Fatalf("prompt did not state the opening text limit:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "Do not search only for support.  Search for related evidence that could confirm, limit, qualify, or defeat your theory.") {
+	if !strings.Contains(prompt, "Do not investigate only for support.  Look for related evidence that could confirm, limit, qualify, or defeat your theory.") {
 		t.Fatalf("prompt did not require related-evidence search:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "To use native web search through the model, ask explicitly for a web search on the precise question, topic, names, dates, terms, and source type you need.") {
+	if !strings.Contains(prompt, "Native web search through the model is available.") {
+		t.Fatalf("prompt did not state search availability:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "To invoke it, ask explicitly for a web search on the precise question, topic, names, dates, terms, and source type you need.") {
 		t.Fatalf("prompt did not explain how to invoke native web search:\n%s", prompt)
 	}
 	if strings.Contains(prompt, "Visible case files:") {
 		t.Fatalf("opening prompt should not list visible case files:\n%s", prompt)
+	}
+}
+
+func TestBuildAttorneyPromptStatesWhenSearchIsUnavailable(t *testing.T) {
+	origPromptBaseDir := promptBaseDir
+	promptBaseDir = filepath.Join("..", "..", "prompts")
+	defer func() { promptBaseDir = origPromptBaseDir }()
+	rc := &runContext{
+		cfg: Config{
+			Policy:        DefaultPolicy(),
+			AttorneyModel: "openai://gpt-5",
+		},
+		complaint: spec.Complaint{
+			Proposition: "P",
+		},
+		state: map[string]any{
+			"policy": map[string]any{
+				"evidence_standard": "preponderance",
+			},
+			"case": map[string]any{
+				"phase":             "openings",
+				"openings":          []map[string]any{},
+				"arguments":         []map[string]any{},
+				"rebuttals":         []map[string]any{},
+				"surrebuttals":      []map[string]any{},
+				"closings":          []map[string]any{},
+				"offered_files":     []map[string]any{},
+				"technical_reports": []map[string]any{},
+			},
+		},
+	}
+	prompt, err := rc.buildAttorneyPrompt(Opportunity{
+		ID:           "openings:plaintiff",
+		Role:         "plaintiff",
+		Phase:        "openings",
+		Objective:    "plaintiff opening statement",
+		AllowedTools: []string{"record_opening_statement"},
+	})
+	if err != nil {
+		t.Fatalf("buildAttorneyPrompt returned error: %v", err)
+	}
+	if !strings.Contains(prompt, "Native web search through the model is not available.") {
+		t.Fatalf("prompt did not state search unavailability:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Do not ask the model to browse the web, retrieve public sources, or inspect URLs on its own.") {
+		t.Fatalf("prompt did not forbid model-side web retrieval:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "ask explicitly for a web search") {
+		t.Fatalf("prompt still described native web search invocation:\n%s", prompt)
 	}
 }
 
@@ -561,9 +613,6 @@ func TestBuildAttorneyPromptConstrainsArgumentExperiments(t *testing.T) {
 	if !strings.Contains(prompt, "You may search for evidence, inspect source material, analyze data, and use native web search through the model when public sources matter.") {
 		t.Fatalf("argument prompt did not allow investigation:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "To use native web search through the model, ask specifically for a web search on the exact issue you need to resolve.") {
-		t.Fatalf("argument prompt did not explain how to invoke native web search:\n%s", prompt)
-	}
 	if !strings.Contains(prompt, "When a decisive factual question can likely be resolved by web search, source retrieval, local analysis, or a direct technical check, do the work.") {
 		t.Fatalf("argument prompt did not require decisive investigation:\n%s", prompt)
 	}
@@ -593,6 +642,56 @@ func TestBuildAttorneyPromptConstrainsArgumentExperiments(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "Outside material that is not already a visible case file belongs in technical_reports, not offered_files.") {
 		t.Fatalf("argument prompt did not distinguish technical reports from offered files:\n%s", prompt)
+	}
+}
+
+func TestBuildAttorneyPromptConstrainsArgumentExperimentsWithoutSearch(t *testing.T) {
+	origPromptBaseDir := promptBaseDir
+	promptBaseDir = filepath.Join("..", "..", "prompts")
+	defer func() { promptBaseDir = origPromptBaseDir }()
+	rc := &runContext{
+		cfg: Config{
+			Policy:        DefaultPolicy(),
+			AttorneyModel: "openai://gpt-5",
+		},
+		complaint: spec.Complaint{
+			Proposition: "P",
+		},
+		caseFiles: []CaseFile{{FileID: "instructions.txt", Name: "instructions.txt", MimeType: "text/plain", TextReadable: true}},
+		state: map[string]any{
+			"policy": map[string]any{
+				"evidence_standard": "preponderance",
+			},
+			"case": map[string]any{
+				"phase":             "arguments",
+				"openings":          []map[string]any{},
+				"arguments":         []map[string]any{},
+				"rebuttals":         []map[string]any{},
+				"surrebuttals":      []map[string]any{},
+				"closings":          []map[string]any{},
+				"offered_files":     []map[string]any{},
+				"technical_reports": []map[string]any{},
+			},
+		},
+	}
+	prompt, err := rc.buildAttorneyPrompt(Opportunity{
+		ID:           "arguments:plaintiff",
+		Role:         "plaintiff",
+		Phase:        "arguments",
+		Objective:    "plaintiff merits argument",
+		AllowedTools: []string{"submit_argument"},
+	})
+	if err != nil {
+		t.Fatalf("buildAttorneyPrompt returned error: %v", err)
+	}
+	if !strings.Contains(prompt, "If a decisive point depends on public material that you cannot retrieve in this run, say so and narrow the claim to what the record and your local analysis support.") {
+		t.Fatalf("argument prompt did not constrain unsupported public retrieval:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Native web search through the model is not available.") {
+		t.Fatalf("argument prompt did not state search unavailability:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "Good web-search instruction:") {
+		t.Fatalf("argument prompt still included web-search examples:\n%s", prompt)
 	}
 }
 
@@ -646,9 +745,6 @@ func TestBuildAttorneyPromptAllowsRebuttalSupplementalMaterials(t *testing.T) {
 	if !strings.Contains(prompt, "If a targeted investigation would materially test the opponent's strongest factual premise, run it here.") {
 		t.Fatalf("rebuttal prompt did not require targeted testing:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "To use native web search through the model, ask for a web search on the exact premise you need to test and name the source type most likely to answer it.") {
-		t.Fatalf("rebuttal prompt did not explain how to invoke native web search:\n%s", prompt)
-	}
 	if !strings.Contains(prompt, "Search for related evidence that bears on the opponent's key premise.") {
 		t.Fatalf("rebuttal prompt did not encourage related-evidence search:\n%s", prompt)
 	}
@@ -672,6 +768,55 @@ func TestBuildAttorneyPromptAllowsRebuttalSupplementalMaterials(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "introduce it through technical_reports") {
 		t.Fatalf("rebuttal prompt did not require outside material to enter through technical reports:\n%s", prompt)
+	}
+}
+
+func TestBuildAttorneyPromptConstrainsRebuttalWithoutSearch(t *testing.T) {
+	origPromptBaseDir := promptBaseDir
+	promptBaseDir = filepath.Join("..", "..", "prompts")
+	defer func() { promptBaseDir = origPromptBaseDir }()
+	rc := &runContext{
+		cfg: Config{
+			Policy:        DefaultPolicy(),
+			AttorneyModel: "openai://gpt-5",
+		},
+		complaint: spec.Complaint{
+			Proposition: "P",
+		},
+		state: map[string]any{
+			"policy": map[string]any{
+				"evidence_standard": "preponderance",
+			},
+			"case": map[string]any{
+				"phase":             "rebuttals",
+				"openings":          []map[string]any{},
+				"arguments":         []map[string]any{},
+				"rebuttals":         []map[string]any{},
+				"surrebuttals":      []map[string]any{},
+				"closings":          []map[string]any{},
+				"offered_files":     []map[string]any{},
+				"technical_reports": []map[string]any{},
+			},
+		},
+	}
+	prompt, err := rc.buildAttorneyPrompt(Opportunity{
+		ID:           "rebuttals:plaintiff",
+		Role:         "plaintiff",
+		Phase:        "rebuttals",
+		Objective:    "plaintiff rebuttal",
+		AllowedTools: []string{"submit_rebuttal", "pass_phase_opportunity"},
+	})
+	if err != nil {
+		t.Fatalf("buildAttorneyPrompt returned error: %v", err)
+	}
+	if !strings.Contains(prompt, "Search is not available through the model in this run.") {
+		t.Fatalf("rebuttal prompt did not state search unavailability:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "If answering the point would require new public-source retrieval, say so and limit the rebuttal to what the present record and your local checks support.") {
+		t.Fatalf("rebuttal prompt did not constrain unsupported public retrieval:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "exact premise you need to test") {
+		t.Fatalf("rebuttal prompt still included native web-search instructions:\n%s", prompt)
 	}
 }
 
