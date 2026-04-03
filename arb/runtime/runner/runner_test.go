@@ -63,6 +63,27 @@ func TestLoadCaseFilesPreservesTrailingNewline(t *testing.T) {
 	}
 }
 
+func TestLoadCaseFilesAllowsNoUsableFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "situation.md"), []byte("# Proposition\n\nP\n"), 0o644); err != nil {
+		t.Fatalf("write situation: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "complaint.md"), []byte("# Proposition\n\nP\n"), 0o644); err != nil {
+		t.Fatalf("write complaint: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("note\n"), 0o644); err != nil {
+		t.Fatalf("write readme: %v", err)
+	}
+
+	files, err := loadCaseFiles(dir)
+	if err != nil {
+		t.Fatalf("loadCaseFiles returned error: %v", err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("loadCaseFiles returned %d files, want 0", len(files))
+	}
+}
+
 func TestLoadCaseFilesFromPaths(t *testing.T) {
 	dir := t.TempDir()
 	txtPath := filepath.Join(dir, "instructions.txt")

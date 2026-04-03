@@ -83,9 +83,6 @@ func loadCaseFiles(dir string) ([]CaseFile, error) {
 	slices.SortFunc(out, func(a, b CaseFile) int {
 		return strings.Compare(a.FileID, b.FileID)
 	})
-	if len(out) == 0 {
-		return nil, fmt.Errorf("no usable case files found in %s", dir)
-	}
 	return out, nil
 }
 
