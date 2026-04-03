@@ -1,0 +1,6 @@
+*~
+.bin/
+.cache/
+out/
+engine/.lake/
+task.md~

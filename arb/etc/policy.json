@@ -1,0 +1,18 @@
+{
+  "council_size": 5,
+  "evidence_standard": "Preponderance of the evidence.",
+  "required_votes_for_decision": 3,
+  "max_deliberation_rounds": 3,
+  "max_opening_chars": 4000,
+  "max_argument_chars": 6000,
+  "max_rebuttal_chars": 4000,
+  "max_surrebuttal_chars": 4000,
+  "max_closing_chars": 5000,
+  "max_exhibits_per_filing": 9,
+  "max_exhibits_per_side": 12,
+  "max_exhibit_bytes": 131072,
+  "max_reports_per_filing": 3,
+  "max_reports_per_side": 4,
+  "max_report_title_bytes": 256,
+  "max_report_summary_bytes": 8192
+}

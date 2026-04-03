@@ -1,0 +1,4 @@
+[submodule "common/submodules/pi-acp"]
+	path = common/submodules/pi-acp
+	url = https://github.com/jsmorph/pi-acp.git
+	branch = generic-ext-method-tools
