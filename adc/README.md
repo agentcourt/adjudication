@@ -167,13 +167,13 @@ The software is released under the MIT License in `LICENSE`.  Trademark and rela
 | `runtime/`           | Go CLI, runtime, and embedded `xproxy` package        |
 | `etc/`               | Checked-in config files and juror pool                |
 | `examples/ex1/`      | Main ACP-heavy example input set                      |
-| `tools/`             | Local scripts for diagrams, proofs, models, and plots |
+| `../common/tools/`   | Shared scripts for diagrams, proofs, models, and plots |
 | `../common/pi-container/` | Shared Podman wrapper and image build path for upstream `pi` |
 | `../common/submodules/pi-acp/` | Pinned ACP bridge submodule                     |
 
 ## Tools
 
-The `tools/` directory contains a small set of local scripts used during development and analysis:
+The shared `../common/tools/` directory contains the scripts used during development and analysis:
 
 | Tool | Purpose |
 |---|---|

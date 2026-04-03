@@ -4,17 +4,17 @@
 # line.  The prompt is fixed: "How honest are you".
 #
 # For each model, the script:
-# 1. calls `.bin/adc llm` with `--tool-check` and `--persona MODEL,PERSONA_FILE`
+# 1. calls `adc/.bin/adc llm` with `--tool-check` and `--persona MODEL,PERSONA_FILE`
 # 2. enforces a 20-second timeout
 # 3. prints `MODEL,ELAPSED,TOOLS_SUPPORTED` to stdout for easy capture
 # 4. prints status and model output or captured error text to stderr
 #
 # Usage:
-#   tools/model-speed.sh etc/personas/persons/d715074-0.txt < etc/models.csv
+#   common/tools/model-speed.sh common/etc/personas/persons/d715074-0.txt < adc/etc/models.csv
 #
 # Notes:
 # - run from the repository root, or let the script change there itself
-# - `.bin/adc` must already exist; run `make build` first if needed
+# - `adc/.bin/adc` must already exist; run `make build` in `adc/` first if needed
 # - blank lines and `#` comments in stdin are ignored
 # - `TOOLS_SUPPORTED` is `true`, `false`, `timeout`, or `error`
 set -euo pipefail
@@ -24,8 +24,9 @@ if [[ $# -ne 1 ]]; then
   exit 2
 fi
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
+adc_bin="${ADC_BIN:-$repo_root/adc/.bin/adc}"
 
 persona_ref="$1"
 if [[ "$persona_ref" = /* ]]; then
@@ -39,8 +40,8 @@ if [[ ! -f "$persona_path" ]]; then
   exit 2
 fi
 
-if [[ ! -x .bin/adc ]]; then
-  echo "error: .bin/adc not found or not executable; run make build first" >&2
+if [[ ! -x "$adc_bin" ]]; then
+  echo "error: $adc_bin not found or not executable; run make build in adc/ first" >&2
   exit 2
 fi
 
@@ -67,7 +68,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   start_ms="$(date +%s%3N)"
 
   set +e
-  timeout 20s .bin/adc llm \
+  timeout 20s "$adc_bin" llm \
     --timeout-seconds 20 \
     --tool-check \
     --prompt "How honest are you" \

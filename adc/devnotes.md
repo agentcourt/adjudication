@@ -1,6 +1,6 @@
 # Development Notes
 
-## 2026-03-18: `tools/cluster-personas.py`
+## 2026-03-18: `../common/tools/cluster-personas.py`
 
 ### References
 
@@ -51,6 +51,6 @@
 
 ### Results
 
-- Live test: `uv run tools/cluster-personas.py --personas-file /tmp/persona-sample-test.csv --genes-file /tmp/persona-sample-genes.json --num-samples 3 --gene-dim 3`
+- Live test: `uv run ../common/tools/cluster-personas.py --personas-file /tmp/persona-sample-test.csv --genes-file /tmp/persona-sample-genes.json --num-samples 3 --gene-dim 3`
 - Live output: three `MP,G,C` rows for one persona and one gene through local xproxy plus direct embeddings.
 - Follow-up fix: `adc xproxy` initially returned an error on clean shutdown because the listener was already closed.  [`runtime/xproxy/xproxy.go`](runtime/xproxy/xproxy.go) now ignores `net.ErrClosed` in that path, and a live `Ctrl-C` shutdown now exits with status `0`.

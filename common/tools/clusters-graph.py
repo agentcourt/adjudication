@@ -17,6 +17,9 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
 @dataclass(frozen=True)
 class Point:
     model: str
@@ -34,12 +37,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--pca",
-        default="etc/personas-pca.csv",
+        default=str(REPO_ROOT / "adc/etc/personas-pca.csv"),
         help="Path to the PCA CSV file.",
     )
     parser.add_argument(
         "--out",
-        default="clusters.png",
+        default=str(REPO_ROOT / "adc/clusters.png"),
         help="Output PNG path.",
     )
     return parser.parse_args()

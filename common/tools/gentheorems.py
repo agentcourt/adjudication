@@ -49,9 +49,9 @@ def write_md(path: Path, rows: list[tuple[str, str, str, str]]) -> None:
 
 
 def main(argv: list[str]) -> int:
-    repo_root = Path(__file__).resolve().parent.parent
-    tsv_path = Path(argv[1]) if len(argv) > 1 else repo_root / "theorems.tsv"
-    md_path = Path(argv[2]) if len(argv) > 2 else repo_root / "docs" / "theorems.md"
+    project_root = Path.cwd().resolve()
+    tsv_path = Path(argv[1]) if len(argv) > 1 else project_root / "theorems.tsv"
+    md_path = Path(argv[2]) if len(argv) > 2 else project_root / "docs" / "theorems.md"
     rows = read_rows(tsv_path)
     write_tsv(tsv_path, rows)
     write_md(md_path, rows)

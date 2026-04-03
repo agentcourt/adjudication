@@ -42,16 +42,16 @@ Lean defines the procedural engines and the proof surface for both systems.  Go 
 
 | Path | Purpose |
 |---|---|
-| `adc/` | District-court system, including the Lean engine, Go runtime, examples, reports, and local tools |
-| `arb/` | Arbitration system, including the Lean engine, Go runtime, examples, prompts, and local tools |
-| `common/` | Shared Go packages, provider and ACP integration, personas, `xproxy`, and the PI container build path |
+| `adc/` | District-court system, including the Lean engine, Go runtime, examples, and reports |
+| `arb/` | Arbitration system, including the Lean engine, Go runtime, examples, and prompts |
+| `common/` | Shared Go packages, provider and ACP integration, personas, `xproxy`, the PI container build path, and repository tools |
 | `go.mod` and `go.sum` | Root Go module for shared packages and both runtimes |
 
 The two systems share infrastructure but remain separate applications.  `adc/` builds `adc` and `adcengine`.  `arb/` builds `aar` and `aarengine`.  Shared code lives under `common/`, not in a sibling checkout outside the repository.
 
 ## Requirements
 
-This repository builds with Go `1.25` and Lean `4.27.0` with `lake`.  `make` drives the project-specific targets in `adc/` and `arb/`.  The Python tools in `adc/tools/` and `arb/tools/` are `uv` scripts and should run that way.
+This repository builds with Go `1.25` and Lean `4.27.0` with `lake`.  `make` drives the project-specific targets in `adc/` and `arb/`.  The Python tools in `common/tools/` are `uv` scripts and should run that way.
 
 Live runs require Podman, network access to the configured model providers, and the corresponding API keys.  The checked-in district-court demo uses ACP attorneys through `xproxy`, so `OPENAI_API_KEY` is required and some model pools also require `OPENROUTER_API_KEY`.  Arbitration examples use the same shared provider and ACP path where the selected models require it.
 

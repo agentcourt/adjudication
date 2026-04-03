@@ -15,14 +15,14 @@ Usage:
 
 1. Start local xproxy from the repository root:
 
-   ./.bin/adc xproxy
+   adc/.bin/adc xproxy
 
 2. Run the script:
 
-   uv run tools/cluster-personas.py --personas-file etc/some-personas.csv --num-samples 3 --num-genes 5 --num-personas 25
+   uv run common/tools/cluster-personas.py --personas-file adc/etc/some-personas.csv --num-samples 3 --num-genes 5 --num-personas 25
 
-The checked-in sample personas file is `etc/some-personas.csv`.  `task.md`
-uses `etc/some-personas.txt`, but that file does not exist in this checkout.
+The shared persona pool is `common/etc/personas.csv`.  The checked-in sampled
+subset is `adc/etc/some-personas.csv`.
 
 Design:
 
@@ -35,7 +35,7 @@ Design:
 - PCA runs once per gene over the full embedding set for that gene, across all
   sampled completions for all model/persona pairs.  That matches the task.
 - The script keeps the cluster CSV on stdout and also writes per-sample PCA
-  rows to `etc/personas-pca.csv` by default.
+  rows to `adc/etc/personas-pca.csv` by default.
 - K-means chooses `k` by maximizing silhouette score across all admissible
   cluster counts in the fixed range `3..10`.  If the data are too small or too
   degenerate to score, the script assigns cluster `0` to every point for that
@@ -93,7 +93,7 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_XPROXY_PORT = 18459
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_EMBEDDING_BASE_URL = "https://api.openai.com/v1"
@@ -148,7 +148,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--personas-file",
-        default="../common/etc/personas.csv",
+        default="common/etc/personas.csv",
         help=(
             "CSV-like file of model/persona records.\n"
             "Default: %(default)s"
@@ -156,7 +156,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--genes-file",
-        default="etc/genes.json",
+        default="adc/etc/genes.json",
         help=(
             "JSON array of prompt strings.\n"
             "Default: %(default)s"
@@ -198,7 +198,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--pca-out",
-        default="etc/personas-pca.csv",
+        default="adc/etc/personas-pca.csv",
         help=(
             "Path for per-sample PCA output. Empty disables the file.\n"
             "Default: %(default)s"
@@ -373,7 +373,7 @@ def ensure_xproxy_healthy(port: int, timeout_seconds: float) -> None:
                 )
     except URLError as exc:
         raise SystemExit(
-            f"xproxy is not reachable at {url}. Run `.bin/adc xproxy` first."
+            f"xproxy is not reachable at {url}. Run `adc/.bin/adc xproxy` first."
         ) from exc
 
 

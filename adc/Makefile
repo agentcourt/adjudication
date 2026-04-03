@@ -69,7 +69,7 @@ demo-flash: build
 
 cluster-personas: 
 	@echo "Start xproxy first in another shell: ./.bin/adc xproxy"
-	uv run --script tools/cluster-personas.py --num-personas all --num-samples 3 --num-genes 3 > etc/persona-clusters.csv
+	uv run --script ../common/tools/cluster-personas.py --num-personas all --num-samples 3 --num-genes 3 > etc/persona-clusters.csv
 
 pool:
 	.bin/adc pool --size 50  | sort | uniq > etc/pool.csv

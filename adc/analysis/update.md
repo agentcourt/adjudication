@@ -33,19 +33,19 @@ Requirements:
 - `mmdc` in `PATH`
 - Chromium or Chrome in `PATH`
 
-The repository helper is [`tools/gendiagram.sh`](../tools/gendiagram.sh).  It takes one Mermaid file and one PNG output path.
+The repository helper is [`../common/tools/gendiagram.sh`](../../common/tools/gendiagram.sh).  It takes one Mermaid file and one PNG output path.
 
 Regenerate one diagram:
 
 ```bash
-tools/gendiagram.sh analysis/lean-simple-flow.mmd analysis/lean-simple-flow.png
+../common/tools/gendiagram.sh analysis/lean-simple-flow.mmd analysis/lean-simple-flow.png
 ```
 
 Regenerate all diagrams in `analysis/`:
 
 ```bash
 for f in analysis/*.mmd; do
-  tools/gendiagram.sh "$f" "${f%.mmd}.png"
+  ../common/tools/gendiagram.sh "$f" "${f%.mmd}.png"
 done
 ```
 
@@ -54,7 +54,7 @@ The helper defaults to `MMDC_SCALE=4`.  The analysis diagrams are dense, and the
 If the rendered text is too small or too large, rerun with `MMDC_SCALE`:
 
 ```bash
-MMDC_SCALE=4 tools/gendiagram.sh analysis/lean-complete-flow.mmd analysis/lean-complete-flow.png
+MMDC_SCALE=4 ../common/tools/gendiagram.sh analysis/lean-complete-flow.mmd analysis/lean-complete-flow.png
 ```
 
 ## What to verify

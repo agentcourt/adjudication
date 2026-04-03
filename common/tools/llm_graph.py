@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 AGENT_CALL_RE = re.compile(r"^agent call turn=\d+ .* phase=([a-z_]+) ")
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass(frozen=True)
@@ -47,7 +48,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--out",
-        default="llm.png",
+        default=str(REPO_ROOT / "adc/llm.png"),
         help="Output PNG path.",
     )
     return parser.parse_args()
