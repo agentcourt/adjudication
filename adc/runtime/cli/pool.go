@@ -7,8 +7,6 @@ import (
 	"io"
 	"math/rand"
 	"os"
-	"path/filepath"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -32,6 +30,7 @@ func RunPool(args []string, stdout io.Writer, stderr io.Writer) error {
 	var fs *flag.FlagSet
 	fs = newFlagSet("pool", stderr, func() {
 		fmt.Fprintf(stderr, "Usage: adc pool [--size N]\n\n")
+		fmt.Fprintf(stderr, "Run from adc/.  The command reads ../common/data/personas/persona-clusters.csv relative to the current working directory.\n\n")
 		fs.PrintDefaults()
 	})
 	size := fs.Int("size", 100, "Number of model/persona records to sample")
@@ -75,18 +74,11 @@ func RunPool(args []string, stdout io.Writer, stderr io.Writer) error {
 }
 
 func resolvePoolRowsPath() (string, error) {
-	const relPath = "etc/persona-clusters.csv"
+	const relPath = "../common/data/personas/persona-clusters.csv"
 	if fileExists(relPath) {
 		return relPath, nil
 	}
-	_, file, _, ok := runtime.Caller(0)
-	if ok {
-		repoPath := filepath.Join(filepath.Dir(file), "..", "..", relPath)
-		if fileExists(repoPath) {
-			return repoPath, nil
-		}
-	}
-	return "", fmt.Errorf("cannot find %s", relPath)
+	return "", fmt.Errorf("cannot find %s from the current working directory", relPath)
 }
 
 func loadPoolRows(path string) ([]poolRow, error) {

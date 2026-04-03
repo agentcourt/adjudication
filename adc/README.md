@@ -173,7 +173,7 @@ The software is released under the MIT License in `LICENSE`.  Trademark and rela
 
 ## Tools
 
-The shared `../common/tools/` directory contains the scripts used during development and analysis:
+The shared `../common/tools/` directory contains the scripts used during development and analysis.  These tools resolve their default paths against the current working directory.  Run them from the repository root unless you pass explicit paths.
 
 | Tool | Purpose |
 |---|---|

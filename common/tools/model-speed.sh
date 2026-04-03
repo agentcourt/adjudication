@@ -10,10 +10,10 @@
 # 4. prints status and model output or captured error text to stderr
 #
 # Usage:
-#   common/tools/model-speed.sh common/etc/personas/persons/d715074-0.txt < adc/etc/models.csv
+#   common/tools/model-speed.sh common/etc/personas/persons/d715074-0.txt < common/data/personas/models.csv
 #
 # Notes:
-# - run from the repository root, or let the script change there itself
+# - run from the repository root
 # - `adc/.bin/adc` must already exist; run `make build` in `adc/` first if needed
 # - blank lines and `#` comments in stdin are ignored
 # - `TOOLS_SUPPORTED` is `true`, `false`, `timeout`, or `error`
@@ -24,24 +24,18 @@ if [[ $# -ne 1 ]]; then
   exit 2
 fi
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$repo_root"
-adc_bin="${ADC_BIN:-$repo_root/adc/.bin/adc}"
+adc_bin="${ADC_BIN:-adc/.bin/adc}"
 
 persona_ref="$1"
-if [[ "$persona_ref" = /* ]]; then
-  persona_path="$persona_ref"
-else
-  persona_path="$repo_root/$persona_ref"
-fi
+persona_path="$persona_ref"
 
 if [[ ! -f "$persona_path" ]]; then
-  echo "error: persona file not found: $persona_ref" >&2
+  echo "error: persona file not found: $persona_ref (run from the repository root or pass an absolute path)" >&2
   exit 2
 fi
 
 if [[ ! -x "$adc_bin" ]]; then
-  echo "error: $adc_bin not found or not executable; run make build in adc/ first" >&2
+  echo "error: $adc_bin not found or not executable; run from the repository root and build adc first" >&2
   exit 2
 fi
 

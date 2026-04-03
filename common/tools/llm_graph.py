@@ -15,7 +15,6 @@ from datetime import datetime
 from pathlib import Path
 
 AGENT_CALL_RE = re.compile(r"^agent call turn=\d+ .* phase=([a-z_]+) ")
-REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass(frozen=True)
@@ -40,16 +39,21 @@ PHASE_STYLE = {
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description=(
+            "Read xproxy llm_csv lines and write a latency plot. Run from the "
+            "repository root unless you pass explicit paths."
+        )
+    )
     parser.add_argument(
         "--log",
         required=True,
-        help="Path to the xproxy log with llm_csv lines.",
+        help="Path to the xproxy log with llm_csv lines, resolved against the working directory.",
     )
     parser.add_argument(
         "--out",
-        default=str(REPO_ROOT / "adc/llm.png"),
-        help="Output PNG path.",
+        default="llm.png",
+        help="Output PNG path, resolved against the working directory.",
     )
     return parser.parse_args()
 

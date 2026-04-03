@@ -11,6 +11,9 @@
 """
 Sample model/persona behavior over a gene set and emit cluster assignments.
 
+Run this script from the repository root unless you pass explicit paths for the
+shared data files.
+
 Usage:
 
 1. Start local xproxy from the repository root:
@@ -19,10 +22,10 @@ Usage:
 
 2. Run the script:
 
-   uv run common/tools/cluster-personas.py --personas-file adc/etc/some-personas.csv --num-samples 3 --num-genes 5 --num-personas 25
+   uv run common/tools/cluster-personas.py --personas-file common/data/personas/some-personas.csv --num-samples 3 --num-genes 5 --num-personas 25
 
 The shared persona pool is `common/etc/personas.csv`.  The checked-in sampled
-subset is `adc/etc/some-personas.csv`.
+subset is `common/data/personas/some-personas.csv`.
 
 Design:
 
@@ -35,11 +38,10 @@ Design:
 - PCA runs once per gene over the full embedding set for that gene, across all
   sampled completions for all model/persona pairs.  That matches the task.
 - The script keeps the cluster CSV on stdout and also writes per-sample PCA
-  rows to `adc/etc/personas-pca.csv` by default.
-- K-means chooses `k` by maximizing silhouette score across all admissible
-  cluster counts in the fixed range `3..10`.  If the data are too small or too
-  degenerate to score, the script assigns cluster `0` to every point for that
-  gene.
+  rows to `common/data/personas/personas-pca.csv` by default.
+- K-means chooses `k` by maximizing silhouette score across the fixed range
+  `3..10`.  If the data are too small or too degenerate to score, the script
+  assigns cluster `0` to every point for that gene.
 - The requested PCA dimension can exceed what the sample count permits.  In that
   case the script computes the largest valid PCA basis and pads the remaining
   coordinates with zeroes so the downstream clustering still receives a fixed
@@ -64,6 +66,8 @@ Design:
 
 Operational requirements:
 
+- Run from the repository root unless you pass explicit paths.  The default
+  file paths are resolved against the current working directory.
 - xproxy must already be running and reachable on `127.0.0.1`.
 - `OPENAI_API_KEY` must be set for embeddings.
 - The script resolves relative persona paths relative to the personas CSV file,
@@ -93,7 +97,6 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_XPROXY_PORT = 18459
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_EMBEDDING_BASE_URL = "https://api.openai.com/v1"
@@ -156,7 +159,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--genes-file",
-        default="adc/etc/genes.json",
+        default="common/data/personas/genes.json",
         help=(
             "JSON array of prompt strings.\n"
             "Default: %(default)s"
@@ -198,7 +201,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--pca-out",
-        default="adc/etc/personas-pca.csv",
+        default="common/data/personas/personas-pca.csv",
         help=(
             "Path for per-sample PCA output. Empty disables the file.\n"
             "Default: %(default)s"
@@ -237,7 +240,7 @@ def resolve_path(path_text: str) -> Path:
     path = Path(path_text)
     if path.is_absolute():
         return path
-    return (REPO_ROOT / path).resolve()
+    return (Path.cwd() / path).resolve()
 
 
 def parse_xproxy_model(model: str) -> None:

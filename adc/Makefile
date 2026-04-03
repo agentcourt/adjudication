@@ -69,11 +69,18 @@ demo-flash: build
 
 cluster-personas: 
 	@echo "Start xproxy first in another shell: ./.bin/adc xproxy"
-	uv run --script ../common/tools/cluster-personas.py --num-personas all --num-samples 3 --num-genes 3 > etc/persona-clusters.csv
+	uv run --script ../common/tools/cluster-personas.py \
+		--personas-file ../common/etc/personas.csv \
+		--genes-file ../common/data/personas/genes.json \
+		--pca-out ../common/data/personas/personas-pca.csv \
+		--num-personas all \
+		--num-samples 3 \
+		--num-genes 3 \
+		> ../common/data/personas/persona-clusters.csv
 
 pool:
-	.bin/adc pool --size 50  | sort | uniq > etc/pool.csv
-	wc -l etc/pool.csv
+	.bin/adc pool --size 50  | sort | uniq > ../common/data/personas/pool.csv
+	wc -l ../common/data/personas/pool.csv
 
 clean:
 	rm -rf $(BIN_DIR) engine/.lake/build

@@ -62,7 +62,11 @@ func TestSamplePoolRecordsWarnsWhenSizeExceedsUniquePairs(t *testing.T) {
 
 func TestRunPoolSuppressesTraceWithoutVerbose(t *testing.T) {
 	rows := "m1,p1,1,0\nm2,p2,1,1\nm1,p1,2,0\nm2,p2,2,1\n"
-	path, err := filepath.Abs(filepath.Join("..", "..", "etc", "persona-clusters.csv"))
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("resolve adc root: %v", err)
+	}
+	path, err := filepath.Abs(filepath.Join(root, "..", "common", "data", "personas", "persona-clusters.csv"))
 	if err != nil {
 		t.Fatalf("resolve persona-clusters path: %v", err)
 	}
@@ -81,6 +85,16 @@ func TestRunPoolSuppressesTraceWithoutVerbose(t *testing.T) {
 	if err := os.WriteFile(path, []byte(rows), 0o644); err != nil {
 		t.Fatalf("WriteFile(%q) error = %v", path, err)
 	}
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd error = %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("Chdir(%q) error = %v", root, err)
+	}
+	defer func() {
+		_ = os.Chdir(oldWD)
+	}()
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

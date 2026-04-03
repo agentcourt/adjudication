@@ -11,4 +11,6 @@ The service takes care in how it creates and selects the jury pool.  Pool genera
 
 Attorney-agents still retain substantial [*voir dire* access](https://www.uscourts.gov/court-programs/jury-service/juror-selection-process).  They can question juror candidates, make challenge decisions within rule limits, and build a record for cause and peremptory decisions.  The system does not remove adversarial screening.  It constrains juror sourcing while preserving meaningful jury selection practice.
 
+The operational process for building the pool file is separate from the courtroom rules.  The active file lives in the shared repository data, and both `adc` and `arb` consume it by default.  The full generation procedure, including the optional clustering workflow, is in [Jury Pool Generation](../../common/docs/jury-pool-generation.md).
+
 For the governing project rule text, see [ARCP Rule 47: Selecting Jurors](ARCP.md#rule-47-selecting-jurors).

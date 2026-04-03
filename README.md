@@ -53,6 +53,8 @@ The two systems share infrastructure but remain separate applications.  `adc/` b
 
 This repository builds with Go `1.25` and Lean `4.27.0` with `lake`.  `make` drives the project-specific targets in `adc/` and `arb/`.  The Python tools in `common/tools/` are `uv` scripts and should run that way.
 
+The shared persona and model curation corpus lives under `common/data/personas/`.  The shared tools resolve their default paths against the current working directory.  Run them from the repository root unless you pass explicit paths.
+
 Live runs require Podman, network access to the configured model providers, and the corresponding API keys.  The checked-in district-court demo uses ACP attorneys through `xproxy`, so `OPENAI_API_KEY` is required and some model pools also require `OPENROUTER_API_KEY`.  Arbitration examples use the same shared provider and ACP path where the selected models require it.
 
 ## Build And Run

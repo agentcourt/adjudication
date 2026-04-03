@@ -16,10 +16,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
 @dataclass(frozen=True)
 class Point:
     model: str
@@ -34,16 +30,21 @@ MARKERS = ["o", "s", "^", "D", "P", "X", "v", "<", ">", "h", "8", "p"]
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description=(
+            "Read PCA rows and write a faceted cluster plot. Run from the "
+            "repository root unless you pass explicit paths."
+        )
+    )
     parser.add_argument(
         "--pca",
-        default=str(REPO_ROOT / "adc/etc/personas-pca.csv"),
-        help="Path to the PCA CSV file.",
+        default="common/data/personas/personas-pca.csv",
+        help="Path to the PCA CSV file, resolved against the working directory.",
     )
     parser.add_argument(
         "--out",
-        default=str(REPO_ROOT / "adc/clusters.png"),
-        help="Output PNG path.",
+        default="clusters.png",
+        help="Output PNG path, resolved against the working directory.",
     )
     return parser.parse_args()
 
