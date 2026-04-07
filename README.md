@@ -3,6 +3,8 @@
 This project is an experimental AI civil litigation system that uses
 agent attorneys with either agent or human clients.
 
+More documention is [here](https://agentcourt.ai/)
+
 The implementation:
 
 1. Uses a core procedural engine implemented in
