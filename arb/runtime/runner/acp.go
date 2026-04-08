@@ -323,19 +323,25 @@ func (rc *runContext) ensureACPSession(ctx context.Context, role string) (*acpPe
 	cleanup := func() error { return nil }
 	workspaceDir := ""
 	workProductDir := ""
+	instructionsPath := strings.TrimSpace(rc.cfg.AttorneyInstructionsPath)
 	if usesPIContainerWrapper(attorney.ACPCommand) {
-		containerHomeDir, closeHome, err := prepareEphemeralPIHome(rc.cfg.CommonRoot, attorney.Model)
+		containerHomeDir, closeHome, err := prepareEphemeralPIHome(rc.cfg.CommonRoot, attorney.Model, instructionsPath)
 		if err != nil {
 			return nil, err
 		}
 		cleanup = closeHome
 		env = append(env, "PI_CONTAINER_HOME_DIR="+containerHomeDir)
+		if instructionsPath != "" {
+			env = append(env, "PI_ACP_INSTRUCTIONS_FILE="+stagedAttorneyInstructionsACPPath)
+		}
 		sessionACPPath = "/home/user"
 		workspaceDir = containerHomeDir
 		workProductDir = filepath.Join(containerHomeDir, "work-product")
 		if err := os.MkdirAll(workProductDir, 0o755); err != nil {
 			return nil, errors.Join(fmt.Errorf("create work-product dir: %w", err), cleanup())
 		}
+	} else if attorney.ACPTransport == "stdio" && instructionsPath != "" {
+		env = append(env, "PI_ACP_INSTRUCTIONS_FILE="+instructionsPath)
 	}
 	env = append(env, "PI_ACP_CLIENT_TOOLS="+marshalInline(acpClientToolSpecs(workspaceDir != "")))
 	client, err := acp.NewClient(acp.Config{
@@ -741,31 +747,9 @@ func (rc *runContext) attorneyCapabilitySection(role string) (string, error) {
 		return "", err
 	}
 	if attorney.SearchEnabled {
-		return "Model capabilities for this run:\nNative web search through the model is available. If public investigation matters, use it. To invoke it, ask explicitly for a web search on the precise question, topic, names, dates, terms, and source type you need.", nil
+		return "Model capabilities for this run:\nNative web search through the model is available.", nil
 	}
-	return "Model capabilities for this run:\nNative web search through the model is not available. Do not ask the model to browse the web, retrieve public sources, or inspect URLs on its own. Use the current record, visible case files, local analysis, and other allowed runtime tools instead.", nil
-}
-
-func (rc *runContext) attorneyPhaseInvestigationSection(role string, phase string) (string, error) {
-	attorney, err := rc.attorneyInfo(role)
-	if err != nil {
-		return "", err
-	}
-	searchEnabled := attorney.SearchEnabled
-	switch phase {
-	case "arguments":
-		if searchEnabled {
-			return "When a decisive factual question can likely be resolved by web search, source retrieval, local analysis, or a direct technical check, do the work.\nYou may search for evidence, inspect source material, analyze data, and use native web search through the model when public sources matter.\nLook for related evidence, not only favorable evidence. Search for the full source behind an excerpt, the official rule behind a disputed interpretation, the primary record behind a summary, and contemporaneous materials that fix timing, authorship, location, or sequence.\nExamples of useful searches: the full transcript behind a quoted line, the official rules or market guidance behind a disputed term, source audio or video behind a paraphrased event, a filing or docket entry behind a claim about procedure, metadata or timestamps behind a timing dispute, or the original file needed for a technical verification.\nGood web-search instruction: \"Search the web for the official market rules for X, dated around Y, and prefer the primary source.\"\nBad web-search instruction: \"Look around online and tell me what people say.\"", nil
-		}
-		return "When a decisive factual question can likely be resolved from the current record, visible case files, local analysis, or a direct technical check, do the work.\nYou may inspect source material already in the record, analyze data, and use local tools when they materially sharpen a disputed point.\nLook for related evidence, not only favorable evidence. Read the full source behind an excerpt, the governing rule behind a disputed interpretation, the primary record behind a summary, and the exact file needed for a technical verification.\nIf a decisive point depends on public material that you cannot retrieve in this run, say so and narrow the claim to what the record and your local analysis support.", nil
-	case "rebuttals":
-		if searchEnabled {
-			return "If a targeted investigation would materially test the opponent's strongest factual premise, run it here.\nYou may do targeted additional investigation here if it directly helps answer those points.\nUse web search, source retrieval, local analysis, or direct technical checks where they bear directly on the opponent's position.\nSearch for related evidence that bears on the opponent's key premise. Examples: the full source behind an excerpt they relied on, the rule or clarification behind their interpretation, the original file behind a technical claim, or contemporaneous materials that fix timing or authorship.", nil
-		}
-		return "If a targeted investigation would materially test the opponent's strongest factual premise, run it here.\nYou may do targeted additional investigation here if it directly helps answer those points.\nUse source material already in the record, visible case files, local analysis, or direct technical checks where they bear directly on the opponent's position.\nSearch is not available through the model in this run. If answering the point would require new public-source retrieval, say so and limit the rebuttal to what the present record and your local checks support.", nil
-	default:
-		return "", nil
-	}
+	return "Model capabilities for this run:\nNative web search through the model is not available.", nil
 }
 
 func (rc *runContext) buildAttorneyPrompt(opportunity Opportunity) (string, error) {
@@ -802,17 +786,11 @@ func (rc *runContext) buildAttorneyPrompt(opportunity Opportunity) (string, erro
 	if err != nil {
 		return "", err
 	}
-	phaseInvestigationSection, err := rc.attorneyPhaseInvestigationSection(opportunity.Role, opportunity.Phase)
-	if err != nil {
-		return "", err
-	}
 	phaseFile, err := attorneyPromptFile(opportunity.Phase)
 	if err != nil {
 		return "", err
 	}
-	phaseText, err := renderPromptFile(phaseFile, map[string]string{
-		"PHASE_INVESTIGATION_SECTION": phaseInvestigationSection,
-	})
+	phaseText, err := renderPromptFile(phaseFile, nil)
 	if err != nil {
 		return "", err
 	}

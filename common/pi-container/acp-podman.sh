@@ -16,6 +16,7 @@ exec podman run --rm -i \
   -e PI_ACP_CLIENT_TOOLS_URL \
   -e PI_ACP_CLIENT_TOOLS_TOKEN \
   -e PI_ACP_CLIENT_TOOLS \
+  -e PI_ACP_INSTRUCTIONS_FILE \
   -e NODE_OPTIONS \
   -v "$PI_CONTAINER_HOME_DIR:/home/user" \
   -w /home/user \

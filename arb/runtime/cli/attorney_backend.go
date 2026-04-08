@@ -43,7 +43,7 @@ func RunStageAttorneyPIHome(args []string, stdout io.Writer, stderr io.Writer) e
 	if err != nil {
 		return fmt.Errorf("resolve --dir: %w", err)
 	}
-	if err := runner.StageAttorneyPIHome(commonRootResolved, targetDir, strings.TrimSpace(*model)); err != nil {
+	if err := runner.StageAttorneyPIHome(commonRootResolved, targetDir, strings.TrimSpace(*model), defaultAttorneyInstructionsPath()); err != nil {
 		return err
 	}
 	return nil

@@ -35,8 +35,13 @@ func TestPrepareEphemeralPIHomeStagesSearchModel(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(etcDir, "pi-models.xproxy.json"), models, 0o644); err != nil {
 		t.Fatalf("write models: %v", err)
 	}
+	instructionsPath := filepath.Join(t.TempDir(), "default.md")
+	instructionsText := "Attorney instructions.\nFile the narrowest truthful submission.\n"
+	if err := os.WriteFile(instructionsPath, []byte(instructionsText), 0o644); err != nil {
+		t.Fatalf("write instructions: %v", err)
+	}
 
-	homeDir, cleanup, err := prepareEphemeralPIHome(commonRoot, DefaultAttorneyModel)
+	homeDir, cleanup, err := prepareEphemeralPIHome(commonRoot, DefaultAttorneyModel, instructionsPath)
 	if err != nil {
 		t.Fatalf("prepareEphemeralPIHome returned error: %v", err)
 	}
@@ -88,6 +93,13 @@ func TestPrepareEphemeralPIHomeStagesSearchModel(t *testing.T) {
 	if string(authRaw) != "{}\n" {
 		t.Fatalf("auth.json = %q, want {}\n", string(authRaw))
 	}
+	instructionsRaw, err := os.ReadFile(filepath.Join(homeDir, ".pi", "agent", "attorney-instructions.md"))
+	if err != nil {
+		t.Fatalf("read staged instructions: %v", err)
+	}
+	if string(instructionsRaw) != instructionsText {
+		t.Fatalf("attorney instructions = %q, want %q", string(instructionsRaw), instructionsText)
+	}
 }
 
 func TestPrepareEphemeralPIHomeStagesExplicitNonSearchModel(t *testing.T) {
@@ -105,7 +117,7 @@ func TestPrepareEphemeralPIHomeStagesExplicitNonSearchModel(t *testing.T) {
 		t.Fatalf("write models: %v", err)
 	}
 
-	homeDir, cleanup, err := prepareEphemeralPIHome(commonRoot, "openai://gpt-5")
+	homeDir, cleanup, err := prepareEphemeralPIHome(commonRoot, "openai://gpt-5", "")
 	if err != nil {
 		t.Fatalf("prepareEphemeralPIHome returned error: %v", err)
 	}

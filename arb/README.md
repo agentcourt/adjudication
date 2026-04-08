@@ -62,6 +62,7 @@ This variant shows the common parameters that change a run:
   --council-size 7 \
   --evidence-standard "Clear and convincing evidence." \
   --council-pool ../common/data/personas/pool.csv \
+  --attorney-instructions attorney-instructions/default.md \
   --attorney-model 'openai://gpt-5?tools=search' \
   --timeout-seconds 120 \
   --acp-timeout-seconds 300 \
@@ -74,6 +75,8 @@ The explicit `--file` path can be repeated.  It accepts shell globs, and it reje
 ## Attorney Configuration
 
 By default, `aar case` runs both attorneys through the local ACP wrapper at `../common/pi-container/acp-podman.sh`.  The global `--attorney-model` flag applies to both sides unless a role-specific model override is present.  Search capability comes from the model id itself.  For example, `openai://gpt-5` runs without native search, while `openai://gpt-5?tools=search` requests native search through xproxy.
+
+Use `--attorney-instructions FILE` to provide the standing attorney-side instructions file for the run.  When that flag is absent, `aar case` falls back to `./attorney-instructions/default.md` from the current working directory if that file exists.  `arb` applies one shared attorney-instructions file to both sides.  A remote ACP endpoint still has to honor its own instructions on the remote side; `arb` does not transmit this file over the TCP ACP transport.
 
 The global `--acp-command` flag sets the local ACP command for both sides.  Each side can override the shared configuration with its own model, local ACP command, remote ACP endpoint, and ACP session working directory.  A role cannot set both `--*-acp-command` and `--*-acp-endpoint` in the same run.
 
@@ -117,6 +120,7 @@ This command shows the same pattern with one global ACP command and a role-speci
 | `--council-size` | Override `policy.council_size`. |
 | `--evidence-standard` | Override `policy.evidence_standard`. |
 | `--council-pool` | Council model and persona pool.  Defaults to `../common/data/personas/pool.csv` when `arb/` is the working directory. |
+| `--attorney-instructions` | Standing attorney-side instructions file.  Defaults to `./attorney-instructions/default.md` when present. |
 | `--attorney-model` | Attorney ACP model id, including any search capability request, such as `openai://gpt-5` or `openai://gpt-5?tools=search`. |
 | `--acp-command` | Shared local ACP command for both attorneys.  Defaults to `<common-root>/pi-container/acp-podman.sh`. |
 | `--plaintiff-attorney-model`, `--defendant-attorney-model` | Role-specific attorney model overrides. |

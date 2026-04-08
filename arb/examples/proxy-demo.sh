@@ -55,6 +55,7 @@ rm -rf "$out_dir"
   --listen "$backend_addr" \
   --command ../common/pi-container/acp-podman.sh \
   --env "PI_CONTAINER_HOME_DIR=$pi_home" \
+  --env "PI_ACP_INSTRUCTIONS_FILE=/home/user/.pi/agent/attorney-instructions.md" \
   --env "PI_ACP_CLIENT_TOOLS=$PI_ACP_CLIENT_TOOLS" &
 backend_pid=$!
 

@@ -12,6 +12,7 @@ import (
 )
 
 const DefaultAttorneyModel = "openai://gpt-5?tools=search"
+const stagedAttorneyInstructionsACPPath = "/home/user/.pi/agent/attorney-instructions.md"
 
 func usesPIContainerWrapper(command string) bool {
 	base := strings.TrimSpace(filepath.Base(command))
@@ -34,7 +35,7 @@ func parseAttorneyModel(model string) (xproxy.ModelSpec, error) {
 	return spec, nil
 }
 
-func StageAttorneyPIHome(commonRoot string, homeDir string, model string) error {
+func StageAttorneyPIHome(commonRoot string, homeDir string, model string, instructionsPath string) error {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = DefaultAttorneyModel
@@ -73,10 +74,13 @@ func StageAttorneyPIHome(commonRoot string, homeDir string, model string) error 
 	if err := os.WriteFile(authPath, []byte("{}\n"), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", authPath, err)
 	}
+	if err := stageAttorneyInstructions(homeDir, instructionsPath); err != nil {
+		return err
+	}
 	return nil
 }
 
-func prepareEphemeralPIHome(commonRoot string, model string) (string, func() error, error) {
+func prepareEphemeralPIHome(commonRoot string, model string, instructionsPath string) (string, func() error, error) {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = DefaultAttorneyModel
@@ -98,10 +102,29 @@ func prepareEphemeralPIHome(commonRoot string, model string) (string, func() err
 		}
 		return "", nil, err
 	}
-	if err := StageAttorneyPIHome(commonRoot, homeDir, model); err != nil {
+	if err := StageAttorneyPIHome(commonRoot, homeDir, model, instructionsPath); err != nil {
 		return fail(err)
 	}
 	return homeDir, cleanup, nil
+}
+
+func stageAttorneyInstructions(homeDir string, instructionsPath string) error {
+	instructionsPath = strings.TrimSpace(instructionsPath)
+	if instructionsPath == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(instructionsPath)
+	if err != nil {
+		return fmt.Errorf("read attorney instructions %s: %w", instructionsPath, err)
+	}
+	if strings.TrimSpace(string(raw)) == "" {
+		return fmt.Errorf("attorney instructions %s are empty", instructionsPath)
+	}
+	targetPath := filepath.Join(homeDir, ".pi", "agent", "attorney-instructions.md")
+	if err := os.WriteFile(targetPath, raw, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", targetPath, err)
+	}
+	return nil
 }
 
 func stageAttorneyPISettings(raw []byte, model string) ([]byte, error) {

@@ -124,7 +124,4 @@ func TestBuildAttorneyPromptUsesRoleSpecificCapability(t *testing.T) {
 	if !strings.Contains(prompt, "Native web search through the model is not available.") {
 		t.Fatalf("prompt did not use defendant capability:\n%s", prompt)
 	}
-	if strings.Contains(prompt, "To invoke it, ask explicitly for a web search") {
-		t.Fatalf("prompt still described native web search invocation:\n%s", prompt)
-	}
 }

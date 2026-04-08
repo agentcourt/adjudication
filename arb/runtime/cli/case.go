@@ -38,6 +38,7 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	policyPath := fs.String("policy", "", "Policy JSON file. Default: ./etc/policy.json when present")
 	councilSize := fs.Int("council-size", 0, "Override policy council_size")
 	evidenceStandard := fs.String("evidence-standard", "", "Override policy evidence_standard")
+	attorneyInstructionsPath := fs.String("attorney-instructions", "", "Attorney instructions markdown file. Default: ./attorney-instructions/default.md when present")
 	commonRoot := fs.String("common-root", defaultCommonRoot(), "Path to the sibling shared common directory")
 	legacyCommonRoot := fs.String("agentcourt-root", "", "Deprecated alias for --common-root")
 	councilPool := fs.String("council-pool", "", "Council model/persona pool file. Default: <common-root>/data/personas/pool.csv")
@@ -89,6 +90,10 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		return reportCaseError(stdout, fmt.Errorf("resolve --common-root: %w", err))
 	}
 	policy, err := loadCasePolicy(*policyPath)
+	if err != nil {
+		return reportCaseError(stdout, err)
+	}
+	resolvedAttorneyInstructionsPath, err := resolveAttorneyInstructionsPath(*attorneyInstructionsPath)
 	if err != nil {
 		return reportCaseError(stdout, err)
 	}
@@ -158,13 +163,14 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		return reportCaseError(stdout, err)
 	}
 	cfg := runner.Config{
-		RunID:           effectiveRunID,
-		ComplaintPath:   *complaintPath,
-		CaseFilePaths:   explicitCaseFiles,
-		OutputDir:       *outDir,
-		CommonRoot:      commonRootResolved,
-		CouncilPoolPath: councilPoolPath,
-		AttorneyModel:   effectiveAttorneyModel,
+		RunID:                    effectiveRunID,
+		ComplaintPath:            *complaintPath,
+		CaseFilePaths:            explicitCaseFiles,
+		OutputDir:                *outDir,
+		CommonRoot:               commonRootResolved,
+		CouncilPoolPath:          councilPoolPath,
+		AttorneyModel:            effectiveAttorneyModel,
+		AttorneyInstructionsPath: resolvedAttorneyInstructionsPath,
 		PlaintiffAttorney: runner.AttorneyRoleConfig{
 			Model:       strings.TrimSpace(*plaintiffAttorneyModel),
 			ACPCommand:  strings.TrimSpace(*plaintiffACPCommand),
@@ -407,6 +413,37 @@ func defaultCommonRoot() string {
 		return locateCommonRootFrom(cwd)
 	}
 	return filepath.FromSlash("../common")
+}
+
+func defaultAttorneyInstructionsPath() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	path := filepath.Join(cwd, "attorney-instructions", "default.md")
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	return path
+}
+
+func resolveAttorneyInstructionsPath(flagValue string) (string, error) {
+	path := strings.TrimSpace(flagValue)
+	if path == "" {
+		return defaultAttorneyInstructionsPath(), nil
+	}
+	resolved, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve attorney instructions %s: %w", path, err)
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("stat attorney instructions %s: %w", resolved, err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("attorney instructions %s must be a file", resolved)
+	}
+	return resolved, nil
 }
 
 func locateCommonRootFrom(start string) string {

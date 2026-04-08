@@ -31,7 +31,7 @@ func TestACPAgentCanUseWebSearch(t *testing.T) {
 	if server != nil {
 		defer server.Close()
 	}
-	homeDir, cleanup, err := prepareEphemeralPIHome(commonRoot, DefaultAttorneyModel)
+	homeDir, cleanup, err := prepareEphemeralPIHome(commonRoot, DefaultAttorneyModel, "")
 	if err != nil {
 		t.Fatalf("prepare PI home: %v", err)
 	}

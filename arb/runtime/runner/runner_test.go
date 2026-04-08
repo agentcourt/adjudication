@@ -383,23 +383,14 @@ func TestBuildAttorneyPromptStatesCouncilForum(t *testing.T) {
 	if !strings.Contains(prompt, "record contains only the proposition and the standard of evidence") {
 		t.Fatalf("prompt did not state the opening record limit:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "Bad advocacy invents facts, sources, quotations, files, analyses, or results") {
+	if !strings.Contains(prompt, "Do not invent facts, sources, quotations, files, analyses, or results.") {
 		t.Fatalf("prompt did not forbid fabrication:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "Your job is to pursue the truth through disciplined, vigorous advocacy for your side under the governing standard of evidence.") {
-		t.Fatalf("prompt did not define counsel's job:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "Text limit for this submission: 4000 characters.") {
 		t.Fatalf("prompt did not state the opening text limit:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "Do not investigate only for support.  Look for related evidence that could confirm, limit, qualify, or defeat your theory.") {
-		t.Fatalf("prompt did not require related-evidence search:\n%s", prompt)
-	}
 	if !strings.Contains(prompt, "Native web search through the model is available.") {
 		t.Fatalf("prompt did not state search availability:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "To invoke it, ask explicitly for a web search on the precise question, topic, names, dates, terms, and source type you need.") {
-		t.Fatalf("prompt did not explain how to invoke native web search:\n%s", prompt)
 	}
 	if strings.Contains(prompt, "Visible case files:") {
 		t.Fatalf("opening prompt should not list visible case files:\n%s", prompt)
@@ -447,12 +438,6 @@ func TestBuildAttorneyPromptStatesWhenSearchIsUnavailable(t *testing.T) {
 	if !strings.Contains(prompt, "Native web search through the model is not available.") {
 		t.Fatalf("prompt did not state search unavailability:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "Do not ask the model to browse the web, retrieve public sources, or inspect URLs on its own.") {
-		t.Fatalf("prompt did not forbid model-side web retrieval:\n%s", prompt)
-	}
-	if strings.Contains(prompt, "ask explicitly for a web search") {
-		t.Fatalf("prompt still described native web search invocation:\n%s", prompt)
-	}
 }
 
 func TestBuildAttorneyPromptIncludesWorkProductGuidance(t *testing.T) {
@@ -498,9 +483,6 @@ func TestBuildAttorneyPromptIncludesWorkProductGuidance(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "This directory is not part of the record unless you later turn material from it into an exhibit or technical report.") {
 		t.Fatalf("prompt did not distinguish work product from the record:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "Create `/home/user/work-product/case-notes.md` on your first turn and update it before each later submission.") {
-		t.Fatalf("prompt did not require a running notes file:\n%s", prompt)
 	}
 }
 
@@ -610,26 +592,14 @@ func TestBuildAttorneyPromptConstrainsArgumentExperiments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildAttorneyPrompt returned error: %v", err)
 	}
-	if !strings.Contains(prompt, "You may search for evidence, inspect source material, analyze data, and use native web search through the model when public sources matter.") {
-		t.Fatalf("argument prompt did not allow investigation:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "When a decisive factual question can likely be resolved by web search, source retrieval, local analysis, or a direct technical check, do the work.") {
-		t.Fatalf("argument prompt did not require decisive investigation:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "Examples of useful searches: the full transcript behind a quoted line, the official rules or market guidance behind a disputed term") {
-		t.Fatalf("argument prompt did not give concrete search examples:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "Good web-search instruction: \"Search the web for the official market rules for X, dated around Y, and prefer the primary source.\"") {
-		t.Fatalf("argument prompt did not show a good web-search instruction:\n%s", prompt)
+	if !strings.Contains(prompt, "Use this phase to file the merits submission for your side.") {
+		t.Fatalf("argument prompt did not define the court-owned phase objective:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "Exhibits: at most 9 in this filing. This side has used 0 of 12 total, with 12 left.") {
 		t.Fatalf("argument prompt did not state exhibit limits:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "Technical reports: at most 3 in this filing. This side has used 0 of 4 total, with 4 left.") {
 		t.Fatalf("argument prompt did not state report limits:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "Bring decisive support into the record through exhibits and technical reports.") {
-		t.Fatalf("argument prompt did not prioritize supported proof:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "capture it accurately and introduce it through technical_reports") {
 		t.Fatalf("argument prompt did not require outside material to enter through technical reports:\n%s", prompt)
@@ -684,14 +654,8 @@ func TestBuildAttorneyPromptConstrainsArgumentExperimentsWithoutSearch(t *testin
 	if err != nil {
 		t.Fatalf("buildAttorneyPrompt returned error: %v", err)
 	}
-	if !strings.Contains(prompt, "If a decisive point depends on public material that you cannot retrieve in this run, say so and narrow the claim to what the record and your local analysis support.") {
-		t.Fatalf("argument prompt did not constrain unsupported public retrieval:\n%s", prompt)
-	}
 	if !strings.Contains(prompt, "Native web search through the model is not available.") {
 		t.Fatalf("argument prompt did not state search unavailability:\n%s", prompt)
-	}
-	if strings.Contains(prompt, "Good web-search instruction:") {
-		t.Fatalf("argument prompt still included web-search examples:\n%s", prompt)
 	}
 }
 
@@ -738,18 +702,6 @@ func TestBuildAttorneyPromptAllowsRebuttalSupplementalMaterials(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "Offer exhibits and technical reports only if they directly answer the opposing argument.") {
 		t.Fatalf("rebuttal prompt did not allow targeted supplemental materials:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "Focus on misreadings of the record, weak inferences, gaps in proof, and decisive contrary support.") {
-		t.Fatalf("rebuttal prompt did not define good rebuttal work:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "If a targeted investigation would materially test the opponent's strongest factual premise, run it here.") {
-		t.Fatalf("rebuttal prompt did not require targeted testing:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "Search for related evidence that bears on the opponent's key premise.") {
-		t.Fatalf("rebuttal prompt did not encourage related-evidence search:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "You may do targeted additional investigation here if it directly helps answer those points.") {
-		t.Fatalf("rebuttal prompt did not allow targeted investigation:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "Text limit for this submission: 4000 characters.") {
 		t.Fatalf("rebuttal prompt did not state the rebuttal text limit:\n%s", prompt)
@@ -809,14 +761,8 @@ func TestBuildAttorneyPromptConstrainsRebuttalWithoutSearch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildAttorneyPrompt returned error: %v", err)
 	}
-	if !strings.Contains(prompt, "Search is not available through the model in this run.") {
+	if !strings.Contains(prompt, "Native web search through the model is not available.") {
 		t.Fatalf("rebuttal prompt did not state search unavailability:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "If answering the point would require new public-source retrieval, say so and limit the rebuttal to what the present record and your local checks support.") {
-		t.Fatalf("rebuttal prompt did not constrain unsupported public retrieval:\n%s", prompt)
-	}
-	if strings.Contains(prompt, "exact premise you need to test") {
-		t.Fatalf("rebuttal prompt still included native web-search instructions:\n%s", prompt)
 	}
 }
 
