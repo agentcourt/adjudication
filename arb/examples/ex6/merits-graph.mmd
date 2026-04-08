@@ -1,0 +1,76 @@
+flowchart LR
+  subgraph Sources
+    S1["TR-1<br>War Powers letter"]
+    S2["TR-2<br>White House recap"]
+    S3["TR-3<br>OMB SAP"]
+  end
+
+  subgraph Facts
+    F1["Ground entry for about two hours"]
+    F2["Targeted and limited apprehension and transfer"]
+    F3["Fortified site with expected violent resistance"]
+  end
+
+  subgraph Rules
+    R1["Capture without occupation => NO"]
+    R2["Special-operations raid without territorial objective => NO"]
+  end
+
+  subgraph Plaintiff
+    C1["Temporary site control satisfies seize-or-hold"]
+    C2["Capture removes the sitting government"]
+  end
+
+  subgraph Defense
+    D1["Time-limited capture raid"]
+    D2["Temporary compound security is not occupation"]
+    D3["No qualifying territorial objective"]
+  end
+
+  subgraph Outcome
+    I1["Issue: qualifying objective established"]
+    P1["Proposition resolves YES"]
+  end
+
+  subgraph Votes
+    V1["C1: YES"]
+    V2["C2: NO"]
+    V3["C3: NO"]
+    V4["C4: YES"]
+    V5["C5: YES"]
+  end
+
+  S1 --> F2
+  S1 --> F3
+  S2 --> F1
+  S3 --> F2
+
+  F1 --> C1
+  F3 --> C1
+  F2 --> C2
+
+  F1 --> D1
+  F2 --> D1
+  R1 --> D2
+  R2 --> D1
+  D1 --> D3
+  D2 --> D3
+
+  C1 --> I1
+  C2 --> I1
+  D3 -. attacks .-> I1
+  I1 --> P1
+
+  V1 -. adopts .-> C1
+  V1 -. adopts .-> C2
+  V2 -. adopts .-> D3
+  V3 -. adopts .-> D3
+  V4 -. adopts .-> C1
+  V5 -. adopts .-> C1
+  V5 -. adopts .-> C2
+
+  V1 --> P1
+  V4 --> P1
+  V5 --> P1
+  V2 -. attacks .-> P1
+  V3 -. attacks .-> P1

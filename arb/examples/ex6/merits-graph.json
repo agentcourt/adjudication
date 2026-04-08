@@ -1,0 +1,427 @@
+{
+  "schema_version": "arb-merits-graph-v1",
+  "run_id": "run-1775667767580182267",
+  "title": "Example 6 merits graph",
+  "proposition_node_id": "P1",
+  "nodes": [
+    {
+      "id": "P1",
+      "kind": "proposition",
+      "label": "YES proposition",
+      "text": "The proposition resolves YES."
+    },
+    {
+      "id": "I1",
+      "kind": "issue",
+      "label": "Qualifying objective established",
+      "text": "The January 3, 2026 ground operation had at least one qualifying objective under the complaint."
+    },
+    {
+      "id": "R1",
+      "kind": "rule",
+      "label": "Head-of-state edge case",
+      "text": "Capture of a head of state without territorial occupation resolves NO.",
+      "mentions": [
+        {
+          "role": "system",
+          "artifact": "complaint"
+        }
+      ]
+    },
+    {
+      "id": "R2",
+      "kind": "rule",
+      "label": "Raid carve-out",
+      "text": "Special operations raids without territorial objectives resolve NO.",
+      "mentions": [
+        {
+          "role": "system",
+          "artifact": "complaint"
+        }
+      ]
+    },
+    {
+      "id": "S1",
+      "kind": "source",
+      "label": "TR-1",
+      "text": "White House War Powers letter of January 5, 2026: targeted and limited military strikes in Venezuela in furtherance of apprehension and transfer, at a fortified site with expected violent resistance.",
+      "mentions": [
+        {
+          "role": "plaintiff",
+          "phase": "arguments",
+          "artifact": "technical_report",
+          "title": "TR-1 — White House War Powers 48-hour report to Congress (Jan. 5, 2026)"
+        }
+      ]
+    },
+    {
+      "id": "S2",
+      "kind": "source",
+      "label": "TR-2",
+      "text": "White House recap of January 4, 2026 remarks: U.S. forces were on the ground in Venezuela for about two hours when they went to capture Maduro.",
+      "mentions": [
+        {
+          "role": "plaintiff",
+          "phase": "arguments",
+          "artifact": "technical_report",
+          "title": "TR-2 — White House recap of Secretary Rubio’s Jan. 4, 2026 remarks"
+        }
+      ]
+    },
+    {
+      "id": "S3",
+      "kind": "source",
+      "label": "TR-3",
+      "text": "OMB Statement of Administration Policy of January 22, 2026: targeted and limited strikes in Venezuela to apprehend and transport Maduro and Flores.",
+      "mentions": [
+        {
+          "role": "plaintiff",
+          "phase": "arguments",
+          "artifact": "technical_report",
+          "title": "TR-3 — Statement of Administration Policy on H.Con.Res. 68 (Jan. 22, 2026)"
+        }
+      ]
+    },
+    {
+      "id": "F1",
+      "kind": "fact",
+      "label": "Ground entry for about two hours",
+      "text": "U.S. forces were on the ground in Venezuela for about two hours during the January 3, 2026 operation.",
+      "sources": [
+        "S2"
+      ]
+    },
+    {
+      "id": "F2",
+      "kind": "fact",
+      "label": "Targeted and limited apprehension operation",
+      "text": "The operation was framed in official Executive statements as targeted and limited action to apprehend, arrest, transfer, and transport Maduro and Flores.",
+      "sources": [
+        "S1",
+        "S3"
+      ]
+    },
+    {
+      "id": "F3",
+      "kind": "fact",
+      "label": "Fortified site and violent resistance",
+      "text": "The target site was heavily fortified, guarded by combat-equipped associates, and expected to resist with extreme violence.",
+      "sources": [
+        "S1"
+      ]
+    },
+    {
+      "id": "C1",
+      "kind": "claim",
+      "label": "Temporary site control satisfies seize-or-hold",
+      "text": "Securing and holding the target site and its approaches for the duration of the raid satisfies the seize-or-hold-territory objective.",
+      "mentions": [
+        {
+          "role": "plaintiff",
+          "phase": "arguments"
+        },
+        {
+          "role": "plaintiff",
+          "phase": "rebuttals"
+        },
+        {
+          "role": "plaintiff",
+          "phase": "closings"
+        }
+      ]
+    },
+    {
+      "id": "C2",
+      "kind": "claim",
+      "label": "Capture removes the sitting government",
+      "text": "Apprehending and transferring the Venezuelan head of state counts as removing the sitting government.",
+      "mentions": [
+        {
+          "role": "plaintiff",
+          "phase": "arguments"
+        },
+        {
+          "role": "plaintiff",
+          "phase": "closings"
+        }
+      ]
+    },
+    {
+      "id": "D1",
+      "kind": "claim",
+      "label": "Time-limited capture raid",
+      "text": "The operation was a targeted and limited capture-and-exfiltration raid rather than a territorial-control mission.",
+      "mentions": [
+        {
+          "role": "defendant",
+          "phase": "arguments"
+        },
+        {
+          "role": "defendant",
+          "phase": "surrebuttals"
+        },
+        {
+          "role": "defendant",
+          "phase": "closings"
+        }
+      ]
+    },
+    {
+      "id": "D2",
+      "kind": "claim",
+      "label": "Temporary compound security is not occupation",
+      "text": "Brief control of a fortified compound during a capture raid does not amount to territorial occupation under the edge case.",
+      "mentions": [
+        {
+          "role": "defendant",
+          "phase": "arguments"
+        },
+        {
+          "role": "defendant",
+          "phase": "surrebuttals"
+        },
+        {
+          "role": "defendant",
+          "phase": "closings"
+        }
+      ]
+    },
+    {
+      "id": "D3",
+      "kind": "claim",
+      "label": "No qualifying territorial objective",
+      "text": "The controlling sources confirm ground entry and combat posture, but they do not confirm any qualifying territorial objective.",
+      "mentions": [
+        {
+          "role": "defendant",
+          "phase": "arguments"
+        },
+        {
+          "role": "defendant",
+          "phase": "surrebuttals"
+        },
+        {
+          "role": "defendant",
+          "phase": "closings"
+        }
+      ]
+    },
+    {
+      "id": "V1",
+      "kind": "vote",
+      "label": "C1 demonstrated",
+      "text": "Temporary compound seizure meets seize-or-hold criteria, and Maduro’s capture implies government removal.",
+      "vote": "demonstrated",
+      "mentions": [
+        {
+          "role": "council",
+          "member_id": "C1",
+          "phase": "deliberation"
+        }
+      ]
+    },
+    {
+      "id": "V2",
+      "kind": "vote",
+      "label": "C2 not demonstrated",
+      "text": "The operation was a time-limited capture raid that falls within the edge case and the raid carve-out, so no qualifying territorial objective is shown.",
+      "vote": "not_demonstrated",
+      "mentions": [
+        {
+          "role": "council",
+          "member_id": "C2",
+          "phase": "deliberation"
+        }
+      ]
+    },
+    {
+      "id": "V3",
+      "kind": "vote",
+      "label": "C3 not demonstrated",
+      "text": "The controlling sources confirm entry and combat posture, but they do not confirm a qualifying territorial objective, and the carve-outs fit this fact pattern.",
+      "vote": "not_demonstrated",
+      "mentions": [
+        {
+          "role": "council",
+          "member_id": "C3",
+          "phase": "deliberation"
+        }
+      ]
+    },
+    {
+      "id": "V4",
+      "kind": "vote",
+      "label": "C4 demonstrated",
+      "text": "Holding a heavily fortified site in the capital for two hours satisfies the seize-or-hold-territory objective.",
+      "vote": "demonstrated",
+      "mentions": [
+        {
+          "role": "council",
+          "member_id": "C4",
+          "phase": "deliberation"
+        }
+      ]
+    },
+    {
+      "id": "V5",
+      "kind": "vote",
+      "label": "C5 demonstrated",
+      "text": "Capturing the head of state satisfies removing the sitting government, and the record also shows control of a fortified site during the operation.",
+      "vote": "demonstrated",
+      "mentions": [
+        {
+          "role": "council",
+          "member_id": "C5",
+          "phase": "deliberation"
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "S1",
+      "to": "F2",
+      "relation": "states"
+    },
+    {
+      "from": "S1",
+      "to": "F3",
+      "relation": "states"
+    },
+    {
+      "from": "S2",
+      "to": "F1",
+      "relation": "states"
+    },
+    {
+      "from": "S3",
+      "to": "F2",
+      "relation": "states"
+    },
+    {
+      "from": "F1",
+      "to": "C1",
+      "relation": "supports"
+    },
+    {
+      "from": "F3",
+      "to": "C1",
+      "relation": "supports"
+    },
+    {
+      "from": "F2",
+      "to": "C2",
+      "relation": "supports"
+    },
+    {
+      "from": "F1",
+      "to": "D1",
+      "relation": "supports"
+    },
+    {
+      "from": "F2",
+      "to": "D1",
+      "relation": "supports"
+    },
+    {
+      "from": "R1",
+      "to": "D2",
+      "relation": "supports"
+    },
+    {
+      "from": "R2",
+      "to": "D1",
+      "relation": "supports"
+    },
+    {
+      "from": "D1",
+      "to": "D3",
+      "relation": "supports"
+    },
+    {
+      "from": "D2",
+      "to": "D3",
+      "relation": "supports"
+    },
+    {
+      "from": "C1",
+      "to": "I1",
+      "relation": "supports"
+    },
+    {
+      "from": "C2",
+      "to": "I1",
+      "relation": "supports"
+    },
+    {
+      "from": "D3",
+      "to": "I1",
+      "relation": "attacks"
+    },
+    {
+      "from": "I1",
+      "to": "P1",
+      "relation": "supports"
+    },
+    {
+      "from": "V1",
+      "to": "C1",
+      "relation": "adopts"
+    },
+    {
+      "from": "V1",
+      "to": "C2",
+      "relation": "adopts"
+    },
+    {
+      "from": "V2",
+      "to": "D3",
+      "relation": "adopts"
+    },
+    {
+      "from": "V3",
+      "to": "D3",
+      "relation": "adopts"
+    },
+    {
+      "from": "V4",
+      "to": "C1",
+      "relation": "adopts"
+    },
+    {
+      "from": "V5",
+      "to": "C1",
+      "relation": "adopts"
+    },
+    {
+      "from": "V5",
+      "to": "C2",
+      "relation": "adopts"
+    },
+    {
+      "from": "V1",
+      "to": "P1",
+      "relation": "supports"
+    },
+    {
+      "from": "V4",
+      "to": "P1",
+      "relation": "supports"
+    },
+    {
+      "from": "V5",
+      "to": "P1",
+      "relation": "supports"
+    },
+    {
+      "from": "V2",
+      "to": "P1",
+      "relation": "attacks"
+    },
+    {
+      "from": "V3",
+      "to": "P1",
+      "relation": "attacks"
+    }
+  ]
+}
