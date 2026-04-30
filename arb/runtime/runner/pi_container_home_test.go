@@ -139,3 +139,46 @@ func TestPrepareEphemeralPIHomeStagesExplicitNonSearchModel(t *testing.T) {
 		t.Fatalf("defaultModel = %q, want openai://gpt-5", got)
 	}
 }
+
+func TestPrepareEphemeralPIHomeAppliesExplicitXProxyBaseURL(t *testing.T) {
+	commonRoot := t.TempDir()
+	etcDir := filepath.Join(commonRoot, "etc")
+	if err := os.MkdirAll(etcDir, 0o755); err != nil {
+		t.Fatalf("mkdir etc: %v", err)
+	}
+	settings := []byte("{\"defaultProvider\":\"xproxy\",\"defaultModel\":\"openai://gpt-5\"}\n")
+	models := []byte("{\"providers\":{\"xproxy\":{\"baseUrl\":\"http://127.0.0.1:18459/v1\",\"models\":[{\"id\":\"openai://gpt-5\",\"name\":\"OpenAI GPT-5\"}]}}}\n")
+	if err := os.WriteFile(filepath.Join(etcDir, "pi-settings.xproxy.json"), settings, 0o644); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(etcDir, "pi-models.xproxy.json"), models, 0o644); err != nil {
+		t.Fatalf("write models: %v", err)
+	}
+
+	const wantBaseURL = "http://host.containers.internal:18459/v1"
+	t.Setenv(piXProxyBaseURLEnvVar, wantBaseURL)
+
+	homeDir, cleanup, err := prepareEphemeralPIHome(commonRoot, "openai://gpt-5", "")
+	if err != nil {
+		t.Fatalf("prepareEphemeralPIHome returned error: %v", err)
+	}
+	defer func() {
+		if err := cleanup(); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("cleanup PI home dir: %v", err)
+		}
+	}()
+
+	modelsRaw, err := os.ReadFile(filepath.Join(homeDir, ".pi", "agent", "models.json"))
+	if err != nil {
+		t.Fatalf("read staged models: %v", err)
+	}
+	var modelsObj map[string]any
+	if err := json.Unmarshal(modelsRaw, &modelsObj); err != nil {
+		t.Fatalf("parse staged models: %v", err)
+	}
+	providers, _ := modelsObj["providers"].(map[string]any)
+	xproxyProvider, _ := providers["xproxy"].(map[string]any)
+	if got := stringValueOrDefault(xproxyProvider["baseUrl"], ""); got != wantBaseURL {
+		t.Fatalf("baseUrl = %q, want %q", got, wantBaseURL)
+	}
+}
