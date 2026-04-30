@@ -218,6 +218,21 @@ The proxy demo now stages the backend PI home through the same code path that
 ordinary attorney runs use.  `aar` exposes two helper commands for that
 purpose: one stages the PI home into a supplied directory, and one prints the
 current `_aar/*` tool catalog as JSON.  The demo script now uses those helpers
+
+## 2026-04-30
+
+### Ignore regenerated signing artifacts in `ex1`
+
+Reference: [Example signer](examples/ex1/sign.sh)
+
+`examples/ex1` regenerates `samantha_public.pem` and `confession.sig.b64` from
+the ignored source inputs `samantha_private.pem` and `confession.sig`.  Keeping
+the derived files tracked leaves the worktree dirty after an ordinary example
+run.
+
+The local `.gitignore` in `examples/ex1` now ignores those derived outputs as
+well.  The repository index must also stop tracking them, because ignore rules
+do not apply to files that Git already tracks.
 instead of carrying its own copies of `settings.json`, `models.json`, and the
 tool schema.
 
