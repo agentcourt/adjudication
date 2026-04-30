@@ -57,6 +57,7 @@ func (rc *runContext) executeAttorneyOpportunity(ctx context.Context, _ any, opp
 	}
 	decisionSubmitted := false
 	invalidDecisionAttempts := 0
+	invalidDecisionReasons := make([]string, 0)
 	responseBytes := 0
 	lastAgentToolStatus := map[string]string{}
 	pendingAgentToolInput := map[string]any{}
@@ -73,6 +74,13 @@ func (rc *runContext) executeAttorneyOpportunity(ctx context.Context, _ any, opp
 		}
 		notifyErr = err
 		cancel()
+	}
+	recordInvalidDecision := func(err error) {
+		invalidDecisionAttempts++
+		invalidDecisionReasons = append(invalidDecisionReasons, err.Error())
+		if invalidDecisionAttempts >= rc.cfg.Runtime.InvalidAttemptLimit {
+			setNotifyErr(formatInvalidAttemptLimitError(opportunity.Role, invalidDecisionReasons))
+		}
 	}
 	accumulateResponseBytes := func(value any) {
 		size, err := jsonPayloadSize(value)
@@ -228,33 +236,22 @@ func (rc *runContext) executeAttorneyOpportunity(ctx context.Context, _ any, opp
 		}
 		actionType, payload, err := attorneyDecision(opportunity, params, rc.fileByID, rc.cfg.Policy)
 		if err != nil {
-			invalidDecisionAttempts++
-			if invalidDecisionAttempts >= rc.cfg.Runtime.InvalidAttemptLimit {
-				setNotifyErr(fmt.Errorf("%s exceeded invalid-attempt limit", opportunity.Role))
-			}
+			recordInvalidDecision(err)
 			return nil, err
 		}
 		if err := rc.validateAttorneyPayloadAgainstState(opportunity, actionType, payload); err != nil {
-			invalidDecisionAttempts++
-			if invalidDecisionAttempts >= rc.cfg.Runtime.InvalidAttemptLimit {
-				setNotifyErr(fmt.Errorf("%s exceeded invalid-attempt limit", opportunity.Role))
-			}
+			recordInvalidDecision(err)
 			return nil, err
 		}
 		stepResp, err := rc.cfg.Engine.Step(rc.state, actionType, opportunity.Role, payload)
 		if err != nil {
-			invalidDecisionAttempts++
-			if invalidDecisionAttempts >= rc.cfg.Runtime.InvalidAttemptLimit {
-				setNotifyErr(fmt.Errorf("%s exceeded invalid-attempt limit", opportunity.Role))
-			}
+			recordInvalidDecision(err)
 			return nil, err
 		}
 		if ok, _ := stepResp["ok"].(bool); !ok {
-			invalidDecisionAttempts++
-			if invalidDecisionAttempts >= rc.cfg.Runtime.InvalidAttemptLimit {
-				setNotifyErr(fmt.Errorf("%s exceeded invalid-attempt limit", opportunity.Role))
-			}
-			return nil, fmt.Errorf("%s", mapString(stepResp["error"]))
+			err := fmt.Errorf("%s", mapString(stepResp["error"]))
+			recordInvalidDecision(err)
+			return nil, err
 		}
 		rc.state = mapAny(stepResp["state"])
 		decisionSubmitted = true

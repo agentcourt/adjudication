@@ -233,6 +233,21 @@ run.
 The local `.gitignore` in `examples/ex1` now ignores those derived outputs as
 well.  The repository index must also stop tracking them, because ignore rules
 do not apply to files that Git already tracks.
+
+### Invalid-attempt limit errors now preserve reasons
+
+Reference: [ACP runner](runtime/runner/acp.go), [Council runner](runtime/runner/council.go)
+
+The attorney and council runners previously replaced the decisive validation
+message with a generic invalid-attempt ceiling error on the final failed
+submission.  That made the failure hard to diagnose, because the run-level
+error lost the exact reason that had already been returned to the agent during
+the correction loop.
+
+The runner now carries the invalid reasons forward and includes them in the
+final limit error in attempt order.  That keeps the stop condition the same,
+but it makes the terminal error match the actual rejection path instead of
+hiding it behind a generic summary.
 instead of carrying its own copies of `settings.json`, `models.json`, and the
 tool schema.
 

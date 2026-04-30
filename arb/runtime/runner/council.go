@@ -46,6 +46,11 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client *ope
 	}
 	prevID := ""
 	invalidAttempts := 0
+	invalidAttemptReasons := make([]string, 0)
+	recordInvalidAttempt := func(reason string) {
+		invalidAttempts++
+		invalidAttemptReasons = append(invalidAttemptReasons, strings.TrimSpace(reason))
+	}
 	maxOutputTokens := rc.cfg.Runtime.CouncilMaxOutputTokens
 	for invalidAttempts < rc.cfg.Runtime.InvalidAttemptLimit {
 		resp, err := client.CreateResponseWithMaxOutputTokens(
@@ -59,7 +64,7 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client *ope
 		)
 		if err != nil {
 			if isFunctionArgumentParseError(err) {
-				invalidAttempts++
+				recordInvalidAttempt(err.Error())
 				inputItems = append(inputItems, map[string]any{
 					"role":    "user",
 					"content": "The previous tool call arguments were malformed. Call submit_council_vote exactly once with valid JSON arguments and keep the rationale brief.",
@@ -78,7 +83,7 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client *ope
 		}
 		prevID = resp.ResponseID
 		if len(resp.ToolCalls) != 1 {
-			invalidAttempts++
+			recordInvalidAttempt("Call submit_council_vote exactly once.")
 			inputItems = append(inputItems, map[string]any{
 				"role":    "user",
 				"content": "Call submit_council_vote exactly once.",
@@ -87,7 +92,7 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client *ope
 		}
 		call := resp.ToolCalls[0]
 		if call.Name != "submit_council_vote" {
-			invalidAttempts++
+			recordInvalidAttempt("The only allowed tool is submit_council_vote.")
 			inputItems = append(inputItems, map[string]any{
 				"role":    "user",
 				"content": "The only allowed tool is submit_council_vote.",
@@ -97,7 +102,7 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client *ope
 		payload := cloneMap(call.Arguments)
 		payload["member_id"] = memberID
 		if mapString(payload["vote"]) == "" || mapString(payload["rationale"]) == "" {
-			invalidAttempts++
+			recordInvalidAttempt("submit_council_vote requires vote and rationale.")
 			inputItems = append(inputItems, map[string]any{
 				"role":    "user",
 				"content": "submit_council_vote requires vote and rationale.",
@@ -109,10 +114,11 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client *ope
 			return err
 		}
 		if ok, _ := stepResp["ok"].(bool); !ok {
-			invalidAttempts++
+			reason := mapString(stepResp["error"])
+			recordInvalidAttempt(reason)
 			inputItems = append(inputItems, map[string]any{
 				"role":    "user",
-				"content": mapString(stepResp["error"]),
+				"content": reason,
 			})
 			continue
 		}
@@ -123,7 +129,7 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client *ope
 			"payload":   payload,
 		})
 	}
-	return fmt.Errorf("council member %s exceeded invalid-attempt limit", memberID)
+	return formatInvalidAttemptLimitError(fmt.Sprintf("council member %s", memberID), invalidAttemptReasons)
 }
 
 func (rc *runContext) removeTimedOutCouncilMember(opportunity Opportunity, seat CouncilSeat, cause error) error {

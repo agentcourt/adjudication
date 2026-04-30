@@ -247,6 +247,36 @@ func TestValidateAttorneyPayloadRejectsTooManyReports(t *testing.T) {
 	}
 }
 
+func TestFormatInvalidAttemptLimitErrorIncludesAttemptReasons(t *testing.T) {
+	err := formatInvalidAttemptLimitError("plaintiff", []string{
+		"opening statement exceeds character limit of 4000 (got 4687)",
+		"payload.text is required",
+	})
+	if err == nil {
+		t.Fatalf("expected formatted error")
+	}
+	got := err.Error()
+	if !strings.Contains(got, "plaintiff exceeded invalid-attempt limit after 2 invalid submissions") {
+		t.Fatalf("unexpected invalid-attempt summary: %s", got)
+	}
+	if !strings.Contains(got, "attempt 1: opening statement exceeds character limit of 4000 (got 4687)") {
+		t.Fatalf("missing first attempt reason: %s", got)
+	}
+	if !strings.Contains(got, "attempt 2: payload.text is required") {
+		t.Fatalf("missing second attempt reason: %s", got)
+	}
+}
+
+func TestFormatInvalidAttemptLimitErrorFallsBackWithoutReasons(t *testing.T) {
+	err := formatInvalidAttemptLimitError("plaintiff", []string{"", "  "})
+	if err == nil {
+		t.Fatalf("expected formatted error")
+	}
+	if got := err.Error(); got != "plaintiff exceeded invalid-attempt limit" {
+		t.Fatalf("unexpected fallback invalid-attempt error: %s", got)
+	}
+}
+
 func TestValidateAttorneyPayloadAgainstStateRejectsOverlongRebuttal(t *testing.T) {
 	policy := DefaultPolicy()
 	rc := &runContext{
