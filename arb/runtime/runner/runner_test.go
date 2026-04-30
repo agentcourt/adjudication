@@ -294,7 +294,7 @@ func TestFormatAttorneyInvalidDecisionErrorGuidesLengthResubmission(t *testing.T
 	if !strings.Contains(got, "This is invalid submission 1 of 3 for this opportunity. You have 2 invalid submissions remaining.") {
 		t.Fatalf("missing invalid-submission count: %s", got)
 	}
-	if !strings.Contains(got, "Resubmit at 3500 characters or fewer. Count characters, not tokens.") {
+	if !strings.Contains(got, "Resubmit at 3000 characters or fewer. Count characters, not tokens.") {
 		t.Fatalf("missing resubmission target: %s", got)
 	}
 	if !strings.Contains(got, "If you exhaust the remaining invalid submissions, this opportunity will fail and the run will end with an error.") {
@@ -486,10 +486,13 @@ func TestBuildAttorneyPromptStatesCouncilForum(t *testing.T) {
 	if !strings.Contains(prompt, "Do not invent facts, sources, quotations, files, analyses, or results.") {
 		t.Fatalf("prompt did not forbid fabrication:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "Text limit for this submission: 4000 characters.") {
+	if !strings.Contains(prompt, "When a tool returns an error, treat the error text as authoritative host feedback and correct the stated defect before trying again.") {
+		t.Fatalf("prompt did not instruct counsel to respond to tool errors:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Text limit for this submission: 5000 characters.") {
 		t.Fatalf("prompt did not state the opening text limit:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "Target length for the first submission: 3000 characters or less.") {
+	if !strings.Contains(prompt, "Target length for the first submission: 3750 characters or less.") {
 		t.Fatalf("prompt did not state the opening target length:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "Native web search through the model is available.") {

@@ -553,3 +553,21 @@ The first theorem batch proves reflexivity and transitivity, shows that every
 successful public step establishes that relation, and packages the initialized
 run form as the conjunction of the initialization frame and source-anchored
 progress from the initialized state.
+
+### Attorney tool-error handling
+
+The attorney guidance now states that tool errors are authoritative host
+feedback and that counsel must change the request before retrying the same
+tool.  I added that rule to both the standing attorney instructions and the
+always-sent attorney court prompt.  The duplication is deliberate because the
+standing file does not travel over a remote TCP ACP endpoint, while the common
+court prompt always does.
+
+### Opening cap and target margin
+
+The next policy change raises `max_opening_chars` from `4000` to `5000` in both
+the built-in default policy and the checked-in `etc/policy.json` that `make`
+targets load by default.  The target-length guidance now uses 75% of the hard
+cap again for both the first-submission prompt target and the retry hint.  That
+gives openings a `3750` target under a `5000` cap, while leaving the hard cap
+itself configurable through policy JSON.

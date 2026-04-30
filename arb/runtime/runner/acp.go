@@ -901,7 +901,7 @@ func targetSubmissionCharLimit(limit int) int {
 	}
 	target := (limit * 3) / 4
 	if target <= 0 {
-		return limit
+		target = limit
 	}
 	return target
 }

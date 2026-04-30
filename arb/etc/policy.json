@@ -3,7 +3,7 @@
   "evidence_standard": "Preponderance of the evidence.",
   "required_votes_for_decision": 3,
   "max_deliberation_rounds": 3,
-  "max_opening_chars": 4000,
+  "max_opening_chars": 5000,
   "max_argument_chars": 6000,
   "max_rebuttal_chars": 4000,
   "max_surrebuttal_chars": 4000,

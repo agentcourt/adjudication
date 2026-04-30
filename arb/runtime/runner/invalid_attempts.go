@@ -171,15 +171,7 @@ func resubmissionCharLimit(limit int) int {
 	if limit <= 0 {
 		return 0
 	}
-	target := limit - 500
-	floor := targetSubmissionCharLimit(limit)
-	if target < floor {
-		target = floor
-	}
-	if target <= 0 || target > limit {
-		return limit
-	}
-	return target
+	return targetSubmissionCharLimit(limit)
 }
 
 func invalidSubmissionWord(count int) string {

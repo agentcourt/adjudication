@@ -14,7 +14,7 @@ func DefaultPolicy() Policy {
 		EvidenceStandard:         "Preponderance of the evidence.",
 		RequiredVotesForDecision: 3,
 		MaxDeliberationRounds:    3,
-		MaxOpeningChars:          4000,
+		MaxOpeningChars:          5000,
 		MaxArgumentChars:         6000,
 		MaxRebuttalChars:         4000,
 		MaxSurrebuttalChars:      4000,
