@@ -1,4 +1,4 @@
-.PHONY: build build-image test prove demo ex2 clean
+.PHONY: build build-image test prove demo ex2 ex3 clean
 
 BIN_DIR := .bin
 GO_ENV := CGO_ENABLED=0 GOCACHE=$(CURDIR)/.cache/go-build
@@ -28,6 +28,11 @@ ex2: build
 	rm -rf out/ex2-demo
 	.bin/aard complain --situation examples/ex2/situation.md --out examples/ex2/complaint.md
 	.bin/aard case --complaint examples/ex2/complaint.md --out-dir out/ex2-demo --attorney-model $(ATTORNEY_MODEL)
+
+ex3: build
+	rm -rf out/ex3-demo
+	.bin/aard complain --situation examples/ex3/situation.md --out examples/ex3/complaint.md
+	.bin/aard case --complaint examples/ex3/complaint.md --out-dir out/ex3-demo --attorney-model $(ATTORNEY_MODEL)
 
 clean:
 	rm -rf $(BIN_DIR) .cache engine/.lake/build out

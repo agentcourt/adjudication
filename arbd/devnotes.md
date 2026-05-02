@@ -41,3 +41,9 @@ The proof-oriented `arb/docs/` files were omitted on purpose.  `arbd` has a smal
 `arbd/examples/ex2/` now follows the same narrow pattern as `ex1`, but with two short stories instead of two sonnets.  The 2024 story, `first-story.md`, describes a near-future city whose civic AI assigns small mercies.  The 2025 story, `second-story.md`, tracks the same plot, scene order, and motifs with paraphrastic substitutions and relabeled set-pieces.
 
 `arbd/Makefile` now has an `ex2` target that mirrors `arb`'s named example targets.  Running `make ex2` rebuilt the tools, drafted `examples/ex2/complaint.md`, and completed a full live case at `out/ex2-demo`.  The final answer map was `{"C1":79,"C2":90,"C3":87,"C4":86,"C5":94}`.
+
+### Example 3
+
+`arbd/examples/ex3/` reuses the same 2024 base story as `ex2`, but pairs it with a 2025 story that is only loosely related.  The second story keeps some of the same named places and people, along with the same near-future municipal-AI setting, but changes the conflict, the central mechanism, the scene sequence, and most of the phrasing.  The point was to give `arbd` a case where common world-building and cast should not by themselves force a high score.
+
+`arbd/Makefile` now has an `ex3` target as well.  Running `make ex3` drafted `examples/ex3/complaint.md` and completed a full live case at `out/ex3-demo`.  The final answer map was `{"C1":42,"C2":62,"C3":55,"C4":52,"C5":60}`, which is materially lower than `ex2` and fits the intended design of the example.
