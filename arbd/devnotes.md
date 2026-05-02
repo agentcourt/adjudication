@@ -4,7 +4,7 @@
 
 ### Initial fork from `arb`
 
-`arbd/` began as a bounded fork of `arb/`, but it does not preserve the binary decision model.  The fork keeps the same high-level merits sequence and the same council-member machinery.  It changes the complaint from `Question` instead of `Proposition`, changes the policy field from `judgment_standard`, and changes the deliberation act from a binary vote to one integer answer in `[0,100]`.
+`arbd/` began as a bounded fork of `arb/`, but it does not preserve the binary decision model.  The fork keeps the same high-level merits sequence and the same council-member machinery.  It changes the complaint from `Proposition` to `Question`, changes the policy field from standard-of-evidence framing to `judgment_standard`, and changes the deliberation act from a binary vote to one integer answer in `[0,100]`.
 
 The final result is the answer set itself.  The runtime exports that result as a Go map keyed by `member_id`.  The engine does not compute a threshold outcome, an aggregate, or a `no_majority` result.  Closure now follows one condition: every seated council member has answered once in the round.
 
@@ -29,3 +29,9 @@ The first live `arbd` case run exposed a missing local prerequisite rather than 
 The first live council runs exposed a transport mismatch with the shared council pool, not a Lean defect.  `arb` asks council models for a string-valued tool argument, while the first `arbd` draft asked the same mixed pool for a JSON integer.  That difference was enough to trigger repeated invalid council submissions under the normal `make demo` path.
 
 `arbd` now matches `arb` at the tool boundary: the council tool asks for digit-only string input, and the Go runner normalizes that input to an integer before it calls the Lean engine.  The engine and the final run artifacts still store numeric answers.  After that change, `make demo` completed successfully on the sonnet example with final answers `{"C1":82,"C2":82,"C3":82,"C4":82,"C5":87}`.
+
+### Documentation set
+
+`arbd/docs/` now mirrors the core non-proof `arb/docs/` set with procedure-specific replacements: `ARAP.md`, `councils.md`, `goals.md`, `params.md`, and `practice.md`.  The text stays close to the working implementation rather than speculating about later aggregation or convergence designs.
+
+The proof-oriented `arb/docs/` files were omitted on purpose.  `arbd` has a smaller proof surface, and the user asked for the procedural and practical documents first.  The documentation review pass focused on direct statement, explicit procedure description, and removal of binary-outcome phrasing that did not fit the degree model.
