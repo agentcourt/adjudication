@@ -260,9 +260,13 @@ func expandExplicitCaseFilePattern(pattern string) ([]string, error) {
 }
 
 func validateExplicitCaseFilePath(path string) error {
+	base := strings.ToLower(filepath.Base(path))
+	if base == ".gitignore" {
+		return fmt.Errorf("explicit case file %s uses prohibited filename %q", path, base)
+	}
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
-	case ".gitignore", ".sh", ".sig":
+	case ".sh", ".sig":
 		return fmt.Errorf("explicit case file %s uses prohibited extension %q", path, ext)
 	default:
 		return nil

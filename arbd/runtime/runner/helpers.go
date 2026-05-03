@@ -201,6 +201,7 @@ func sampleCouncil(path string, baseDir string, count int) ([]CouncilSeat, error
 			MemberID:    fmt.Sprintf("C%d", i+1),
 			Model:       spec.Model,
 			PersonaFile: spec.File,
+			Status:      "seated",
 			PersonaText: spec.Text,
 		})
 	}
@@ -228,6 +229,25 @@ func caseFileMetas(files []CaseFile) []CaseFileMeta {
 			Name:         file.Name,
 			MimeType:     file.MimeType,
 			TextReadable: file.TextReadable,
+		})
+	}
+	return out
+}
+
+func finalCouncil(state map[string]any) []CouncilSeat {
+	caseObj := mapAny(state["case"])
+	rawCouncil := mapList(caseObj["council_members"])
+	out := make([]CouncilSeat, 0, len(rawCouncil))
+	for _, raw := range rawCouncil {
+		status := mapString(raw["status"])
+		if status == "" {
+			status = "seated"
+		}
+		out = append(out, CouncilSeat{
+			MemberID:    mapString(raw["member_id"]),
+			Model:       mapString(raw["model"]),
+			PersonaFile: mapString(raw["persona_filename"]),
+			Status:      status,
 		})
 	}
 	return out

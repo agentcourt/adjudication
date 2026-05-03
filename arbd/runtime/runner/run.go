@@ -123,7 +123,7 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 				Answers:          currentAnswers(rc.state),
 				Attorneys:        attorneys,
 				CaseFiles:        caseFileMetas(caseFiles),
-				Council:          council,
+				Council:          finalCouncil(rc.state),
 				Events:           rc.events,
 				FinalState:       rc.state,
 				FinalReason:      reason,

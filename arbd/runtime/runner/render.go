@@ -160,11 +160,15 @@ func appendComplaintSection(b *strings.Builder, result Result) {
 func appendCouncilSection(b *strings.Builder, result Result, includePersona bool) {
 	b.WriteString("\n\n## Council\n\n")
 	for _, seat := range result.Council {
+		status := strings.TrimSpace(seat.Status)
+		if status == "" {
+			status = "seated"
+		}
 		if includePersona {
-			b.WriteString(fmt.Sprintf("- %s: %s (%s)\n", seat.MemberID, seat.Model, seat.PersonaFile))
+			b.WriteString(fmt.Sprintf("- %s: %s (%s), status: %s\n", seat.MemberID, seat.Model, seat.PersonaFile, status))
 			continue
 		}
-		b.WriteString(fmt.Sprintf("- %s: %s\n", seat.MemberID, seat.Model))
+		b.WriteString(fmt.Sprintf("- %s: %s, status: %s\n", seat.MemberID, seat.Model, status))
 	}
 }
 

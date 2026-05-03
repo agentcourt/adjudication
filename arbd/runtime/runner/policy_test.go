@@ -24,3 +24,31 @@ func TestCurrentAnswersBuildsMemberMap(t *testing.T) {
 		t.Fatalf("currentAnswers = %#v", answers)
 	}
 }
+
+func TestFinalCouncilBuildsSeatStatusesFromState(t *testing.T) {
+	state := map[string]any{
+		"case": map[string]any{
+			"council_members": []any{
+				map[string]any{
+					"member_id":        "C1",
+					"model":            "m1",
+					"persona_filename": "p1",
+					"status":           "seated",
+				},
+				map[string]any{
+					"member_id":        "C2",
+					"model":            "m2",
+					"persona_filename": "p2",
+					"status":           "timed_out",
+				},
+			},
+		},
+	}
+	council := finalCouncil(state)
+	if len(council) != 2 {
+		t.Fatalf("len(finalCouncil) = %d, want 2", len(council))
+	}
+	if council[0].Status != "seated" || council[1].Status != "timed_out" {
+		t.Fatalf("finalCouncil statuses = %#v", council)
+	}
+}

@@ -106,6 +106,7 @@ type CouncilSeat struct {
 	MemberID    string `json:"member_id"`
 	Model       string `json:"model"`
 	PersonaFile string `json:"persona_file"`
+	Status      string `json:"status"`
 	PersonaText string `json:"-"`
 }
 

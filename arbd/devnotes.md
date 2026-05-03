@@ -47,3 +47,11 @@ The proof-oriented `arb/docs/` files were omitted on purpose.  `arbd` has a smal
 `arbd/examples/ex3/` reuses the same 2024 base story as `ex2`, but pairs it with a 2025 story that is only loosely related.  The second story keeps some of the same named places and people, along with the same near-future municipal-AI setting, but changes the conflict, the central mechanism, the scene sequence, and most of the phrasing.  The point was to give `arbd` a case where common world-building and cast should not by themselves force a high score.
 
 `arbd/Makefile` now has an `ex3` target as well.  Running `make ex3` drafted `examples/ex3/complaint.md` and completed a full live case at `out/ex3-demo`.  The final answer map was `{"C1":42,"C2":62,"C3":55,"C4":52,"C5":60}`, which is materially lower than `ex2` and fits the intended design of the example.
+
+### Artifact fidelity and explicit file filtering
+
+The first review pass found two runtime issues worth fixing.  First, the exported `council.json`, `run.json`, digest, and transcript used the initially sampled council list even after the Lean state had marked a member `timed_out` or otherwise removed.  That made the packet misleading in exactly the cases where a reader most needs the status history.
+
+`arbd` now derives the exported council list from the final Lean state.  That keeps the packet aligned with the source of truth and carries each member's final `status` into JSON and the rendered markdown reports.  The runner still keeps the sampled council list in memory for persona text during live execution.
+
+The same review found that `--file .gitignore` slipped past `validateExplicitCaseFilePath`, because `filepath.Ext(".gitignore")` is empty.  The validator now rejects `.gitignore` by basename before it checks ordinary extensions.  That change affects only the explicit `--file` path, which is where the gap existed.

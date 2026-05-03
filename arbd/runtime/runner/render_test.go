@@ -13,8 +13,8 @@ func TestRenderDigestShowsAnswerMap(t *testing.T) {
 		JudgmentStandard: "Answer with one integer.",
 		Answers:          map[string]int{"C1": 72, "C2": 45},
 		Council: []CouncilSeat{
-			{MemberID: "C1", Model: "m1", PersonaFile: "p1"},
-			{MemberID: "C2", Model: "m2", PersonaFile: "p2"},
+			{MemberID: "C1", Model: "m1", PersonaFile: "p1", Status: "seated"},
+			{MemberID: "C2", Model: "m2", PersonaFile: "p2", Status: "timed_out"},
 		},
 		FinalState: map[string]any{
 			"case": map[string]any{
@@ -41,5 +41,8 @@ func TestRenderDigestShowsAnswerMap(t *testing.T) {
 	}
 	if !strings.Contains(out, "## Council Answers") {
 		t.Fatalf("digest missing council answers section:\n%s", out)
+	}
+	if !strings.Contains(out, "- C2: m2 (p2), status: timed_out") {
+		t.Fatalf("digest missing council status:\n%s", out)
 	}
 }

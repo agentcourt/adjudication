@@ -37,3 +37,9 @@ func TestWriteCaseSummaryWritesJSON(t *testing.T) {
 		t.Fatalf("decoded summary = %#v", decoded)
 	}
 }
+
+func TestValidateExplicitCaseFilePathRejectsDotGitignore(t *testing.T) {
+	if err := validateExplicitCaseFilePath(".gitignore"); err == nil {
+		t.Fatal("validateExplicitCaseFilePath returned nil error, want failure")
+	}
+}
