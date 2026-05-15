@@ -6,22 +6,24 @@ import (
 )
 
 type Policy struct {
-	CouncilSize              int    `json:"council_size"`
-	EvidenceStandard         string `json:"evidence_standard"`
-	RequiredVotesForDecision int    `json:"required_votes_for_decision"`
-	MaxDeliberationRounds    int    `json:"max_deliberation_rounds"`
-	MaxOpeningChars          int    `json:"max_opening_chars"`
-	MaxArgumentChars         int    `json:"max_argument_chars"`
-	MaxRebuttalChars         int    `json:"max_rebuttal_chars"`
-	MaxSurrebuttalChars      int    `json:"max_surrebuttal_chars"`
-	MaxClosingChars          int    `json:"max_closing_chars"`
-	MaxExhibitsPerFiling     int    `json:"max_exhibits_per_filing"`
-	MaxExhibitsPerSide       int    `json:"max_exhibits_per_side"`
-	MaxExhibitBytes          int    `json:"max_exhibit_bytes"`
-	MaxReportsPerFiling      int    `json:"max_reports_per_filing"`
-	MaxReportsPerSide        int    `json:"max_reports_per_side"`
-	MaxReportTitleBytes      int    `json:"max_report_title_bytes"`
-	MaxReportSummaryBytes    int    `json:"max_report_summary_bytes"`
+	CouncilSize                 int    `json:"council_size"`
+	EvidenceStandard            string `json:"evidence_standard"`
+	RequiredVotesForDecision    int    `json:"required_votes_for_decision"`
+	MaxDeliberationRounds       int    `json:"max_deliberation_rounds"`
+	MaxOpeningChars             int    `json:"max_opening_chars"`
+	MaxArgumentChars            int    `json:"max_argument_chars"`
+	MaxRebuttalChars            int    `json:"max_rebuttal_chars"`
+	MaxSurrebuttalChars         int    `json:"max_surrebuttal_chars"`
+	MaxClosingChars             int    `json:"max_closing_chars"`
+	MaxExhibitsPerFiling        int    `json:"max_exhibits_per_filing"`
+	MaxExhibitsPerSide          int    `json:"max_exhibits_per_side"`
+	MaxExhibitBytes             int    `json:"max_exhibit_bytes"`
+	MaxReportsPerFiling         int    `json:"max_reports_per_filing"`
+	MaxReportsPerSide           int    `json:"max_reports_per_side"`
+	MaxReportTitleBytes         int    `json:"max_report_title_bytes"`
+	MaxReportSummaryBytes       int    `json:"max_report_summary_bytes"`
+	MaxSubmittedEvidencePerSide int    `json:"max_submitted_evidence_per_side"`
+	MaxSubmittedEvidenceBytes   int    `json:"max_submitted_evidence_bytes"`
 }
 
 type RuntimeLimits struct {
@@ -41,8 +43,8 @@ type AttorneyRoleConfig struct {
 
 type AttorneyRunInfo struct {
 	Role          string `json:"role"`
-	Model         string `json:"model"`
-	SearchEnabled bool   `json:"search_enabled"`
+	Model         string `json:"model,omitempty"`
+	SearchEnabled *bool  `json:"search_enabled,omitempty"`
 	ACPTransport  string `json:"acp_transport"`
 	ACPCommand    string `json:"acp_command,omitempty"`
 	ACPEndpoint   string `json:"acp_endpoint,omitempty"`
@@ -71,20 +73,21 @@ type Config struct {
 }
 
 type Result struct {
-	RunID            string            `json:"run_id"`
-	StartedAt        string            `json:"started_at"`
-	FinishedAt       string            `json:"finished_at"`
-	Status           string            `json:"status"`
-	Phase            string            `json:"phase"`
-	Resolution       string            `json:"resolution"`
-	Complaint        spec.Complaint    `json:"complaint"`
-	EvidenceStandard string            `json:"evidence_standard"`
-	Attorneys        []AttorneyRunInfo `json:"attorneys"`
-	CaseFiles        []CaseFileMeta    `json:"case_files"`
-	Council          []CouncilSeat     `json:"council"`
-	Events           []Event           `json:"events"`
-	FinalState       map[string]any    `json:"final_state"`
-	FinalReason      string            `json:"final_reason"`
+	RunID             string                  `json:"run_id"`
+	StartedAt         string                  `json:"started_at"`
+	FinishedAt        string                  `json:"finished_at"`
+	Status            string                  `json:"status"`
+	Phase             string                  `json:"phase"`
+	Resolution        string                  `json:"resolution"`
+	Complaint         spec.Complaint          `json:"complaint"`
+	EvidenceStandard  string                  `json:"evidence_standard"`
+	Attorneys         []AttorneyRunInfo       `json:"attorneys"`
+	CaseFiles         []CaseFileMeta          `json:"case_files"`
+	SubmittedEvidence []SubmittedEvidenceMeta `json:"submitted_evidence,omitempty"`
+	Council           []CouncilSeat           `json:"council"`
+	Events            []Event                 `json:"events"`
+	FinalState        map[string]any          `json:"final_state"`
+	FinalReason       string                  `json:"final_reason"`
 }
 
 type CaseFile struct {
@@ -102,6 +105,21 @@ type CaseFileMeta struct {
 	Name         string `json:"name"`
 	MimeType     string `json:"mime_type"`
 	TextReadable bool   `json:"text_readable"`
+}
+
+type SubmittedEvidenceMeta struct {
+	Phase              string `json:"phase"`
+	Role               string `json:"role"`
+	FileID             string `json:"file_id"`
+	Name               string `json:"name"`
+	Title              string `json:"title"`
+	SourceURL          string `json:"source_url,omitempty"`
+	SourceDescription  string `json:"source_description,omitempty"`
+	MimeType           string `json:"mime_type"`
+	RetrievalTimestamp string `json:"retrieval_timestamp"`
+	Relevance          string `json:"relevance"`
+	SHA256             string `json:"sha256"`
+	SizeBytes          int    `json:"size_bytes"`
 }
 
 type CouncilSeat struct {
@@ -130,15 +148,16 @@ type Event struct {
 }
 
 type runContext struct {
-	cfg             Config
-	complaint       spec.Complaint
-	state           map[string]any
-	caseFiles       []CaseFile
-	fileByID        map[string]CaseFile
-	council         []CouncilSeat
-	attorneys       map[string]AttorneyRunInfo
-	acpSessions     map[string]*acpPersistentSession
-	workProductDirs map[string]string
-	events          []Event
-	turn            int
+	cfg               Config
+	complaint         spec.Complaint
+	state             map[string]any
+	caseFiles         []CaseFile
+	fileByID          map[string]CaseFile
+	submittedEvidence []SubmittedEvidenceMeta
+	council           []CouncilSeat
+	attorneys         map[string]AttorneyRunInfo
+	acpSessions       map[string]*acpPersistentSession
+	workProductDirs   map[string]string
+	events            []Event
+	turn              int
 }

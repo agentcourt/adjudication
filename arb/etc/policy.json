@@ -14,5 +14,7 @@
   "max_reports_per_filing": 3,
   "max_reports_per_side": 4,
   "max_report_title_bytes": 256,
-  "max_report_summary_bytes": 8192
+  "max_report_summary_bytes": 8192,
+  "max_submitted_evidence_per_side": 8,
+  "max_submitted_evidence_bytes": 131072
 }

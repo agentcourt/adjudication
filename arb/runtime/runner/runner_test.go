@@ -2,6 +2,8 @@ package runner
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,6 +37,53 @@ func TestLoadCaseFiles(t *testing.T) {
 	}
 	if files[0].FileID != "instructions.txt" || files[1].FileID != "samantha_public.pem" {
 		t.Fatalf("unexpected files: %#v", files)
+	}
+}
+
+func TestPrepareSubmittedEvidencePreservesContentAndBuildsVisibleFile(t *testing.T) {
+	dir := t.TempDir()
+	rc := &runContext{
+		cfg: Config{
+			OutputDir: dir,
+			Policy:    DefaultPolicy(),
+		},
+		submittedEvidence: []SubmittedEvidenceMeta{},
+	}
+	opportunity := Opportunity{Role: "plaintiff", Phase: "arguments"}
+	content := "  exact text\n"
+	meta, raw, err := rc.prepareSubmittedEvidence(opportunity, map[string]any{
+		"title":                  "Source post",
+		"source_url":             "https://example.test/post",
+		"mime_type":              "text/plain",
+		"relevance":              "Shows the disputed announcement.",
+		"content":                content,
+		"retrieval_timestamp":    "2026-05-14T23:00:00Z",
+		"preferred_filename_ext": "txt",
+	})
+	if err != nil {
+		t.Fatalf("prepareSubmittedEvidence returned error: %v", err)
+	}
+	if string(raw) != content {
+		t.Fatalf("raw content = %q, want %q", string(raw), content)
+	}
+	sum := sha256.Sum256([]byte(content))
+	wantSHA := hex.EncodeToString(sum[:])
+	if meta.SHA256 != wantSHA {
+		t.Fatalf("sha = %s, want %s", meta.SHA256, wantSHA)
+	}
+	file, err := rc.writeSubmittedEvidenceFile(meta, raw)
+	if err != nil {
+		t.Fatalf("writeSubmittedEvidenceFile returned error: %v", err)
+	}
+	if file.FileID != meta.FileID || !file.TextReadable || file.Text != content {
+		t.Fatalf("written file metadata = %#v", file)
+	}
+	written, err := os.ReadFile(file.Path)
+	if err != nil {
+		t.Fatalf("read written evidence: %v", err)
+	}
+	if string(written) != content {
+		t.Fatalf("written content = %q, want %q", string(written), content)
 	}
 }
 
@@ -211,6 +260,31 @@ func TestValidateAttorneyPayloadRejectsSupplementalMaterialsInSurrebuttal(t *tes
 	}
 	if err := validateAttorneyPayload("submit_surrebuttal", surrebuttal, fileByID, policy); err == nil {
 		t.Fatalf("expected surrebuttal technical_reports to be rejected")
+	}
+}
+
+func TestValidateAttorneyPayloadRejectsSupplementalMaterialsInClosing(t *testing.T) {
+	policy := DefaultPolicy()
+	fileByID := map[string]CaseFile{
+		"instructions.txt": {FileID: "instructions.txt", SizeBytes: 128},
+	}
+	closing := map[string]any{
+		"text": "closing",
+		"offered_files": []any{
+			map[string]any{"file_id": "instructions.txt"},
+		},
+	}
+	if err := validateAttorneyPayload("deliver_closing_statement", closing, fileByID, policy); err == nil {
+		t.Fatalf("expected closing offered_files to be rejected")
+	}
+	closing = map[string]any{
+		"text": "closing",
+		"technical_reports": []any{
+			map[string]any{"title": "Late report", "summary": "New analysis."},
+		},
+	}
+	if err := validateAttorneyPayload("deliver_closing_statement", closing, fileByID, policy); err == nil {
+		t.Fatalf("expected closing technical_reports to be rejected")
 	}
 }
 
@@ -606,16 +680,16 @@ func TestACPToolSpecsArePhaseSpecific(t *testing.T) {
 	for _, spec := range argumentSpecs {
 		argumentTools = append(argumentTools, mapString(spec["toolName"]))
 	}
-	if !slices.Contains(argumentTools, "aar_list_case_files") || !slices.Contains(argumentTools, "aar_read_case_text_file") || !slices.Contains(argumentTools, "aar_write_case_file") {
-		t.Fatalf("argument tools did not expose case-file access: %#v", argumentTools)
+	if !slices.Contains(argumentTools, "aar_list_case_files") || !slices.Contains(argumentTools, "aar_read_case_text_file") || !slices.Contains(argumentTools, "aar_write_case_file") || !slices.Contains(argumentTools, "aar_submit_evidence") {
+		t.Fatalf("argument tools did not expose case-file and evidence access: %#v", argumentTools)
 	}
 	rebuttalSpecs := acpToolSpecs(Opportunity{Phase: "rebuttals"}, true)
 	rebuttalTools := make([]string, 0, len(rebuttalSpecs))
 	for _, spec := range rebuttalSpecs {
 		rebuttalTools = append(rebuttalTools, mapString(spec["toolName"]))
 	}
-	if !slices.Contains(rebuttalTools, "aar_list_case_files") || !slices.Contains(rebuttalTools, "aar_read_case_text_file") || !slices.Contains(rebuttalTools, "aar_write_case_file") {
-		t.Fatalf("rebuttal tools did not expose case-file access: %#v", rebuttalTools)
+	if !slices.Contains(rebuttalTools, "aar_list_case_files") || !slices.Contains(rebuttalTools, "aar_read_case_text_file") || !slices.Contains(rebuttalTools, "aar_write_case_file") || !slices.Contains(rebuttalTools, "aar_submit_evidence") {
+		t.Fatalf("rebuttal tools did not expose case-file and evidence access: %#v", rebuttalTools)
 	}
 	var submitSpec map[string]any
 	for _, spec := range argumentSpecs {
@@ -707,17 +781,17 @@ func TestBuildAttorneyPromptConstrainsArgumentExperiments(t *testing.T) {
 	if !strings.Contains(prompt, "Technical reports: at most 3 in this filing. This side has used 0 of 4 total, with 4 left.") {
 		t.Fatalf("argument prompt did not state report limits:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "capture it accurately and introduce it through technical_reports") {
-		t.Fatalf("argument prompt did not require outside material to enter through technical reports:\n%s", prompt)
+	if !strings.Contains(prompt, "submit its content and provenance with aar_submit_evidence") {
+		t.Fatalf("argument prompt did not require outside source material to enter as submitted evidence:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "write the needed visible case file into the workspace first") {
 		t.Fatalf("argument prompt did not instruct counsel to materialize exact file bytes:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "Use only visible case file_id values in offered_files. Do not use workspace paths, downloaded filenames, or invented names there.") {
+	if !strings.Contains(prompt, "Use only visible case file_id values in offered_files. Submit new source material first with aar_submit_evidence") {
 		t.Fatalf("argument prompt did not restrict offered_files to visible file ids:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "Outside material that is not already a visible case file belongs in technical_reports, not offered_files.") {
-		t.Fatalf("argument prompt did not distinguish technical reports from offered files:\n%s", prompt)
+	if !strings.Contains(prompt, "Use technical_reports for attorney analysis or synthesized work product") {
+		t.Fatalf("argument prompt did not distinguish technical reports from source evidence:\n%s", prompt)
 	}
 }
 
@@ -806,7 +880,7 @@ func TestBuildAttorneyPromptAllowsRebuttalSupplementalMaterials(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildAttorneyPrompt returned error: %v", err)
 	}
-	if !strings.Contains(prompt, "Offer exhibits and technical reports only if they directly answer the opposing argument.") {
+	if !strings.Contains(prompt, "Offer exhibits, submitted evidence, and technical reports only if they directly answer the opposing argument.") {
 		t.Fatalf("rebuttal prompt did not allow targeted supplemental materials:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "Text limit for this submission: 4000 characters.") {
@@ -827,8 +901,8 @@ func TestBuildAttorneyPromptAllowsRebuttalSupplementalMaterials(t *testing.T) {
 	if !strings.Contains(prompt, "Use offered_files only for visible case files, by file_id.") {
 		t.Fatalf("rebuttal prompt did not restrict offered_files to visible file ids:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "introduce it through technical_reports") {
-		t.Fatalf("rebuttal prompt did not require outside material to enter through technical reports:\n%s", prompt)
+	if !strings.Contains(prompt, "submit its content and provenance with aar_submit_evidence") {
+		t.Fatalf("rebuttal prompt did not require outside source material to enter as submitted evidence:\n%s", prompt)
 	}
 }
 
@@ -892,8 +966,9 @@ func TestWriteCaseFileToWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("writeCaseFileToWorkspace returned error: %v", err)
 	}
-	if path != "/home/user/confession.txt" {
-		t.Fatalf("workspace path = %q, want /home/user/confession.txt", path)
+	want := filepath.ToSlash(filepath.Join(defaultRemoteSessionCwd, "confession.txt"))
+	if path != want {
+		t.Fatalf("workspace path = %q, want %q", path, want)
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, "confession.txt"))
 	if err != nil {

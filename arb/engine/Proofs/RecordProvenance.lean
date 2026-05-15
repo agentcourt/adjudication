@@ -656,6 +656,34 @@ theorem step_submit_surrebuttal_extends_materials
     (addFiling_preserves_offered_files s.case "surrebuttals" "defendant" (trimString rawText))
     (addFiling_preserves_technical_reports s.case "surrebuttals" "defendant" (trimString rawText))
 
+theorem step_submit_evidence_preserves_recordProvenance
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "submit_evidence")
+    (hProv : recordProvenance s)
+    (hStep : step { state := s, action := action } = .ok t) :
+    recordProvenance t := by
+  have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
+    simpa [step, hType] using hStep
+  rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
+  exact stateWithCase_preserves_recordProvenance s _
+    (by simp [appendSubmittedEvidence])
+    (by simp [appendSubmittedEvidence])
+    hProv
+
+theorem step_submit_evidence_extends_materials
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "submit_evidence")
+    (hStep : step { state := s, action := action } = .ok t) :
+    materialsExtend s t := by
+  have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
+    simpa [step, hType] using hStep
+  rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
+  exact stateWithCase_extends_materials s _
+    (by simp [appendSubmittedEvidence])
+    (by simp [appendSubmittedEvidence])
+
 theorem step_deliver_closing_statement_preserves_recordProvenance
     (s t : ArbitrationState)
     (action : CourtAction)
@@ -898,15 +926,17 @@ theorem step_preserves_recordProvenance
       · exact step_submit_rebuttal_preserves_recordProvenance s t action hRebuttal hProv hStep
       · by_cases hSurrebuttal : action.action_type = "submit_surrebuttal"
         · exact step_submit_surrebuttal_preserves_recordProvenance s t action hSurrebuttal hProv hStep
-        · by_cases hClosing : action.action_type = "deliver_closing_statement"
-          · exact step_deliver_closing_statement_preserves_recordProvenance s t action hClosing hProv hStep
-          · by_cases hPass : action.action_type = "pass_phase_opportunity"
-            · exact step_pass_phase_opportunity_preserves_recordProvenance s t action hPass hProv hStep
-            · by_cases hVote : action.action_type = "submit_council_vote"
-              · exact step_submit_council_vote_preserves_recordProvenance s t action hVote hProv hStep
-              · by_cases hRemoval : action.action_type = "remove_council_member"
-                · exact step_remove_council_member_preserves_recordProvenance s t action hRemoval hProv hStep
-                · simp [step] at hStep
+        · by_cases hEvidence : action.action_type = "submit_evidence"
+          · exact step_submit_evidence_preserves_recordProvenance s t action hEvidence hProv hStep
+          · by_cases hClosing : action.action_type = "deliver_closing_statement"
+            · exact step_deliver_closing_statement_preserves_recordProvenance s t action hClosing hProv hStep
+            · by_cases hPass : action.action_type = "pass_phase_opportunity"
+              · exact step_pass_phase_opportunity_preserves_recordProvenance s t action hPass hProv hStep
+              · by_cases hVote : action.action_type = "submit_council_vote"
+                · exact step_submit_council_vote_preserves_recordProvenance s t action hVote hProv hStep
+                · by_cases hRemoval : action.action_type = "remove_council_member"
+                  · exact step_remove_council_member_preserves_recordProvenance s t action hRemoval hProv hStep
+                  · simp [step] at hStep
 
 /--
 Every successful public step extends the admitted-material lists by appending a
@@ -925,15 +955,17 @@ theorem step_extends_materials
       · exact step_submit_rebuttal_extends_materials s t action hRebuttal hStep
       · by_cases hSurrebuttal : action.action_type = "submit_surrebuttal"
         · exact step_submit_surrebuttal_extends_materials s t action hSurrebuttal hStep
-        · by_cases hClosing : action.action_type = "deliver_closing_statement"
-          · exact step_deliver_closing_statement_extends_materials s t action hClosing hStep
-          · by_cases hPass : action.action_type = "pass_phase_opportunity"
-            · exact step_pass_phase_opportunity_extends_materials s t action hPass hStep
-            · by_cases hVote : action.action_type = "submit_council_vote"
-              · exact step_submit_council_vote_extends_materials s t action hVote hStep
-              · by_cases hRemoval : action.action_type = "remove_council_member"
-                · exact step_remove_council_member_extends_materials s t action hRemoval hStep
-                · simp [step] at hStep
+        · by_cases hEvidence : action.action_type = "submit_evidence"
+          · exact step_submit_evidence_extends_materials s t action hEvidence hStep
+          · by_cases hClosing : action.action_type = "deliver_closing_statement"
+            · exact step_deliver_closing_statement_extends_materials s t action hClosing hStep
+            · by_cases hPass : action.action_type = "pass_phase_opportunity"
+              · exact step_pass_phase_opportunity_extends_materials s t action hPass hStep
+              · by_cases hVote : action.action_type = "submit_council_vote"
+                · exact step_submit_council_vote_extends_materials s t action hVote hStep
+                · by_cases hRemoval : action.action_type = "remove_council_member"
+                  · exact step_remove_council_member_extends_materials s t action hRemoval hStep
+                  · simp [step] at hStep
 
 /--
 Every reachable state satisfies record provenance.

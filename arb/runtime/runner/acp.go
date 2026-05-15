@@ -2,6 +2,9 @@ package runner
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -230,6 +233,50 @@ func (rc *runContext) executeAttorneyOpportunity(ctx context.Context, _ any, opp
 			"workspace_path": path,
 		}, nil
 	})
+	client.HandleMethod(acpCustomMethod("submit_evidence"), func(_ context.Context, params map[string]any) (map[string]any, error) {
+		meta, raw, err := rc.prepareSubmittedEvidence(opportunity, params)
+		if err != nil {
+			return nil, recordInvalidDecision(err)
+		}
+		payload := submittedEvidencePayload(meta)
+		stepResp, err := rc.cfg.Engine.Step(rc.state, "submit_evidence", opportunity.Role, payload)
+		if err != nil {
+			return nil, recordInvalidDecision(err)
+		}
+		if ok, _ := stepResp["ok"].(bool); !ok {
+			return nil, recordInvalidDecision(fmt.Errorf("%s", mapString(stepResp["error"])))
+		}
+		file, err := rc.writeSubmittedEvidenceFile(meta, raw)
+		if err != nil {
+			return nil, err
+		}
+		rc.state = mapAny(stepResp["state"])
+		rc.caseFiles = append(rc.caseFiles, file)
+		rc.fileByID[file.FileID] = file
+		rc.submittedEvidence = append(rc.submittedEvidence, meta)
+		appendTranscript(map[string]any{
+			"custom_method": acpCustomMethod("submit_evidence"),
+			"result":        meta,
+		})
+		if err := rc.recordEventAtTurn(turn, "submitted_evidence", opportunity.Role, opportunity.Phase, map[string]any{
+			"file_id":             meta.FileID,
+			"title":               meta.Title,
+			"source_url":          meta.SourceURL,
+			"source_description":  meta.SourceDescription,
+			"mime_type":           meta.MimeType,
+			"retrieval_timestamp": meta.RetrievalTimestamp,
+			"relevance":           meta.Relevance,
+			"sha256":              meta.SHA256,
+			"size_bytes":          meta.SizeBytes,
+		}); err != nil {
+			setNotifyErr(err)
+		}
+		return map[string]any{
+			"text":     fmt.Sprintf("Evidence accepted as file_id %s. Cite this file_id in offered_files if you want it admitted as an exhibit.", meta.FileID),
+			"file_id":  meta.FileID,
+			"evidence": meta,
+		}, nil
+	})
 	client.HandleMethod(acpCustomMethod("submit_decision"), func(_ context.Context, params map[string]any) (map[string]any, error) {
 		if decisionSubmitted {
 			return nil, fmt.Errorf("decision already submitted for this opportunity")
@@ -413,9 +460,19 @@ func attorneyDecision(opportunity Opportunity, params map[string]any, fileByID m
 
 func validateAttorneyPayload(actionType string, payload map[string]any, fileByID map[string]CaseFile, policy Policy) error {
 	switch actionType {
-	case "record_opening_statement", "deliver_closing_statement":
+	case "record_opening_statement":
 		if mapString(payload["text"]) == "" {
 			return fmt.Errorf("payload.text is required")
+		}
+	case "deliver_closing_statement":
+		if mapString(payload["text"]) == "" {
+			return fmt.Errorf("payload.text is required")
+		}
+		if len(listOfMaps(payload["offered_files"])) != 0 {
+			return fmt.Errorf("offered_files are allowed only in arguments and rebuttals")
+		}
+		if len(listOfMaps(payload["technical_reports"])) != 0 {
+			return fmt.Errorf("technical_reports are allowed only in arguments and rebuttals")
 		}
 	case "submit_argument":
 		if mapString(payload["text"]) == "" {
@@ -539,48 +596,78 @@ func ACPClientToolSpecs(includeWorkspaceWriter bool) []map[string]any {
 
 func acpClientToolSpecs(includeWorkspaceWriter bool) []map[string]any {
 	specs := []map[string]any{
-		{
-			"method":      acpCustomMethod("get_case"),
-			"toolName":    "aar_get_case",
-			"description": "Return the current visible arbitration record.",
-			"parameters":  map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
-		},
-		{
-			"method":      acpCustomMethod("list_case_files"),
-			"toolName":    "aar_list_case_files",
-			"description": "List visible case files.",
-			"parameters":  map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
-		},
-		{
-			"method":      acpCustomMethod("read_case_text_file"),
-			"toolName":    "aar_read_case_text_file",
-			"description": "Read one visible text case file by file_id.",
-			"parameters": map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"file_id": map[string]any{"type": "string"},
-				},
-				"required":             []string{"file_id"},
-				"additionalProperties": false,
-			},
-		},
+		getCaseToolSpec(),
+		listCaseFilesToolSpec(),
+		readCaseTextFileToolSpec(),
 	}
 	if includeWorkspaceWriter {
-		specs = append(specs, map[string]any{
-			"method":      acpCustomMethod("write_case_file"),
-			"toolName":    "aar_write_case_file",
-			"description": "Write one visible case file into the local workspace with exact bytes.",
-			"parameters": map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"file_id": map[string]any{"type": "string"},
-				},
-				"required":             []string{"file_id"},
-				"additionalProperties": false,
-			},
-		})
+		specs = append(specs, writeCaseFileToolSpec())
 	}
-	specs = append(specs, map[string]any{
+	specs = append(specs, submitEvidenceToolSpec(), submitDecisionToolSpec())
+	return specs
+}
+
+func getCaseToolSpec() map[string]any {
+	return map[string]any{
+		"method":      acpCustomMethod("get_case"),
+		"toolName":    "aar_get_case",
+		"description": "Return the current visible arbitration record.",
+		"parameters":  map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
+	}
+}
+
+func listCaseFilesToolSpec() map[string]any {
+	return map[string]any{
+		"method":      acpCustomMethod("list_case_files"),
+		"toolName":    "aar_list_case_files",
+		"description": "List visible case files, including any evidence submitted earlier in this run.",
+		"parameters":  map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
+	}
+}
+
+func readCaseTextFileToolSpec() map[string]any {
+	return map[string]any{
+		"method":      acpCustomMethod("read_case_text_file"),
+		"toolName":    "aar_read_case_text_file",
+		"description": "Read one visible text case file by file_id.",
+		"parameters": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"file_id": map[string]any{"type": "string"},
+			},
+			"required":             []string{"file_id"},
+			"additionalProperties": false,
+		},
+	}
+}
+
+func writeCaseFileToolSpec() map[string]any {
+	return map[string]any{
+		"method":      acpCustomMethod("write_case_file"),
+		"toolName":    "aar_write_case_file",
+		"description": "Write one visible case file into the local workspace with exact bytes.",
+		"parameters": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"file_id": map[string]any{"type": "string"},
+			},
+			"required":             []string{"file_id"},
+			"additionalProperties": false,
+		},
+	}
+}
+
+func submitEvidenceToolSpec() map[string]any {
+	return map[string]any{
+		"method":      acpCustomMethod("submit_evidence"),
+		"toolName":    "aar_submit_evidence",
+		"description": "Submit source evidence with provenance. The accepted response returns a file_id that can be cited later in offered_files.",
+		"parameters":  submittedEvidenceSchema(),
+	}
+}
+
+func submitDecisionToolSpec() map[string]any {
+	return map[string]any{
 		"method":      acpCustomMethod("submit_decision"),
 		"toolName":    "aar_submit_decision",
 		"description": "Submit the legal act for the current opportunity.",
@@ -604,8 +691,7 @@ func acpClientToolSpecs(includeWorkspaceWriter bool) []map[string]any {
 			"required":             []string{"kind"},
 			"additionalProperties": false,
 		},
-	})
-	return specs
+	}
 }
 
 func attorneyPayloadSchema() map[string]any {
@@ -650,20 +736,35 @@ func technicalReportsSchema() map[string]any {
 	}
 }
 
-func acpToolSpecs(opportunity Opportunity, includeWorkspaceWriter bool) []map[string]any {
-	all := acpClientToolSpecs(includeWorkspaceWriter)
-	specs := []map[string]any{all[0]}
-	if opportunity.Phase == "arguments" || opportunity.Phase == "rebuttals" {
-		specs = append(specs, all[1], all[2])
-		next := 3
-		if includeWorkspaceWriter {
-			specs = append(specs, all[next])
-			next++
-		}
-		specs = append(specs, all[next])
-		return specs
+func submittedEvidenceSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"title":                  map[string]any{"type": "string"},
+			"source_url":             map[string]any{"type": "string"},
+			"source_description":     map[string]any{"type": "string"},
+			"retrieval_timestamp":    map[string]any{"type": "string"},
+			"mime_type":              map[string]any{"type": "string"},
+			"relevance":              map[string]any{"type": "string"},
+			"content":                map[string]any{"type": "string"},
+			"content_base64":         map[string]any{"type": "string"},
+			"preferred_filename_ext": map[string]any{"type": "string"},
+		},
+		"required":             []string{"title", "mime_type", "relevance"},
+		"additionalProperties": false,
 	}
-	specs = append(specs, all[len(all)-1])
+}
+
+func acpToolSpecs(opportunity Opportunity, includeWorkspaceWriter bool) []map[string]any {
+	specs := []map[string]any{getCaseToolSpec()}
+	if opportunity.Phase == "arguments" || opportunity.Phase == "rebuttals" {
+		specs = append(specs, listCaseFilesToolSpec(), readCaseTextFileToolSpec())
+		if includeWorkspaceWriter {
+			specs = append(specs, writeCaseFileToolSpec())
+		}
+		specs = append(specs, submitEvidenceToolSpec())
+	}
+	specs = append(specs, submitDecisionToolSpec())
 	return specs
 }
 
@@ -675,29 +776,28 @@ func (rc *runContext) attorneyInfo(role string) (AttorneyRunInfo, error) {
 	if attorney, ok := rc.attorneys[role]; ok {
 		return attorney, nil
 	}
-	model := strings.TrimSpace(rc.cfg.AttorneyModel)
-	if model == "" {
-		model = DefaultAttorneyModel
+	attorney, err := resolveAttorney(role, rc.cfg, rc.cfg.ComplaintPath)
+	if err == nil {
+		return attorney, nil
 	}
-	spec, err := parseAttorneyModel(model)
-	if err != nil {
-		return AttorneyRunInfo{}, err
-	}
-	sessionCwd := ""
-	if strings.TrimSpace(rc.cfg.ComplaintPath) != "" {
-		sessionCwd, err = filepath.Abs(filepath.Dir(rc.cfg.ComplaintPath))
-		if err != nil {
-			return AttorneyRunInfo{}, fmt.Errorf("resolve attorney session cwd: %w", err)
+	if strings.Contains(err.Error(), "ACP command is required") {
+		model := strings.TrimSpace(rc.cfg.AttorneyModel)
+		if model == "" {
+			model = DefaultAttorneyModel
 		}
+		spec, parseErr := parseAttorneyModel(model)
+		if parseErr != nil {
+			return AttorneyRunInfo{}, parseErr
+		}
+		searchEnabled := spec.SearchRequested
+		return AttorneyRunInfo{
+			Role:          role,
+			Model:         model,
+			SearchEnabled: &searchEnabled,
+			ACPTransport:  "stdio",
+		}, nil
 	}
-	return AttorneyRunInfo{
-		Role:          role,
-		Model:         model,
-		SearchEnabled: spec.SearchRequested,
-		ACPTransport:  "stdio",
-		ACPCommand:    rc.cfg.ACPCommand,
-		SessionCwd:    sessionCwd,
-	}, nil
+	return AttorneyRunInfo{}, err
 }
 
 func (rc *runContext) attorneyView(opportunity Opportunity) map[string]any {
@@ -720,13 +820,14 @@ func (rc *runContext) attorneyView(opportunity Opportunity) map[string]any {
 			"may_pass":      opportunity.MayPass,
 		},
 		"record": map[string]any{
-			"openings":          mapList(mapAny(rc.state["case"])["openings"]),
-			"arguments":         mapList(mapAny(rc.state["case"])["arguments"]),
-			"rebuttals":         mapList(mapAny(rc.state["case"])["rebuttals"]),
-			"surrebuttals":      mapList(mapAny(rc.state["case"])["surrebuttals"]),
-			"closings":          mapList(mapAny(rc.state["case"])["closings"]),
-			"exhibits":          rc.attorneyExhibits(),
-			"technical_reports": mapList(mapAny(rc.state["case"])["technical_reports"]),
+			"openings":           mapList(mapAny(rc.state["case"])["openings"]),
+			"arguments":          mapList(mapAny(rc.state["case"])["arguments"]),
+			"rebuttals":          mapList(mapAny(rc.state["case"])["rebuttals"]),
+			"surrebuttals":       mapList(mapAny(rc.state["case"])["surrebuttals"]),
+			"closings":           mapList(mapAny(rc.state["case"])["closings"]),
+			"submitted_evidence": mapList(mapAny(rc.state["case"])["submitted_evidence"]),
+			"exhibits":           rc.attorneyExhibits(),
+			"technical_reports":  mapList(mapAny(rc.state["case"])["technical_reports"]),
 		},
 		"limits":  limits,
 		"council": rc.council,
@@ -738,7 +839,10 @@ func (rc *runContext) attorneyCapabilitySection(role string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if attorney.SearchEnabled {
+	if attorney.SearchEnabled == nil {
+		return "Attorney capabilities for this run:\nAAR is connected to a remote ACP attorney endpoint. Model selection and native tool availability are owned by that ACP attorney. Use the capabilities available in that environment and file record material through the AAR tools.", nil
+	}
+	if *attorney.SearchEnabled {
 		return "Model capabilities for this run:\nNative web search through the model is available.", nil
 	}
 	return "Model capabilities for this run:\nNative web search through the model is not available.", nil
@@ -806,7 +910,197 @@ func writeCaseFileToWorkspace(workspaceDir string, file CaseFile) (string, error
 	if err := os.WriteFile(hostPath, raw, 0o644); err != nil {
 		return "", fmt.Errorf("write workspace file %s: %w", hostPath, err)
 	}
-	return filepath.ToSlash(filepath.Join("/home/user", name)), nil
+	return filepath.ToSlash(filepath.Join(defaultRemoteSessionCwd, name)), nil
+}
+
+func (rc *runContext) prepareSubmittedEvidence(opportunity Opportunity, params map[string]any) (SubmittedEvidenceMeta, []byte, error) {
+	if opportunity.Phase != "arguments" && opportunity.Phase != "rebuttals" {
+		return SubmittedEvidenceMeta{}, nil, fmt.Errorf("submitted evidence is allowed only in arguments and rebuttals")
+	}
+	title := mapString(params["title"])
+	mimeType := mapString(params["mime_type"])
+	relevance := mapString(params["relevance"])
+	sourceURL := mapString(params["source_url"])
+	sourceDescription := mapString(params["source_description"])
+	retrievalTimestamp := mapString(params["retrieval_timestamp"])
+	if title == "" {
+		return SubmittedEvidenceMeta{}, nil, fmt.Errorf("submitted evidence requires title")
+	}
+	if sourceURL == "" && sourceDescription == "" {
+		return SubmittedEvidenceMeta{}, nil, fmt.Errorf("submitted evidence requires source_url or source_description")
+	}
+	if mimeType == "" {
+		return SubmittedEvidenceMeta{}, nil, fmt.Errorf("submitted evidence requires mime_type")
+	}
+	if relevance == "" {
+		return SubmittedEvidenceMeta{}, nil, fmt.Errorf("submitted evidence requires relevance")
+	}
+	raw, err := submittedEvidenceContent(params)
+	if err != nil {
+		return SubmittedEvidenceMeta{}, nil, err
+	}
+	if len(raw) == 0 {
+		return SubmittedEvidenceMeta{}, nil, fmt.Errorf("submitted evidence content must not be empty")
+	}
+	if len(raw) > rc.cfg.Policy.MaxSubmittedEvidenceBytes {
+		return SubmittedEvidenceMeta{}, nil, fmt.Errorf("submitted evidence exceeds byte limit of %d", rc.cfg.Policy.MaxSubmittedEvidenceBytes)
+	}
+	if submittedEvidenceCountForRole(rc.submittedEvidence, opportunity.Role) >= rc.cfg.Policy.MaxSubmittedEvidencePerSide {
+		return SubmittedEvidenceMeta{}, nil, fmt.Errorf("submitted_evidence for this side exceed limit of %d", rc.cfg.Policy.MaxSubmittedEvidencePerSide)
+	}
+	sum := sha256.Sum256(raw)
+	sha := hex.EncodeToString(sum[:])
+	name := submittedEvidenceFilename(len(rc.submittedEvidence)+1, opportunity.Role, sha, mimeType, mapString(params["preferred_filename_ext"]))
+	return SubmittedEvidenceMeta{
+		Phase:              opportunity.Phase,
+		Role:               opportunity.Role,
+		FileID:             name,
+		Name:               name,
+		Title:              title,
+		SourceURL:          sourceURL,
+		SourceDescription:  sourceDescription,
+		MimeType:           mimeType,
+		RetrievalTimestamp: retrievalTimestamp,
+		Relevance:          relevance,
+		SHA256:             sha,
+		SizeBytes:          len(raw),
+	}, raw, nil
+}
+
+func submittedEvidenceContent(params map[string]any) ([]byte, error) {
+	content, hasContent := rawStringParam(params, "content")
+	contentBase64 := mapString(params["content_base64"])
+	if hasContent && contentBase64 != "" {
+		return nil, fmt.Errorf("use content or content_base64, not both")
+	}
+	if contentBase64 != "" {
+		raw, err := base64.StdEncoding.DecodeString(contentBase64)
+		if err != nil {
+			return nil, fmt.Errorf("decode content_base64: %w", err)
+		}
+		return raw, nil
+	}
+	if !hasContent {
+		return nil, fmt.Errorf("submitted evidence requires content or content_base64")
+	}
+	return []byte(content), nil
+}
+
+func rawStringParam(params map[string]any, key string) (string, bool) {
+	value, ok := params[key]
+	if !ok || value == nil {
+		return "", false
+	}
+	s, ok := value.(string)
+	return s, ok
+}
+
+func submittedEvidenceFilename(index int, role string, sha string, mimeType string, preferredExt string) string {
+	ext := sanitizeEvidenceExtension(preferredExt)
+	if ext == "" {
+		ext = evidenceExtensionForMIME(mimeType)
+	}
+	if ext == "" {
+		ext = ".bin"
+	}
+	return fmt.Sprintf("submitted-evidence-%02d-%s-%s%s", index, sanitizeEvidenceComponent(role), sha[:12], ext)
+}
+
+func sanitizeEvidenceComponent(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var b strings.Builder
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	if b.Len() == 0 {
+		return "item"
+	}
+	return b.String()
+}
+
+func sanitizeEvidenceExtension(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+	if !strings.HasPrefix(value, ".") {
+		value = "." + value
+	}
+	if filepath.Base("x"+value) != "x"+value {
+		return ""
+	}
+	for _, r := range value[1:] {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return ""
+		}
+	}
+	return value
+}
+
+func evidenceExtensionForMIME(mimeType string) string {
+	switch strings.ToLower(strings.TrimSpace(strings.Split(mimeType, ";")[0])) {
+	case "text/plain":
+		return ".txt"
+	case "text/markdown":
+		return ".md"
+	case "text/html":
+		return ".html"
+	case "application/json":
+		return ".json"
+	case "application/pdf":
+		return ".pdf"
+	default:
+		return ""
+	}
+}
+
+func submittedEvidencePayload(meta SubmittedEvidenceMeta) map[string]any {
+	return map[string]any{
+		"file_id":             meta.FileID,
+		"title":               meta.Title,
+		"source_url":          meta.SourceURL,
+		"source_description":  meta.SourceDescription,
+		"mime_type":           meta.MimeType,
+		"retrieval_timestamp": meta.RetrievalTimestamp,
+		"relevance":           meta.Relevance,
+		"sha256":              meta.SHA256,
+		"size_bytes":          meta.SizeBytes,
+	}
+}
+
+func (rc *runContext) writeSubmittedEvidenceFile(meta SubmittedEvidenceMeta, raw []byte) (CaseFile, error) {
+	dir := filepath.Join(rc.cfg.OutputDir, "submitted-evidence")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return CaseFile{}, fmt.Errorf("create submitted evidence dir: %w", err)
+	}
+	name := filepath.Base(meta.Name)
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return CaseFile{}, fmt.Errorf("invalid submitted evidence filename %q", meta.Name)
+	}
+	path := filepath.Join(dir, name)
+	if _, err := os.Stat(path); err == nil {
+		return CaseFile{}, fmt.Errorf("submitted evidence file already exists: %s", path)
+	} else if !os.IsNotExist(err) {
+		return CaseFile{}, fmt.Errorf("stat submitted evidence file %s: %w", path, err)
+	}
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		return CaseFile{}, fmt.Errorf("write submitted evidence %s: %w", path, err)
+	}
+	_, readable := caseFileKind(name)
+	file := CaseFile{
+		FileID:       meta.FileID,
+		Name:         name,
+		Path:         path,
+		MimeType:     meta.MimeType,
+		TextReadable: readable || strings.HasPrefix(strings.ToLower(meta.MimeType), "text/") || strings.EqualFold(meta.MimeType, "application/json"),
+		SizeBytes:    len(raw),
+	}
+	if file.TextReadable {
+		file.Text = string(raw)
+	}
+	return file, nil
 }
 
 func (rc *runContext) attorneyExhibits() []map[string]any {
@@ -851,8 +1145,13 @@ func (rc *runContext) attorneyLimits(opportunity Opportunity) map[string]any {
 		limits["max_reports_per_side"] = rc.cfg.Policy.MaxReportsPerSide
 		limits["used_reports_for_side"] = usedReports
 		limits["remaining_reports_for_side"] = remainingCapacity(rc.cfg.Policy.MaxReportsPerSide, usedReports)
-		limits["offered_files_rule"] = "Use only visible case file_id values in offered_files."
-		limits["outside_material_rule"] = "Outside material that is not already a visible case file belongs in technical_reports."
+		usedSubmittedEvidence := submittedEvidenceCountForRole(rc.submittedEvidence, opportunity.Role)
+		limits["max_submitted_evidence_per_side"] = rc.cfg.Policy.MaxSubmittedEvidencePerSide
+		limits["max_submitted_evidence_bytes"] = rc.cfg.Policy.MaxSubmittedEvidenceBytes
+		limits["used_submitted_evidence_for_side"] = usedSubmittedEvidence
+		limits["remaining_submitted_evidence_for_side"] = remainingCapacity(rc.cfg.Policy.MaxSubmittedEvidencePerSide, usedSubmittedEvidence)
+		limits["offered_files_rule"] = "Use only visible case file_id values in offered_files. Submit new evidence first with aar_submit_evidence, then cite the returned file_id in offered_files."
+		limits["outside_material_rule"] = "Outside source material belongs in submitted evidence when the source content matters, or in technical_reports when only attorney analysis is being offered."
 	}
 	if opportunity.Phase == "surrebuttals" {
 		limits["outside_material_rule"] = "offered_files and technical_reports are not allowed in this phase."
@@ -887,8 +1186,17 @@ func (rc *runContext) attorneyLimitsSection(opportunity Opportunity) string {
 				limits["remaining_reports_for_side"].(int),
 			),
 		)
-		lines = append(lines, "Use only visible case file_id values in offered_files. Do not use workspace paths, downloaded filenames, or invented names there.")
-		lines = append(lines, "Outside material that is not already a visible case file belongs in technical_reports, not offered_files.")
+		lines = append(lines,
+			fmt.Sprintf(
+				"Submitted evidence: each item may be at most %d bytes. This side has submitted %d of %d total, with %d left.",
+				limits["max_submitted_evidence_bytes"].(int),
+				limits["used_submitted_evidence_for_side"].(int),
+				limits["max_submitted_evidence_per_side"].(int),
+				limits["remaining_submitted_evidence_for_side"].(int),
+			),
+		)
+		lines = append(lines, "Use only visible case file_id values in offered_files. Submit new source material first with aar_submit_evidence, then cite the returned file_id in offered_files.")
+		lines = append(lines, "Use technical_reports for attorney analysis or synthesized work product, not as a substitute for source evidence when exact source content matters.")
 	case "surrebuttals":
 		lines = append(lines, "offered_files and technical_reports are not allowed in this phase.")
 	}
@@ -927,6 +1235,16 @@ func filingCountForRole(items []map[string]any, role string) int {
 	count := 0
 	for _, item := range items {
 		if mapString(item["role"]) == role {
+			count++
+		}
+	}
+	return count
+}
+
+func submittedEvidenceCountForRole(items []SubmittedEvidenceMeta, role string) int {
+	count := 0
+	for _, item := range items {
+		if item.Role == role {
 			count++
 		}
 	}

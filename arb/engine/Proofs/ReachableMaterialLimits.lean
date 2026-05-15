@@ -38,14 +38,16 @@ theorem reachable_materialLimitsRespected
           · exact step_submit_rebuttal_preserves_material_limits s t action hRebuttal ih hStep
           · by_cases hSurrebuttal : action.action_type = "submit_surrebuttal"
             · exact step_submit_surrebuttal_preserves_material_limits s t action hSurrebuttal ih hStep
-            · by_cases hClosing : action.action_type = "deliver_closing_statement"
-              · exact step_deliver_closing_statement_preserves_material_limits s t action hClosing ih hStep
-              · by_cases hPass : action.action_type = "pass_phase_opportunity"
-                · exact step_pass_phase_opportunity_preserves_material_limits s t action hPass ih hStep
-                · by_cases hVote : action.action_type = "submit_council_vote"
-                  · exact step_submit_council_vote_preserves_material_limits s t action hVote ih hStep
-                  · by_cases hRemoval : action.action_type = "remove_council_member"
-                    · exact step_remove_council_member_preserves_material_limits s t action hRemoval ih hStep
-                    · simp [step] at hStep
+            · by_cases hEvidence : action.action_type = "submit_evidence"
+              · exact step_submit_evidence_preserves_material_limits s t action hEvidence ih hStep
+              · by_cases hClosing : action.action_type = "deliver_closing_statement"
+                · exact step_deliver_closing_statement_preserves_material_limits s t action hClosing ih hStep
+                · by_cases hPass : action.action_type = "pass_phase_opportunity"
+                  · exact step_pass_phase_opportunity_preserves_material_limits s t action hPass ih hStep
+                  · by_cases hVote : action.action_type = "submit_council_vote"
+                    · exact step_submit_council_vote_preserves_material_limits s t action hVote ih hStep
+                    · by_cases hRemoval : action.action_type = "remove_council_member"
+                      · exact step_remove_council_member_preserves_material_limits s t action hRemoval ih hStep
+                      · simp [step] at hStep
 
 end ArbProofs

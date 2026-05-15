@@ -17,9 +17,12 @@
 #                   Default: openai://gpt-5
 #                   Use openai://gpt-5?tools=search to enable web search.
 #
-# The input directory must contain `situation.md` and `sign.sh`. This script runs
-# `sign.sh`, generates `complaint.md` in the input directory, removes the output
-# directory, and then runs `.bin/aar case` with the selected attorney model.
+# If the input directory contains an executable `sign.sh`, this script runs it.
+# If the input directory contains `situation.md`, this script generates
+# `complaint.md` in the input directory. Otherwise, the input directory must
+# already contain `complaint.md`. The script removes the output directory and
+# then runs `.bin/aar case` with the selected attorney model and a fixed invalid
+# attempt limit of 5.
 #
 # The script assumes `.bin/aar` and `.bin/aarengine` have already been built. It
 # does not run the Makefile build target.
@@ -47,12 +50,35 @@ export AGENTCOURT_PI_XPROXY_BASE_URL="http://host.containers.internal:18459/v1"
 INPUT_DIR="${1:-examples/ex1}"
 OUTPUT_DIR="${2:-out/ex1-demo}"
 ATTORNEY_MODEL="${3:-openai://gpt-5}"
+INVALID_ATTEMPT_LIMIT=5
+
+SIGN_SCRIPT="$INPUT_DIR/sign.sh"
+SITUATION_FILE="$INPUT_DIR/situation.md"
+COMPLAINT_FILE="$INPUT_DIR/complaint.md"
 
 if ! podman info >/dev/null 2>&1; then
   podman machine start podman-machine-default
 fi
 
 rm -rf "$OUTPUT_DIR"
-"$INPUT_DIR/sign.sh"
-.bin/aar complain --situation "$INPUT_DIR/situation.md" --out "$INPUT_DIR/complaint.md"
-.bin/aar case --complaint "$INPUT_DIR/complaint.md" --out-dir "$OUTPUT_DIR" --attorney-model "$ATTORNEY_MODEL"
+
+if [[ -e "$SIGN_SCRIPT" ]]; then
+  if [[ ! -x "$SIGN_SCRIPT" ]]; then
+    echo "error: sign script exists but is not executable: $SIGN_SCRIPT" >&2
+    exit 1
+  fi
+  "$SIGN_SCRIPT"
+fi
+
+if [[ -f "$SITUATION_FILE" ]]; then
+  .bin/aar complain --situation "$SITUATION_FILE" --out "$COMPLAINT_FILE"
+elif [[ ! -f "$COMPLAINT_FILE" ]]; then
+  echo "error: input directory must contain situation.md or complaint.md: $INPUT_DIR" >&2
+  exit 1
+fi
+
+.bin/aar case \
+  --complaint "$COMPLAINT_FILE" \
+  --out-dir "$OUTPUT_DIR" \
+  --attorney-model "$ATTORNEY_MODEL" \
+  --invalid-attempt-limit "$INVALID_ATTEMPT_LIMIT"

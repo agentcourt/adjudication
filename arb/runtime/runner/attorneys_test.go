@@ -8,7 +8,7 @@ import (
 	"adjudication/arb/runtime/spec"
 )
 
-func TestResolveAttorneyUsesRoleOverrideAndEndpoint(t *testing.T) {
+func TestResolveAttorneyUsesEndpointWithoutModelSelection(t *testing.T) {
 	t.Parallel()
 
 	complaintPath := filepath.Join(t.TempDir(), "complaint.md")
@@ -16,7 +16,6 @@ func TestResolveAttorneyUsesRoleOverrideAndEndpoint(t *testing.T) {
 		AttorneyModel: "openai://gpt-5",
 		ACPCommand:    "/tmp/acp-podman.sh",
 		PlaintiffAttorney: AttorneyRoleConfig{
-			Model:       "openai://gpt-5?tools=search",
 			ACPEndpoint: "tcp://127.0.0.1:7000",
 		},
 	}
@@ -25,11 +24,11 @@ func TestResolveAttorneyUsesRoleOverrideAndEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveAttorney(plaintiff) returned error: %v", err)
 	}
-	if plaintiff.Model != "openai://gpt-5?tools=search" {
-		t.Fatalf("plaintiff model = %q", plaintiff.Model)
+	if plaintiff.Model != "" {
+		t.Fatalf("plaintiff model = %q, want empty for remote ACP endpoint", plaintiff.Model)
 	}
-	if !plaintiff.SearchEnabled {
-		t.Fatal("plaintiff search should be enabled")
+	if plaintiff.SearchEnabled != nil {
+		t.Fatal("plaintiff search capability should be unknown for remote ACP endpoint")
 	}
 	if plaintiff.ACPTransport != "tcp" {
 		t.Fatalf("plaintiff transport = %q, want tcp", plaintiff.ACPTransport)
@@ -51,7 +50,7 @@ func TestResolveAttorneyUsesRoleOverrideAndEndpoint(t *testing.T) {
 	if defendant.Model != "openai://gpt-5" {
 		t.Fatalf("defendant model = %q", defendant.Model)
 	}
-	if defendant.SearchEnabled {
+	if defendant.SearchEnabled == nil || *defendant.SearchEnabled {
 		t.Fatal("defendant search should be disabled")
 	}
 	if defendant.ACPTransport != "stdio" {
@@ -63,6 +62,24 @@ func TestResolveAttorneyUsesRoleOverrideAndEndpoint(t *testing.T) {
 	wantDefendantCwd, _ := filepath.Abs(filepath.Dir(complaintPath))
 	if defendant.SessionCwd != wantDefendantCwd {
 		t.Fatalf("defendant session cwd = %q, want %q", defendant.SessionCwd, wantDefendantCwd)
+	}
+}
+
+func TestResolveAttorneyRejectsRoleModelWithEndpoint(t *testing.T) {
+	t.Parallel()
+
+	complaintPath := filepath.Join(t.TempDir(), "complaint.md")
+	cfg := Config{
+		AttorneyModel: "openai://gpt-5",
+		ACPCommand:    "/tmp/acp-podman.sh",
+		PlaintiffAttorney: AttorneyRoleConfig{
+			Model:       "openai://gpt-5?tools=search",
+			ACPEndpoint: "tcp://127.0.0.1:7000",
+		},
+	}
+	_, err := resolveAttorney("plaintiff", cfg, complaintPath)
+	if err == nil || !strings.Contains(err.Error(), "remote ACP attorney owns model selection") {
+		t.Fatalf("resolveAttorney error = %v, want remote ACP model-selection error", err)
 	}
 }
 
@@ -82,14 +99,14 @@ func TestBuildAttorneyPromptUsesRoleSpecificCapability(t *testing.T) {
 			"plaintiff": {
 				Role:          "plaintiff",
 				Model:         "openai://gpt-5?tools=search",
-				SearchEnabled: true,
+				SearchEnabled: boolPtr(true),
 				ACPTransport:  "stdio",
 				ACPCommand:    "/tmp/acp-podman.sh",
 			},
 			"defendant": {
 				Role:          "defendant",
 				Model:         "openai://gpt-5",
-				SearchEnabled: false,
+				SearchEnabled: boolPtr(false),
 				ACPTransport:  "stdio",
 				ACPCommand:    "/tmp/acp-podman.sh",
 			},
@@ -124,4 +141,8 @@ func TestBuildAttorneyPromptUsesRoleSpecificCapability(t *testing.T) {
 	if !strings.Contains(prompt, "Native web search through the model is not available.") {
 		t.Fatalf("prompt did not use defendant capability:\n%s", prompt)
 	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }

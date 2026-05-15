@@ -343,38 +343,44 @@ theorem step_shrinks_seatedCouncilMemberIds
                           cases hPassResult
                           exact seatedCouncilMemberIdsShrink_of_same_members rfl
                 · simp [step, hPass, hRebuttals, hSurrebuttals] at hStep
-            · by_cases hVote : action.action_type = "submit_council_vote"
-              · rcases step_submit_council_vote_details s t action hVote hStep with
-                  ⟨memberId, vote, rationale, _hPhase, _hSeated, _hFresh, hCont⟩
-                let c1 := { s.case with council_votes := s.case.council_votes.concat {
-                  member_id := memberId
-                  round := s.case.deliberation_round
-                  vote := trimString vote
-                  rationale := trimString rationale
-                } }
+            · by_cases hEvidence : action.action_type = "submit_evidence"
+              · have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
+                  simpa [step, hEvidence] using hStep
+                rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
                 exact seatedCouncilMemberIdsShrink_of_same_members <| by
-                  have hMembers : t.case.council_members = c1.council_members :=
-                    continueDeliberation_preserves_council_members s t c1 hCont
-                  simpa [c1] using hMembers
-              · by_cases hRemoval : action.action_type = "remove_council_member"
-                · rcases step_remove_council_member_details s t action hRemoval hStep with
+                  simp [stateWithCase, appendSubmittedEvidence]
+              · by_cases hVote : action.action_type = "submit_council_vote"
+                · rcases step_submit_council_vote_details s t action hVote hStep with
+                  ⟨memberId, vote, rationale, _hPhase, _hSeated, _hFresh, hCont⟩
+                  let c1 := { s.case with council_votes := s.case.council_votes.concat {
+                    member_id := memberId
+                    round := s.case.deliberation_round
+                    vote := trimString vote
+                    rationale := trimString rationale
+                  } }
+                  exact seatedCouncilMemberIdsShrink_of_same_members <| by
+                    have hMembers : t.case.council_members = c1.council_members :=
+                      continueDeliberation_preserves_council_members s t c1 hCont
+                    simpa [c1] using hMembers
+                · by_cases hRemoval : action.action_type = "remove_council_member"
+                  · rcases step_remove_council_member_details s t action hRemoval hStep with
                     ⟨memberId, status, _hPhase, _hSeated, _hFresh, hStatus, hCont⟩
-                  let c1 := { s.case with
+                    let c1 := { s.case with
                     council_members := s.case.council_members.map (fun (member : CouncilMember) =>
                       if member.member_id = memberId then
                         { member with status := trimString status }
                       else
                         member)
-                  }
-                  intro target hTarget
-                  have hTarget1 : target ∈ seatedCouncilMemberIds c1 := by
-                    have hMembers : t.case.council_members = c1.council_members :=
-                      continueDeliberation_preserves_council_members s t c1 hCont
-                    simpa [seatedCouncilMemberIds, seatedCouncilMembers, c1, hMembers] using hTarget
-                  exact setMemberStatus_shrinks_seatedCouncilMemberIds s.case memberId status hStatus hTarget1
-                · cases hType : action.action_type <;>
-                    simp [hType] at hOpening hArgument hRebuttal hSurrebuttal hClosing hPass hVote hRemoval <;>
-                    simp [step, hType] at hStep
+                    }
+                    intro target hTarget
+                    have hTarget1 : target ∈ seatedCouncilMemberIds c1 := by
+                      have hMembers : t.case.council_members = c1.council_members :=
+                        continueDeliberation_preserves_council_members s t c1 hCont
+                      simpa [seatedCouncilMemberIds, seatedCouncilMembers, c1, hMembers] using hTarget
+                    exact setMemberStatus_shrinks_seatedCouncilMemberIds s.case memberId status hStatus hTarget1
+                  · cases hType : action.action_type <;>
+                      simp [hType] at hOpening hArgument hRebuttal hSurrebuttal hClosing hPass hEvidence hVote hRemoval <;>
+                      simp [step, hType] at hStep
 
 /--
 Any successful public run can only shrink the seated roster.
@@ -586,23 +592,29 @@ theorem step_introduces_newCouncilVotes_only_from_seated
                           cases hPassResult
                           exact newCouncilVotesComeFromSeated_of_same_votes rfl
                 · simp [step, hPass, hRebuttals, hSurrebuttals] at hStep
-            · by_cases hVote : action.action_type = "submit_council_vote"
-              · exact step_submit_council_vote_introduces_only_seated_currentRoundVote
-                  s t action hVote hStep
-              · by_cases hRemoval : action.action_type = "remove_council_member"
-                · rcases step_remove_council_member_details s t action hRemoval hStep with
+            · by_cases hEvidence : action.action_type = "submit_evidence"
+              · have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
+                  simpa [step, hEvidence] using hStep
+                rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
+                exact newCouncilVotesComeFromSeated_of_same_votes <| by
+                  simp [stateWithCase, appendSubmittedEvidence]
+              · by_cases hVote : action.action_type = "submit_council_vote"
+                · exact step_submit_council_vote_introduces_only_seated_currentRoundVote
+                    s t action hVote hStep
+                · by_cases hRemoval : action.action_type = "remove_council_member"
+                  · rcases step_remove_council_member_details s t action hRemoval hStep with
                     ⟨memberId, status, _hPhase, _hSeated, _hFresh, _hStatus, hCont⟩
-                  let c1 := { s.case with
+                    let c1 := { s.case with
                     council_members := s.case.council_members.map (fun (member : CouncilMember) =>
                       if member.member_id = memberId then
                         { member with status := trimString status }
                       else
                         member)
-                  }
-                  exact newCouncilVotesComeFromSeated_of_same_votes <|
-                    continueDeliberation_preserves_council_votes s t c1 hCont
-                · cases hType : action.action_type <;>
-                    simp [hType] at hOpening hArgument hRebuttal hSurrebuttal hClosing hPass hVote hRemoval <;>
-                    simp [step, hType] at hStep
+                    }
+                    exact newCouncilVotesComeFromSeated_of_same_votes <|
+                      continueDeliberation_preserves_council_votes s t c1 hCont
+                  · cases hType : action.action_type <;>
+                      simp [hType] at hOpening hArgument hRebuttal hSurrebuttal hClosing hPass hEvidence hVote hRemoval <;>
+                      simp [step, hType] at hStep
 
 end ArbProofs

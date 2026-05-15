@@ -224,32 +224,34 @@ theorem reachable_phase_closed_implies_status_closed
               · exact False.elim ((step_deliver_closing_statement_phase_ne_closed u t action hClosing hStep) hClosed)
               · by_cases hPass : action.action_type = "pass_phase_opportunity"
                 · exact False.elim ((step_pass_phase_opportunity_phase_ne_closed u t action hPass hStep) hClosed)
-                · by_cases hVote : action.action_type = "submit_council_vote"
-                  · rcases step_submit_council_vote_result u t action hVote hStep with
+                · by_cases hEvidence : action.action_type = "submit_evidence"
+                  · exact False.elim ((step_submit_evidence_phase_ne_closed u t action hEvidence hStep) hClosed)
+                  · by_cases hVote : action.action_type = "submit_council_vote"
+                    · rcases step_submit_council_vote_result u t action hVote hStep with
                       ⟨memberId, vote, rationale, hDeliberation, hCont⟩
-                    let c1 := { u.case with council_votes := u.case.council_votes.concat {
-                      member_id := memberId
-                      round := u.case.deliberation_round
-                      vote := trimString vote
-                      rationale := trimString rationale
-                    } }
-                    exact continueDeliberation_phase_closed_implies_status_closed u t c1 (by
-                      simpa [c1] using hDeliberation) (by
-                      simpa [c1] using hCont) hClosed
-                  · by_cases hRemoval : action.action_type = "remove_council_member"
-                    · rcases step_remove_council_member_result u t action hRemoval hStep with
+                      let c1 := { u.case with council_votes := u.case.council_votes.concat {
+                        member_id := memberId
+                        round := u.case.deliberation_round
+                        vote := trimString vote
+                        rationale := trimString rationale
+                      } }
+                      exact continueDeliberation_phase_closed_implies_status_closed u t c1 (by
+                        simpa [c1] using hDeliberation) (by
+                        simpa [c1] using hCont) hClosed
+                    · by_cases hRemoval : action.action_type = "remove_council_member"
+                      · rcases step_remove_council_member_result u t action hRemoval hStep with
                         ⟨memberId, status, hDeliberation, hCont⟩
-                      let c1 := {
+                        let c1 := {
                         u.case with council_members := u.case.council_members.map (fun (member : CouncilMember) =>
                           if member.member_id = memberId then
                             { member with status := trimString status }
                           else
                             member)
-                      }
-                      exact continueDeliberation_phase_closed_implies_status_closed u t c1 (by
-                        simpa [c1] using hDeliberation) (by
-                        simpa [c1] using hCont) hClosed
-                    · simp [step] at hStep
+                        }
+                        exact continueDeliberation_phase_closed_implies_status_closed u t c1 (by
+                          simpa [c1] using hDeliberation) (by
+                          simpa [c1] using hCont) hClosed
+                      · simp [step] at hStep
 
 /--
 A successful opening step never reaches deliberation.
@@ -443,6 +445,52 @@ theorem step_pass_phase_opportunity_phase_ne_deliberation
               cases hPass
               simp [stateWithCase]
     · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
+
+theorem submitEvidence_source_meritsPhase
+    (s t : ArbitrationState)
+    (actorRole : String)
+    (payload : Lean.Json)
+    (hSubmit : submitEvidence s actorRole payload = .ok t) :
+    meritsPhase s.case.phase := by
+  by_cases hArgs : s.case.phase = "arguments"
+  · exact Or.inr <| Or.inl hArgs
+  · by_cases hRebuttals : s.case.phase = "rebuttals"
+    · cases hEmpty : s.case.rebuttals.isEmpty with
+      | true =>
+          exact Or.inr <| Or.inr <| Or.inl hRebuttals
+      | false =>
+          simp [submitEvidence, hRebuttals, hEmpty] at hSubmit
+          change Except.error "rebuttal evidence is closed" = .ok t at hSubmit
+          cases hSubmit
+    · simp [submitEvidence] at hSubmit
+      change Except.error "submitted evidence is allowed only in arguments and rebuttals" = .ok t at hSubmit
+      cases hSubmit
+
+theorem step_submit_evidence_phase_eq_source
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "submit_evidence")
+    (hStep : step { state := s, action := action } = .ok t) :
+    t.case.phase = s.case.phase := by
+  have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
+    simpa [step, hType] using hStep
+  rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
+  simp [stateWithCase, appendSubmittedEvidence]
+
+theorem step_submit_evidence_phase_ne_deliberation
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "submit_evidence")
+    (hStep : step { state := s, action := action } = .ok t) :
+    t.case.phase ≠ "deliberation" := by
+  have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
+    simpa [step, hType] using hStep
+  have hMerits : meritsPhase s.case.phase :=
+    submitEvidence_source_meritsPhase s t action.actor_role action.payload hSubmit
+  have hEq := step_submit_evidence_phase_eq_source s t action hType hStep
+  intro hDeliberation
+  rw [hEq] at hDeliberation
+  simp [meritsPhase, hDeliberation] at hMerits
 
 /--
 A started bilateral phase still has a next role.
@@ -1010,6 +1058,22 @@ theorem step_pass_phase_opportunity_preserves_pristineCouncilState
                 rfl rfl rfl hPristine
     · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
 
+theorem step_submit_evidence_preserves_pristineCouncilState
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "submit_evidence")
+    (hPristine : pristineCouncilState s.case)
+    (hStep : step { state := s, action := action } = .ok t) :
+    pristineCouncilState t.case := by
+  have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
+    simpa [step, hType] using hStep
+  rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
+  exact pristineCouncilState_congr
+    (by simp [stateWithCase, appendSubmittedEvidence])
+    (by simp [stateWithCase, appendSubmittedEvidence])
+    (by simp [stateWithCase, appendSubmittedEvidence])
+    hPristine
+
 /--
 Every reachable merits-phase state still has pristine deliberation metadata.
 
@@ -1118,38 +1182,45 @@ theorem reachable_meritsPhase_pristineCouncilState
                       exact step_pass_phase_opportunity_preserves_pristineCouncilState
                         u t action hPass (ih hMeritsU) hStep
                     · simp [step, hPass, hRebuttals, hSurrebuttals] at hStep
-                · by_cases hVote : action.action_type = "submit_council_vote"
-                  · rcases step_submit_council_vote_result u t action hVote hStep with
+                · by_cases hEvidence : action.action_type = "submit_evidence"
+                  · have hSubmit : submitEvidence u action.actor_role action.payload = .ok t := by
+                      simpa [step, hEvidence] using hStep
+                    have hMeritsU : meritsPhase u.case.phase :=
+                      submitEvidence_source_meritsPhase u t action.actor_role action.payload hSubmit
+                    exact step_submit_evidence_preserves_pristineCouncilState
+                      u t action hEvidence (ih hMeritsU) hStep
+                  · by_cases hVote : action.action_type = "submit_council_vote"
+                    · rcases step_submit_council_vote_result u t action hVote hStep with
                       ⟨memberId, vote, rationale, hDeliberation, hCont⟩
-                    let c1 := { u.case with council_votes := u.case.council_votes.concat {
-                      member_id := memberId
-                      round := u.case.deliberation_round
-                      vote := trimString vote
-                      rationale := trimString rationale
-                    } }
-                    have hPhaseOut := continueDeliberation_phase_deliberation_or_closed u t c1
-                      (by simpa [c1] using hDeliberation)
-                      (by simpa [c1] using hCont)
-                    rcases hPhaseOut with hDelibOut | hClosedOut
-                    · simp [meritsPhase, hDelibOut] at hMerits
-                    · simp [meritsPhase, hClosedOut] at hMerits
-                  · by_cases hRemoval : action.action_type = "remove_council_member"
-                    · rcases step_remove_council_member_result u t action hRemoval hStep with
-                        ⟨memberId, status, hDeliberation, hCont⟩
-                      let c1 := {
-                        u.case with council_members := u.case.council_members.map (fun (member : CouncilMember) =>
-                          if member.member_id = memberId then
-                            { member with status := trimString status }
-                          else
-                            member)
-                      }
+                      let c1 := { u.case with council_votes := u.case.council_votes.concat {
+                        member_id := memberId
+                        round := u.case.deliberation_round
+                        vote := trimString vote
+                        rationale := trimString rationale
+                      } }
                       have hPhaseOut := continueDeliberation_phase_deliberation_or_closed u t c1
                         (by simpa [c1] using hDeliberation)
                         (by simpa [c1] using hCont)
                       rcases hPhaseOut with hDelibOut | hClosedOut
                       · simp [meritsPhase, hDelibOut] at hMerits
                       · simp [meritsPhase, hClosedOut] at hMerits
-                    · simp [step] at hStep
+                    · by_cases hRemoval : action.action_type = "remove_council_member"
+                      · rcases step_remove_council_member_result u t action hRemoval hStep with
+                        ⟨memberId, status, hDeliberation, hCont⟩
+                        let c1 := {
+                        u.case with council_members := u.case.council_members.map (fun (member : CouncilMember) =>
+                          if member.member_id = memberId then
+                            { member with status := trimString status }
+                          else
+                            member)
+                        }
+                        have hPhaseOut := continueDeliberation_phase_deliberation_or_closed u t c1
+                          (by simpa [c1] using hDeliberation)
+                          (by simpa [c1] using hCont)
+                        rcases hPhaseOut with hDelibOut | hClosedOut
+                        · simp [meritsPhase, hDelibOut] at hMerits
+                        · simp [meritsPhase, hClosedOut] at hMerits
+                      · simp [step] at hStep
 
 /--
 A positive seated-member count gives a nonempty seated roster.
@@ -1299,39 +1370,17 @@ theorem reachable_deliberation_has_nextCouncilMember
                 exact nextCouncilMember_some_of_empty_currentRoundVotes t.case hNoVotes hSeatedNonempty
               · by_cases hPass : action.action_type = "pass_phase_opportunity"
                 · exact False.elim ((step_pass_phase_opportunity_phase_ne_deliberation u t action hPass hStep) hPhase)
-                · by_cases hVote : action.action_type = "submit_council_vote"
-                  · rcases step_submit_council_vote_details u t action hVote hStep with
+                · by_cases hEvidence : action.action_type = "submit_evidence"
+                  · exact False.elim ((step_submit_evidence_phase_ne_deliberation u t action hEvidence hStep) hPhase)
+                  · by_cases hVote : action.action_type = "submit_council_vote"
+                    · rcases step_submit_council_vote_details u t action hVote hStep with
                       ⟨memberId, vote, rationale, _hPhaseU, hSeated, hFresh, hCont⟩
-                    let c1 := { u.case with council_votes := u.case.council_votes.concat {
-                      member_id := memberId
-                      round := u.case.deliberation_round
-                      vote := trimString vote
-                      rationale := trimString rationale
-                    } }
-                    have hPositive : 0 < u.policy.required_votes_for_decision :=
-                      reachable_required_votes_positive u hu
-                    have hUniqueU : councilIdsUnique u.case :=
-                      reachable_councilIdsUnique u hu
-                    have hIntegrityU : councilVoteIntegrity u.case :=
-                      reachable_councilVoteIntegrity u hu
-                    have hIntegrity1 : councilVoteIntegrity c1 := by
-                      exact appendCurrentRoundVote_preserves_councilVoteIntegrity
-                        u.case memberId vote rationale hIntegrityU hSeated hFresh
-                    have hUnique1 : councilIdsUnique c1 := by
-                      simpa [c1, councilIdsUnique, councilMemberIds] using hUniqueU
-                    exact continueDeliberation_live_has_nextCouncilMember
-                      u t c1 hPositive hUnique1 hIntegrity1
-                      (by simpa [c1] using hCont) hPhase hStatus
-                  · by_cases hRemoval : action.action_type = "remove_council_member"
-                    · rcases step_remove_council_member_details u t action hRemoval hStep with
-                        ⟨memberId, status, _hPhaseU, _hSeated, hFresh, _hStatus, hCont⟩
-                      let c1 := {
-                        u.case with council_members := u.case.council_members.map (fun (member : CouncilMember) =>
-                          if member.member_id = memberId then
-                            { member with status := trimString status }
-                          else
-                            member)
-                      }
+                      let c1 := { u.case with council_votes := u.case.council_votes.concat {
+                        member_id := memberId
+                        round := u.case.deliberation_round
+                        vote := trimString vote
+                        rationale := trimString rationale
+                      } }
                       have hPositive : 0 < u.policy.required_votes_for_decision :=
                         reachable_required_votes_positive u hu
                       have hUniqueU : councilIdsUnique u.case :=
@@ -1339,15 +1388,39 @@ theorem reachable_deliberation_has_nextCouncilMember
                       have hIntegrityU : councilVoteIntegrity u.case :=
                         reachable_councilVoteIntegrity u hu
                       have hIntegrity1 : councilVoteIntegrity c1 := by
-                        simpa [c1] using removeUnvotedCouncilMember_preserves_councilVoteIntegrity
-                          u.case memberId status hIntegrityU hFresh
+                        exact appendCurrentRoundVote_preserves_councilVoteIntegrity
+                          u.case memberId vote rationale hIntegrityU hSeated hFresh
                       have hUnique1 : councilIdsUnique c1 := by
-                        unfold councilIdsUnique
-                        simpa [c1, councilMemberIds_status_update] using hUniqueU
+                        simpa [c1, councilIdsUnique, councilMemberIds] using hUniqueU
                       exact continueDeliberation_live_has_nextCouncilMember
                         u t c1 hPositive hUnique1 hIntegrity1
                         (by simpa [c1] using hCont) hPhase hStatus
-                    · simp [step] at hStep
+                    · by_cases hRemoval : action.action_type = "remove_council_member"
+                      · rcases step_remove_council_member_details u t action hRemoval hStep with
+                        ⟨memberId, status, _hPhaseU, _hSeated, hFresh, _hStatus, hCont⟩
+                        let c1 := {
+                        u.case with council_members := u.case.council_members.map (fun (member : CouncilMember) =>
+                          if member.member_id = memberId then
+                            { member with status := trimString status }
+                          else
+                            member)
+                        }
+                        have hPositive : 0 < u.policy.required_votes_for_decision :=
+                          reachable_required_votes_positive u hu
+                        have hUniqueU : councilIdsUnique u.case :=
+                          reachable_councilIdsUnique u hu
+                        have hIntegrityU : councilVoteIntegrity u.case :=
+                          reachable_councilVoteIntegrity u hu
+                        have hIntegrity1 : councilVoteIntegrity c1 := by
+                          simpa [c1] using removeUnvotedCouncilMember_preserves_councilVoteIntegrity
+                            u.case memberId status hIntegrityU hFresh
+                        have hUnique1 : councilIdsUnique c1 := by
+                          unfold councilIdsUnique
+                          simpa [c1, councilMemberIds_status_update] using hUniqueU
+                        exact continueDeliberation_live_has_nextCouncilMember
+                          u t c1 hPositive hUnique1 hIntegrity1
+                          (by simpa [c1] using hCont) hPhase hStatus
+                      · simp [step] at hStep
 
 /--
 In a reachable live deliberation state, the summary records that the current
@@ -1427,7 +1500,7 @@ theorem reachable_nonclosed_has_nextOpportunity
           role := role
           phase := "arguments"
           objective := s!"{role} merits argument"
-          allowed_tools := ["submit_argument"]
+          allowed_tools := ["submit_evidence", "submit_argument"]
         }, ?_⟩
         simp [nextOpportunity, hStatus, nextOpportunityForPhase, hArguments, hRole]
     · by_cases hRebuttals : s.case.phase = "rebuttals"
@@ -1447,7 +1520,7 @@ theorem reachable_nonclosed_has_nextOpportunity
             phase := "rebuttals"
             may_pass := true
             objective := "plaintiff rebuttal"
-            allowed_tools := ["submit_rebuttal", "pass_phase_opportunity"]
+            allowed_tools := ["submit_evidence", "submit_rebuttal", "pass_phase_opportunity"]
           }, ?_⟩
           simp [nextOpportunity, hStatus, nextOpportunityForPhase, hRebuttals, hEmpty]
       · by_cases hSurrebuttals : s.case.phase = "surrebuttals"

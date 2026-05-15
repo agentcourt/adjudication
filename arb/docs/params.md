@@ -30,6 +30,8 @@ One part remains open.  The proof-friendly policy shape is now in place, but the
 | Procedure | `max_reports_per_side` | Maximum technical reports by one side across the whole case | policy | Lean |
 | Procedure | `max_report_title_bytes` | Maximum title size for one report | policy | Lean and Go |
 | Procedure | `max_report_summary_bytes` | Maximum summary size for one report | policy | Lean and Go |
+| Procedure | `max_submitted_evidence_per_side` | Maximum source-evidence items submitted by one side across the case | policy | Lean and Go |
+| Procedure | `max_submitted_evidence_bytes` | Maximum bytes for one submitted source-evidence item | policy | Lean and Go |
 | Complaint | `proposition` | The disputed proposition | complaint | complaint parser |
 | Runtime | `council_llm_timeout_seconds` | Timeout for council turns | runner config | Go |
 | Runtime | `attorney_acp_timeout_seconds` | Timeout for attorney ACP turns | runner config | Go |
@@ -54,7 +56,7 @@ This matters for cumulative limits.  Per-filing limits and per-side limits solve
 
 ## Enforcement split
 
-Lean should continue to enforce procedural rules that affect the legal state: filing phase, text limits, vote thresholds, round limits, and counts of exhibits or reports.  Go should enforce byte-based limits and transport limits before material reaches the engine.  A file-size limit is about what the runner will carry and persist.  A phase rule is about what the procedure allows.  They are different constraints and should stay in different layers.
+Lean should continue to enforce procedural rules that affect the legal state: filing phase, text limits, vote thresholds, round limits, and counts of exhibits, submitted evidence, or reports. Go should enforce byte-based limits and transport limits before material reaches the engine. A file-size limit is about what the runner will carry and persist. A phase rule is about what the procedure allows. They are different constraints and should stay in different layers.
 
 This split also determines persistence.  Policy values that affect the legal case should be written into the arbitration state and therefore into artifacts such as `run.json`, `state.json`, and the event log.  Runtime limits should stay in runner config and, if we want them recorded, they should appear in run metadata rather than in the legal state.
 

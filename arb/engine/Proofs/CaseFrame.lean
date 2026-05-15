@@ -145,6 +145,19 @@ theorem appendSupplementalMaterials_preserves_councilMemberIds
       councilMemberIds c.council_members := by
   simp [appendSupplementalMaterials, councilMemberIds]
 
+theorem appendSubmittedEvidence_preserves_proposition
+    (c : ArbitrationCase)
+    (evidence : SubmittedEvidence) :
+    (appendSubmittedEvidence c evidence).proposition = c.proposition := by
+  simp [appendSubmittedEvidence]
+
+theorem appendSubmittedEvidence_preserves_councilMemberIds
+    (c : ArbitrationCase)
+    (evidence : SubmittedEvidence) :
+    councilMemberIds (appendSubmittedEvidence c evidence).council_members =
+      councilMemberIds c.council_members := by
+  simp [appendSubmittedEvidence, councilMemberIds]
+
 theorem stateWithCase_preserves_caseFrame
     (s : ArbitrationState)
     (c : ArbitrationCase)
@@ -323,6 +336,23 @@ theorem step_pass_phase_opportunity_preserves_caseFrame
                 (by simp [councilMemberIds])
     · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
 
+theorem step_submit_evidence_preserves_caseFrame
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (proposition : String)
+    (policy : ArbitrationPolicy)
+    (memberIds : List String)
+    (hType : action.action_type = "submit_evidence")
+    (hFrame : caseFrameMatches proposition policy memberIds s)
+    (hStep : step { state := s, action := action } = .ok t) :
+    caseFrameMatches proposition policy memberIds t := by
+  have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
+    simpa [step, hType] using hStep
+  rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
+  exact stateWithCase_preserves_caseFrame s _ proposition policy memberIds hFrame
+    (appendSubmittedEvidence_preserves_proposition s.case evidence)
+    (appendSubmittedEvidence_preserves_councilMemberIds s.case evidence)
+
 /--
 Every successful public step preserves the case frame.
 
@@ -431,38 +461,41 @@ theorem step_preserves_caseFrame
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
             · exact step_pass_phase_opportunity_preserves_caseFrame
                 s t action proposition policy memberIds hPass hFrame hStep
-            · by_cases hVote : action.action_type = "submit_council_vote"
-              · rcases step_submit_council_vote_result s t action hVote hStep with
+            · by_cases hEvidence : action.action_type = "submit_evidence"
+              · exact step_submit_evidence_preserves_caseFrame
+                  s t action proposition policy memberIds hEvidence hFrame hStep
+              · by_cases hVote : action.action_type = "submit_council_vote"
+                · rcases step_submit_council_vote_result s t action hVote hStep with
                   ⟨memberId, vote, rationale, _hPhase, hCont⟩
-                let c1 := { s.case with council_votes := s.case.council_votes.concat {
-                  member_id := memberId
-                  round := s.case.deliberation_round
-                  vote := trimString vote
-                  rationale := trimString rationale
-                } }
-                exact continueDeliberation_preserves_caseFrame_for s t c1
-                  proposition policy memberIds hFrame
-                  (by simp [c1])
-                  (by simp [c1, councilMemberIds])
-                  hCont
-              · by_cases hRemoval : action.action_type = "remove_council_member"
-                · rcases step_remove_council_member_result s t action hRemoval hStep with
+                  let c1 := { s.case with council_votes := s.case.council_votes.concat {
+                    member_id := memberId
+                    round := s.case.deliberation_round
+                    vote := trimString vote
+                    rationale := trimString rationale
+                  } }
+                  exact continueDeliberation_preserves_caseFrame_for s t c1
+                    proposition policy memberIds hFrame
+                    (by simp [c1])
+                    (by simp [c1, councilMemberIds])
+                    hCont
+                · by_cases hRemoval : action.action_type = "remove_council_member"
+                  · rcases step_remove_council_member_result s t action hRemoval hStep with
                     ⟨memberId, status, _hPhase, hCont⟩
-                  let c1 := {
+                    let c1 := {
                       s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
                         if member.member_id = memberId then
                           { member with status := trimString status }
                         else
                           member)
                     }
-                  exact continueDeliberation_preserves_caseFrame_for s t c1
-                    proposition policy memberIds hFrame
-                    (by simp [c1])
-                    (by
-                      simpa [c1] using
-                        councilMemberIds_status_update s.case.council_members memberId (trimString status))
-                    hCont
-                · simp [step] at hStep
+                    exact continueDeliberation_preserves_caseFrame_for s t c1
+                      proposition policy memberIds hFrame
+                      (by simp [c1])
+                      (by
+                        simpa [c1] using
+                          councilMemberIds_status_update s.case.council_members memberId (trimString status))
+                      hCont
+                  · simp [step] at hStep
 
 /--
 Any run that begins at a successful initialization preserves the initialized

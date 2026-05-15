@@ -10,22 +10,24 @@ import (
 
 func DefaultPolicy() Policy {
 	return Policy{
-		CouncilSize:              5,
-		EvidenceStandard:         "Preponderance of the evidence.",
-		RequiredVotesForDecision: 3,
-		MaxDeliberationRounds:    3,
-		MaxOpeningChars:          5000,
-		MaxArgumentChars:         6000,
-		MaxRebuttalChars:         4000,
-		MaxSurrebuttalChars:      4000,
-		MaxClosingChars:          5000,
-		MaxExhibitsPerFiling:     9,
-		MaxExhibitsPerSide:       12,
-		MaxExhibitBytes:          128 * 1024,
-		MaxReportsPerFiling:      3,
-		MaxReportsPerSide:        4,
-		MaxReportTitleBytes:      256,
-		MaxReportSummaryBytes:    8192,
+		CouncilSize:                 5,
+		EvidenceStandard:            "Preponderance of the evidence.",
+		RequiredVotesForDecision:    3,
+		MaxDeliberationRounds:       3,
+		MaxOpeningChars:             5000,
+		MaxArgumentChars:            6000,
+		MaxRebuttalChars:            4000,
+		MaxSurrebuttalChars:         4000,
+		MaxClosingChars:             5000,
+		MaxExhibitsPerFiling:        9,
+		MaxExhibitsPerSide:          12,
+		MaxExhibitBytes:             128 * 1024,
+		MaxReportsPerFiling:         3,
+		MaxReportsPerSide:           4,
+		MaxReportTitleBytes:         256,
+		MaxReportSummaryBytes:       8192,
+		MaxSubmittedEvidencePerSide: 8,
+		MaxSubmittedEvidenceBytes:   128 * 1024,
 	}
 }
 
@@ -96,6 +98,10 @@ func ValidatePolicy(policy Policy) error {
 		return fmt.Errorf("policy.max_report_title_bytes must be positive")
 	case policy.MaxReportSummaryBytes <= 0:
 		return fmt.Errorf("policy.max_report_summary_bytes must be positive")
+	case policy.MaxSubmittedEvidencePerSide < 0:
+		return fmt.Errorf("policy.max_submitted_evidence_per_side must be non-negative")
+	case policy.MaxSubmittedEvidenceBytes <= 0:
+		return fmt.Errorf("policy.max_submitted_evidence_bytes must be positive")
 	default:
 		return nil
 	}
@@ -136,21 +142,23 @@ func (limits RuntimeLimits) AttorneyACPTimeout() time.Duration {
 
 func (policy Policy) StateMap() map[string]any {
 	return map[string]any{
-		"council_size":                policy.CouncilSize,
-		"evidence_standard":           strings.TrimSpace(policy.EvidenceStandard),
-		"required_votes_for_decision": policy.RequiredVotesForDecision,
-		"max_deliberation_rounds":     policy.MaxDeliberationRounds,
-		"max_opening_chars":           policy.MaxOpeningChars,
-		"max_argument_chars":          policy.MaxArgumentChars,
-		"max_rebuttal_chars":          policy.MaxRebuttalChars,
-		"max_surrebuttal_chars":       policy.MaxSurrebuttalChars,
-		"max_closing_chars":           policy.MaxClosingChars,
-		"max_exhibits_per_filing":     policy.MaxExhibitsPerFiling,
-		"max_exhibits_per_side":       policy.MaxExhibitsPerSide,
-		"max_exhibit_bytes":           policy.MaxExhibitBytes,
-		"max_reports_per_filing":      policy.MaxReportsPerFiling,
-		"max_reports_per_side":        policy.MaxReportsPerSide,
-		"max_report_title_bytes":      policy.MaxReportTitleBytes,
-		"max_report_summary_bytes":    policy.MaxReportSummaryBytes,
+		"council_size":                    policy.CouncilSize,
+		"evidence_standard":               strings.TrimSpace(policy.EvidenceStandard),
+		"required_votes_for_decision":     policy.RequiredVotesForDecision,
+		"max_deliberation_rounds":         policy.MaxDeliberationRounds,
+		"max_opening_chars":               policy.MaxOpeningChars,
+		"max_argument_chars":              policy.MaxArgumentChars,
+		"max_rebuttal_chars":              policy.MaxRebuttalChars,
+		"max_surrebuttal_chars":           policy.MaxSurrebuttalChars,
+		"max_closing_chars":               policy.MaxClosingChars,
+		"max_exhibits_per_filing":         policy.MaxExhibitsPerFiling,
+		"max_exhibits_per_side":           policy.MaxExhibitsPerSide,
+		"max_exhibit_bytes":               policy.MaxExhibitBytes,
+		"max_reports_per_filing":          policy.MaxReportsPerFiling,
+		"max_reports_per_side":            policy.MaxReportsPerSide,
+		"max_report_title_bytes":          policy.MaxReportTitleBytes,
+		"max_report_summary_bytes":        policy.MaxReportSummaryBytes,
+		"max_submitted_evidence_per_side": policy.MaxSubmittedEvidencePerSide,
+		"max_submitted_evidence_bytes":    policy.MaxSubmittedEvidenceBytes,
 	}
 }

@@ -1,4 +1,4 @@
-.PHONY: build test prove install demo ex2 ex3 ex4 ex5 ex6 clean
+.PHONY: build test prove install openclaw-acp-bridge demo ex2 ex3 ex4 ex5 ex6 clean
 
 BIN_DIR := .bin
 GO_ENV := CGO_ENABLED=0 GOCACHE=$(CURDIR)/.cache/go-build
@@ -10,6 +10,7 @@ build:
 	cd engine && lake build aarengine
 	install -m 755 engine/.lake/build/bin/aarengine $(BIN_DIR)/aarengine
 	cd runtime && $(GO_ENV) go build -o ../$(BIN_DIR)/aar ./cmd/aar
+	cd runtime && $(GO_ENV) go build -o ../$(BIN_DIR)/aar-openclaw-attorney ./cmd/aar-openclaw-attorney
 
 test:
 	cd runtime && $(GO_ENV) go test ./...
@@ -18,6 +19,9 @@ prove:
 	cd engine && lake build Proofs
 
 install: build
+
+openclaw-acp-bridge: build
+	tools/openclaw-acp-tcp-bridge.js
 
 demo: build
 	rm -rf out/ex1-demo
