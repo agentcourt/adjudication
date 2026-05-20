@@ -10,7 +10,7 @@ When a role is delegated through ACP, that role's live opportunity turns go thro
 
 The current path uses the [Agent Client Protocol](https://agentclientprotocol.com/).  `adc` acts as the ACP client.  The delegated role agent runs behind `pi-acp`, and `pi-acp` starts `pi`.  In the checked-in demo path, both `pi-acp` and `pi` run inside the Podman image.
 
-One ACP server configuration may serve more than one delegated role.  `adc` accepts repeated delegated-role selections while keeping one shared ACP command, argument list, environment, and timeout.  The role and opportunity still come from Lean, not from ACP-side configuration.
+One ACP server configuration may serve more than one delegated role.  `adc` accepts repeated delegated-role selections while keeping one shared ACP command or one shared TCP endpoint, argument list, environment, and timeout.  The role and opportunity still come from Lean, not from ACP-side configuration.
 
 | Layer | Role |
 |---|---|
@@ -26,7 +26,7 @@ This separation matters.  Court procedure does not move into the delegated agent
 
 The ACP layer uses custom `_adc/*` methods for case-scoped operations.  These methods are not legal acts in themselves.  They give the delegated role access to the visible record and to the one path that can propose a legal act.
 
-The current method surface includes:
+The current method set includes:
 
 | Method | Purpose |
 |---|---|
@@ -65,6 +65,16 @@ This layout keeps the attorney agent off the host filesystem while preserving a 
 
 The wrapper keeps stdio intact and mounts only that ephemeral home directory.  The container does not receive the repository checkout, the run output directory, or a persistent host `~/.pi` tree.  For ACP attorney turns, case materials arrive through `_adc/*` methods and file-by-`file_id` reads, not from direct host paths.
 
+`adc` now stages role configuration into the wrapper home.  The PI settings default model comes from the delegated role's model after conversion to an xproxy model identifier, while `ADC_FLASH_XPROXY_MODEL` remains a compatibility override for flash runs and scripts.  The staged instruction file records the role name, allowed legal actions, role instructions, role preamble, and the work-product directory rule, and `PI_ACP_INSTRUCTIONS_FILE` points the wrapper at that file.
+
+Each wrapper-backed role also gets `/home/user/work-product/`.  The role may put private notes, calculations, timelines, and drafts there during the opportunity.  After the run, `adc` copies those files to `work-product/<role>/` beside `run.json`, while case state still changes only through `_adc/submit_decision`.
+
+## Remote ACP endpoints
+
+`adc case`, `adc run`, and `adc acp-role` can use a TCP endpoint instead of starting a local ACP command.  Use `--acp-endpoint tcp://host:port` with `adc case` or `adc run`, and use `--endpoint tcp://host:port` with `adc acp-role`.  Command and endpoint modes are mutually exclusive because a run either starts a local process over stdio or connects to an existing server, and `--acp-arg` or `--acp-env` applies only to command mode.
+
+Endpoint mode does not start host `xproxy` for the delegated role.  Model selection, native search, browser, fetch, and filesystem capabilities belong to the remote ACP server.  `adc` still owns the legal method set, current opportunity, role-visible case view, validation, event log, and state transition.
+
 ## Host `xproxy`
 
 Provider keys do not need to enter the container.  The current path uses host-side `xproxy` for that reason.
@@ -97,6 +107,8 @@ The current file-access limits are narrower than the long-term goal:
 
 That limit comes from current `pi` and `pi-acp` content and tool-result types, not from Lean or `adc`.
 
+The opportunity prompt now includes current capability and limit text.  It names the ADC host methods, support-method budget, decision budget, invalid-submission limit, visible file count, and party exhibit and technical-report counts when those counts apply.  Rejected ACP decisions now accumulate a submission history, so repeated malformed or disallowed filings end with an ordered account of what failed.
+
 ## Why this matters
 
 This path is the current plan for third-party attorney agents.  A third-party lawyer should not need to embed court logic, and the court should not need to trust the lawyer with direct state mutation.
@@ -111,7 +123,7 @@ First, non-image binary documents are not yet usable through the ACP plus `pi` p
 
 Second, this architecture still depends on careful prompt design.  The delegated lawyer now sees the exact legal-tool schema of the current opportunity because generic submission methods led to avoidable payload errors.
 
-Third, the helper surface is still narrow.  It is enough for the current attorney workflow, but it does not yet expose every potentially useful case-derived helper.
+Third, the helper method set is still narrow.  It is enough for the current attorney workflow, but it does not yet expose every potentially useful case-derived helper.
 
 ## References
 

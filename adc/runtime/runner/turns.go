@@ -62,7 +62,8 @@ func (r *Runner) executeTurn(
 	prevID := ""
 	steps := 0
 	invalidAttempts := 0
-	maxInvalidAttemptsPerTurn := r.cfg.Runtime.InvalidAttemptLimit
+	invalidAttemptReasons := make([]string, 0)
+	maxInvalidAttemptsPerTurn := r.cfg.Runtime.Normalized().InvalidAttemptLimit
 	successfulCalls := map[string]bool{}
 	for steps < turn.MaxSteps {
 		steps++
@@ -153,11 +154,12 @@ func (r *Runner) executeTurn(
 			inputItems = append(inputItems, followupInputItems...)
 		}
 		if len(issues) > 0 {
-			invalidAttempts++
 			issueTexts := make([]string, 0, len(issues))
 			for _, issue := range issues {
 				issueTexts = append(issueTexts, formatIssue(issue))
 			}
+			invalidAttemptReasons = append(invalidAttemptReasons, strings.Join(issueTexts, "; "))
+			invalidAttempts++
 			fmt.Fprintf(
 				os.Stderr,
 				"agent correction turn=%d role=%s invalid_attempt=%d/%d reason=%s\n",
@@ -168,12 +170,7 @@ func (r *Runner) executeTurn(
 				strings.Join(issueTexts, "; "),
 			)
 			if invalidAttempts >= maxInvalidAttemptsPerTurn {
-				return TurnLog{}, fmt.Errorf(
-					"agent exceeded invalid-attempt limit turn=%d role=%s reasons=%s",
-					turnIndex,
-					role.Name,
-					strings.Join(issueTexts, "; "),
-				)
+				return TurnLog{}, formatInvalidAttemptLimitError(fmt.Sprintf("agent turn=%d role=%s", turnIndex, role.Name), invalidAttemptReasons)
 			}
 			inputItems = append(
 				inputItems,
@@ -246,8 +243,17 @@ func (r *Runner) executeOpportunityTurn(
 	supportSteps := 0
 	supportBudget := supportToolBudget(r.state)
 	invalidAttempts := 0
+	invalidAttemptReasons := make([]string, 0)
 	agentEventSeq := 0
-	maxInvalidAttemptsPerTurn := r.cfg.Runtime.InvalidAttemptLimit
+	maxInvalidAttemptsPerTurn := r.cfg.Runtime.Normalized().InvalidAttemptLimit
+	recordInvalidAttempt := func(issue correctionIssue) error {
+		invalidAttemptReasons = append(invalidAttemptReasons, formatIssue(issue))
+		invalidAttempts++
+		if invalidAttempts >= maxInvalidAttemptsPerTurn {
+			return formatInvalidAttemptLimitError(fmt.Sprintf("agent turn=%d role=%s", turnIndex, role.Name), invalidAttemptReasons)
+		}
+		return nil
+	}
 	recordCompletionResult := func(resp openaiapi.Response, status string, issue *correctionIssue, invalidAttempt int) error {
 		agentEventSeq++
 		return r.persistAgentCompletionResult(
@@ -290,9 +296,8 @@ func (r *Runner) executeOpportunityTurn(
 			} else {
 				inputItems = appendOpportunityCorrection(turnIndex, role.Name, invalidAttempts, maxInvalidAttemptsPerTurn, nil, issue, opportunity, referenceTools)
 			}
-			invalidAttempts++
-			if invalidAttempts >= maxInvalidAttemptsPerTurn {
-				return TurnLog{}, fmt.Errorf("agent exceeded invalid-attempt limit turn=%d role=%s reasons=%s", turnIndex, role.Name, formatIssue(issue))
+			if err := recordInvalidAttempt(issue); err != nil {
+				return TurnLog{}, err
 			}
 			continue
 		}
@@ -327,9 +332,8 @@ func (r *Runner) executeOpportunityTurn(
 				inputItems = nextInputItems(callOutputs)
 				inputItems = appendOpportunityCorrection(turnIndex, role.Name, invalidAttempts, maxInvalidAttemptsPerTurn, inputItems, issue, opportunity, referenceTools)
 			}
-			invalidAttempts++
-			if invalidAttempts >= maxInvalidAttemptsPerTurn {
-				return TurnLog{}, fmt.Errorf("agent exceeded invalid-attempt limit turn=%d role=%s reasons=%s", turnIndex, role.Name, formatIssue(issue))
+			if err := recordInvalidAttempt(issue); err != nil {
+				return TurnLog{}, err
 			}
 			continue
 		}
@@ -352,9 +356,8 @@ func (r *Runner) executeOpportunityTurn(
 				inputItems = nextInputItems([]map[string]any{callOutput})
 				inputItems = appendOpportunityCorrection(turnIndex, role.Name, invalidAttempts, maxInvalidAttemptsPerTurn, inputItems, issue, opportunity, referenceTools)
 			}
-			invalidAttempts++
-			if invalidAttempts >= maxInvalidAttemptsPerTurn {
-				return TurnLog{}, fmt.Errorf("agent exceeded invalid-attempt limit turn=%d role=%s reasons=%s", turnIndex, role.Name, formatIssue(issue))
+			if err := recordInvalidAttempt(issue); err != nil {
+				return TurnLog{}, err
 			}
 			continue
 		}
@@ -381,9 +384,8 @@ func (r *Runner) executeOpportunityTurn(
 				inputItems = nextInputItems([]map[string]any{callOutput})
 				inputItems = appendOpportunityCorrection(turnIndex, role.Name, invalidAttempts, maxInvalidAttemptsPerTurn, inputItems, issue, opportunity, referenceTools)
 			}
-			invalidAttempts++
-			if invalidAttempts >= maxInvalidAttemptsPerTurn {
-				return TurnLog{}, fmt.Errorf("agent exceeded invalid-attempt limit turn=%d role=%s reasons=%s", turnIndex, role.Name, formatIssue(issue))
+			if err := recordInvalidAttempt(issue); err != nil {
+				return TurnLog{}, err
 			}
 			continue
 		}
@@ -408,9 +410,8 @@ func (r *Runner) executeOpportunityTurn(
 				}
 				inputItems = nextInputItems([]map[string]any{callOutput})
 				inputItems = appendOpportunityCorrection(turnIndex, role.Name, invalidAttempts, maxInvalidAttemptsPerTurn, inputItems, issue, opportunity, referenceTools)
-				invalidAttempts++
-				if invalidAttempts >= maxInvalidAttemptsPerTurn {
-					return TurnLog{}, fmt.Errorf("agent exceeded invalid-attempt limit turn=%d role=%s reasons=%s", turnIndex, role.Name, formatIssue(issue))
+				if err := recordInvalidAttempt(issue); err != nil {
+					return TurnLog{}, err
 				}
 				continue
 			}
@@ -438,9 +439,8 @@ func (r *Runner) executeOpportunityTurn(
 				return TurnLog{}, err
 			}
 			inputItems = appendOpportunityCorrection(turnIndex, role.Name, invalidAttempts, maxInvalidAttemptsPerTurn, inputItems, issue, opportunity, referenceTools)
-			invalidAttempts++
-			if invalidAttempts >= maxInvalidAttemptsPerTurn {
-				return TurnLog{}, fmt.Errorf("agent exceeded invalid-attempt limit turn=%d role=%s reasons=%s", turnIndex, role.Name, formatIssue(issue))
+			if err := recordInvalidAttempt(issue); err != nil {
+				return TurnLog{}, err
 			}
 			continue
 		}
@@ -469,9 +469,8 @@ func (r *Runner) executeOpportunityTurn(
 					inputItems = nextInputItems([]map[string]any{callOutput})
 					inputItems = appendOpportunityCorrection(turnIndex, role.Name, invalidAttempts, maxInvalidAttemptsPerTurn, inputItems, *issue, opportunity, referenceTools)
 				}
-				invalidAttempts++
-				if invalidAttempts >= maxInvalidAttemptsPerTurn {
-					return TurnLog{}, fmt.Errorf("agent exceeded invalid-attempt limit turn=%d role=%s reasons=%s", turnIndex, role.Name, formatIssue(*issue))
+				if err := recordInvalidAttempt(*issue); err != nil {
+					return TurnLog{}, err
 				}
 				continue
 			}
@@ -503,9 +502,8 @@ func (r *Runner) executeOpportunityTurn(
 				inputItems = nextInputItems([]map[string]any{callOutput})
 				inputItems = appendOpportunityCorrection(turnIndex, role.Name, invalidAttempts, maxInvalidAttemptsPerTurn, inputItems, issue, opportunity, referenceTools)
 			}
-			invalidAttempts++
-			if invalidAttempts >= maxInvalidAttemptsPerTurn {
-				return TurnLog{}, fmt.Errorf("agent exceeded invalid-attempt limit turn=%d role=%s reasons=%s", turnIndex, role.Name, formatIssue(issue))
+			if err := recordInvalidAttempt(issue); err != nil {
+				return TurnLog{}, err
 			}
 			continue
 		}
@@ -561,9 +559,8 @@ func (r *Runner) executeOpportunityTurn(
 				inputItems = nextInputItems([]map[string]any{callOutput})
 				inputItems = appendOpportunityCorrection(turnIndex, role.Name, invalidAttempts, maxInvalidAttemptsPerTurn, inputItems, issue, opportunity, referenceTools)
 			}
-			invalidAttempts++
-			if invalidAttempts >= maxInvalidAttemptsPerTurn {
-				return TurnLog{}, fmt.Errorf("agent exceeded invalid-attempt limit turn=%d role=%s reasons=%s", turnIndex, role.Name, formatIssue(issue))
+			if err := recordInvalidAttempt(issue); err != nil {
+				return TurnLog{}, err
 			}
 			continue
 		}

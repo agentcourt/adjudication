@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -116,5 +117,81 @@ func (r *Runner) writeEvidence(result Result) error {
 	if err := os.WriteFile(r.cfg.OutputPath, raw, 0o644); err != nil {
 		return fmt.Errorf("write evidence: %w", err)
 	}
+	if err := exportACPWorkProduct(filepath.Dir(r.cfg.OutputPath), r.workProductDirs); err != nil {
+		return err
+	}
 	return nil
+}
+
+func exportACPWorkProduct(outputDir string, workProductDirs map[string]string) error {
+	if len(workProductDirs) == 0 {
+		return nil
+	}
+	workRoot := filepath.Join(outputDir, "work-product")
+	roles := make([]string, 0, len(workProductDirs))
+	for role := range workProductDirs {
+		roles = append(roles, role)
+	}
+	sort.Strings(roles)
+	for _, role := range roles {
+		src := strings.TrimSpace(workProductDirs[role])
+		if src == "" {
+			continue
+		}
+		info, err := os.Stat(src)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("stat work-product dir for %s: %w", role, err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("work-product path for %s is not a directory", role)
+		}
+		dst := filepath.Join(workRoot, role)
+		if err := copyTree(dst, src); err != nil {
+			return fmt.Errorf("export work product for %s: %w", role, err)
+		}
+	}
+	return nil
+}
+
+func copyTree(dstRoot string, srcRoot string) error {
+	return filepath.WalkDir(srcRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(srcRoot, path)
+		if err != nil {
+			return fmt.Errorf("relative path for %s: %w", path, err)
+		}
+		dstPath := dstRoot
+		if rel != "." {
+			dstPath = filepath.Join(dstRoot, rel)
+		}
+		if d.IsDir() {
+			if err := os.MkdirAll(dstPath, 0o755); err != nil {
+				return fmt.Errorf("create dir %s: %w", dstPath, err)
+			}
+			return nil
+		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("symlink work product is not allowed: %s", path)
+		}
+		info, err := d.Info()
+		if err != nil {
+			return fmt.Errorf("stat %s: %w", path, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("unsupported work-product entry %s", path)
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", path, err)
+		}
+		if err := os.WriteFile(dstPath, raw, info.Mode().Perm()); err != nil {
+			return fmt.Errorf("write %s: %w", dstPath, err)
+		}
+		return nil
+	})
 }

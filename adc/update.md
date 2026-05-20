@@ -2,6 +2,10 @@
 
 This inventory records the `arb` changes that should inform `adc` work after the recent arbitration updates.  The main conclusion is that the ACP execution improvements should move first, because they strengthen external-agent operation without changing adjudication semantics.  Evidence provenance and proof architecture require design work before implementation, because `adc` already has different case-file, exhibit, report, and opportunity models.
 
+## Implementation Status
+
+The 2026-05-20 update completed the immediate ACP infrastructure ports.  `adc` now supports TCP ACP endpoints for delegated roles, stages effective role models and standing instructions into wrapper-backed PI homes, creates and exports ACP role work product, adds current capability and limit text to ACP prompts, preserves ordered invalid-decision history for ACP roles, and stops tracking generated `.sig.b64` example artifacts.  Evidence provenance, an ADC-specific OpenClaw adapter, litigation graphs, and the larger proof layer remain design work.
+
 ## Inventory Basis
 
 The review compared recent `arb` changes with the overlapping `adc` runtime, engine, proof, example, and documentation paths.  The most relevant `arb` additions were ACP endpoint handling, PI wrapper staging, attorney instructions, OpenClaw attorney support, submitted evidence, work-product preservation, invalid-attempt feedback, merits graphs, expanded examples, and a larger Lean proof program.  The comparison focused on whether each change carries over as infrastructure, requires an `adc`-specific design, or belongs only to arbitration.

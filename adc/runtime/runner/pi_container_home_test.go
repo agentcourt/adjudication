@@ -36,8 +36,8 @@ func TestPrepareEphemeralPIHome(t *testing.T) {
 		t.Fatalf("write models: %v", err)
 	}
 
-	t.Setenv("ADC_FLASH_XPROXY_MODEL", "openai://gpt-5-mini")
-	homeDir, cleanup, err := prepareEphemeralPIHome(repoRoot)
+	t.Setenv("ADC_FLASH_XPROXY_MODEL", "")
+	homeDir, cleanup, err := prepareEphemeralPIHome(repoRoot, "gpt-5-mini", "Role instructions.")
 	if err != nil {
 		t.Fatalf("prepareEphemeralPIHome returned error: %v", err)
 	}
@@ -88,6 +88,13 @@ func TestPrepareEphemeralPIHome(t *testing.T) {
 	}
 	if string(authRaw) != "{}\n" {
 		t.Fatalf("auth.json = %q, want {}\n", string(authRaw))
+	}
+	instructionsRaw, err := os.ReadFile(filepath.Join(homeDir, ".pi", "agent", "adc-role-instructions.md"))
+	if err != nil {
+		t.Fatalf("read staged instructions: %v", err)
+	}
+	if string(instructionsRaw) != "Role instructions.\n" {
+		t.Fatalf("instructions = %q", string(instructionsRaw))
 	}
 
 	if err := cleanup(); err != nil && !os.IsNotExist(err) {

@@ -51,6 +51,7 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	maxResponseBytes := fs.Int("max-response-bytes", runner.DefaultMaxResponseBytes, "Maximum bytes allowed in one direct-runtime model response")
 	var acpRoles stringListFlag
 	acpCommand := fs.String("acp-command", "", "ACP server command shared by delegated roles")
+	acpEndpoint := fs.String("acp-endpoint", "", "TCP ACP endpoint shared by delegated roles, for example tcp://127.0.0.1:19701")
 	acpTimeoutSeconds := fs.Int("acp-timeout-seconds", defaultACPTimeoutSeconds, "Timeout in seconds for each delegated ACP opportunity turn")
 	invalidAttemptLimit := fs.Int("invalid-attempt-limit", runner.DefaultInvalidAttemptLimit, "Maximum invalid model responses before a turn fails")
 	runID := fs.String("run-id", "", "Run ID override")
@@ -73,8 +74,13 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	if strings.TrimSpace(*outDir) == "" {
 		return fmt.Errorf("--out-dir is required")
 	}
-	if len(acpRoles) > 0 && strings.TrimSpace(*acpCommand) == "" {
-		return fmt.Errorf("--acp-command is required when --acp-role is set")
+	if len(acpRoles) > 0 {
+		switch {
+		case strings.TrimSpace(*acpCommand) != "" && strings.TrimSpace(*acpEndpoint) != "":
+			return fmt.Errorf("--acp-command and --acp-endpoint are mutually exclusive")
+		case strings.TrimSpace(*acpCommand) == "" && strings.TrimSpace(*acpEndpoint) == "":
+			return fmt.Errorf("--acp-command or --acp-endpoint is required when --acp-role is set")
+		}
 	}
 	flashOverride, err := parseFlashModel(*flashModel)
 	if err != nil {
@@ -94,7 +100,7 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		}()
 	}
 	useJurorXProxy := strings.TrimSpace(*jurorPersonas) != ""
-	if *allThroughXProxy || len(acpRoles) > 0 || useJurorXProxy {
+	if *allThroughXProxy || (len(acpRoles) > 0 && strings.TrimSpace(*acpCommand) != "") || useJurorXProxy {
 		xproxyServer, err := maybeStartXProxy(true)
 		if err != nil {
 			return err
@@ -258,7 +264,7 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	}()
 
 	engine := lean.New(strings.Fields(strings.TrimSpace(*engineCommand)))
-	acpCfg, err := runner.NewACPConfig([]string(acpRoles), *acpCommand, []string(acpArgList), []string(acpEnvList), time.Duration(*acpTimeoutSeconds)*time.Second)
+	acpCfg, err := runner.NewACPConfig([]string(acpRoles), *acpCommand, *acpEndpoint, []string(acpArgList), []string(acpEnvList), time.Duration(*acpTimeoutSeconds)*time.Second)
 	if err != nil {
 		return err
 	}
@@ -305,11 +311,11 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		"digest":             digestPath,
 	}
 	if *jsonSummary {
-		wire, err := json.MarshalIndent(summary, "", "  ")
+		payload, err := json.MarshalIndent(summary, "", "  ")
 		if err != nil {
 			return err
 		}
-		_, err = fmt.Fprintln(stdout, string(wire))
+		_, err = fmt.Fprintln(stdout, string(payload))
 		return err
 	}
 	_, err = fmt.Fprintf(stdout, "run_id=%s out_dir=%s scenario=%s output=%s runtime=%s digest=%s transcript=%s\n", effectiveRunID, *outDir, scenarioPath, outputPath, runtimePath, digestPath, transcriptPath)

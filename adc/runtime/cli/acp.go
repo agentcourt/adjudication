@@ -243,7 +243,7 @@ func prepareACPCommand(commandValue string, sessionCwd string, env []string) (pr
 		}
 	}
 	commonRoot := filepath.Dir(filepath.Dir(commandPath))
-	containerHomeDir, cleanup, err := runner.PrepareEphemeralPIHome(commonRoot)
+	containerHomeDir, cleanup, err := runner.PrepareEphemeralPIHome(commonRoot, "", "")
 	if err != nil {
 		return preparedACPCommand{}, err
 	}

@@ -112,7 +112,7 @@ make demo
 
 1. Runs `examples/ex1/sign.sh`.
 2. Runs `.bin/adc complain --situation examples/ex1/situation.md`.
-3. Runs `.bin/adc case --complaint examples/ex1/complaint.md --out-dir out/ex1-demo ...`.
+3. Runs `.bin/adc case --complaint examples/ex1/complaint.md --out-dir out/ex1-demo` with delegated plaintiff and defendant ACP roles.
 
 If you want the manual case command after complaint drafting, use:
 
@@ -122,8 +122,10 @@ If you want the manual case command after complaint drafting, use:
   --out-dir out/ex1-demo \
   --acp-role plaintiff \
   --acp-role defendant \
-  --acp-command "$PWD/pi-container/acp-podman.sh"
+  --acp-command "$PWD/../common/pi-container/acp-podman.sh"
 ```
+
+To connect delegated roles to an already-running ACP server, replace `--acp-command` with `--acp-endpoint tcp://127.0.0.1:19701`.  Endpoint mode leaves model choice and native tools to that remote server.  The local Podman path stages the delegated role model, standing role instructions, and `/home/user/work-product/` inside the temporary PI home.
 
 ## Results
 
@@ -139,6 +141,7 @@ The `--out-dir` directory contains the complete record of the run:
 | `events.ndjson`           | Event log                             |
 | `run.db`                  | SQLite run database                   |
 | `run.json`                | Full authoritative run evidence       |
+| `work-product/`           | Exported private ACP role notes, when present |
 | `digest.md`               | Case digest                           |
 | `transcript.md`           | Trial transcript                      |
 
