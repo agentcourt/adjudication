@@ -17,13 +17,13 @@ Because the structure is this narrow, each phase has a clear job.  Openings fram
 | Phase | Who acts | What belongs there |
 |---|---|---|
 | `openings` | claimant, then respondent | theory of the case, framing of the numeric question, and explanation of how the judgment standard applies |
-| `arguments` | claimant, then respondent | merits argument, exhibits, technical reports, and a concrete advocated score or range |
-| `rebuttals` | claimant | response to the respondent's method or score, with targeted exhibits and technical reports if needed, or a pass |
+| `arguments` | claimant, then respondent | merits argument, submitted source evidence, exhibits, technical reports, and a concrete advocated score or range |
+| `rebuttals` | claimant | response to the respondent's method or score, with targeted source evidence, exhibits, and technical reports if needed, or a pass |
 | `surrebuttals` | respondent | response to the rebuttal, or a pass |
 | `closings` | claimant, then respondent | final application of the full record to the question, with a concrete advocated answer |
 | `deliberation` | council members | individual answers and rationales |
 
-In the current implementation, `arguments` remains the main record-building phase.  Rebuttal may also add exhibits and technical reports, but only for the claimant and only as a response to the respondent's argument.  Surrebuttal remains text-only.
+In the current implementation, `arguments` remains the main record-building phase.  Rebuttal may also add submitted evidence, exhibits, and technical reports, but only for the claimant and only as a response to the respondent's argument.  Surrebuttal remains text-only.
 
 ## Openings
 
@@ -33,11 +33,11 @@ Use openings to frame the method and identify the evidence that would justify a 
 
 ## Arguments and Record Building
 
-Arguments are the center of the case.  This is the main phase in which a side may offer files as exhibits and submit technical reports.  Counsel should therefore treat the arguments phase as both merits briefing and record assembly.
+Arguments are the center of the case.  This is the main phase in which a side may submit source evidence, offer files as exhibits, and submit technical reports.  Counsel should therefore treat the arguments phase as both merits briefing and record assembly.
 
-Use a selective record-building strategy.  Offer the files that matter to the score and the judgment standard, and use technical reports when a concrete check will move the number in an explainable way.  In a similarity case, that may mean a side-by-side alignment, a chronology check, a structural comparison, or a report that separates distinctive reuse from background conventions.
+Use a selective record-building strategy.  Submit source evidence when exact outside material matters, offer the files that matter to the score and the judgment standard, and use technical reports when a concrete check will move the number in an explainable way.  In a similarity case, that may mean a side-by-side alignment, a chronology check, a structural comparison, or a report that separates distinctive reuse from background conventions.
 
-A good argument ties each offered file to a specific scoring consequence.  One document may establish the source text, another may show the later text, and a report may explain how much of the wording, structure, or development persisted.  If a technical check weakens your side's preferred score, report that weakness directly and explain why the remaining evidence still supports the advocated number.
+A good argument ties each record item to a specific scoring consequence.  One source may establish the earlier text, another may show the later text, and a report may explain how much of the wording, structure, or development persisted.  If a technical check weakens your side's preferred score, report that weakness directly and explain why the remaining evidence still supports the advocated number.
 
 Arguments in `arbd` should also make their scoring method explicit.  A side should say which factors matter, which factors should be discounted, and why its advocated number fits the record better than numbers ten points lower or higher.  A filing that argues for `92` without explaining why `82` is too low and why `98` is too high leaves the decisive work to the council without guidance.
 
@@ -45,9 +45,9 @@ Arguments in `arbd` should also make their scoring method explicit.  A side shou
 
 Rebuttal and surrebuttal are narrow response phases.  They exist to answer the other side's method, weighting, or use of the record.  A good rebuttal identifies one or two decisive failures in the respondent's scoring approach, then shows why those failures matter under the stated judgment standard.
 
-These phases should not repeat the full merits presentation.  Rebuttal may sharpen the record, but it should do so only in direct response to the respondent's case.  What remains is argument about how the council should read the record, which features are distinctive, which similarities should be discounted, and which nearby numbers fail to fit the evidence.
+These phases should not repeat the full merits presentation.  Rebuttal may sharpen the record with targeted source evidence, exhibits, or technical reports, but it should do so only in direct response to the respondent's case.  What remains is argument about how the council should read the record, which features are distinctive, which similarities should be discounted, and which nearby numbers fail to fit the evidence.
 
-Closings should synthesize, not expand.  By then the council has the full set of filings, exhibits, and technical reports.  The closing should tell the council what number the record supports, why nearby alternatives fit less well, and how the judgment standard bears on disputed inferences.  A strong closing in `arbd` almost always names a concrete answer rather than a vague upper or lower band.
+Closings should synthesize, not expand.  By then the council has the full set of filings, submitted source evidence, exhibits, and technical reports.  The closing should tell the council what number the record supports, why nearby alternatives fit less well, and how the judgment standard bears on disputed inferences.  A strong closing in `arbd` almost always names a concrete answer rather than a vague upper or lower band.
 
 ## Council Deliberation
 

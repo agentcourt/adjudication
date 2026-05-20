@@ -1,4 +1,4 @@
-.PHONY: build build-image test prove demo ex2 ex3 clean
+.PHONY: build build-image test prove openclaw-acp-bridge demo ex2 ex3 clean
 
 BIN_DIR := .bin
 GO_ENV := CGO_ENABLED=0 GOCACHE=$(CURDIR)/.cache/go-build
@@ -9,6 +9,7 @@ build: build-image
 	cd engine && lake build aardengine
 	install -m 755 engine/.lake/build/bin/aardengine $(BIN_DIR)/aardengine
 	cd runtime && $(GO_ENV) go build -o ../$(BIN_DIR)/aard ./cmd/aard
+	cd runtime && $(GO_ENV) go build -o ../$(BIN_DIR)/aard-openclaw-attorney ./cmd/aard-openclaw-attorney
 
 build-image:
 	../common/pi-container/build-image.sh
@@ -18,6 +19,9 @@ test:
 
 prove:
 	cd engine && lake build Proofs
+
+openclaw-acp-bridge: build
+	tools/openclaw-acp-tcp-bridge.js
 
 demo: build
 	rm -rf out/ex1-demo

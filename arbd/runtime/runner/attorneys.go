@@ -14,13 +14,32 @@ func resolveAttorney(role string, cfg Config, complaintPath string) (AttorneyRun
 		Model:      cfg.AttorneyModel,
 		ACPCommand: cfg.ACPCommand,
 	}
+	var roleModel string
 	switch role {
 	case "plaintiff":
+		roleModel = strings.TrimSpace(cfg.PlaintiffAttorney.Model)
 		base = mergeAttorneyRoleConfig(base, cfg.PlaintiffAttorney)
 	case "defendant":
+		roleModel = strings.TrimSpace(cfg.DefendantAttorney.Model)
 		base = mergeAttorneyRoleConfig(base, cfg.DefendantAttorney)
 	default:
 		return AttorneyRunInfo{}, fmt.Errorf("unsupported attorney role %q", role)
+	}
+	sessionCwd := strings.TrimSpace(base.SessionCwd)
+	endpoint := strings.TrimSpace(base.ACPEndpoint)
+	if endpoint != "" {
+		if roleModel != "" {
+			return AttorneyRunInfo{}, fmt.Errorf("%s attorney model cannot be set with an ACP endpoint; the remote ACP attorney owns model selection", role)
+		}
+		if sessionCwd == "" {
+			sessionCwd = defaultRemoteSessionCwd
+		}
+		return AttorneyRunInfo{
+			Role:         role,
+			ACPTransport: "tcp",
+			ACPEndpoint:  endpoint,
+			SessionCwd:   sessionCwd,
+		}, nil
 	}
 	model := strings.TrimSpace(base.Model)
 	if model == "" {
@@ -30,34 +49,23 @@ func resolveAttorney(role string, cfg Config, complaintPath string) (AttorneyRun
 	if err != nil {
 		return AttorneyRunInfo{}, err
 	}
-	sessionCwd := strings.TrimSpace(base.SessionCwd)
-	transport := "stdio"
 	command := strings.TrimSpace(base.ACPCommand)
-	endpoint := strings.TrimSpace(base.ACPEndpoint)
-	if endpoint != "" {
-		transport = "tcp"
-		if sessionCwd == "" {
-			sessionCwd = defaultRemoteSessionCwd
-		}
-		command = ""
-	} else {
-		if command == "" {
-			return AttorneyRunInfo{}, fmt.Errorf("%s attorney ACP command is required", role)
-		}
-		if sessionCwd == "" {
-			sessionCwd, err = filepath.Abs(filepath.Dir(complaintPath))
-			if err != nil {
-				return AttorneyRunInfo{}, fmt.Errorf("resolve %s attorney session cwd: %w", role, err)
-			}
+	if command == "" {
+		return AttorneyRunInfo{}, fmt.Errorf("%s attorney ACP command is required", role)
+	}
+	if sessionCwd == "" {
+		sessionCwd, err = filepath.Abs(filepath.Dir(complaintPath))
+		if err != nil {
+			return AttorneyRunInfo{}, fmt.Errorf("resolve %s attorney session cwd: %w", role, err)
 		}
 	}
+	searchEnabled := spec.SearchRequested
 	return AttorneyRunInfo{
 		Role:          role,
 		Model:         model,
-		SearchEnabled: spec.SearchRequested,
-		ACPTransport:  transport,
+		SearchEnabled: &searchEnabled,
+		ACPTransport:  "stdio",
 		ACPCommand:    command,
-		ACPEndpoint:   endpoint,
 		SessionCwd:    sessionCwd,
 	}, nil
 }

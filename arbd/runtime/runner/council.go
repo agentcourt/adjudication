@@ -257,6 +257,7 @@ func (rc *runContext) renderCouncilRecord() string {
 		"Surrebuttals:\n" + renderFilingList(mapList(caseObj["surrebuttals"])),
 		"Closings:\n" + renderFilingList(mapList(caseObj["closings"])),
 		"Exhibits:\n" + rc.renderExhibits(mapList(caseObj["offered_files"])),
+		"Submitted evidence:\n" + renderSubmittedEvidence(mapList(caseObj["submitted_evidence"])),
 		"Technical reports:\n" + renderReports(mapList(caseObj["technical_reports"])),
 	}
 	prior := rc.renderPriorAnswers(mapList(caseObj["council_answers"]), intNumber(caseObj["deliberation_round"]))

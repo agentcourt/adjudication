@@ -49,6 +49,8 @@ make build
 
 `aard case` scans the complaint directory for case files when `--file` is absent.  It skips the complaint, the situation file, `README.md`, signing artifacts, and directories.  It loads `.txt`, `.md`, `.pem`, and `.b64` files as readable case files and records other file types as byte-bearing exhibits.
 
+During arguments and claimant rebuttal, attorneys may submit source material discovered during the run through `aar_submit_evidence`.  The runner stores accepted bytes under `submitted-evidence/`, records source URL or source description, MIME type, retrieval timestamp, relevance, SHA-256, and byte count, and adds the new file to the visible case-file set.  A party that wants the material admitted as an exhibit must cite the returned `file_id` in `offered_files`; attorney analysis belongs in `technical_reports`.
+
 The default attorney path uses `../common/pi-container/acp-podman.sh`.  That path also requires a provider API key in the environment for the selected model endpoint, such as `OPENAI_API_KEY` for `openai://...` models or `OPENROUTER_API_KEY` for `openrouter://...` models.
 
 ## Key Flags
@@ -63,12 +65,18 @@ The default attorney path uses `../common/pi-container/acp-podman.sh`.  That pat
 | `--judgment-standard` | Override `policy.judgment_standard`. |
 | `--council-pool` | Council model and persona pool.  Defaults under `common/`. |
 | `--attorney-model` | Attorney ACP model id. |
+| `--plaintiff-acp-endpoint` | Remote ACP endpoint for the plaintiff attorney. |
+| `--defendant-acp-endpoint` | Remote ACP endpoint for the defendant attorney. |
 | `--attorney-instructions` | Standing attorney instructions file. |
 | `--engine` | Lean engine binary.  Defaults to `.bin/aardengine` next to the CLI binary. |
 
+A role using a remote ACP endpoint owns its own model selection and native tool availability.  Do not combine `--plaintiff-attorney-model` with `--plaintiff-acp-endpoint`, or `--defendant-attorney-model` with `--defendant-acp-endpoint`.  The local model flags apply to the Pi/xproxy attorney path only.
+
+OpenClaw-backed endpoint runs are described in [OpenClaw Degree Attorneys](docs/openclaw-attorneys.md).  The build creates `.bin/aard-openclaw-attorney`, and `tools/openclaw-acp-tcp-bridge.js` exposes that stdio adapter as a TCP ACP endpoint.  Use `make openclaw-acp-bridge` to build the tools and start the bridge with default settings.
+
 ## Outputs
 
-Each run writes a full packet to `--out-dir`: `complaint.md`, `policy.json`, `runtime.json`, `run.json`, `state.json`, `council.json`, `digest.md`, `transcript.md`, and `events.ndjson`.
+Each run writes a full packet to `--out-dir`: `complaint.md`, `policy.json`, `runtime.json`, `run.json`, `state.json`, `council.json`, `digest.md`, `transcript.md`, and `events.ndjson`.  When attorneys submit source evidence, the packet also includes a `submitted-evidence/` directory.  The digest and transcript distinguish submitted source evidence from exhibits and technical reports.
 
 On success, `aard case` prints one JSON object to stdout:
 

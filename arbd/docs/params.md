@@ -22,6 +22,8 @@ The current implementation already keeps those classes separate in the code and 
 | Procedure | `max_reports_per_side` | Maximum technical reports by one side across the whole case | policy | Lean |
 | Procedure | `max_report_title_bytes` | Maximum title size for one report | policy | Lean and Go |
 | Procedure | `max_report_summary_bytes` | Maximum summary size for one report | policy | Lean and Go |
+| Procedure | `max_submitted_evidence_per_side` | Maximum source-evidence items submitted by one side across the case | policy | Lean and Go |
+| Procedure | `max_submitted_evidence_bytes` | Maximum bytes for one submitted source-evidence item | policy | Lean and Go |
 | Complaint | `question` | The disputed quantitative question | complaint | complaint parser |
 | Runtime | `council_llm_timeout_seconds` | Timeout for council turns | runner config | Go |
 | Runtime | `attorney_acp_timeout_seconds` | Timeout for attorney ACP turns | runner config | Go |
@@ -38,7 +40,7 @@ That closure rule is part of the procedural surface, even though it is not curre
 
 ## Enforcement Split
 
-Lean should continue to enforce procedural rules that affect the legal state: phase ordering, text limits, counts of exhibits or reports, bounded council answers, and closure on complete answering.  Go should enforce byte-based limits and transport limits before material reaches the engine.  A file-size limit is about what the runner will carry and persist.  A phase rule is about what the procedure allows.  They are different constraints and should stay in different layers.
+Lean should continue to enforce procedural rules that affect the legal state: phase ordering, text limits, counts of exhibits, technical reports, submitted evidence, bounded council answers, and closure on complete answering.  Go should enforce byte-based limits and transport limits before material reaches the engine.  A file-size limit is about what the runner will carry and persist.  A phase rule is about what the procedure allows.  They are different constraints and should stay in different layers.
 
 This split also determines persistence.  Policy values that affect the legal case are written into the arbitration state and therefore into artifacts such as `run.json`, `state.json`, and the event log.  Runtime limits stay in runner config and appear in `runtime.json` rather than in the legal state.
 
@@ -50,4 +52,4 @@ That separation matters because the same complaint should be able to run under d
 
 ## Defaults
 
-The initial defaults should preserve the current implementation's working behavior.  That means a five-member council, the checked-in judgment standard from [`etc/policy.json`](../etc/policy.json), and the current filing-size and material-limit fields.  It also means one deliberation round in practice, because the engine closes after the first complete set of seated-member answers.
+The initial defaults should preserve the current implementation's working behavior.  That means a five-member council, the checked-in judgment standard from [`etc/policy.json`](../etc/policy.json), and the current filing-size and material-limit fields.  It also means source evidence is capped by item count and byte size before it becomes a visible case file.  The engine still closes after the first complete set of seated-member answers.

@@ -13,6 +13,10 @@ def afterPlaintiffArgument : Except String ArbitrationState := do
   let s1 ← afterTwoOpenings
   step { state := s1, action := argumentAction "plaintiff" "Plaintiff argument." }
 
+def afterPlaintiffSubmittedEvidence : Except String ArbitrationState := do
+  let s1 ← afterTwoOpenings
+  step { state := s1, action := submittedEvidenceAction "plaintiff" }
+
 def afterTwoArguments : Except String ArbitrationState := do
   let s1 ← afterPlaintiffArgument
   step { state := s1, action := argumentAction "defendant" "Defendant argument." }
@@ -58,6 +62,11 @@ theorem second_opening_advances_to_arguments :
 
 theorem second_argument_advances_to_rebuttals :
     statePhase afterTwoArguments = "rebuttals" := by
+  native_decide
+
+theorem submitted_evidence_stays_in_arguments :
+    statePhase afterPlaintiffSubmittedEvidence = "arguments" ∧
+      stateSubmittedEvidenceCount afterPlaintiffSubmittedEvidence = 1 := by
   native_decide
 
 theorem filed_rebuttal_and_surrebuttal_advance_the_case :
