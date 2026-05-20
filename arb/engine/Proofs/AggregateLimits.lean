@@ -174,6 +174,13 @@ theorem appendSupplementalMaterials_preserves_material_limits
           · simpa [appendSupplementalMaterials, reportCount_append, hReportPlaintiff] using hPlaintiffRep
           · simpa [appendSupplementalMaterials, reportCount_append, hReportDefendant] using hDefendantRep
 
+theorem appendSubmittedEvidence_preserves_material_limits
+    (s : ArbitrationState)
+    (evidence : SubmittedEvidence)
+    (hBase : materialLimitsRespected s) :
+    materialLimitsRespected { s with case := appendSubmittedEvidence s.case evidence } := by
+  simpa [materialLimitsRespected, appendSubmittedEvidence] using hBase
+
 /-
 The lemmas below lift the arithmetic fact into procedure-level invariants.
 

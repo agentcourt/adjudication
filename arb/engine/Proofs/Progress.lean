@@ -365,32 +365,39 @@ theorem step_phaseRank_mono
                 (⟨hPhase, rfl⟩ | ⟨hPhase, rfl⟩)
               · simp [stateWithCase, hPhase, phaseRank]
               · simp [stateWithCase, hPhase, phaseRank]
-            · by_cases hVote : action.action_type = "submit_council_vote"
-              · rcases step_submit_council_vote_result s t action hVote hStep with
-                  ⟨memberId, vote, rationale, hPhase, hCont⟩
-                let c1 := { s.case with council_votes := s.case.council_votes.concat {
-                  member_id := memberId
-                  round := s.case.deliberation_round
-                  vote := trimString vote
-                  rationale := trimString rationale
-                } }
-                have hPhase1 : c1.phase = "deliberation" := by
-                  simpa [c1] using hPhase
-                exact continueDeliberation_phaseRank_mono s t c1 hPhase1 hCont
-              · by_cases hRemoval : action.action_type = "remove_council_member"
-                · rcases step_remove_council_member_result s t action hRemoval hStep with
-                    ⟨memberId, status, hPhase, hCont⟩
-                  let c1 := {
-                    s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
-                      if member.member_id = memberId then
-                        { member with status := trimString status }
-                      else
-                        member)
-                  }
+            · by_cases hEvidence : action.action_type = "submit_evidence"
+              · have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
+                  simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing,
+                    hPass, hEvidence] using hStep
+                rcases submitEvidence_result s t action.actor_role action.payload hSubmit with
+                  ⟨evidence, rfl⟩
+                simp [stateWithCase, appendSubmittedEvidence]
+              · by_cases hVote : action.action_type = "submit_council_vote"
+                · rcases step_submit_council_vote_result s t action hVote hStep with
+                    ⟨memberId, vote, rationale, hPhase, hCont⟩
+                  let c1 := { s.case with council_votes := s.case.council_votes.concat {
+                    member_id := memberId
+                    round := s.case.deliberation_round
+                    vote := trimString vote
+                    rationale := trimString rationale
+                  } }
                   have hPhase1 : c1.phase = "deliberation" := by
                     simpa [c1] using hPhase
                   exact continueDeliberation_phaseRank_mono s t c1 hPhase1 hCont
-                · simp [step] at hStep
+                · by_cases hRemoval : action.action_type = "remove_council_member"
+                  · rcases step_remove_council_member_result s t action hRemoval hStep with
+                      ⟨memberId, status, hPhase, hCont⟩
+                    let c1 := {
+                      s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
+                        if member.member_id = memberId then
+                          { member with status := trimString status }
+                        else
+                          member)
+                    }
+                    have hPhase1 : c1.phase = "deliberation" := by
+                      simpa [c1] using hPhase
+                    exact continueDeliberation_phaseRank_mono s t c1 hPhase1 hCont
+                  · simp [step] at hStep
 
 theorem step_deliberation_round_mono
     (s t : ArbitrationState)
@@ -488,36 +495,43 @@ theorem step_deliberation_round_mono
                 (⟨_hPhase, rfl⟩ | ⟨_hPhase, rfl⟩)
               · simp [stateWithCase]
               · simp [stateWithCase]
-            · by_cases hVote : action.action_type = "submit_council_vote"
-              · rcases step_submit_council_vote_result s t action hVote hStep with
-                  ⟨memberId, vote, rationale, _hPhase, hCont⟩
-                let c1 := { s.case with council_votes := s.case.council_votes.concat {
-                  member_id := memberId
-                  round := s.case.deliberation_round
-                  vote := trimString vote
-                  rationale := trimString rationale
-                } }
-                have hRoundEq : c1.deliberation_round = s.case.deliberation_round := by
-                  simp [c1]
-                have hMono : c1.deliberation_round ≤ t.case.deliberation_round :=
-                  continueDeliberation_deliberation_round_mono s t c1 hCont
-                simpa [hRoundEq] using hMono
-              · by_cases hRemoval : action.action_type = "remove_council_member"
-                · rcases step_remove_council_member_result s t action hRemoval hStep with
-                    ⟨memberId, status, _hPhase, hCont⟩
-                  let c1 := {
-                    s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
-                      if member.member_id = memberId then
-                        { member with status := trimString status }
-                      else
-                        member)
-                  }
+            · by_cases hEvidence : action.action_type = "submit_evidence"
+              · have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
+                  simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing,
+                    hPass, hEvidence] using hStep
+                rcases submitEvidence_result s t action.actor_role action.payload hSubmit with
+                  ⟨evidence, rfl⟩
+                simp [stateWithCase, appendSubmittedEvidence]
+              · by_cases hVote : action.action_type = "submit_council_vote"
+                · rcases step_submit_council_vote_result s t action hVote hStep with
+                    ⟨memberId, vote, rationale, _hPhase, hCont⟩
+                  let c1 := { s.case with council_votes := s.case.council_votes.concat {
+                    member_id := memberId
+                    round := s.case.deliberation_round
+                    vote := trimString vote
+                    rationale := trimString rationale
+                  } }
                   have hRoundEq : c1.deliberation_round = s.case.deliberation_round := by
                     simp [c1]
                   have hMono : c1.deliberation_round ≤ t.case.deliberation_round :=
                     continueDeliberation_deliberation_round_mono s t c1 hCont
                   simpa [hRoundEq] using hMono
-                · simp [step] at hStep
+                · by_cases hRemoval : action.action_type = "remove_council_member"
+                  · rcases step_remove_council_member_result s t action hRemoval hStep with
+                      ⟨memberId, status, _hPhase, hCont⟩
+                    let c1 := {
+                      s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
+                        if member.member_id = memberId then
+                          { member with status := trimString status }
+                        else
+                          member)
+                    }
+                    have hRoundEq : c1.deliberation_round = s.case.deliberation_round := by
+                      simp [c1]
+                    have hMono : c1.deliberation_round ≤ t.case.deliberation_round :=
+                      continueDeliberation_deliberation_round_mono s t c1 hCont
+                    simpa [hRoundEq] using hMono
+                  · simp [step] at hStep
 
 theorem step_establishes_fixedFrameProgress
     (s t : ArbitrationState)

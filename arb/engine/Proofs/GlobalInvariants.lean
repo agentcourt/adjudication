@@ -114,6 +114,13 @@ theorem appendSupplementalMaterials_preserves_phaseShape
     phaseShape (appendSupplementalMaterials c offered reports) := by
   cases hPhase : c.phase <;> simpa [appendSupplementalMaterials, phaseShape, hPhase] using hShape
 
+theorem appendSubmittedEvidence_preserves_phaseShape
+    (c : ArbitrationCase)
+    (evidence : SubmittedEvidence)
+    (hShape : phaseShape c) :
+    phaseShape (appendSubmittedEvidence c evidence) := by
+  cases hPhase : c.phase <;> simpa [appendSubmittedEvidence, phaseShape, hPhase] using hShape
+
 /--
 Adding an opening to a well-shaped opening state preserves the global shape.
 

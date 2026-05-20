@@ -42,9 +42,9 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	commonRoot := fs.String("common-root", defaultCommonRoot(), "Path to the sibling shared common directory")
 	legacyCommonRoot := fs.String("agentcourt-root", "", "Deprecated alias for --common-root")
 	councilPool := fs.String("council-pool", "", "Council model/persona pool file. Default: <common-root>/data/personas/pool.csv")
-	attorneyModel := fs.String("attorney-model", runner.DefaultAttorneyModel, "Attorney ACP model id. Use an explicit xproxy model such as openai://gpt-5 or openai://gpt-5?tools=search")
-	plaintiffAttorneyModel := fs.String("plaintiff-attorney-model", "", "Plaintiff attorney model override")
-	defendantAttorneyModel := fs.String("defendant-attorney-model", "", "Defendant attorney model override")
+	attorneyModel := fs.String("attorney-model", runner.DefaultAttorneyModel, "Local Pi/xproxy attorney model id, such as openai://gpt-5 or openai://gpt-5?tools=search")
+	plaintiffAttorneyModel := fs.String("plaintiff-attorney-model", "", "Plaintiff local Pi/xproxy attorney model override")
+	defendantAttorneyModel := fs.String("defendant-attorney-model", "", "Defendant local Pi/xproxy attorney model override")
 	acpCommand := fs.String("acp-command", "", "ACP command. Default: <common-root>/pi-container/acp-podman.sh")
 	plaintiffACPCommand := fs.String("plaintiff-acp-command", "", "Plaintiff ACP command override")
 	defendantACPCommand := fs.String("defendant-acp-command", "", "Defendant ACP command override")
@@ -125,6 +125,12 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	effectiveAttorneyModel := strings.TrimSpace(*attorneyModel)
 	if _, err := runner.ParseAttorneyModelForCLI(effectiveAttorneyModel); err != nil {
 		return reportCaseError(stdout, err)
+	}
+	if strings.TrimSpace(*plaintiffAttorneyModel) != "" && strings.TrimSpace(*plaintiffACPEndpoint) != "" {
+		return reportCaseError(stdout, fmt.Errorf("plaintiff attorney model cannot be set with --plaintiff-acp-endpoint; the remote ACP attorney owns model selection"))
+	}
+	if strings.TrimSpace(*defendantAttorneyModel) != "" && strings.TrimSpace(*defendantACPEndpoint) != "" {
+		return reportCaseError(stdout, fmt.Errorf("defendant attorney model cannot be set with --defendant-acp-endpoint; the remote ACP attorney owns model selection"))
 	}
 	if strings.TrimSpace(*plaintiffAttorneyModel) != "" {
 		if _, err := runner.ParseAttorneyModelForCLI(strings.TrimSpace(*plaintiffAttorneyModel)); err != nil {

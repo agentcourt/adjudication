@@ -8,7 +8,7 @@ This repository contains the Lean engine, the Go runtime, the `aar` CLI, and a s
 
 | Path | Purpose |
 |---|---|
-| `docs/` | Project rules and notes |
+| `docs/` | Project rules and notes. See [`docs/openclaw-attorneys.md`](docs/openclaw-attorneys.md) for the OpenClaw-attorney workflow. |
 | `engine/` | Lean arbitration engine |
 | `runtime/` | Go CLI and runtime bridge |
 | `examples/` | Example disputes |
@@ -72,11 +72,11 @@ The explicit `--file` path can be repeated.  It accepts shell globs, and it reje
 
 ## Attorney Configuration
 
-By default, `aar case` runs both attorneys through the local ACP wrapper at `../common/pi-container/acp-podman.sh`.  The global `--attorney-model` flag applies to both sides unless a role-specific model override is present.  Search capability comes from the model id itself.  For example, `openai://gpt-5` runs without native search, while `openai://gpt-5?tools=search` requests native search through xproxy.
+By default, `aar case` runs both attorneys through the local Pi ACP wrapper at `../common/pi-container/acp-podman.sh`.  The global `--attorney-model` flag applies only to local Pi/xproxy attorneys unless a role-specific local model override is present.  Search capability for that path comes from the model id itself.  For example, `openai://gpt-5` runs without native search, while `openai://gpt-5?tools=search` requests native search through xproxy.
 
 Use `--attorney-instructions FILE` to provide the standing attorney-side instructions file for the run.  When that flag is absent, `aar case` falls back to `./attorney-instructions/default.md` from the current working directory if that file exists.  `arb` applies one shared attorney-instructions file to both sides.  A remote ACP endpoint still has to honor its own instructions on the remote side; `arb` does not transmit this file over the TCP ACP transport.
 
-The global `--acp-command` flag sets the local ACP command for both sides.  Each side can override the shared configuration with its own model, local ACP command, remote ACP endpoint, and ACP session working directory.  A role cannot set both `--*-acp-command` and `--*-acp-endpoint` in the same run.
+The global `--acp-command` flag sets the local ACP command for both sides.  Each side can override the shared configuration with its own local Pi/xproxy model, local ACP command, remote ACP endpoint, and ACP session working directory.  A role cannot set both `--*-acp-command` and `--*-acp-endpoint` in the same run.  A role using `--*-acp-endpoint` also cannot set `--*-attorney-model`; the remote ACP attorney owns its model selection and tool availability.
 
 This command keeps the defendant on the local ACP wrapper and points the plaintiff at a remote ACP endpoint:
 
@@ -84,14 +84,51 @@ This command keeps the defendant on the local ACP wrapper and points the plainti
 .bin/aar case \
   --complaint work/defamation/complaint.md \
   --out-dir out/defamation-demo \
-  --plaintiff-attorney-model 'openai://gpt-5?tools=search' \
   --plaintiff-acp-endpoint 'tcp://agent.example.com:7000' \
-  --plaintiff-acp-session-cwd /home/user \
   --defendant-attorney-model 'openai://gpt-5' \
   --defendant-acp-command ../common/pi-container/acp-podman.sh
 ```
 
 The remote endpoint path uses a persistent TCP connection that carries newline-delimited ACP JSON-RPC messages.  `arb` exposes the current `_aar/*` client methods for case access and filing over that session.  A remote ACP server must already know how to use those methods.
+
+For OpenClaw attorneys, prefer `--*-acp-endpoint` and run an OpenClaw ACP attorney server at that endpoint.  AAR will connect over ACP and assume the remote OpenClaw side owns model selection, session policy, and native tool availability.  The full reproduction guide is [`docs/openclaw-attorneys.md`](docs/openclaw-attorneys.md).
+
+The `aar-openclaw-attorney` adapter is a local compatibility wrapper for smoke tests and custom integrations.  It preloads the visible AAR record and text-readable case files, asks OpenClaw for one strict JSON filing, and submits that filing through `_aar/submit_decision`.  It does not accept or forward an AAR model selection.
+
+```bash
+AAR_OPENCLAW_AGENT=1 \
+AAR_OPENCLAW_AGENT_ID=aar-lawyer \
+AAR_OPENCLAW_AGENT_SESSION_ID=aar-plaintiff-demo \
+.bin/aar case \
+  --complaint work/defamation/complaint.md \
+  --out-dir out/defamation-openclaw-demo \
+  --plaintiff-acp-command .bin/aar-openclaw-attorney \
+  --defendant-acp-command ../common/pi-container/acp-podman.sh
+```
+
+Use a dedicated OpenClaw lawyer agent for this path.  The adapter requires `AAR_OPENCLAW_AGENT_ID` so arbitration prompts do not fall through to a default personal agent workspace.
+
+For deterministic local tests, set `AAR_OPENCLAW_ATTORNEY_DECISION_JSON` to the exact filing object instead of `AAR_OPENCLAW_AGENT=1`.  For custom integrations, set `AAR_OPENCLAW_ATTORNEY_COMMAND` to a command that reads the prompt packet from stdin and prints the filing JSON to stdout.
+
+For endpoint smoke tests, `tools/openclaw-acp-tcp-bridge.js` exposes the stdio adapter as a local TCP ACP endpoint.  It listens on `127.0.0.1:19701` by default, spawns `.bin/aar-openclaw-attorney` for each connection, pipes ACP JSON-RPC between the socket and the adapter, and strips `AAR_OPENCLAW_AGENT_MODEL` from the adapter environment so model selection stays on the OpenClaw side.
+
+```bash
+make build
+AAR_OPENCLAW_AGENT_ID=aar-lawyer \
+tools/openclaw-acp-tcp-bridge.js
+```
+
+In another shell:
+
+```bash
+.bin/aar case \
+  --complaint work/defamation/complaint.md \
+  --out-dir out/defamation-openclaw-endpoint-demo \
+  --plaintiff-acp-endpoint tcp://127.0.0.1:19701 \
+  --defendant-acp-endpoint tcp://127.0.0.1:19701
+```
+
+The helper also accepts `--host`, `--port`, and `--adapter`.  It is intended for local smoke tests and simple single-host integrations, not as a hardened network service.
 
 This command shows the same pattern with one global ACP command and a role-specific remote override:
 
@@ -101,7 +138,6 @@ This command shows the same pattern with one global ACP command and a role-speci
   --out-dir out/defamation-demo \
   --attorney-model 'openai://gpt-5' \
   --acp-command ../common/pi-container/acp-podman.sh \
-  --plaintiff-attorney-model 'openai://gpt-5?tools=search' \
   --plaintiff-acp-endpoint 'tcp://agent.example.com:7000'
 ```
 
@@ -119,9 +155,9 @@ This command shows the same pattern with one global ACP command and a role-speci
 | `--evidence-standard` | Override `policy.evidence_standard`. |
 | `--council-pool` | Council model and persona pool.  Defaults to `../common/data/personas/pool.csv` when `arb/` is the working directory. |
 | `--attorney-instructions` | Standing attorney-side instructions file.  Defaults to `./attorney-instructions/default.md` when present. |
-| `--attorney-model` | Attorney ACP model id, including any search capability request, such as `openai://gpt-5` or `openai://gpt-5?tools=search`. |
+| `--attorney-model` | Local Pi/xproxy attorney model id, including any search capability request, such as `openai://gpt-5` or `openai://gpt-5?tools=search`. This does not apply to roles using `--*-acp-endpoint`. |
 | `--acp-command` | Shared local ACP command for both attorneys.  Defaults to `<common-root>/pi-container/acp-podman.sh`. |
-| `--plaintiff-attorney-model`, `--defendant-attorney-model` | Role-specific attorney model overrides. |
+| `--plaintiff-attorney-model`, `--defendant-attorney-model` | Role-specific local Pi/xproxy attorney model overrides. Invalid with the same role's `--*-acp-endpoint`. |
 | `--plaintiff-acp-command`, `--defendant-acp-command` | Role-specific ACP command overrides. |
 | `--plaintiff-acp-endpoint`, `--defendant-acp-endpoint` | Role-specific remote ACP endpoints.  Supported transport: `tcp://host:port`. |
 | `--plaintiff-acp-session-cwd`, `--defendant-acp-session-cwd` | Role-specific `session/new` working-directory overrides. |

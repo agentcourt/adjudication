@@ -228,6 +228,39 @@ func TestRunCaseRejectsConflictingPlaintiffACPSettings(t *testing.T) {
 	}
 }
 
+func TestRunCaseRejectsPlaintiffModelWithACPEndpoint(t *testing.T) {
+	dir := t.TempDir()
+	complaintPath := filepath.Join(dir, "complaint.md")
+	if err := os.WriteFile(complaintPath, []byte("# Proposition\n\nP\n"), 0o644); err != nil {
+		t.Fatalf("write complaint: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := RunCase([]string{
+		"--complaint", complaintPath,
+		"--out-dir", filepath.Join(dir, "out"),
+		"--plaintiff-attorney-model", "openai://gpt-5?tools=search",
+		"--plaintiff-acp-endpoint", "tcp://127.0.0.1:7000",
+	}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("RunCase returned nil error, want failure")
+	}
+	if !IsReportedError(err) {
+		t.Fatalf("RunCase error = %T, want reported error", err)
+	}
+	var summary caseRunSummary
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &summary); decodeErr != nil {
+		t.Fatalf("stdout is not JSON: %v\n%s", decodeErr, stdout.String())
+	}
+	if summary.Status != "error" {
+		t.Fatalf("summary status = %q, want error", summary.Status)
+	}
+	if !strings.Contains(summary.Error, "remote ACP attorney owns model selection") {
+		t.Fatalf("summary error = %q, want endpoint model-selection message", summary.Error)
+	}
+}
+
 func TestReportedErrorWrapsOriginalError(t *testing.T) {
 	base := errors.New("boom")
 	err := &ReportedError{Err: base}
