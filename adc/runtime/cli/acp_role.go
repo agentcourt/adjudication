@@ -18,12 +18,13 @@ import (
 func RunACPRole(args []string, stdout io.Writer, stderr io.Writer) error {
 	var fs *flag.FlagSet
 	fs = newFlagSet("acp-role", stderr, func() {
-		fmt.Fprintf(stderr, "Usage: adc acp-role --scenario <json> --role <name> --command <server> [options]\n\n")
+		fmt.Fprintf(stderr, "Usage: adc acp-role --scenario <json> --role <name> (--command <server> | --endpoint <tcp-url>) [options]\n\n")
 		fs.PrintDefaults()
 	})
 	scenarioPath := fs.String("scenario", "", "Path to scenario JSON")
 	roleName := fs.String("role", "", "Role to delegate to the external ACP agent")
 	command := fs.String("command", "", "ACP server command")
+	endpoint := fs.String("endpoint", "", "TCP ACP endpoint, for example tcp://127.0.0.1:19701")
 	outputPath := fs.String("output", "out/adc-role-run.json", "Run artifact output path")
 	eventsPath := fs.String("events", "out/adc-role-actions.ndjson", "Event log output path")
 	dbPath := fs.String("db", "out/adc-role.db", "SQLite path")
@@ -47,15 +48,20 @@ func RunACPRole(args []string, stdout io.Writer, stderr io.Writer) error {
 	if strings.TrimSpace(*roleName) == "" {
 		return fmt.Errorf("--role is required")
 	}
-	if strings.TrimSpace(*command) == "" {
-		return fmt.Errorf("--command is required")
+	switch {
+	case strings.TrimSpace(*command) != "" && strings.TrimSpace(*endpoint) != "":
+		return fmt.Errorf("--command and --endpoint are mutually exclusive")
+	case strings.TrimSpace(*command) == "" && strings.TrimSpace(*endpoint) == "":
+		return fmt.Errorf("--command or --endpoint is required")
 	}
-	xproxyServer, err := maybeStartXProxy(false)
-	if err != nil {
-		return err
-	}
-	if xproxyServer != nil {
-		defer xproxyServer.Close()
+	if strings.TrimSpace(*command) != "" {
+		xproxyServer, err := maybeStartXProxy(false)
+		if err != nil {
+			return err
+		}
+		if xproxyServer != nil {
+			defer xproxyServer.Close()
+		}
 	}
 	for _, path := range []string{*outputPath, *eventsPath, *dbPath} {
 		if err := ensureParentDir(path); err != nil {
@@ -86,10 +92,11 @@ func RunACPRole(args []string, stdout io.Writer, stderr io.Writer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeoutSeconds)*time.Second)
 	defer cancel()
 	result, err := r.RunACPRoleExperiment(ctx, runner.ACPRoleConfig{
-		Role:    strings.TrimSpace(*roleName),
-		Command: strings.TrimSpace(*command),
-		Args:    []string(argList),
-		Env:     []string(envList),
+		Role:     strings.TrimSpace(*roleName),
+		Command:  strings.TrimSpace(*command),
+		Endpoint: strings.TrimSpace(*endpoint),
+		Args:     []string(argList),
+		Env:      []string(envList),
 	})
 	if err != nil {
 		return err
@@ -110,11 +117,11 @@ func RunACPRole(args []string, stdout io.Writer, stderr io.Writer) error {
 		"run_id":             effectiveRunID,
 	}
 	if *jsonSummary {
-		wire, err := json.MarshalIndent(summary, "", "  ")
+		payload, err := json.MarshalIndent(summary, "", "  ")
 		if err != nil {
 			return err
 		}
-		_, err = fmt.Fprintln(stdout, string(wire))
+		_, err = fmt.Fprintln(stdout, string(payload))
 		return err
 	}
 	_, err = fmt.Fprintf(

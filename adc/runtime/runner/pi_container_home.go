@@ -7,14 +7,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"adjudication/common/xproxy"
 )
+
+const stagedACPRoleInstructionsPath = "/home/user/.pi/agent/adc-role-instructions.md"
 
 func UsesPIContainerWrapper(command string) bool {
 	base := strings.TrimSpace(filepath.Base(command))
 	return base == "acp-podman.sh" || base == "pi-podman.sh"
 }
 
-func PrepareEphemeralPIHome(commonRoot string) (string, func() error, error) {
+func PrepareEphemeralPIHome(commonRoot string, model string, instructions string) (string, func() error, error) {
 	commonRoot = strings.TrimSpace(commonRoot)
 	if commonRoot == "" {
 		return "", nil, fmt.Errorf("common root is required")
@@ -37,7 +41,10 @@ func PrepareEphemeralPIHome(commonRoot string) (string, func() error, error) {
 	if err := os.MkdirAll(agentDir, 0o755); err != nil {
 		return fail(fmt.Errorf("create PI agent dir: %w", err))
 	}
-	flashModel := strings.TrimSpace(os.Getenv("ADC_FLASH_XPROXY_MODEL"))
+	piModel, err := effectiveACPPIModel(model)
+	if err != nil {
+		return fail(err)
+	}
 	for _, file := range []struct {
 		src string
 		dst string
@@ -57,12 +64,12 @@ func PrepareEphemeralPIHome(commonRoot string) (string, func() error, error) {
 		}
 		switch filepath.Base(file.dst) {
 		case "settings.json":
-			raw, err = overridePISettingsDefaultModelForRunner(raw, flashModel)
+			raw, err = overridePISettingsDefaultModelForRunner(raw, piModel)
 			if err != nil {
 				return fail(err)
 			}
 		case "models.json":
-			raw, err = ensurePIModelCatalogForRunner(raw, flashModel)
+			raw, err = ensurePIModelCatalogForRunner(raw, piModel)
 			if err != nil {
 				return fail(err)
 			}
@@ -75,6 +82,12 @@ func PrepareEphemeralPIHome(commonRoot string) (string, func() error, error) {
 	if err := os.WriteFile(authPath, []byte("{}\n"), 0o644); err != nil {
 		return fail(fmt.Errorf("write %s: %w", authPath, err))
 	}
+	if strings.TrimSpace(instructions) != "" {
+		targetPath := filepath.Join(agentDir, "adc-role-instructions.md")
+		if err := os.WriteFile(targetPath, []byte(strings.TrimSpace(instructions)+"\n"), 0o644); err != nil {
+			return fail(fmt.Errorf("write %s: %w", targetPath, err))
+		}
+	}
 	return homeDir, cleanup, nil
 }
 
@@ -82,8 +95,28 @@ func usesPIContainerWrapper(command string) bool {
 	return UsesPIContainerWrapper(command)
 }
 
-func prepareEphemeralPIHome(commonRoot string) (string, func() error, error) {
-	return PrepareEphemeralPIHome(commonRoot)
+func prepareEphemeralPIHome(commonRoot string, model string, instructions string) (string, func() error, error) {
+	return PrepareEphemeralPIHome(commonRoot, model, instructions)
+}
+
+func effectiveACPPIModel(model string) (string, error) {
+	if envModel := strings.TrimSpace(os.Getenv("ADC_FLASH_XPROXY_MODEL")); envModel != "" {
+		if _, err := xproxy.ParseXProxyModel(envModel); err != nil {
+			return "", fmt.Errorf("parse ADC_FLASH_XPROXY_MODEL: %w", err)
+		}
+		return envModel, nil
+	}
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return "", nil
+	}
+	if !strings.Contains(model, "://") {
+		model = "openai://" + model
+	}
+	if _, err := xproxy.ParseXProxyModel(model); err != nil {
+		return "", fmt.Errorf("parse ACP role model %q: %w", model, err)
+	}
+	return model, nil
 }
 
 func overridePISettingsDefaultModelForRunner(raw []byte, flashModel string) ([]byte, error) {

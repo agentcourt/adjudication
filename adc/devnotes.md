@@ -1,5 +1,31 @@
 # Development Notes
 
+## 2026-05-20: ACP role portability
+
+### References
+
+- ACP role runtime: [`runtime/runner/acp_role.go`](runtime/runner/acp_role.go)
+- PI-home staging: [`runtime/runner/pi_container_home.go`](runtime/runner/pi_container_home.go)
+- Agent documentation: [`docs/agents.md`](docs/agents.md)
+- Porting inventory: [`update.md`](update.md)
+
+### Decisions
+
+`adc` now accepts remote ACP endpoints for delegated roles.  The `case` and `run` commands use `--acp-endpoint`, while `acp-role` uses `--endpoint`; each path rejects simultaneous command and endpoint configuration.  Endpoint roles keep model selection and native tool availability outside ADC, while ADC still provides `_adc/*` methods and Lean validation.
+
+Local wrapper-backed ACP roles now use typed ADC role configuration.  The staged PI settings default model comes from the effective role model, normalized to an xproxy model identifier, while `ADC_FLASH_XPROXY_MODEL` remains a compatibility override.  The staged PI home also receives role instructions and a private `/home/user/work-product/` directory, and the runner exports that directory beside `run.json` after the run.
+
+The ACP prompt now names current limits instead of relying only on static documentation.  It includes host methods, support-method budget, decision budget, invalid-submission budget, visible file count, and party exhibit and report counts when the role is a party.  ACP decision rejections now keep an ordered history and fail with that history after the configured invalid-attempt limit.
+
+### Plan
+
+- [x] Add shared TCP endpoint configuration to `case`, `run`, and `acp-role`.
+- [x] Stage role model and standing instructions into local PI homes.
+- [x] Create and export ACP role work product.
+- [x] Add dynamic capability and limit text to ACP opportunity prompts.
+- [x] Preserve ordered invalid-decision history for ACP roles.
+- [x] Stop tracking generated `.sig.b64` example artifacts.
+
 ## 2026-04-03: `adc acp` wrapper staging
 
 ### References

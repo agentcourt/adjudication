@@ -69,6 +69,7 @@ type Runner struct {
 	roles                   map[string]spec.RoleSpec
 	courtProfile            courts.Profile
 	acpSessions             map[string]*acpPersistentSession
+	workProductDirs         map[string]string
 	jurorPersonaPool        *jurorPersonaPool
 	jurorPersonaAssignments map[string]jurorPersonaPair
 }
@@ -115,6 +116,7 @@ func New(st *store.Store, le lean.Engine, client *openai.Client, jurorClient *op
 		roles:                   roles,
 		courtProfile:            courtProfile,
 		acpSessions:             map[string]*acpPersistentSession{},
+		workProductDirs:         map[string]string{},
 		jurorPersonaAssignments: map[string]jurorPersonaPair{},
 	}
 	if strings.TrimSpace(cfg.JurorPersonasPath) != "" {
@@ -305,9 +307,6 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 		}
 		turnLogs = append(turnLogs, logs...)
 	}
-	if err := r.closeACPSessions(); err != nil {
-		return Result{}, err
-	}
 	assertions := evaluateAssertions(r.scenario.Assertions, r.state, turnLogs)
 	result := Result{
 		Scenario:   r.scenario.Name,
@@ -316,6 +315,12 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 		FinalState: r.state,
 	}
 	if err := r.writeArtifacts(result); err != nil {
+		if cleanupErr := r.closeACPSessions(); cleanupErr != nil {
+			return Result{}, errors.Join(err, cleanupErr)
+		}
+		return Result{}, err
+	}
+	if err := r.closeACPSessions(); err != nil {
 		return Result{}, err
 	}
 	status := "ok"

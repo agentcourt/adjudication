@@ -17,25 +17,28 @@ import (
 )
 
 type ACPRoleConfig struct {
-	Role    string
-	Command string
-	Args    []string
-	Env     []string
-	Timeout time.Duration
+	Role     string
+	Command  string
+	Endpoint string
+	Args     []string
+	Env      []string
+	Timeout  time.Duration
 }
 
 type ACPConfig struct {
-	Roles   map[string]struct{}
-	Command string
-	Args    []string
-	Env     []string
-	Timeout time.Duration
+	Roles    map[string]struct{}
+	Command  string
+	Endpoint string
+	Args     []string
+	Env      []string
+	Timeout  time.Duration
 }
 
 type acpPersistentSession struct {
-	client      *acp.Client
-	sessionPath string
-	cleanup     func() error
+	client         *acp.Client
+	sessionPath    string
+	workProductDir string
+	cleanup        func() error
 }
 
 func (s *acpPersistentSession) Close() error {
@@ -52,7 +55,7 @@ func (s *acpPersistentSession) Close() error {
 	return err
 }
 
-func NewACPConfig(roles []string, command string, args []string, env []string, timeout time.Duration) (*ACPConfig, error) {
+func NewACPConfig(roles []string, command string, endpoint string, args []string, env []string, timeout time.Duration) (*ACPConfig, error) {
 	roleSet := map[string]struct{}{}
 	for _, raw := range roles {
 		role := strings.TrimSpace(raw)
@@ -64,25 +67,35 @@ func NewACPConfig(roles []string, command string, args []string, env []string, t
 	if len(roleSet) == 0 {
 		return nil, nil
 	}
-	if strings.TrimSpace(command) == "" {
-		return nil, fmt.Errorf("acp command is required")
+	command = strings.TrimSpace(command)
+	endpoint = strings.TrimSpace(endpoint)
+	switch {
+	case command != "" && endpoint != "":
+		return nil, fmt.Errorf("acp command and endpoint are mutually exclusive")
+	case command == "" && endpoint == "":
+		return nil, fmt.Errorf("acp command or endpoint is required")
+	}
+	if endpoint != "" && (len(args) > 0 || len(env) > 0) {
+		return nil, fmt.Errorf("acp args and env apply only to command mode")
 	}
 	return &ACPConfig{
-		Roles:   roleSet,
-		Command: strings.TrimSpace(command),
-		Args:    append([]string{}, args...),
-		Env:     append([]string{}, env...),
-		Timeout: timeout,
+		Roles:    roleSet,
+		Command:  command,
+		Endpoint: endpoint,
+		Args:     append([]string{}, args...),
+		Env:      append([]string{}, env...),
+		Timeout:  timeout,
 	}, nil
 }
 
 func (cfg ACPRoleConfig) sharedConfig() ACPConfig {
 	return ACPConfig{
-		Roles:   map[string]struct{}{strings.TrimSpace(cfg.Role): struct{}{}},
-		Command: strings.TrimSpace(cfg.Command),
-		Args:    append([]string{}, cfg.Args...),
-		Env:     append([]string{}, cfg.Env...),
-		Timeout: cfg.Timeout,
+		Roles:    map[string]struct{}{strings.TrimSpace(cfg.Role): struct{}{}},
+		Command:  strings.TrimSpace(cfg.Command),
+		Endpoint: strings.TrimSpace(cfg.Endpoint),
+		Args:     append([]string{}, cfg.Args...),
+		Env:      append([]string{}, cfg.Env...),
+		Timeout:  cfg.Timeout,
 	}
 }
 
@@ -90,8 +103,14 @@ func (r *Runner) RunACPRoleExperiment(ctx context.Context, cfg ACPRoleConfig) (R
 	if strings.TrimSpace(cfg.Role) == "" {
 		return Result{}, fmt.Errorf("acp role is required")
 	}
-	if strings.TrimSpace(cfg.Command) == "" {
-		return Result{}, fmt.Errorf("acp command is required")
+	switch {
+	case strings.TrimSpace(cfg.Command) != "" && strings.TrimSpace(cfg.Endpoint) != "":
+		return Result{}, fmt.Errorf("acp command and endpoint are mutually exclusive")
+	case strings.TrimSpace(cfg.Command) == "" && strings.TrimSpace(cfg.Endpoint) == "":
+		return Result{}, fmt.Errorf("acp command or endpoint is required")
+	}
+	if strings.TrimSpace(cfg.Endpoint) != "" && (len(cfg.Args) > 0 || len(cfg.Env) > 0) {
+		return Result{}, fmt.Errorf("acp args and env apply only to command mode")
 	}
 	if err := resetEventLog(r.cfg.EventsPath); err != nil {
 		return Result{}, err
@@ -173,10 +192,6 @@ func (r *Runner) RunACPRoleExperiment(ctx context.Context, cfg ACPRoleConfig) (R
 	turnLogsApplyOpportunity(len(turnLogs)+1, &log, opportunity)
 	turnLogs = append(turnLogs, log)
 
-	if err := r.closeACPSessions(); err != nil {
-		return Result{}, err
-	}
-
 	assertions := evaluateAssertions(r.scenario.Assertions, r.state, turnLogs)
 	result := Result{
 		Scenario:   r.scenario.Name,
@@ -185,6 +200,12 @@ func (r *Runner) RunACPRoleExperiment(ctx context.Context, cfg ACPRoleConfig) (R
 		FinalState: r.state,
 	}
 	if err := r.writeArtifacts(result); err != nil {
+		if cleanupErr := r.closeACPSessions(); cleanupErr != nil {
+			return Result{}, errors.Join(err, cleanupErr)
+		}
+		return Result{}, err
+	}
+	if err := r.closeACPSessions(); err != nil {
 		return Result{}, err
 	}
 	status := "ok"
@@ -215,7 +236,10 @@ func (r *Runner) ensureACPSession(ctx context.Context, role spec.RoleSpec, cfg A
 	sessionACPPath := sessionCwd
 	cleanup := func() error { return nil }
 	containerHomeDir := ""
-	if usesPIContainerWrapper(cfg.Command) {
+	workProductDir := ""
+	if strings.TrimSpace(cfg.Endpoint) != "" {
+		sessionACPPath = "/home/user"
+	} else if usesPIContainerWrapper(cfg.Command) {
 		commandPath := strings.TrimSpace(cfg.Command)
 		if !filepath.IsAbs(commandPath) {
 			var err error
@@ -226,36 +250,46 @@ func (r *Runner) ensureACPSession(ctx context.Context, role spec.RoleSpec, cfg A
 		}
 		repoRoot := filepath.Dir(filepath.Dir(commandPath))
 		var err error
-		containerHomeDir, cleanup, err = prepareEphemeralPIHome(repoRoot)
+		containerHomeDir, cleanup, err = prepareEphemeralPIHome(repoRoot, r.effectiveRoleModel(role), acpRoleStandingInstructions(role))
 		if err != nil {
 			return nil, err
 		}
 		sessionACPPath = "/home/user"
+		workProductDir = filepath.Join(containerHomeDir, "work-product")
+		if err := os.MkdirAll(workProductDir, 0o755); err != nil {
+			return nil, errors.Join(fmt.Errorf("create work-product dir: %w", err), cleanup())
+		}
 	}
 	toolSpecs := acpRoleToolSpecs(role)
 	env := append([]string{}, cfg.Env...)
 	env = append(env, "PI_ACP_CLIENT_TOOLS="+marshalString(toolSpecs))
 	if containerHomeDir != "" {
 		env = append(env, "PI_CONTAINER_HOME_DIR="+containerHomeDir)
+		env = append(env, "PI_ACP_INSTRUCTIONS_FILE="+stagedACPRoleInstructionsPath)
 	}
 	client, err := acp.NewClient(acp.Config{
-		Command: cfg.Command,
-		Args:    cfg.Args,
-		Cwd:     sessionCwd,
-		Env:     env,
+		Command:  cfg.Command,
+		Endpoint: cfg.Endpoint,
+		Args:     cfg.Args,
+		Cwd:      sessionCwd,
+		Env:      env,
 	})
 	if err != nil {
 		return nil, errors.Join(err, cleanup())
 	}
 	session := &acpPersistentSession{
-		client:  client,
-		cleanup: cleanup,
+		client:         client,
+		workProductDir: workProductDir,
+		cleanup:        cleanup,
 	}
 	if _, err := client.Initialize(ctx, 1); err != nil {
 		return nil, errors.Join(err, session.Close())
 	}
 	session.sessionPath = sessionACPPath
 	r.acpSessions[roleName] = session
+	if strings.TrimSpace(workProductDir) != "" {
+		r.workProductDirs[roleName] = workProductDir
+	}
 	return session, nil
 }
 
@@ -366,10 +400,31 @@ func (r *Runner) executeOpportunityTurnACP(
 	supportStepsUsed := 0
 	supportBudget := supportToolBudget(r.state)
 	decisionSubmitted := false
+	invalidDecisionReasons := make([]string, 0)
+	invalidDecisionLimit := r.cfg.Runtime.Normalized().InvalidAttemptLimit
 
 	recordActionStep := func() int {
 		stepsUsed++
 		return stepsUsed
+	}
+	recordInvalidDecision := func(err error) error {
+		reason := "invalid decision submission"
+		if err != nil && strings.TrimSpace(err.Error()) != "" {
+			reason = strings.TrimSpace(err.Error())
+		}
+		invalidDecisionReasons = append(invalidDecisionReasons, reason)
+		feedbackErr := formatInvalidAttemptLimitError(fmt.Sprintf("ACP role %s", role.Name), invalidDecisionReasons)
+		if len(invalidDecisionReasons) >= invalidDecisionLimit {
+			setNotifyErr(feedbackErr)
+			return feedbackErr
+		}
+		remaining := invalidDecisionLimit - len(invalidDecisionReasons)
+		return fmt.Errorf("%s This is invalid submission %d of %d for this opportunity. You have %d invalid submissions remaining.",
+			reason,
+			len(invalidDecisionReasons),
+			invalidDecisionLimit,
+			remaining,
+		)
 	}
 
 	callAction := func(actionType string, payload map[string]any) (ActionExecution, error) {
@@ -473,13 +528,13 @@ func (r *Runner) executeOpportunityTurnACP(
 			return nil, fmt.Errorf("a decision has already been accepted for this opportunity")
 		}
 		if decisionStepsUsed >= opportunity.StepBudget {
-			return nil, fmt.Errorf("This opportunity's decision budget is exhausted.")
+			return nil, recordInvalidDecision(fmt.Errorf("This opportunity's decision budget is exhausted."))
 		}
 		decisionStepsUsed++
 		stepIndex := recordActionStep()
 		decision, err := acpDecisionFromParams(params)
 		if err != nil {
-			return nil, err
+			return nil, recordInvalidDecision(err)
 		}
 		acceptResp, err := r.lean.ApplyDecision(r.state, stateVersion, opportunity.OpportunityID, role.Name, decision, rolesPayload, opportunity.StepBudget)
 		if err != nil {
@@ -491,7 +546,7 @@ func (r *Runner) executeOpportunityTurnACP(
 			"acceptance":    acceptResp,
 		})
 		if ok, _ := acceptResp["ok"].(bool); !ok {
-			return nil, fmt.Errorf("%s", issueText(issueFromResult("submit_decision", acceptResp)))
+			return nil, recordInvalidDecision(fmt.Errorf("%s", issueText(issueFromResult("submit_decision", acceptResp))))
 		}
 		resultKind := strings.TrimSpace(stringOrDefault(acceptResp["result_kind"], ""))
 		switch resultKind {
@@ -528,7 +583,7 @@ func (r *Runner) executeOpportunityTurnACP(
 			res := execRes.Result
 			appendTranscript(map[string]any{"action": actionType, "arguments": payload, "result": res})
 			if ok, _ := res["ok"].(bool); !ok {
-				return nil, fmt.Errorf("%s", issueText(issueFromResult(actionType, res)))
+				return nil, recordInvalidDecision(fmt.Errorf("%s", issueText(issueFromResult(actionType, res))))
 			}
 			decisionSubmitted = true
 			return map[string]any{
@@ -712,6 +767,27 @@ func acpRoleToolSpecs(role spec.RoleSpec) []map[string]any {
 	return specs
 }
 
+func acpRoleStandingInstructions(role spec.RoleSpec) string {
+	lines := []string{
+		"ADC role instructions",
+		"",
+		"Role: " + strings.TrimSpace(role.Name),
+		"",
+		"Use `/home/user/work-product/` for private notes, timelines, calculations, source leads, and draft analysis.  The directory is not part of the case record unless you later import a file, offer an exhibit, or submit a technical report through ADC.",
+		"Case material is available only through `_adc/*` methods during an ACP session.  Do not assume that repository paths, output paths, or host home-directory files are available inside the role environment.",
+	}
+	if allowed := role.EffectiveAllowedActions(); len(allowed) > 0 {
+		lines = append(lines, "", "Allowed legal actions for this role: "+strings.Join(allowed, ", "))
+	}
+	if text := strings.TrimSpace(role.Instructions); text != "" {
+		lines = append(lines, "", "Role instructions:", text)
+	}
+	if text := strings.TrimSpace(role.PromptPreamble); text != "" {
+		lines = append(lines, "", "Role preamble:", text)
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (r *Runner) buildACPRolePrompt(role spec.RoleSpec, view map[string]any, opportunity leanOpportunity) string {
 	lines := []string{
 		buildSystemPrompt(role, view),
@@ -722,6 +798,8 @@ func (r *Runner) buildACPRolePrompt(role spec.RoleSpec, view map[string]any, opp
 		"When kind=tool, adc_submit_decision takes exactly three fields: kind, tool_name, and payload.",
 		"Put every legal tool argument inside payload.  Do not put legal tool fields at the top level of adc_submit_decision.",
 	}
+	lines = append(lines, "")
+	lines = append(lines, r.acpRoleCapabilityLines(role, opportunity)...)
 	if schemaLines := r.legalToolSchemaLines(opportunity.AllowedTools); len(schemaLines) > 0 {
 		lines = append(lines, "", "Legal tool payloads:")
 		lines = append(lines, schemaLines...)
@@ -769,6 +847,99 @@ func (r *Runner) buildACPRolePrompt(role spec.RoleSpec, view map[string]any, opp
 		"Do not describe a legal act in prose.  Use adc_submit_decision to perform it.",
 	)
 	return strings.Join(lines, "\n")
+}
+
+func (r *Runner) acpRoleCapabilityLines(role spec.RoleSpec, opportunity leanOpportunity) []string {
+	runtimeLimits := r.cfg.Runtime.Normalized()
+	lines := []string{
+		"ACP capability and limits:",
+		"- Native search, browser, fetch, filesystem, and command availability belong to the ACP role environment, not to ADC.",
+		"- ADC host methods available here: " + strings.Join(acpHostToolNames(role), ", "),
+		fmt.Sprintf("- Support host-method calls remaining for this opportunity: %d.", supportToolBudget(r.state)),
+		fmt.Sprintf("- Decision submissions allowed by this opportunity: %d.", opportunity.StepBudget),
+		fmt.Sprintf("- Invalid submissions allowed before the opportunity fails: %d.", runtimeLimits.InvalidAttemptLimit),
+	}
+	caseObj := currentCaseObject(r.state)
+	if caseObj != nil {
+		lines = append(lines, fmt.Sprintf("- Visible case files in the current case state: %d.", len(getAnySlice(caseObj["case_files"]))))
+	}
+	party := normalizedPartyRole(role.Name)
+	if party == "plaintiff" || party == "defendant" {
+		policy, _ := r.state["policy"].(map[string]any)
+		maxExhibits := toInt(policy["max_exhibits_per_side"])
+		if maxExhibits > 0 {
+			used := countExhibitsOfferedByParty(caseObj, party)
+			remaining := maxExhibits - used
+			if remaining < 0 {
+				remaining = 0
+			}
+			lines = append(lines, fmt.Sprintf("- %s exhibit offers: %d used, %d remaining, %d maximum.", party, used, remaining, maxExhibits))
+		}
+		maxReports := toInt(policy["max_technical_reports_per_side"])
+		if maxReports > 0 {
+			used := countTechnicalReportsByParty(caseObj, party)
+			remaining := maxReports - used
+			if remaining < 0 {
+				remaining = 0
+			}
+			lines = append(lines, fmt.Sprintf("- %s technical reports: %d used, %d remaining, %d maximum.", party, used, remaining, maxReports))
+		}
+	}
+	return lines
+}
+
+func acpHostToolNames(role spec.RoleSpec) []string {
+	names := make([]string, 0, len(referenceToolsForRole(role))+1)
+	for _, name := range referenceToolsForRole(role) {
+		names = append(names, acpToolName(name))
+	}
+	names = append(names, acpToolName("submit_decision"))
+	return names
+}
+
+func currentCaseObject(state map[string]any) map[string]any {
+	caseObj, _ := state["case"].(map[string]any)
+	return caseObj
+}
+
+func getAnySlice(value any) []any {
+	items, _ := value.([]any)
+	if items != nil {
+		return items
+	}
+	maps, _ := value.([]map[string]any)
+	out := make([]any, 0, len(maps))
+	for _, item := range maps {
+		out = append(out, item)
+	}
+	return out
+}
+
+func normalizedPartyRole(role string) string {
+	role = strings.TrimSpace(strings.ToLower(role))
+	switch role {
+	case "plaintiff", "defendant":
+		return role
+	default:
+		return ""
+	}
+}
+
+func countTechnicalReportsByParty(caseObj map[string]any, party string) int {
+	if caseObj == nil {
+		return 0
+	}
+	count := 0
+	for _, raw := range getAnySlice(caseObj["technical_reports"]) {
+		entry, _ := raw.(map[string]any)
+		if entry == nil {
+			continue
+		}
+		if strings.TrimSpace(strings.ToLower(stringOrDefault(entry["party"], ""))) == party {
+			count++
+		}
+	}
+	return count
 }
 
 func legalDecisionExamples(allowedTools []string) []string {
