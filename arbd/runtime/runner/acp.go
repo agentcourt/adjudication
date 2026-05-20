@@ -990,29 +990,28 @@ func (rc *runContext) attorneyInfo(role string) (AttorneyRunInfo, error) {
 	if attorney, ok := rc.attorneys[role]; ok {
 		return attorney, nil
 	}
-	model := strings.TrimSpace(rc.cfg.AttorneyModel)
-	if model == "" {
-		model = DefaultAttorneyModel
+	attorney, err := resolveAttorney(role, rc.cfg, rc.cfg.ComplaintPath)
+	if err == nil {
+		return attorney, nil
 	}
-	spec, err := parseAttorneyModel(model)
-	if err != nil {
-		return AttorneyRunInfo{}, err
-	}
-	sessionCwd := ""
-	if strings.TrimSpace(rc.cfg.ComplaintPath) != "" {
-		sessionCwd, err = filepath.Abs(filepath.Dir(rc.cfg.ComplaintPath))
-		if err != nil {
-			return AttorneyRunInfo{}, fmt.Errorf("resolve attorney session cwd: %w", err)
+	if strings.Contains(err.Error(), "ACP command is required") {
+		model := strings.TrimSpace(rc.cfg.AttorneyModel)
+		if model == "" {
+			model = DefaultAttorneyModel
 		}
+		spec, parseErr := parseAttorneyModel(model)
+		if parseErr != nil {
+			return AttorneyRunInfo{}, parseErr
+		}
+		searchEnabled := spec.SearchRequested
+		return AttorneyRunInfo{
+			Role:          role,
+			Model:         model,
+			SearchEnabled: &searchEnabled,
+			ACPTransport:  "stdio",
+		}, nil
 	}
-	return AttorneyRunInfo{
-		Role:          role,
-		Model:         model,
-		SearchEnabled: spec.SearchRequested,
-		ACPTransport:  "stdio",
-		ACPCommand:    rc.cfg.ACPCommand,
-		SessionCwd:    sessionCwd,
-	}, nil
+	return AttorneyRunInfo{}, err
 }
 
 func (rc *runContext) attorneyView(opportunity Opportunity) map[string]any {
@@ -1055,7 +1054,10 @@ func (rc *runContext) attorneyCapabilitySection(role string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if attorney.SearchEnabled {
+	if attorney.SearchEnabled == nil {
+		return "Attorney capabilities for this run:\nAARD is connected to a remote ACP attorney endpoint. Model selection and native tool availability are owned by that ACP attorney. Use the capabilities available in that environment and file record material through the AARD tools.", nil
+	}
+	if *attorney.SearchEnabled {
 		return "Model capabilities for this run:\nNative web search through the model is available.", nil
 	}
 	return "Model capabilities for this run:\nNative web search through the model is not available.", nil

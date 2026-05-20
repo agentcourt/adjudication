@@ -98,6 +98,10 @@ def stateAnswerFor (memberId : String) : Except String ArbitrationState → Nat
       | none => 0
   | .error _ => 0
 
+def stateSubmittedEvidenceCount : Except String ArbitrationState → Nat
+  | .ok state => state.case.submitted_evidence.length
+  | .error _ => 0
+
 def stateNextRole (result : NextOpportunityOk) : String :=
   match result.opportunity with
   | some opportunity => opportunity.role
@@ -141,6 +145,21 @@ def argumentAction (role text : String) : CourtAction :=
   { action_type := "submit_argument"
   , actor_role := role
   , payload := meritsPayload text
+  }
+
+def submittedEvidenceAction (role : String) : CourtAction :=
+  { action_type := "submit_evidence"
+  , actor_role := role
+  , payload := Json.mkObj
+      [ ("evidence_id", Json.str "ev_abc123_submitted-evidence-01-plaintiff")
+      , ("title", Json.str "Source text")
+      , ("source_url", Json.str "https://example.test/source")
+      , ("mime_type", Json.str "text/plain")
+      , ("retrieval_timestamp", Json.str "2026-05-20T00:00:00Z")
+      , ("relevance", Json.str "Shows the source material.")
+      , ("sha256", Json.str "abc123")
+      , ("size_bytes", toJson (12 : Nat))
+      ]
   }
 
 def rebuttalAction (text : String) : CourtAction :=

@@ -69,7 +69,7 @@ The default attorney path uses `../common/pi-container/acp-podman.sh`.  That pat
 
 ## Outputs
 
-Each run writes a full packet to `--out-dir`: `complaint.md`, `policy.json`, `runtime.json`, `run.json`, `state.json`, `council.json`, `evidence-manifest.json`, `evidence-store/`, `digest.md`, `transcript.md`, and `events.ndjson`.
+Each run writes a full packet to `--out-dir`: `complaint.md`, `policy.json`, `runtime.json`, `run.json`, `state.json`, `council.json`, `evidence-manifest.json`, `evidence-store/`, `digest.md`, `transcript.md`, and `events.ndjson`.  The digest and transcript include submitted evidence separately from admitted exhibits and technical reports.
 
 On success, `aard case` prints one JSON object to stdout:
 

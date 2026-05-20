@@ -47,8 +47,8 @@ type AttorneyRoleConfig struct {
 
 type AttorneyRunInfo struct {
 	Role          string `json:"role"`
-	Model         string `json:"model"`
-	SearchEnabled bool   `json:"search_enabled"`
+	Model         string `json:"model,omitempty"`
+	SearchEnabled *bool  `json:"search_enabled,omitempty"`
 	ACPTransport  string `json:"acp_transport"`
 	ACPCommand    string `json:"acp_command,omitempty"`
 	ACPEndpoint   string `json:"acp_endpoint,omitempty"`

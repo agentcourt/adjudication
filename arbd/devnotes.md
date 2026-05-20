@@ -1,5 +1,41 @@
 # Development Notes
 
+## 2026-05-20
+
+### OpenClaw degree attorney adapter
+
+Reference: [OpenClaw Degree Attorneys](docs/openclaw-attorneys.md), [OpenClaw adapter](runtime/openclawattorney/server.go), [TCP bridge](tools/openclaw-acp-tcp-bridge.js)
+
+`arbd` now has an OpenClaw-backed attorney adapter matching the current `arb` transport pattern.  The adapter speaks stdio ACP to AARD, obtains one filing JSON from either an OpenClaw command or `openclaw agent`, and submits the result through the existing `_aar/*` host methods.  The TCP bridge starts a fresh `aard-openclaw-attorney` process for each connection so `aard case` can use `--plaintiff-acp-endpoint` and `--defendant-acp-endpoint`.
+
+The adapter prompt is degree-specific.  It presents the AARD attorney prompt, visible case view, and readable case files, and it tells the lawyer to advocate a concrete score or bounded range when that fits the phase.  Structured evidence bundles are supported, so open-record degree runs can submit source evidence before filing the merits decision.
+
+- [x] Add `runtime/openclawattorney`.
+- [x] Add `.bin/aard-openclaw-attorney` build target.
+- [x] Add `tools/openclaw-acp-tcp-bridge.js`.
+- [x] Document closed-record and open-record endpoint runs.
+- [x] Cover parsing, command execution, retries, and evidence-bundle submission in adapter tests.
+
+### Submitted source evidence and remote endpoint ownership
+
+Reference: [Degree runner ACP implementation](runtime/runner/acp.go), [Degree Lean engine](engine/Main.lean), [Degree policy](etc/policy.json)
+
+`arbd` now follows the current `arb` split between source evidence and attorney analysis.  During arguments and claimant rebuttal, an attorney may call `aar_submit_evidence` with source content and provenance.  The Go runner hashes the bytes, stores them under `submitted-evidence/` and `evidence-store/`, records the metadata in the Lean state through `submit_evidence`, and adds the accepted item to the visible evidence set so later filings can cite its `evidence_id` in `offered_evidence`.
+
+The policy now carries `max_submitted_evidence_per_side` and `max_submitted_evidence_bytes`.  Lean enforces the procedural count and byte limits in state, while Go enforces byte storage and creates the visible file.  The digest, transcript, attorney view, and council record distinguish submitted source evidence from exhibits and technical reports.
+
+Remote ACP endpoints also now own their model selection.  A role using `--plaintiff-acp-endpoint` or `--defendant-acp-endpoint` cannot also set the matching role-specific attorney model flag.  The run packet leaves local model and search-capability metadata empty for remote endpoints, because that information belongs to the remote ACP attorney environment.
+
+- [x] Reject role-specific model overrides when a remote ACP endpoint is set.
+- [x] Add submitted-evidence policy fields.
+- [x] Add Lean `SubmittedEvidence` state and `submit_evidence` action.
+- [x] Add proof-suite coverage for the submitted-evidence transition.
+- [x] Add Go evidence preparation, hashing, storage, event recording, and visible-file conversion.
+- [x] Update prompts, rendering, council record text, README, ARAP, parameter docs, and practice docs.
+- [x] Cover endpoint ownership, ACP evidence tool exposure, and evidence storage in tests.
+- [x] Run `go test ./...` under `arbd/runtime`.
+- [x] Run `lake build Proofs` under `arbd/engine`.
+
 ## 2026-05-02
 
 ### Initial fork from `arb`

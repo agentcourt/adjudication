@@ -124,6 +124,12 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	if _, err := runner.ParseAttorneyModelForCLI(effectiveAttorneyModel); err != nil {
 		return reportCaseError(stdout, err)
 	}
+	if strings.TrimSpace(*plaintiffAttorneyModel) != "" && strings.TrimSpace(*plaintiffACPEndpoint) != "" {
+		return reportCaseError(stdout, fmt.Errorf("plaintiff attorney model cannot be set with --plaintiff-acp-endpoint; the remote ACP attorney owns model selection"))
+	}
+	if strings.TrimSpace(*defendantAttorneyModel) != "" && strings.TrimSpace(*defendantACPEndpoint) != "" {
+		return reportCaseError(stdout, fmt.Errorf("defendant attorney model cannot be set with --defendant-acp-endpoint; the remote ACP attorney owns model selection"))
+	}
 	if strings.TrimSpace(*plaintiffAttorneyModel) != "" {
 		if _, err := runner.ParseAttorneyModelForCLI(strings.TrimSpace(*plaintiffAttorneyModel)); err != nil {
 			return reportCaseError(stdout, err)

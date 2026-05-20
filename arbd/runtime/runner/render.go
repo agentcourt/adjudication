@@ -111,6 +111,8 @@ func renderTranscript(result Result, rc *runContext) string {
 	b.WriteString(renderAnswerRounds(mapList(caseObj["council_answers"])))
 	b.WriteString("\n\n## Exhibits\n\n")
 	b.WriteString(rc.renderExhibitBodies(mapList(caseObj["offered_evidence"])))
+	b.WriteString("\n\n## Submitted Evidence\n\n")
+	b.WriteString(renderSubmittedEvidence(mapList(caseObj["submitted_evidence"])))
 	b.WriteString("\n\n## Technical Reports\n\n")
 	b.WriteString(renderReports(mapList(caseObj["technical_reports"])))
 	b.WriteString("\n\n## Answers\n\n")
@@ -137,6 +139,8 @@ func renderDigest(result Result, rc *runContext) string {
 	appendFilingSection(&b, "Closings", mapList(caseObj["closings"]))
 	b.WriteString("## Exhibits\n\n")
 	b.WriteString(rc.renderExhibitIndex(mapList(caseObj["offered_evidence"])))
+	b.WriteString("\n\n## Submitted Evidence\n\n")
+	b.WriteString(renderSubmittedEvidence(mapList(caseObj["submitted_evidence"])))
 	b.WriteString("\n\n## Technical Reports\n\n")
 	b.WriteString(renderReports(mapList(caseObj["technical_reports"])))
 	b.WriteString("\n\n## Council Answers\n\n")
@@ -265,6 +269,31 @@ func renderInlineReportIndex(items []map[string]any) string {
 		lines = append(lines, fmt.Sprintf("- %s\n  %s", mapString(item["title"]), mapString(item["summary"])))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func renderSubmittedEvidence(items []map[string]any) string {
+	if len(items) == 0 {
+		return "(none)"
+	}
+	lines := make([]string, 0, len(items))
+	for _, item := range items {
+		source := mapString(item["source_url"])
+		if source == "" {
+			source = mapString(item["source_description"])
+		}
+		lines = append(lines, fmt.Sprintf(
+			"[%s %s] %s (%s)\nSource: %s\nSHA-256: `%s`\nBytes: %s\nRelevance: %s",
+			mapString(item["role"]),
+			mapString(item["phase"]),
+			mapString(item["title"]),
+			mapString(item["evidence_id"]),
+			source,
+			mapString(item["sha256"]),
+			mapString(item["size_bytes"]),
+			mapString(item["relevance"]),
+		))
+	}
+	return strings.Join(lines, "\n\n")
 }
 
 func renderAnswerRounds(items []map[string]any) string {
