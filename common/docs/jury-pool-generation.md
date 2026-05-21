@@ -34,11 +34,20 @@ Build `adc` first, because [`model-speed.sh`](../tools/model-speed.sh) calls `ad
 adc/.bin/adc xproxy
 ```
 
-In another shell, still from the repository root, probe candidate models.  This example uses the checked-in OpenRouter snapshot in [OpenRouter models](../../adc/openrouter-models.txt) as the candidate list and one checked-in persona file as the probe persona.  Provider inventories change, so this file is only one possible input set.  From the repository root, run:
+Before the live probe, apply the conservative metadata prefilter.  The prefilter skips only models whose provider metadata proves that the model cannot satisfy the juror path: no text input, no text output, or no advertised function-tool support.  Unknowns remain in the probe set.  Fetch the current OpenRouter metadata into [OpenRouter model metadata](../data/personas/openrouter-models.json), then run:
+
+```bash
+common/tools/filter-models.py \
+  --metadata common/data/personas/openrouter-models.json \
+  --out common/data/personas/models-prefiltered.csv \
+  --decisions common/data/personas/model-filter-decisions.csv
+```
+
+In another shell, still from the repository root, probe candidate models.  This example uses the prefiltered OpenRouter list and one checked-in persona file as the probe persona.  Provider inventories change, so this file is only one possible input set.  From the repository root, run:
 
 ```bash
 common/tools/model-speed.sh common/etc/personas/persons/d715074-0.txt \
-  < adc/openrouter-models.txt \
+  < common/data/personas/models-prefiltered.csv \
   > common/data/personas/model-latency.csv
 ```
 

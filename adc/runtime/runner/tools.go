@@ -30,6 +30,10 @@ func buildTools(allowed []string) ([]map[string]any, error) {
 	return tools, nil
 }
 
+func BuildTools(allowed []string) ([]map[string]any, error) {
+	return buildTools(allowed)
+}
+
 func buildOpportunityTools(allowed []string, reference []string, mayPass bool) ([]map[string]any, error) {
 	names := append([]string{}, allowed...)
 	for _, name := range reference {

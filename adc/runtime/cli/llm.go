@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -10,12 +11,13 @@ import (
 	"strings"
 	"time"
 
+	"adjudication/adc/runtime/runner"
 	"adjudication/common/openai"
 	"adjudication/common/persona"
 	"adjudication/common/xproxy"
 )
 
-const llmToolCheckName = "answer_question"
+const llmToolCheckName = "submit_juror_vote"
 
 func RunLLM(args []string, stdout io.Writer, stderr io.Writer) error {
 	var fs *flag.FlagSet
@@ -28,7 +30,7 @@ func RunLLM(args []string, stdout io.Writer, stderr io.Writer) error {
 	model := fs.String("model", "openrouter://openai/gpt-5", "Model name in xproxy PROVIDER://MODEL form")
 	personaRecord := fs.String("persona", "", `Persona record in PROVIDER://MODEL,path/to/persona.txt form, or "random" to sample from the shared personas file`)
 	timeoutSeconds := fs.Int("timeout-seconds", defaultLLMTimeoutSeconds, "LLM HTTP timeout in seconds")
-	toolCheck := fs.Bool("tool-check", false, "Require a single tool call in response and print the extracted answer")
+	toolCheck := fs.Bool("tool-check", false, "Require one submit_juror_vote tool call and print its arguments")
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
 			return nil
@@ -87,13 +89,16 @@ func RunLLM(args []string, stdout io.Writer, stderr io.Writer) error {
 	if *toolCheck {
 		input = append(input, map[string]any{
 			"role":    "system",
-			"content": "Call answer_question exactly once with your answer in the answer field.  Do not reply with plain text.",
+			"content": "When the prompt asks for a juror act, call submit_juror_vote exactly once.  Do not reply with plain text instead of the required tool call.",
 		})
 	}
 	input = append(input, map[string]any{"role": "user", "content": promptText})
 	tools := []map[string]any(nil)
 	if *toolCheck {
-		tools = llmToolCheckTools()
+		tools, err = llmToolCheckTools()
+		if err != nil {
+			return err
+		}
 	}
 	resp, err := client.CreateResponse(ctx, modelName, input, tools, "", nil)
 	if err != nil {
@@ -101,7 +106,7 @@ func RunLLM(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 	output := strings.TrimSpace(resp.Text)
 	if *toolCheck {
-		output, err = extractToolCheckAnswer(resp)
+		output, err = extractToolCheckArguments(resp)
 		if err != nil {
 			return err
 		}
@@ -112,25 +117,11 @@ func RunLLM(args []string, stdout io.Writer, stderr io.Writer) error {
 	return nil
 }
 
-func llmToolCheckTools() []map[string]any {
-	return []map[string]any{
-		{
-			"type":        "function",
-			"name":        llmToolCheckName,
-			"description": "Submit the answer to the user's question",
-			"parameters": map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"answer": map[string]any{"type": "string"},
-				},
-				"required":             []any{"answer"},
-				"additionalProperties": false,
-			},
-		},
-	}
+func llmToolCheckTools() ([]map[string]any, error) {
+	return runner.BuildTools([]string{llmToolCheckName})
 }
 
-func extractToolCheckAnswer(resp openai.Response) (string, error) {
+func extractToolCheckArguments(resp openai.Response) (string, error) {
 	if len(resp.ToolCalls) != 1 {
 		return "", fmt.Errorf("model did not call required tool %s", llmToolCheckName)
 	}
@@ -138,12 +129,34 @@ func extractToolCheckAnswer(resp openai.Response) (string, error) {
 	if strings.TrimSpace(call.Name) != llmToolCheckName {
 		return "", fmt.Errorf("model called %s, want %s", strings.TrimSpace(call.Name), llmToolCheckName)
 	}
-	answer, _ := call.Arguments["answer"].(string)
-	answer = strings.TrimSpace(answer)
-	if answer == "" {
-		return "", fmt.Errorf("required tool %s returned empty answer", llmToolCheckName)
+	if strings.TrimSpace(call.ArgumentsError) != "" {
+		return "", fmt.Errorf("required tool %s returned malformed arguments: %s", llmToolCheckName, call.ArgumentsError)
 	}
-	return answer, nil
+	if strings.TrimSpace(stringArg(call.Arguments, "juror_id")) == "" {
+		return "", fmt.Errorf("required tool %s missing juror_id", llmToolCheckName)
+	}
+	if strings.TrimSpace(stringArg(call.Arguments, "vote")) == "" {
+		return "", fmt.Errorf("required tool %s missing vote", llmToolCheckName)
+	}
+	if strings.TrimSpace(stringArg(call.Arguments, "confidence")) == "" {
+		return "", fmt.Errorf("required tool %s missing confidence", llmToolCheckName)
+	}
+	if strings.TrimSpace(stringArg(call.Arguments, "explanation")) == "" {
+		return "", fmt.Errorf("required tool %s missing explanation", llmToolCheckName)
+	}
+	if _, ok := call.Arguments["damages"]; !ok {
+		return "", fmt.Errorf("required tool %s missing damages", llmToolCheckName)
+	}
+	encoded, err := json.Marshal(call.Arguments)
+	if err != nil {
+		return "", fmt.Errorf("marshal tool arguments: %w", err)
+	}
+	return string(encoded), nil
+}
+
+func stringArg(args map[string]any, key string) string {
+	value, _ := args[key].(string)
+	return value
 }
 
 func resolveLLMPersonaSpec(record string, cwd string) (persona.Spec, bool, error) {
