@@ -435,13 +435,24 @@ def value_or_blank(value: Any) -> str:
     return "" if value is None else str(value)
 
 
-def write_outputs(selected: list[Candidate], out_path: Path, report_path: Path, all_count: int, eligible_count: int, exclusions: Counter[str], used_pca: bool, args: argparse.Namespace) -> None:
+def output_persona_ref(candidate: Candidate, repo_root: Path) -> str:
+    common_etc = (repo_root / "common" / "etc").resolve()
+    try:
+        return candidate.absolute_persona_path.resolve().relative_to(common_etc).as_posix()
+    except ValueError:
+        pass
+    if not Path(candidate.persona_file).is_absolute():
+        return candidate.persona_file
+    return str(candidate.absolute_persona_path)
+
+
+def write_outputs(selected: list[Candidate], out_path: Path, report_path: Path, all_count: int, eligible_count: int, exclusions: Counter[str], used_pca: bool, args: argparse.Namespace, repo_root: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", newline="") as handle:
         writer = csv.writer(handle, lineterminator="\n")
         for candidate in selected:
-            writer.writerow([candidate.model, str(candidate.absolute_persona_path)])
+            writer.writerow([candidate.model, output_persona_ref(candidate, repo_root)])
 
     provider_counts = Counter(candidate.provider for candidate in selected)
     lines: list[str] = []
@@ -495,7 +506,7 @@ def write_outputs(selected: list[Candidate], out_path: Path, report_path: Path, 
                 [
                     str(index),
                     candidate.model,
-                    str(candidate.absolute_persona_path),
+                    output_persona_ref(candidate, repo_root),
                     candidate.provider,
                     value_or_blank(metadata.top_context if metadata else None),
                     value_or_blank(metadata.provider_context if metadata else None),
@@ -532,7 +543,7 @@ def main(argv: list[str]) -> int:
     else:
         build_cluster_vectors(eligible)
     selected = select_farthest_first(eligible, args.size, args.tie_break_label)
-    write_outputs(selected, args.out, args.report, len(candidates_by_key), len(eligible), exclusions, used_pca, args)
+    write_outputs(selected, args.out, args.report, len(candidates_by_key), len(eligible), exclusions, used_pca, args, repo_root)
     print(f"candidates={len(candidates_by_key)} eligible={len(eligible)} selected={len(selected)} out={args.out}")
     return 0
 

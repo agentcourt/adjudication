@@ -38,8 +38,3 @@ common/data/personas/*.log
 dev/
 .codex
 arb/analysis.md
-common/data/personas/clustering-*
-common/data/personas/model-filter-decisions.csv
-common/data/personas/model-latency-sample.csv
-common/data/personas/model-operational-failures.csv
-common/data/personas/models-prefiltered.csv
