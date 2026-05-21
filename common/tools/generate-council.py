@@ -14,7 +14,6 @@ import random
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 from urllib.error import URLError
@@ -44,7 +43,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--pca", default="common/data/personas/pca-cluster.csv", help="PCA cluster CSV output/input")
     parser.add_argument("--failures", default="common/data/personas/model-operational-failures.csv", help="Operational failure ledger CSV")
     parser.add_argument("--council", default="common/data/personas/council.csv", help="Selected council CSV output")
-    parser.add_argument("--report", default="", help="Council selection report output. Default: a temporary file outside the repository")
+    parser.add_argument("--report", default="", help="Council selection report output. Default: <council stem>-report.md beside --council")
     parser.add_argument("--model-speed-log", default="common/data/personas/model-latency.log", help="stderr log for model-speed.sh")
     parser.add_argument("--cluster-log", default="common/data/personas/clusters.log", help="stderr log for cluster-personas.py")
     parser.add_argument("--min-context", type=int, default=200000, help="Minimum effective context for selected council candidates")
@@ -358,7 +357,7 @@ def main(argv: list[str]) -> int:
     pca = rel_path(root, args.pca)
     failures = rel_path(root, args.failures)
     council = rel_path(root, args.council)
-    report = Path(tempfile.gettempdir()) / "generate-council-report.md" if args.report == "" else rel_path(root, args.report)
+    report = council.with_name(f"{council.stem}-report.md") if args.report == "" else rel_path(root, args.report)
     model_speed_log = rel_path(root, args.model_speed_log)
     cluster_log = rel_path(root, args.cluster_log)
     common_etc = rel_path(root, args.common_etc)

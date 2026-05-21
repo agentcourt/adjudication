@@ -27,7 +27,7 @@ Run the commands below from the repository root unless the command says otherwis
 | `common/data/personas/model-operational-failures.csv` | Manual exclusion ledger for known model failures |
 | `common/tools/select-council.py` | Selects a behaviorally diverse council from cluster/PCA data |
 | `common/data/personas/council.csv` | Selected council rows, written as `MODEL,personas/persons/....txt` |
-| `/tmp/generate-council-report.md` | Default selection report from `generate-council.py`; not a checked-in artifact |
+| `common/data/personas/council-report.md` | Default selection report from `generate-council.py` |
 | `common/data/personas/pool.csv` | Runtime default pool consumed by `aar`/`arb` unless `--council-pool` overrides it |
 
 Rows in `common/etc/personas.csv`, `common/data/personas/council.csv`, and `common/data/personas/pool.csv` have two columns:
@@ -70,7 +70,7 @@ uv run --script common/tools/generate-council.py \
   --use-existing-clusters
 ```
 
-The driver defaults to a deterministic 512-row clustering input sample (`--sample-size 512 --sample-seed 0`) and writes `common/data/personas/council.csv`. Its default selection report is `/tmp/generate-council-report.md`, outside the repository. It does not modify `pool.csv`.
+The driver defaults to a deterministic 512-row clustering input sample (`--sample-size 512 --sample-seed 0`) and writes `common/data/personas/council.csv`. Its default selection report is `common/data/personas/council-report.md`, beside the other council-generation artifacts. It does not modify `pool.csv`.
 
 By default, the driver reuses intermediate files younger than seven days. Control that cache window with `--expires DAYS`:
 
@@ -78,7 +78,7 @@ By default, the driver reuses intermediate files younger than seven days. Contro
 uv run --script common/tools/generate-council.py --expires 7
 ```
 
-Use `--expires 0` to regenerate all intermediates. The cache applies to intermediate outputs such as metadata, metadata-filter outputs, `model-latency.csv`, `models.csv`, `common/etc/personas.csv`, `cluster-input.csv`, `clusters.csv`, and `pca-cluster.csv`. The final `council.csv` and temporary report are regenerated from the selected inputs. For paired outputs, such as `clusters.csv` and `pca-cluster.csv`, the driver refuses to mix a fresh file with a stale or missing paired file.
+Use `--expires 0` to regenerate all intermediates. The cache applies to intermediate outputs such as metadata, metadata-filter outputs, `model-latency.csv`, `models.csv`, `common/etc/personas.csv`, `cluster-input.csv`, `clusters.csv`, and `pca-cluster.csv`. The final `council.csv` and `council-report.md` are regenerated from the selected inputs. For paired outputs, such as `clusters.csv` and `pca-cluster.csv`, the driver refuses to mix a fresh file with a stale or missing paired file.
 
 ## Stage 1: Fetch OpenRouter Metadata
 
@@ -163,7 +163,7 @@ This file is the broad source pool. It is larger than `council.csv` and `pool.cs
 
 ## Stage 6: Choose The Clustering Input
 
-Clustering the full cross product can be expensive. Use a deliberate sampled input when refreshing the clustered candidate universe. The current 3x3 data was produced from sampled model/persona inputs, not from the 20-row council file.
+Clustering the full cross product can be expensive. Use a deliberate sampled input when refreshing the clustered candidate universe. The current clustering data was produced from sampled model/persona inputs, not from the 20-row council file.
 
 A simple sampling pattern is:
 
@@ -179,7 +179,7 @@ Run `cluster-personas.py` over the sampled model/persona input and gene prompts:
 
 ```bash
 uv run --script common/tools/cluster-personas.py \
-  --personas-file common/data/personas/clustering-3x3-sampled-personas.csv \
+  --personas-file common/data/personas/cluster-input.csv \
   --genes-file common/data/personas/genes.json \
   --pca-out common/data/personas/pca-cluster.csv \
   --num-personas all \
@@ -218,7 +218,7 @@ uv run --script common/tools/select-council.py \
   --min-context 200000 \
   --size 20 \
   --out common/data/personas/council.csv \
-  --report /tmp/generate-council-report.md
+  --report common/data/personas/council-report.md
 ```
 
 Selection works in four steps:
@@ -228,7 +228,7 @@ Selection works in four steps:
 3. Build a diversity vector for each eligible candidate. With `--pca`, this is the mean PCA vector per gene. Without `--pca`, the script falls back to cluster-frequency signatures.
 4. Select `--size` rows by deterministic farthest-first selection with provider caps.
 
-For the current 3x3 cluster data and the restored full latency file, the expected result is:
+For the current cluster data and the restored full latency file, the expected result is:
 
 ```text
 candidates=490 eligible=198 selected=20 out=common/data/personas/council.csv
@@ -238,7 +238,7 @@ candidates=490 eligible=198 selected=20 out=common/data/personas/council.csv
 
 ## Stage 9: Runtime Pool Decision
 
-`aar`/`arb` read `common/data/personas/pool.csv` by default when `--council-pool` is not supplied. The runtime does not read `clusters.csv`, `pca-cluster.csv`, `model-latency.csv`, or the temporary selection report.
+`aar`/`arb` read `common/data/personas/pool.csv` by default when `--council-pool` is not supplied. The runtime does not read `clusters.csv`, `pca-cluster.csv`, `model-latency.csv`, or the council-selection report.
 
 There are three distinct choices:
 
@@ -265,11 +265,11 @@ Expected path-form check for a repository-clean `council.csv`:
 absolute=0 relative=20 bad_relative=0 total=20
 ```
 
-Validate the selector and inspect the temporary report if needed:
+Validate the selector and inspect the council-selection report if needed:
 
 ```bash
 python3 -m py_compile common/tools/select-council.py
-sed -n '1,120p' /tmp/generate-council-report.md
+sed -n '1,120p' common/data/personas/council-report.md
 ```
 
 If `pool.csv` is changed separately, apply the same path and uniqueness checks to `pool.csv`:
