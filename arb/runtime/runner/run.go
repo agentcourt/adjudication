@@ -29,6 +29,10 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 	if err := ValidateRuntimeLimits(cfg.Runtime); err != nil {
 		return Result{}, err
 	}
+	if err := ValidateCouncilBackend(cfg.CouncilBackend); err != nil {
+		return Result{}, err
+	}
+	cfg.CouncilBackend = NormalizeCouncilBackend(cfg.CouncilBackend)
 	if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
 		return Result{}, fmt.Errorf("create out dir: %w", err)
 	}
@@ -103,6 +107,7 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 	if err := rc.recordEvent("run_initialized", "system", currentPhase(rc.state), map[string]any{
 		"complaint":         complaint,
 		"evidence_standard": cfg.Policy.EvidenceStandard,
+		"council_backend":   cfg.CouncilBackend,
 		"attorneys":         attorneys,
 		"council":           council,
 	}); err != nil {
@@ -124,6 +129,7 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 				Resolution:        currentResolution(rc.state),
 				Complaint:         complaint,
 				EvidenceStandard:  currentEvidenceStandard(rc.state, cfg.Policy),
+				CouncilBackend:    cfg.CouncilBackend,
 				Attorneys:         attorneys,
 				CaseFiles:         caseFileMetas(rc.caseFiles),
 				SubmittedArtifact: rc.submittedArtifact,

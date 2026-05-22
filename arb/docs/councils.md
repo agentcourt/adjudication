@@ -51,6 +51,8 @@ The same council list appears again in the completion artifacts written by [the 
 
 When the case reaches deliberation, the Lean engine chooses the next voting member from the initialized `council_members` list.  [The selection function](../engine/Main.lean) filters that list to members whose status remains `seated` and then chooses the first seated member who has not yet voted in the current round.  Because the underlying list order is the original sampling order, the first round calls members in the sampled seat order: `C1`, then `C2`, then `C3`, and so on.
 
+The default council backend calls the selected model through the runtime xproxy client and gives it a rendered record plus one function, `submit_council_vote`. With `--council-backend pi`, the runtime instead runs each voting member as a Pi ACP juror agent. The Pi juror path preserves the same Lean vote transition, but gives the juror read-only artifact tools during deliberation: list, stat, bounded byte-range read, and materialization into the managed juror workspace. The juror does not receive upload or evidence-submission tools, and the procedure does not authorize independent web investigation. The Pi backend rejects council models that request web-search tools.
+
 The procedure now waits for all seated members to vote in a round before resolving that round.  [The deliberation continuation rule](../engine/Main.lean) compares the current-round vote count to the number of seated members, and only then resolves to `demonstrated`, `not_demonstrated`, or `no_majority`, or advances to the next round.  The strict-majority policy check established earlier keeps the two substantive outcomes mutually exclusive within a valid policy.
 
 ## Status Changes

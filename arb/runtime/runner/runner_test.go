@@ -999,6 +999,107 @@ func TestACPToolSpecsArePhaseSpecific(t *testing.T) {
 	}
 }
 
+func TestJurorACPToolSpecsAreReadOnly(t *testing.T) {
+	tools := make([]string, 0)
+	for _, spec := range jurorACPClientToolSpecs(true) {
+		tools = append(tools, mapString(spec["toolName"]))
+	}
+	for _, want := range []string{
+		"aar_get_case",
+		"aar_list_artifacts",
+		"aar_stat_artifact",
+		"aar_read_artifact_range",
+		"aar_materialize_artifact",
+		"aar_submit_council_vote",
+	} {
+		if !slices.Contains(tools, want) {
+			t.Fatalf("juror tools missing %s: %#v", want, tools)
+		}
+	}
+	for _, forbidden := range []string{
+		"aar_begin_artifact_upload",
+		"aar_write_artifact_chunk",
+		"aar_commit_artifact_upload",
+		"aar_submit_artifact",
+		"aar_submit_decision",
+	} {
+		if slices.Contains(tools, forbidden) {
+			t.Fatalf("juror tools exposed forbidden tool %s: %#v", forbidden, tools)
+		}
+	}
+}
+
+func TestBuildCouncilACPPromptConstrainsJurorInvestigation(t *testing.T) {
+	origPromptBaseDir := promptBaseDir
+	promptBaseDir = filepath.Join("..", "..", "prompts")
+	defer func() { promptBaseDir = origPromptBaseDir }()
+	rc := &runContext{
+		cfg: Config{
+			Policy: DefaultPolicy(),
+		},
+		complaint: spec.Complaint{Proposition: "P"},
+		state: map[string]any{
+			"policy": map[string]any{"evidence_standard": "preponderance"},
+			"case": map[string]any{
+				"phase":              "deliberation",
+				"deliberation_round": 1,
+				"openings":           []map[string]any{},
+				"arguments":          []map[string]any{},
+				"rebuttals":          []map[string]any{},
+				"surrebuttals":       []map[string]any{},
+				"closings":           []map[string]any{},
+				"offered_artifacts":  []map[string]any{},
+				"technical_reports":  []map[string]any{},
+				"council_votes":      []map[string]any{},
+			},
+		},
+	}
+	prompt, err := rc.buildCouncilACPPrompt(CouncilSeat{MemberID: "C1", Model: "openai://gpt-5", PersonaText: "Skeptical."}, Opportunity{ID: "deliberation:1:C1", Role: "council", Phase: "deliberation"})
+	if err != nil {
+		t.Fatalf("buildCouncilACPPrompt returned error: %v", err)
+	}
+	for _, want := range []string{
+		"You may examine admitted artifacts through the read-only AAR tools.",
+		"Do not search the web, introduce new facts, create new evidence, upload artifacts",
+		"Artifact identity is artifact_id plus SHA-256.",
+		"call aar_submit_council_vote exactly once",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("council ACP prompt missing %q:\n%s", want, prompt)
+		}
+	}
+}
+
+func TestCouncilBackendValidation(t *testing.T) {
+	for _, backend := range []string{"", "direct", "pi", "PI"} {
+		if err := ValidateCouncilBackend(backend); err != nil {
+			t.Fatalf("ValidateCouncilBackend(%q) returned error: %v", backend, err)
+		}
+	}
+	if got := NormalizeCouncilBackend(""); got != "direct" {
+		t.Fatalf("NormalizeCouncilBackend empty = %q, want direct", got)
+	}
+	if err := ValidateCouncilBackend("browser"); err == nil {
+		t.Fatalf("ValidateCouncilBackend accepted unknown backend")
+	}
+}
+
+func TestEnsureCouncilACPSessionRejectsSearchEnabledModel(t *testing.T) {
+	rc := &runContext{
+		cfg: Config{
+			OutputDir:         t.TempDir(),
+			CouncilACPCommand: "/tmp/acp",
+			Policy:            DefaultPolicy(),
+			Runtime:           DefaultRuntimeLimits(),
+		},
+		acpSessions: map[string]*acpPersistentSession{},
+	}
+	_, err := rc.ensureCouncilACPSession(context.Background(), CouncilSeat{MemberID: "C1", Model: "openai://gpt-5?tools=search"})
+	if err == nil || !strings.Contains(err.Error(), "does not allow web-search-enabled model") {
+		t.Fatalf("ensureCouncilACPSession error = %v, want web-search rejection", err)
+	}
+}
+
 func TestBuildAttorneyPromptConstrainsArgumentExperiments(t *testing.T) {
 	origPromptBaseDir := promptBaseDir
 	promptBaseDir = filepath.Join("..", "..", "prompts")

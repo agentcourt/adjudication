@@ -161,6 +161,9 @@ This command shows the same pattern with one global ACP command and a role-speci
 | `--plaintiff-acp-command`, `--defendant-acp-command` | Role-specific ACP command overrides. |
 | `--plaintiff-acp-endpoint`, `--defendant-acp-endpoint` | Role-specific remote ACP endpoints.  Supported transport: `tcp://host:port`. |
 | `--plaintiff-acp-session-cwd`, `--defendant-acp-session-cwd` | Role-specific `session/new` working-directory overrides. |
+| `--council-backend` | Council execution backend. `direct` uses the xproxy Responses path. `pi` runs council members as Pi ACP juror agents with read-only artifact tools and rejects web-search-enabled council models. |
+| `--council-acp-command` | ACP command override for `--council-backend pi`. Defaults to `--acp-command`. |
+| `--council-acp-session-cwd` | Council ACP `session/new` working-directory override for `--council-backend pi`. |
 | `--common-root` | Shared `common/` tree used for the pool, xproxy config, and ACP launcher. |
 | `--xproxy-config` | xproxy configuration file.  Defaults under `common/`. |
 | `--xproxy-port` | xproxy port.  Default: `18459`. |
@@ -173,7 +176,7 @@ This command shows the same pattern with one global ACP command and a role-speci
 
 ## Outputs
 
-Each run writes a complete packet to `--out-dir`.  The main files are `complaint.md`, `policy.json`, `runtime.json`, `run.json`, `state.json`, `council.json`, `digest.md`, `transcript.md`, `events.ndjson`, and `artifact-manifest.json`.  `run.json` records the resolved attorney configuration for each side in its `attorneys` field and includes visible artifact metadata.  Exact artifact bytes are stored under `artifact-store/`; accepted attorney evidence is also copied under `submitted-evidence/` and exposed through artifact methods.  Attorney work product is exported into the run directory separately.
+Each run writes a complete packet to `--out-dir`.  The main files are `complaint.md`, `policy.json`, `runtime.json`, `state.json`, `council.json`, `digest.md`, `transcript.md`, `events.ndjson`, and `artifact-manifest.json`.  `run.json` records the resolved attorney configuration for each side in its `attorneys` field and includes visible artifact metadata.  Exact artifact bytes are stored under `artifact-store/`; accepted attorney evidence is also copied under `submitted-evidence/` and exposed through artifact methods.  With `--council-backend pi`, juror artifact reads and materializations are logged in `events.ndjson` under role `council`. Attorney work product is exported into the run directory separately.
 
 On success, `aar case` prints a JSON object like this:
 

@@ -79,6 +79,9 @@ type Config struct {
 	ACPCommand                 string
 	ACPArgs                    []string
 	ACPEnv                     []string
+	CouncilBackend             string
+	CouncilACPCommand          string
+	CouncilACPSessionCwd       string
 	Engine                     lean.Engine
 }
 
@@ -91,6 +94,7 @@ type Result struct {
 	Resolution        string                  `json:"resolution"`
 	Complaint         spec.Complaint          `json:"complaint"`
 	EvidenceStandard  string                  `json:"evidence_standard"`
+	CouncilBackend    string                  `json:"council_backend"`
 	Attorneys         []AttorneyRunInfo       `json:"attorneys"`
 	CaseFiles         []CaseFileMeta          `json:"case_files"`
 	SubmittedArtifact []SubmittedArtifactMeta `json:"submitted_artifacts,omitempty"`

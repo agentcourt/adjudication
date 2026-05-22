@@ -315,6 +315,38 @@ func TestRunCaseRejectsPlaintiffModelWithACPEndpoint(t *testing.T) {
 	}
 }
 
+func TestRunCaseRejectsInvalidCouncilBackend(t *testing.T) {
+	dir := t.TempDir()
+	complaintPath := filepath.Join(dir, "complaint.md")
+	if err := os.WriteFile(complaintPath, []byte("# Proposition\n\nP\n"), 0o644); err != nil {
+		t.Fatalf("write complaint: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := RunCase([]string{
+		"--complaint", complaintPath,
+		"--out-dir", filepath.Join(dir, "out"),
+		"--council-backend", "browser",
+	}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("RunCase returned nil error, want failure")
+	}
+	if !IsReportedError(err) {
+		t.Fatalf("RunCase error = %T, want reported error", err)
+	}
+	var summary caseRunSummary
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &summary); decodeErr != nil {
+		t.Fatalf("stdout is not JSON: %v\n%s", decodeErr, stdout.String())
+	}
+	if summary.Status != "error" {
+		t.Fatalf("summary status = %q, want error", summary.Status)
+	}
+	if !strings.Contains(summary.Error, "council backend must be direct or pi") {
+		t.Fatalf("summary error = %q, want invalid council backend message", summary.Error)
+	}
+}
+
 func TestReportedErrorWrapsOriginalError(t *testing.T) {
 	base := errors.New("boom")
 	err := &ReportedError{Err: base}

@@ -56,6 +56,9 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	defendantACPEndpoint := fs.String("defendant-acp-endpoint", "", "Defendant ACP endpoint override. Supported transport: tcp://host:port")
 	plaintiffACPSessionCwd := fs.String("plaintiff-acp-session-cwd", "", "Plaintiff ACP session cwd override")
 	defendantACPSessionCwd := fs.String("defendant-acp-session-cwd", "", "Defendant ACP session cwd override")
+	councilBackend := fs.String("council-backend", "direct", "Council backend: direct or pi. pi runs jurors as read-only Pi ACP agents")
+	councilACPCommand := fs.String("council-acp-command", "", "Council ACP command override for --council-backend=pi. Default: --acp-command")
+	councilACPSessionCwd := fs.String("council-acp-session-cwd", "", "Council ACP session cwd override for --council-backend=pi")
 	xproxyConfig := fs.String("xproxy-config", "", "xproxy config path. Default: <common-root>/etc/xproxy.json")
 	xproxyPort := fs.Int("xproxy-port", 18459, "xproxy port")
 	timeoutSeconds := fs.Int("timeout-seconds", 0, "Override runtime council LLM timeout in seconds")
@@ -142,6 +145,9 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err := runner.ValidateRuntimeLimits(runtimeLimits); err != nil {
 		return reportCaseError(stdout, err)
 	}
+	if err := runner.ValidateCouncilBackend(*councilBackend); err != nil {
+		return reportCaseError(stdout, err)
+	}
 	effectiveAttorneyModel := strings.TrimSpace(*attorneyModel)
 	if _, err := runner.ParseAttorneyModelForCLI(effectiveAttorneyModel); err != nil {
 		return reportCaseError(stdout, err)
@@ -213,12 +219,15 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 			ACPEndpoint: strings.TrimSpace(*defendantACPEndpoint),
 			SessionCwd:  strings.TrimSpace(*defendantACPSessionCwd),
 		},
-		Policy:           policy,
-		Runtime:          runtimeLimits,
-		XProxyConfigPath: xproxyConfigPath,
-		XProxyPort:       *xproxyPort,
-		ACPCommand:       acpCommandPath,
-		Engine:           lean.New([]string{*enginePath}),
+		Policy:               policy,
+		Runtime:              runtimeLimits,
+		XProxyConfigPath:     xproxyConfigPath,
+		XProxyPort:           *xproxyPort,
+		ACPCommand:           acpCommandPath,
+		CouncilBackend:       runner.NormalizeCouncilBackend(*councilBackend),
+		CouncilACPCommand:    strings.TrimSpace(*councilACPCommand),
+		CouncilACPSessionCwd: strings.TrimSpace(*councilACPSessionCwd),
+		Engine:               lean.New([]string{*enginePath}),
 	}
 	result, err := runner.Run(context.Background(), cfg, complaint)
 	if err != nil {

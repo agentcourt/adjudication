@@ -49,6 +49,19 @@ AAR exposes these methods over the existing ACP custom-method channel during arg
 - `aar_submit_artifact` submits small source evidence in one JSON request using `content` or `content_base64`.
 - `aar_submit_decision` submits the legal act for the current opportunity.
 
+## Juror methods
+
+When `aar case` runs with `--council-backend pi`, council members are Pi ACP juror agents. Juror artifact access is read-only and available only during deliberation. Jurors receive these AAR methods:
+
+- `aar_get_case` returns the visible arbitration record.
+- `aar_list_artifacts` lists visible artifact metadata.
+- `aar_stat_artifact` returns metadata, allowed read operations, and remaining limits for one artifact.
+- `aar_read_artifact_range` returns a bounded byte range as base64 and logs an `artifact_read` event with role `council`.
+- `aar_materialize_artifact` copies exact bytes into the managed juror workspace and logs an `artifact_materialized` event with role `council`.
+- `aar_submit_council_vote` submits the juror's vote through the same Lean `submit_council_vote` transition used by the direct council path.
+
+Jurors do not receive upload, submit-evidence, or attorney-decision methods. AAR does not grant jurors web search or a path to introduce new facts. The Pi backend rejects council models that request web-search tools. The procedural boundary is: attorneys build the record; jurors examine the admitted record.
+
 ## Chunked upload methods
 
 Chunked upload is for evidence too large or unsuitable for single-request `aar_submit_artifact`.
@@ -86,7 +99,8 @@ The implementation must preserve these invariants:
 4. `offered_artifacts` uses visible `artifact_id` values.
 5. Artifact reads and materializations are logged.
 6. AAR remains media-agnostic. Agents examine bytes with their own tools.
-7. Juror-facing artifact access, when added, must be read-only and narrower than attorney access.
+7. Juror-facing artifact access is read-only and narrower than attorney access.
+8. Juror evidence inspection does not authorize independent investigation or new evidence.
 
 ## Inspection checklist
 

@@ -16,6 +16,9 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client *ope
 	if !ok {
 		return fmt.Errorf("unknown council member %q", memberID)
 	}
+	if NormalizeCouncilBackend(rc.cfg.CouncilBackend) == councilBackendPI {
+		return rc.executeCouncilACPOpportunity(ctx, opportunity, seat)
+	}
 	ctx, cancel := withTimeout(ctx, rc.cfg.Runtime.CouncilTimeout())
 	defer cancel()
 

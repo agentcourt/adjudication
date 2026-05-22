@@ -133,6 +133,23 @@ func ValidatePolicy(policy Policy) error {
 	}
 }
 
+func ValidateCouncilBackend(backend string) error {
+	switch strings.TrimSpace(strings.ToLower(backend)) {
+	case "", "direct", councilBackendPI:
+		return nil
+	default:
+		return fmt.Errorf("council backend must be direct or pi")
+	}
+}
+
+func NormalizeCouncilBackend(backend string) string {
+	backend = strings.TrimSpace(strings.ToLower(backend))
+	if backend == "" {
+		return "direct"
+	}
+	return backend
+}
+
 func ValidateRuntimeLimits(limits RuntimeLimits) error {
 	switch {
 	case limits.CouncilLLMTimeoutSeconds <= 0:
