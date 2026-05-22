@@ -65,7 +65,7 @@ theorem initializeCase_establishes_phaseShape
 /--
 Successful initialization also starts with empty admitted-material lists.
 
-`initializeCase` clears `offered_artifacts` and `technical_reports`.  Because the
+`initializeCase` clears `offered_evidence` and `technical_reports`.  Because the
 side-level limits are natural-number upper bounds, empty lists satisfy them
 immediately.
 -/
@@ -108,18 +108,18 @@ append function changes neither.
 -/
 theorem appendSupplementalMaterials_preserves_phaseShape
     (c : ArbitrationCase)
-    (offered : List OfferedArtifact)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport)
     (hShape : phaseShape c) :
     phaseShape (appendSupplementalMaterials c offered reports) := by
   cases hPhase : c.phase <;> simpa [appendSupplementalMaterials, phaseShape, hPhase] using hShape
 
-theorem appendSubmittedArtifact_preserves_phaseShape
+theorem appendSubmittedEvidence_preserves_phaseShape
     (c : ArbitrationCase)
-    (evidence : SubmittedArtifact)
+    (evidence : SubmittedEvidence)
     (hShape : phaseShape c) :
-    phaseShape (appendSubmittedArtifact c evidence) := by
-  cases hPhase : c.phase <;> simpa [appendSubmittedArtifact, phaseShape, hPhase] using hShape
+    phaseShape (appendSubmittedEvidence c evidence) := by
+  cases hPhase : c.phase <;> simpa [appendSubmittedEvidence, phaseShape, hPhase] using hShape
 
 /--
 Adding an opening to a well-shaped opening state preserves the global shape.
@@ -386,7 +386,7 @@ theorem continueDeliberation_preserves_phaseShape
 `continueDeliberation` preserves the cumulative material limits.
 
 Deliberation changes vote state, council seating, round number, status, phase,
-and resolution.  It never rewrites `offered_artifacts` or `technical_reports`.
+and resolution.  It never rewrites `offered_evidence` or `technical_reports`.
 That makes the proof simpler than the filing-shape version above.  Every branch
 reduces to `stateWithCase_preserves_material_limits` with reflexive equalities
 for the material lists.

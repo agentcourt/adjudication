@@ -17,7 +17,7 @@ counting argument that later step-level proofs will need.
 -/
 
 theorem offeredCount_eq_length_of_all_role
-    (items : List OfferedArtifact)
+    (items : List OfferedEvidence)
     (role : String)
     (hAll : ∀ item ∈ items, item.role = role) :
     offeredCount items role = items.length := by
@@ -33,7 +33,7 @@ theorem offeredCount_eq_length_of_all_role
       simpa [offeredCount, hHead] using congrArg Nat.succ hTailCount
 
 theorem offeredCount_zero_of_all_other_role
-    (items : List OfferedArtifact)
+    (items : List OfferedEvidence)
     (role other : String)
     (hAll : ∀ item ∈ items, item.role = role)
     (hNe : role ≠ other) :
@@ -106,14 +106,14 @@ invariant.
 -/
 theorem appendSupplementalMaterials_preserves_material_limits
     (s : ArbitrationState)
-    (offered : List OfferedArtifact)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport)
     (role : String)
     (hBase : materialLimitsRespected s)
     (hOfferedRole : ∀ item ∈ offered, item.role = role)
     (hReportRole : ∀ item ∈ reports, item.role = role)
     (hOfferedCap :
-      offeredCount s.case.offered_artifacts role + offered.length ≤ s.policy.max_exhibits_per_side)
+      offeredCount s.case.offered_evidence role + offered.length ≤ s.policy.max_exhibits_per_side)
     (hReportCap :
       reportCount s.case.technical_reports role + reports.length ≤ s.policy.max_reports_per_side) :
     materialLimitsRespected { s with case := appendSupplementalMaterials s.case offered reports } := by
@@ -174,12 +174,12 @@ theorem appendSupplementalMaterials_preserves_material_limits
           · simpa [appendSupplementalMaterials, reportCount_append, hReportPlaintiff] using hPlaintiffRep
           · simpa [appendSupplementalMaterials, reportCount_append, hReportDefendant] using hDefendantRep
 
-theorem appendSubmittedArtifact_preserves_material_limits
+theorem appendSubmittedEvidence_preserves_material_limits
     (s : ArbitrationState)
-    (evidence : SubmittedArtifact)
+    (evidence : SubmittedEvidence)
     (hBase : materialLimitsRespected s) :
-    materialLimitsRespected { s with case := appendSubmittedArtifact s.case evidence } := by
-  simpa [materialLimitsRespected, appendSubmittedArtifact] using hBase
+    materialLimitsRespected { s with case := appendSubmittedEvidence s.case evidence } := by
+  simpa [materialLimitsRespected, appendSubmittedEvidence] using hBase
 
 /-
 The lemmas below lift the arithmetic fact into procedure-level invariants.
@@ -193,9 +193,9 @@ should point to one of two precise causes: either the append arithmetic was
 wrong, or a transition unexpectedly changed the material lists.
 -/
 
-theorem advanceAfterMerits_preserves_offered_artifacts
+theorem advanceAfterMerits_preserves_offered_evidence
     (c : ArbitrationCase) :
-    (advanceAfterMerits c).offered_artifacts = c.offered_artifacts := by
+    (advanceAfterMerits c).offered_evidence = c.offered_evidence := by
   unfold advanceAfterMerits
   by_cases hOpen : c.openings.length >= 2 ∧ c.phase = "openings"
   · simp [hOpen]
@@ -233,12 +233,12 @@ theorem advanceAfterMerits_preserves_technical_reports
           · simp [hClose]
           · simp [hClose]
 
-theorem addFiling_preserves_offered_artifacts
+theorem addFiling_preserves_offered_evidence
     (c : ArbitrationCase)
     (phase role text : String) :
-    (addFiling c phase role text).offered_artifacts = c.offered_artifacts := by
+    (addFiling c phase role text).offered_evidence = c.offered_evidence := by
   unfold addFiling
-  split <;> simp [advanceAfterMerits_preserves_offered_artifacts]
+  split <;> simp [advanceAfterMerits_preserves_offered_evidence]
 
 theorem addFiling_preserves_technical_reports
     (c : ArbitrationCase)
@@ -251,7 +251,7 @@ theorem stateWithCase_preserves_material_limits
     (s : ArbitrationState)
     (c : ArbitrationCase)
     (hBase : materialLimitsRespected s)
-    (hOffered : c.offered_artifacts = s.case.offered_artifacts)
+    (hOffered : c.offered_evidence = s.case.offered_evidence)
     (hReports : c.technical_reports = s.case.technical_reports) :
     materialLimitsRespected (stateWithCase s c) := by
   simpa [materialLimitsRespected, stateWithCase, hOffered, hReports] using hBase

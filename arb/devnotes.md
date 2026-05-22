@@ -223,7 +223,7 @@ tool schema.
 
 ## 2026-04-30
 
-### Ignore regenerated signing artifacts in `ex1`
+### Ignore regenerated signing evidence in `ex1`
 
 Reference: [Example signer](examples/ex1/sign.sh)
 

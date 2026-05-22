@@ -28,7 +28,7 @@ func (rc *runContext) recordEventAtTurn(turn int, eventType string, role string,
 	return appendJSONLine(filepath.Join(rc.cfg.OutputDir, "events.ndjson"), event)
 }
 
-func writeArtifacts(cfg Config, result Result, rc *runContext) error {
+func writeEvidence(cfg Config, result Result, rc *runContext) error {
 	if err := exportAttorneyWorkProduct(cfg.OutputDir, rc.workProductDirs); err != nil {
 		return err
 	}
@@ -186,13 +186,13 @@ func appendTranscriptPhase(b *strings.Builder, title string, phase string, items
 		b.WriteString("\n\n")
 		b.WriteString(mapString(item["text"]))
 		b.WriteString("\n\n")
-		exhibits := filterArtifacts(mapList(caseObj["offered_files"]), phase, role)
+		exhibits := filterEvidence(mapList(caseObj["offered_files"]), phase, role)
 		if len(exhibits) > 0 {
 			b.WriteString("Exhibits offered:\n")
 			b.WriteString(renderInlineExhibitIndex(exhibits, rc.fileByID))
 			b.WriteString("\n\n")
 		}
-		reports := filterArtifacts(mapList(caseObj["technical_reports"]), phase, role)
+		reports := filterEvidence(mapList(caseObj["technical_reports"]), phase, role)
 		if len(reports) > 0 {
 			b.WriteString("Technical reports:\n")
 			b.WriteString(renderInlineReportIndex(reports))
@@ -227,7 +227,7 @@ func titleCase(value string) string {
 	return strings.ToUpper(value[:1]) + value[1:]
 }
 
-func filterArtifacts(items []map[string]any, phase string, role string) []map[string]any {
+func filterEvidence(items []map[string]any, phase string, role string) []map[string]any {
 	out := make([]map[string]any, 0)
 	for _, item := range items {
 		if mapString(item["phase"]) != phase || mapString(item["role"]) != role {

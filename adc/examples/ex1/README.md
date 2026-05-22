@@ -57,7 +57,7 @@ The demo run writes these into the selected output directory:
 
 | File | Meaning |
 |---|---|
-| `run.json` | Full authoritative run artifact |
+| `run.json` | Full authoritative run evidence |
 | `digest.md` | Case digest |
 | `transcript.md` | Trial transcript |
 | `normalized-case.json` | Intake packet |

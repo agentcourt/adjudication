@@ -122,7 +122,7 @@ func TestBuildAttorneyPromptUsesRoleSpecificCapability(t *testing.T) {
 				"rebuttals":         []map[string]any{},
 				"surrebuttals":      []map[string]any{},
 				"closings":          []map[string]any{},
-				"offered_artifacts": []map[string]any{},
+				"offered_evidence":  []map[string]any{},
 				"technical_reports": []map[string]any{},
 			},
 		},

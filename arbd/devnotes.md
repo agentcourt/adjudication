@@ -28,7 +28,7 @@ The first live `arbd` case run exposed a missing local prerequisite rather than 
 
 The first live council runs exposed a transport mismatch with the shared council pool, not a Lean defect.  `arb` asks council models for a string-valued tool argument, while the first `arbd` draft asked the same mixed pool for a JSON integer.  That difference was enough to trigger repeated invalid council submissions under the normal `make demo` path.
 
-`arbd` now matches `arb` at the tool boundary: the council tool asks for digit-only string input, and the Go runner normalizes that input to an integer before it calls the Lean engine.  The engine and the final run artifacts still store numeric answers.  After that change, `make demo` completed successfully on the sonnet example with final answers `{"C1":82,"C2":82,"C3":82,"C4":82,"C5":87}`.
+`arbd` now matches `arb` at the tool boundary: the council tool asks for digit-only string input, and the Go runner normalizes that input to an integer before it calls the Lean engine.  The engine and the final run evidence still store numeric answers.  After that change, `make demo` completed successfully on the sonnet example with final answers `{"C1":82,"C2":82,"C3":82,"C4":82,"C5":87}`.
 
 ### Documentation set
 
@@ -48,7 +48,7 @@ The proof-oriented `arb/docs/` files were omitted on purpose.  `arbd` has a smal
 
 `arbd/Makefile` now has an `ex3` target as well.  Running `make ex3` drafted `examples/ex3/complaint.md` and completed a full live case at `out/ex3-demo`.  The final answer map was `{"C1":42,"C2":62,"C3":55,"C4":52,"C5":60}`, which is materially lower than `ex2` and fits the intended design of the example.
 
-### Artifact fidelity and explicit file filtering
+### Evidence fidelity and explicit file filtering
 
 The first review pass found two runtime issues worth fixing.  First, the exported `council.json`, `run.json`, digest, and transcript used the initially sampled council list even after the Lean state had marked a member `timed_out` or otherwise removed.  That made the packet misleading in exactly the cases where a reader most needs the status history.
 

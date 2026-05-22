@@ -33,7 +33,7 @@ func (rc *runContext) executeCouncilACPOpportunity(ctx context.Context, opportun
 		mu.Unlock()
 	}
 	decisionSubmitted := false
-	artifactBudget := &artifactReadBudget{}
+	evidenceBudget := &evidenceReadBudget{}
 	responseBytes := 0
 	lastAgentToolStatus := map[string]string{}
 	pendingAgentToolInput := map[string]any{}
@@ -154,39 +154,39 @@ func (rc *runContext) executeCouncilACPOpportunity(ctx context.Context, opportun
 		appendTranscript(map[string]any{"custom_method": acpCustomMethod("get_case"), "result": view})
 		return map[string]any{"text": marshalInline(view), "case": view}, nil
 	})
-	client.HandleMethod(acpCustomMethod("list_artifacts"), func(_ context.Context, _ map[string]any) (map[string]any, error) {
+	client.HandleMethod(acpCustomMethod("list_evidence"), func(_ context.Context, _ map[string]any) (map[string]any, error) {
 		if !jurorEvidenceAccessAllowed(opportunity) {
-			return nil, fmt.Errorf("juror artifact access is not allowed in phase %q", opportunity.Phase)
+			return nil, fmt.Errorf("juror evidence access is not allowed in phase %q", opportunity.Phase)
 		}
-		artifacts := rc.listVisibleArtifacts()
-		appendTranscript(map[string]any{"custom_method": acpCustomMethod("list_artifacts"), "member_id": seat.MemberID, "artifact_count": len(artifacts)})
-		return map[string]any{"text": marshalInline(map[string]any{"artifacts": artifacts}), "artifacts": artifacts}, nil
+		evidence := rc.listVisibleEvidence()
+		appendTranscript(map[string]any{"custom_method": acpCustomMethod("list_evidence"), "member_id": seat.MemberID, "evidence_count": len(evidence)})
+		return map[string]any{"text": marshalInline(map[string]any{"evidence": evidence}), "evidence": evidence}, nil
 	})
-	client.HandleMethod(acpCustomMethod("stat_artifact"), func(_ context.Context, params map[string]any) (map[string]any, error) {
+	client.HandleMethod(acpCustomMethod("stat_evidence"), func(_ context.Context, params map[string]any) (map[string]any, error) {
 		if !jurorEvidenceAccessAllowed(opportunity) {
-			return nil, fmt.Errorf("juror artifact access is not allowed in phase %q", opportunity.Phase)
+			return nil, fmt.Errorf("juror evidence access is not allowed in phase %q", opportunity.Phase)
 		}
-		artifact, err := rc.statArtifact(mapString(params["artifact_id"]))
+		evidence, err := rc.statEvidence(mapString(params["evidence_id"]))
 		if err != nil {
 			return nil, err
 		}
-		appendTranscript(map[string]any{"custom_method": acpCustomMethod("stat_artifact"), "member_id": seat.MemberID, "artifact_id": artifact.ArtifactID})
+		appendTranscript(map[string]any{"custom_method": acpCustomMethod("stat_evidence"), "member_id": seat.MemberID, "evidence_id": evidence.EvidenceID})
 		return map[string]any{
-			"text":               marshalInline(map[string]any{"artifact": artifact}),
-			"artifact":           artifact,
+			"text":               marshalInline(map[string]any{"evidence": evidence}),
+			"evidence":           evidence,
 			"allowed_operations": []string{"read_range", "materialize"},
 			"limits": map[string]any{
-				"max_read_bytes":                       rc.cfg.Policy.MaxArtifactReadBytes,
-				"max_reads_per_opportunity":            rc.cfg.Policy.MaxArtifactReadsPerOpportunity,
-				"max_read_bytes_per_opportunity":       rc.cfg.Policy.MaxArtifactReadBytesPerOpportunity,
-				"remaining_read_bytes_for_opportunity": remainingCapacity(rc.cfg.Policy.MaxArtifactReadBytesPerOpportunity, artifactBudget.bytes),
-				"remaining_reads_for_opportunity":      remainingCapacity(rc.cfg.Policy.MaxArtifactReadsPerOpportunity, artifactBudget.reads),
+				"max_read_bytes":                       rc.cfg.Policy.MaxEvidenceReadBytes,
+				"max_reads_per_opportunity":            rc.cfg.Policy.MaxEvidenceReadsPerOpportunity,
+				"max_read_bytes_per_opportunity":       rc.cfg.Policy.MaxEvidenceReadBytesPerOpportunity,
+				"remaining_read_bytes_for_opportunity": remainingCapacity(rc.cfg.Policy.MaxEvidenceReadBytesPerOpportunity, evidenceBudget.bytes),
+				"remaining_reads_for_opportunity":      remainingCapacity(rc.cfg.Policy.MaxEvidenceReadsPerOpportunity, evidenceBudget.reads),
 			},
 		}, nil
 	})
-	client.HandleMethod(acpCustomMethod("read_artifact_range"), func(_ context.Context, params map[string]any) (map[string]any, error) {
+	client.HandleMethod(acpCustomMethod("read_evidence_range"), func(_ context.Context, params map[string]any) (map[string]any, error) {
 		if !jurorEvidenceAccessAllowed(opportunity) {
-			return nil, fmt.Errorf("juror artifact access is not allowed in phase %q", opportunity.Phase)
+			return nil, fmt.Errorf("juror evidence access is not allowed in phase %q", opportunity.Phase)
 		}
 		offset, err := requiredIntParam(params, "offset")
 		if err != nil {
@@ -196,16 +196,16 @@ func (rc *runContext) executeCouncilACPOpportunity(ctx context.Context, opportun
 		if err != nil {
 			return nil, err
 		}
-		result, err := rc.readArtifactRange(mapString(params["artifact_id"]), int64(offset), length, artifactBudget)
+		result, err := rc.readEvidenceRange(mapString(params["evidence_id"]), int64(offset), length, evidenceBudget)
 		if err != nil {
 			return nil, err
 		}
-		result["remaining_read_bytes_for_opportunity"] = remainingCapacity(rc.cfg.Policy.MaxArtifactReadBytesPerOpportunity, artifactBudget.bytes)
-		result["remaining_reads_for_opportunity"] = remainingCapacity(rc.cfg.Policy.MaxArtifactReadsPerOpportunity, artifactBudget.reads)
-		appendTranscript(map[string]any{"custom_method": acpCustomMethod("read_artifact_range"), "member_id": seat.MemberID, "artifact_id": result["artifact_id"], "offset": result["offset"], "length": result["length"]})
-		if err := rc.recordEventAtTurn(turn, "artifact_read", "council", opportunity.Phase, map[string]any{
+		result["remaining_read_bytes_for_opportunity"] = remainingCapacity(rc.cfg.Policy.MaxEvidenceReadBytesPerOpportunity, evidenceBudget.bytes)
+		result["remaining_reads_for_opportunity"] = remainingCapacity(rc.cfg.Policy.MaxEvidenceReadsPerOpportunity, evidenceBudget.reads)
+		appendTranscript(map[string]any{"custom_method": acpCustomMethod("read_evidence_range"), "member_id": seat.MemberID, "evidence_id": result["evidence_id"], "offset": result["offset"], "length": result["length"]})
+		if err := rc.recordEventAtTurn(turn, "evidence_read", "council", opportunity.Phase, map[string]any{
 			"member_id":   seat.MemberID,
-			"artifact_id": result["artifact_id"],
+			"evidence_id": result["evidence_id"],
 			"offset":      result["offset"],
 			"length":      result["length"],
 			"byte_count":  result["length"],
@@ -214,18 +214,18 @@ func (rc *runContext) executeCouncilACPOpportunity(ctx context.Context, opportun
 		}
 		return result, nil
 	})
-	client.HandleMethod(acpCustomMethod("materialize_artifact"), func(_ context.Context, params map[string]any) (map[string]any, error) {
+	client.HandleMethod(acpCustomMethod("materialize_evidence"), func(_ context.Context, params map[string]any) (map[string]any, error) {
 		if !jurorEvidenceAccessAllowed(opportunity) {
-			return nil, fmt.Errorf("juror artifact access is not allowed in phase %q", opportunity.Phase)
+			return nil, fmt.Errorf("juror evidence access is not allowed in phase %q", opportunity.Phase)
 		}
-		result, err := rc.materializeArtifact(session.workspaceDir, mapString(params["artifact_id"]))
+		result, err := rc.materializeEvidence(session.workspaceDir, mapString(params["evidence_id"]))
 		if err != nil {
 			return nil, err
 		}
-		appendTranscript(map[string]any{"custom_method": acpCustomMethod("materialize_artifact"), "member_id": seat.MemberID, "artifact_id": result["artifact_id"], "workspace_path": result["workspace_path"]})
-		if err := rc.recordEventAtTurn(turn, "artifact_materialized", "council", opportunity.Phase, map[string]any{
+		appendTranscript(map[string]any{"custom_method": acpCustomMethod("materialize_evidence"), "member_id": seat.MemberID, "evidence_id": result["evidence_id"], "workspace_path": result["workspace_path"]})
+		if err := rc.recordEventAtTurn(turn, "evidence_materialized", "council", opportunity.Phase, map[string]any{
 			"member_id":      seat.MemberID,
-			"artifact_id":    result["artifact_id"],
+			"evidence_id":    result["evidence_id"],
 			"workspace_path": result["workspace_path"],
 			"byte_count":     result["size_bytes"],
 		}); err != nil {
@@ -397,21 +397,21 @@ func (rc *runContext) councilView(seat CouncilSeat, opportunity Opportunity) map
 			"member_id": seat.MemberID,
 		},
 		"record": map[string]any{
-			"artifacts":           rc.listVisibleArtifacts(),
-			"openings":            mapList(caseObj["openings"]),
-			"arguments":           mapList(caseObj["arguments"]),
-			"rebuttals":           mapList(caseObj["rebuttals"]),
-			"surrebuttals":        mapList(caseObj["surrebuttals"]),
-			"closings":            mapList(caseObj["closings"]),
-			"submitted_artifacts": mapList(caseObj["submitted_artifacts"]),
-			"exhibits":            rc.attorneyExhibits(),
-			"technical_reports":   mapList(caseObj["technical_reports"]),
-			"prior_votes":         mapList(caseObj["council_votes"]),
+			"evidence":           rc.listVisibleEvidence(),
+			"openings":           mapList(caseObj["openings"]),
+			"arguments":          mapList(caseObj["arguments"]),
+			"rebuttals":          mapList(caseObj["rebuttals"]),
+			"surrebuttals":       mapList(caseObj["surrebuttals"]),
+			"closings":           mapList(caseObj["closings"]),
+			"submitted_evidence": mapList(caseObj["submitted_evidence"]),
+			"exhibits":           rc.attorneyExhibits(),
+			"technical_reports":  mapList(caseObj["technical_reports"]),
+			"prior_votes":        mapList(caseObj["council_votes"]),
 		},
 		"limits": map[string]any{
-			"max_artifact_read_bytes":                 rc.cfg.Policy.MaxArtifactReadBytes,
-			"max_artifact_reads_per_opportunity":      rc.cfg.Policy.MaxArtifactReadsPerOpportunity,
-			"max_artifact_read_bytes_per_opportunity": rc.cfg.Policy.MaxArtifactReadBytesPerOpportunity,
+			"max_evidence_read_bytes":                 rc.cfg.Policy.MaxEvidenceReadBytes,
+			"max_evidence_reads_per_opportunity":      rc.cfg.Policy.MaxEvidenceReadsPerOpportunity,
+			"max_evidence_read_bytes_per_opportunity": rc.cfg.Policy.MaxEvidenceReadBytesPerOpportunity,
 			"max_response_bytes":                      rc.cfg.Runtime.MaxResponseBytes,
 		},
 		"council_member": map[string]any{
@@ -428,36 +428,36 @@ func (rc *runContext) buildCouncilACPPrompt(seat CouncilSeat, opportunity Opport
 	}
 	return base + "\n\nJuror agent instructions:\n" +
 		"You are a juror. Your task is to decide the proposition from the admitted record.\n" +
-		"You may examine admitted artifacts through the read-only AAR tools. Use aar_list_artifacts, aar_stat_artifact, aar_read_artifact_range, or aar_materialize_artifact when exact bytes, metadata, or exhibit contents matter.\n" +
-		"Do not search the web, introduce new facts, create new evidence, upload artifacts, or treat local workspace paths as record identities. Artifact identity is artifact_id plus SHA-256.\n" +
+		"You may examine admitted evidence through the read-only AAR tools. Use aar_list_evidence, aar_stat_evidence, aar_read_evidence_range, or aar_materialize_evidence when exact bytes, metadata, or exhibit contents matter.\n" +
+		"Do not search the web, introduce new facts, create new evidence, upload evidence, or treat local workspace paths as record identities. Evidence identity is evidence_id plus SHA-256.\n" +
 		"When ready, call aar_submit_council_vote exactly once with vote=demonstrated or vote=not_demonstrated and a concise rationale.\n", nil
 }
 
 func jurorACPClientToolSpecs(includeWorkspaceWriter bool) []map[string]any {
 	specs := []map[string]any{
 		getCaseToolSpec(),
-		listArtifactsToolSpec(),
-		statArtifactToolSpec(),
-		readArtifactRangeToolSpec(),
+		listEvidenceToolSpec(),
+		statEvidenceToolSpec(),
+		readEvidenceRangeToolSpec(),
 	}
 	if includeWorkspaceWriter {
-		specs = append(specs, jurorMaterializeArtifactToolSpec())
+		specs = append(specs, jurorMaterializeEvidenceToolSpec())
 	}
 	specs = append(specs, submitCouncilVoteToolSpec())
 	return specs
 }
 
-func jurorMaterializeArtifactToolSpec() map[string]any {
+func jurorMaterializeEvidenceToolSpec() map[string]any {
 	return map[string]any{
-		"method":      acpCustomMethod("materialize_artifact"),
-		"toolName":    "aar_materialize_artifact",
-		"description": "Copy one visible artifact into the managed juror workspace and return its workspace path. The artifact_id and hash remain the record identity.",
+		"method":      acpCustomMethod("materialize_evidence"),
+		"toolName":    "aar_materialize_evidence",
+		"description": "Copy one visible evidence into the managed juror workspace and return its workspace path. The evidence_id and hash remain the record identity.",
 		"parameters": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"artifact_id": map[string]any{"type": "string"},
+				"evidence_id": map[string]any{"type": "string"},
 			},
-			"required":             []string{"artifact_id"},
+			"required":             []string{"evidence_id"},
 			"additionalProperties": false,
 		},
 	}

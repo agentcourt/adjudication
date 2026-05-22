@@ -69,7 +69,7 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 			return Result{}, err
 		}
 	}
-	artifactStoreDir := filepath.Join(cfg.OutputDir, "artifact-store")
+	evidenceStoreDir := filepath.Join(cfg.OutputDir, "evidence-store")
 	council, err := sampleCouncil(cfg.CouncilPoolPath, cfg.CommonRoot, cfg.Policy.CouncilSize)
 	if err != nil {
 		return Result{}, err
@@ -87,16 +87,16 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 		complaint:         complaint,
 		state:             mapAny(initResp["state"]),
 		caseFiles:         caseFiles,
-		submittedArtifact: []SubmittedArtifactMeta{},
-		artifactByID:      map[string]ArtifactMeta{},
-		artifactStoreDir:  artifactStoreDir,
-		uploadSessions:    map[string]*ArtifactUploadSession{},
+		submittedEvidence: []SubmittedEvidenceMeta{},
+		evidenceByID:      map[string]EvidenceMeta{},
+		evidenceStoreDir:  evidenceStoreDir,
+		uploadSessions:    map[string]*EvidenceUploadSession{},
 		council:           council,
 		attorneys:         attorneyMap,
 		acpSessions:       map[string]*acpPersistentSession{},
 		workProductDirs:   map[string]string{},
 	}
-	if err := rc.initializeArtifactRegistry(); err != nil {
+	if err := rc.initializeEvidenceRegistry(); err != nil {
 		return Result{}, err
 	}
 	defer func() {
@@ -132,14 +132,14 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 				CouncilBackend:    cfg.CouncilBackend,
 				Attorneys:         attorneys,
 				CaseFiles:         caseFileMetas(rc.caseFiles),
-				SubmittedArtifact: rc.submittedArtifact,
-				Artifacts:         rc.listVisibleArtifacts(),
+				SubmittedEvidence: rc.submittedEvidence,
+				Evidence:          rc.listVisibleEvidence(),
 				Council:           council,
 				Events:            rc.events,
 				FinalState:        rc.state,
 				FinalReason:       reason,
 			}
-			if err := writeArtifacts(cfg, result, rc); err != nil {
+			if err := writeEvidence(cfg, result, rc); err != nil {
 				return Result{}, err
 			}
 			return result, nil
@@ -165,23 +165,23 @@ func initialState(policy Policy) map[string]any {
 		"schema_version": "v1",
 		"forum_name":     "Agent Arbitration",
 		"case": map[string]any{
-			"case_id":             "arb-1",
-			"caption":             "Claimant v. Respondent",
-			"proposition":         "",
-			"status":              "draft",
-			"phase":               "draft",
-			"council_members":     []map[string]any{},
-			"openings":            []map[string]any{},
-			"arguments":           []map[string]any{},
-			"rebuttals":           []map[string]any{},
-			"surrebuttals":        []map[string]any{},
-			"closings":            []map[string]any{},
-			"offered_artifacts":   []map[string]any{},
-			"technical_reports":   []map[string]any{},
-			"submitted_artifacts": []map[string]any{},
-			"deliberation_round":  1,
-			"council_votes":       []map[string]any{},
-			"resolution":          "",
+			"case_id":            "arb-1",
+			"caption":            "Claimant v. Respondent",
+			"proposition":        "",
+			"status":             "draft",
+			"phase":              "draft",
+			"council_members":    []map[string]any{},
+			"openings":           []map[string]any{},
+			"arguments":          []map[string]any{},
+			"rebuttals":          []map[string]any{},
+			"surrebuttals":       []map[string]any{},
+			"closings":           []map[string]any{},
+			"offered_evidence":   []map[string]any{},
+			"technical_reports":  []map[string]any{},
+			"submitted_evidence": []map[string]any{},
+			"deliberation_round": 1,
+			"council_votes":      []map[string]any{},
+			"resolution":         "",
 		},
 		"policy":        policy.StateMap(),
 		"state_version": 0,

@@ -70,7 +70,7 @@ uv run --script common/tools/generate-council.py \
   --use-existing-clusters
 ```
 
-The driver defaults to a deterministic 512-row clustering input sample (`--sample-size 512 --sample-seed 0`) and writes `common/data/personas/council.csv`. Its default selection report is `common/data/personas/council-report.md`, beside the other council-generation artifacts. It does not modify `pool.csv`.
+The driver defaults to a deterministic 512-row clustering input sample (`--sample-size 512 --sample-seed 0`) and writes `common/data/personas/council.csv`. Its default selection report is `common/data/personas/council-report.md`, beside the other council-generation evidence. It does not modify `pool.csv`.
 
 By default, the driver reuses intermediate files younger than seven days. Control that cache window with `--expires DAYS`:
 
@@ -244,7 +244,7 @@ There are three distinct choices:
 
 1. Pass `common/data/personas/council.csv` explicitly with `--council-pool` for a run.
 2. Copy or promote `council.csv` to `pool.csv` if the selected council should become the default runtime pool.
-3. Leave `pool.csv` unchanged and keep `council.csv` as an offline selection artifact.
+3. Leave `pool.csv` unchanged and keep `council.csv` as an offline selection evidence.
 
 Do not change `pool.csv` implicitly as part of council generation. That is a runtime behavior change.
 

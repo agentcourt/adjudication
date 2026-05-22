@@ -94,15 +94,15 @@ def phaseShape (c : ArbitrationCase) : Prop :=
 def filingCount (xs : List Filing) (role : String) : Nat :=
   (xs.filter (fun item => item.role = role)).length
 
-def offeredCount (xs : List OfferedArtifact) (role : String) : Nat :=
+def offeredCount (xs : List OfferedEvidence) (role : String) : Nat :=
   (xs.filter (fun item => item.role = role)).length
 
 def reportCount (xs : List TechnicalReport) (role : String) : Nat :=
   (xs.filter (fun item => item.role = role)).length
 
 def materialLimitsRespected (s : ArbitrationState) : Prop :=
-  offeredCount s.case.offered_artifacts "plaintiff" ≤ s.policy.max_exhibits_per_side ∧
-    offeredCount s.case.offered_artifacts "defendant" ≤ s.policy.max_exhibits_per_side ∧
+  offeredCount s.case.offered_evidence "plaintiff" ≤ s.policy.max_exhibits_per_side ∧
+    offeredCount s.case.offered_evidence "defendant" ≤ s.policy.max_exhibits_per_side ∧
     reportCount s.case.technical_reports "plaintiff" ≤ s.policy.max_reports_per_side ∧
     reportCount s.case.technical_reports "defendant" ≤ s.policy.max_reports_per_side
 
@@ -167,7 +167,7 @@ theorem filingCount_append (xs ys : List Filing) (role : String) :
     filingCount (xs ++ ys) role = filingCount xs role + filingCount ys role := by
   simp [filingCount, List.filter_append]
 
-theorem offeredCount_append (xs ys : List OfferedArtifact) (role : String) :
+theorem offeredCount_append (xs ys : List OfferedEvidence) (role : String) :
     offeredCount (xs ++ ys) role = offeredCount xs role + offeredCount ys role := by
   simp [offeredCount, List.filter_append]
 
@@ -203,8 +203,8 @@ theorem filingCountForRole_eq_filingCount (items : List Filing) (role : String) 
   unfold filingCountForRole
   simpa using filingCountForRole_foldl items role 0
 
-theorem offeredArtifactCountForRole_foldl
-    (items : List OfferedArtifact)
+theorem offeredEvidenceCountForRole_foldl
+    (items : List OfferedEvidence)
     (role : String)
     (acc : Nat) :
     List.foldl (fun total item => if item.role = role then total + 1 else total) acc items =
@@ -217,12 +217,12 @@ theorem offeredArtifactCountForRole_foldl
       · simp [offeredCount, hRole, ih, Nat.add_assoc, Nat.add_comm]
       · simp [offeredCount, hRole, ih]
 
-theorem offeredArtifactCountForRole_eq_offeredCount
-    (items : List OfferedArtifact)
+theorem offeredEvidenceCountForRole_eq_offeredCount
+    (items : List OfferedEvidence)
     (role : String) :
-    offeredArtifactCountForRole items role = offeredCount items role := by
-  unfold offeredArtifactCountForRole
-  simpa using offeredArtifactCountForRole_foldl items role 0
+    offeredEvidenceCountForRole items role = offeredCount items role := by
+  unfold offeredEvidenceCountForRole
+  simpa using offeredEvidenceCountForRole_foldl items role 0
 
 theorem technicalReportCountForRole_foldl
     (items : List TechnicalReport)

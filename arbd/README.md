@@ -47,7 +47,7 @@ make build
   --out-dir out/ex1-demo
 ```
 
-`aard case` scans the complaint directory for case files when `--file` is absent.  It skips the complaint, the situation file, `README.md`, signing artifacts, and directories.  It loads `.txt`, `.md`, `.pem`, and `.b64` files as readable case files and records other file types as byte-bearing exhibits.
+`aard case` scans the complaint directory for case files when `--file` is absent.  It skips the complaint, the situation file, `README.md`, signing evidence, and directories.  It loads `.txt`, `.md`, `.pem`, and `.b64` files as readable case files and records other file types as byte-bearing exhibits.
 
 The default attorney path uses `../common/pi-container/acp-podman.sh`.  That path also requires a provider API key in the environment for the selected model endpoint, such as `OPENAI_API_KEY` for `openai://...` models or `OPENROUTER_API_KEY` for `openrouter://...` models.
 

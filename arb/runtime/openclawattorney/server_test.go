@@ -122,23 +122,23 @@ func TestServerFilesDecisionThroughAARClientMethod(t *testing.T) {
 			switch method {
 			case "_aar/get_case":
 				writeResponse(env["id"], map[string]any{"case": map[string]any{"proposition": "P"}})
-			case "_aar/list_artifacts":
-				writeResponse(env["id"], map[string]any{"artifacts": []any{map[string]any{"artifact_id": "f1", "title": "evidence.txt", "text_readable": true, "size_bytes": len(content)}}})
-			case "_aar/stat_artifact":
-				writeResponse(env["id"], map[string]any{"artifact": map[string]any{"artifact_id": "f1"}, "limits": map[string]any{"max_read_bytes": 5, "remaining_read_bytes_for_opportunity": 20, "remaining_reads_for_opportunity": 4}})
-			case "_aar/read_artifact_range":
+			case "_aar/list_evidence":
+				writeResponse(env["id"], map[string]any{"evidence": []any{map[string]any{"evidence_id": "f1", "title": "evidence.txt", "text_readable": true, "size_bytes": len(content)}}})
+			case "_aar/stat_evidence":
+				writeResponse(env["id"], map[string]any{"evidence": map[string]any{"evidence_id": "f1"}, "limits": map[string]any{"max_read_bytes": 5, "remaining_read_bytes_for_opportunity": 20, "remaining_reads_for_opportunity": 4}})
+			case "_aar/read_evidence_range":
 				params, _ := env["params"].(map[string]any)
 				offset := intValue(params["offset"])
 				length := intValue(params["length"])
-				if params["artifact_id"] != "f1" || length > 5 || offset < 0 || offset >= len(content) {
-					t.Fatalf("read artifact params = %#v", params)
+				if params["evidence_id"] != "f1" || length > 5 || offset < 0 || offset >= len(content) {
+					t.Fatalf("read evidence params = %#v", params)
 				}
 				end := offset + length
 				if end > len(content) {
 					end = len(content)
 				}
 				readCalls++
-				writeResponse(env["id"], map[string]any{"artifact_id": "f1", "offset": offset, "length": end - offset, "content_base64": base64.StdEncoding.EncodeToString(content[offset:end]), "remaining_read_bytes_for_opportunity": 20 - end})
+				writeResponse(env["id"], map[string]any{"evidence_id": "f1", "offset": offset, "length": end - offset, "content_base64": base64.StdEncoding.EncodeToString(content[offset:end]), "remaining_read_bytes_for_opportunity": 20 - end})
 			case "_aar/submit_decision":
 				params, _ := env["params"].(map[string]any)
 				submitted = params
@@ -345,7 +345,7 @@ func TestServerSubmitsEvidenceBundleBeforeDecision(t *testing.T) {
 	_ = readEnvelope()
 	writeRequest(3, "session/prompt", map[string]any{"sessionId": "s1", "prompt": []any{map[string]any{"type": "text", "text": "File an argument."}}})
 
-	var submittedArtifact map[string]any
+	var submittedEvidence map[string]any
 	var submittedDecision map[string]any
 	var calls []string
 	promptDone := false
@@ -355,14 +355,14 @@ func TestServerSubmitsEvidenceBundleBeforeDecision(t *testing.T) {
 			switch method {
 			case "_aar/get_case":
 				writeResponse(env["id"], map[string]any{"case": map[string]any{"proposition": "P"}})
-			case "_aar/submit_artifact":
-				calls = append(calls, "submit_artifact")
+			case "_aar/submit_evidence":
+				calls = append(calls, "submit_evidence")
 				params, _ := env["params"].(map[string]any)
-				submittedArtifact = params
+				submittedEvidence = params
 				if _, exists := params["offer_label"]; exists {
-					t.Fatalf("submit_artifact params leaked offer_label: %#v", params)
+					t.Fatalf("submit_evidence params leaked offer_label: %#v", params)
 				}
-				writeResponse(env["id"], map[string]any{"artifact_id": "submitted-evidence-01-plaintiff-abc.txt"})
+				writeResponse(env["id"], map[string]any{"evidence_id": "submitted-evidence-01-plaintiff-abc.txt"})
 			case "_aar/submit_decision":
 				calls = append(calls, "submit_decision")
 				params, _ := env["params"].(map[string]any)
@@ -380,22 +380,22 @@ func TestServerSubmitsEvidenceBundleBeforeDecision(t *testing.T) {
 			promptDone = true
 		}
 	}
-	if submittedArtifact == nil {
+	if submittedEvidence == nil {
 		t.Fatal("no evidence submitted")
 	}
-	if !reflect.DeepEqual(calls, []string{"submit_artifact", "submit_decision"}) {
+	if !reflect.DeepEqual(calls, []string{"submit_evidence", "submit_decision"}) {
 		t.Fatalf("calls = %#v", calls)
 	}
-	if submittedArtifact["content"] != "exact source text" {
-		t.Fatalf("submitted evidence = %#v", submittedArtifact)
+	if submittedEvidence["content"] != "exact source text" {
+		t.Fatalf("submitted evidence = %#v", submittedEvidence)
 	}
 	payload, _ := submittedDecision["payload"].(map[string]any)
-	offered, _ := payload["offered_artifacts"].([]any)
+	offered, _ := payload["offered_evidence"].([]any)
 	if len(offered) != 1 {
-		t.Fatalf("offered_artifacts = %#v", payload["offered_artifacts"])
+		t.Fatalf("offered_evidence = %#v", payload["offered_evidence"])
 	}
 	first, _ := offered[0].(map[string]any)
-	if first["artifact_id"] != "submitted-evidence-01-plaintiff-abc.txt" || first["label"] != "PX-new" {
+	if first["evidence_id"] != "submitted-evidence-01-plaintiff-abc.txt" || first["label"] != "PX-new" {
 		t.Fatalf("offered file = %#v", first)
 	}
 

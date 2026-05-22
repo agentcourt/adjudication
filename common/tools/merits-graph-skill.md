@@ -1,6 +1,6 @@
 # Merits Graph Workflow
 
-These instructions describe how to build a merits graph for one `arb` run packet.  The canonical artifact is JSON.  The Mermaid file is a readable projection of that JSON, and the PNG is a generated preview.  The graph files belong in the packet directory under `out/`, beside `run.json`, `digest.md`, and `transcript.md`.  The schema note is [Merits Graphs](../../arb/docs/merits-graphs.md).
+These instructions describe how to build a merits graph for one `arb` run packet.  The canonical evidence is JSON.  The Mermaid file is a readable projection of that JSON, and the PNG is a generated preview.  The graph files belong in the packet directory under `out/`, beside `run.json`, `digest.md`, and `transcript.md`.  The schema note is [Merits Graphs](../../arb/docs/merits-graphs.md).
 
 Work from `arb/` as the current working directory.  The packet inputs are the run directory under `out/`, especially `run.json`, `digest.md`, and `transcript.md`.  `run.json` gives the complaint, technical reports, vote tally, and full event history in one file.  `digest.md` and `transcript.md` are easier to read when you are normalizing claims and checking whether a proposition is stated directly or only implied.
 
@@ -40,7 +40,7 @@ Render the Mermaid view only after the JSON and Mermaid files are stable.  From 
   out/ex6-demo/merits-graph.png
 ```
 
-Replace the `ex6-demo` path with the packet you are working on.  The helper requires `mmdc` and a local Chromium binary.  The PNG is a generated artifact for inspection.  Do not commit it unless there is a specific reason to check in the rendered image.
+Replace the `ex6-demo` path with the packet you are working on.  The helper requires `mmdc` and a local Chromium binary.  The PNG is a generated evidence for inspection.  Do not commit it unless there is a specific reason to check in the rendered image.
 
 ## Review Pass
 

@@ -6,11 +6,11 @@
 
 The first goal is to keep `arbd` close to `arb` wherever the binary outcome model is not the issue.  The merits sequence, the council constitution path, the complaint drafting flow, the runtime packaging, and the attorney backend remain recognizably the same.  That bounded divergence keeps the code review surface small, lowers the risk to `arb`, and makes it clear which changes are intrinsic to degree adjudication rather than incidental refactors.
 
-This is why `arbd` keeps the existing council and `member_id` machinery.  The procedure did not need a renamed deciding body or a shared abstraction layer to support degree questions.  It needed a new complaint shape, a new council action, a different closure rule, and a different final artifact.
+This is why `arbd` keeps the existing council and `member_id` machinery.  The procedure did not need a renamed deciding body or a shared abstraction layer to support degree questions.  It needed a new complaint shape, a new council action, a different closure rule, and a different final evidence.
 
 ## Numeric Judgment Rather Than Binary Outcome
 
-The second goal is to make the question itself primary.  The complaint states one question, and the policy states how the council should answer it.  Degree adjudication should therefore remain a numeric process from prompt to state to final artifact, because that is the information the procedure is meant to collect.
+The second goal is to make the question itself primary.  The complaint states one question, and the policy states how the council should answer it.  Degree adjudication should therefore remain a numeric process from prompt to state to final evidence, because that is the information the procedure is meant to collect.
 
 This goal affects both prompting and state.  Attorneys are expected to argue for concrete numbers or narrow numeric ranges, and council members are expected to answer with one bounded integer from `0` through `100`.  The Lean state therefore stores numeric answers directly rather than storing labels and reconstructing a number later.
 

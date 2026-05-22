@@ -110,14 +110,14 @@ func attorneyInvalidReasonText(reason string, opportunity Opportunity, policy Po
 				resubmissionCharLimit(limit),
 			)
 	}
-	if strings.HasPrefix(reason, "offered_artifacts for this side exceed limit of") ||
+	if strings.HasPrefix(reason, "offered_evidence for this side exceed limit of") ||
 		strings.HasPrefix(reason, "technical_reports for this side exceed limit of") ||
-		strings.HasPrefix(reason, "offered_artifacts exceed per-filing limit of") ||
+		strings.HasPrefix(reason, "offered_evidence exceed per-filing limit of") ||
 		strings.HasPrefix(reason, "technical_reports exceed per-filing limit of") {
 		return ensureTerminalPeriod(reason), "Remove the overflow and resubmit within the stated limit."
 	}
-	if strings.Contains(reason, "offered_artifacts must use visible case artifact_id values") {
-		return ensureTerminalPeriod(reason), "Use only visible case artifact_id values in offered_artifacts and resubmit."
+	if strings.Contains(reason, "offered_evidence must use visible case evidence_id values") {
+		return ensureTerminalPeriod(reason), "Use only visible case evidence_id values in offered_evidence and resubmit."
 	}
 	if reason == "payload.text is required" {
 		return "payload.text is required.", "Provide payload.text and resubmit."

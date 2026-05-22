@@ -224,8 +224,8 @@ theorem reachable_phase_closed_implies_status_closed
               · exact False.elim ((step_deliver_closing_statement_phase_ne_closed u t action hClosing hStep) hClosed)
               · by_cases hPass : action.action_type = "pass_phase_opportunity"
                 · exact False.elim ((step_pass_phase_opportunity_phase_ne_closed u t action hPass hStep) hClosed)
-                · by_cases hEvidence : action.action_type = "submit_artifact"
-                  · exact False.elim ((step_submit_artifact_phase_ne_closed u t action hEvidence hStep) hClosed)
+                · by_cases hEvidence : action.action_type = "submit_evidence"
+                  · exact False.elim ((step_submit_evidence_phase_ne_closed u t action hEvidence hStep) hClosed)
                   · by_cases hVote : action.action_type = "submit_council_vote"
                     · rcases step_submit_council_vote_result u t action hVote hStep with
                       ⟨memberId, vote, rationale, hDeliberation, hCont⟩
@@ -466,28 +466,28 @@ theorem submitEvidence_source_meritsPhase
       change Except.error "submitted evidence is allowed only in arguments and rebuttals" = .ok t at hSubmit
       cases hSubmit
 
-theorem step_submit_artifact_phase_eq_source
+theorem step_submit_evidence_phase_eq_source
     (s t : ArbitrationState)
     (action : CourtAction)
-    (hType : action.action_type = "submit_artifact")
+    (hType : action.action_type = "submit_evidence")
     (hStep : step { state := s, action := action } = .ok t) :
     t.case.phase = s.case.phase := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
     simpa [step, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
-  simp [stateWithCase, appendSubmittedArtifact]
+  simp [stateWithCase, appendSubmittedEvidence]
 
-theorem step_submit_artifact_phase_ne_deliberation
+theorem step_submit_evidence_phase_ne_deliberation
     (s t : ArbitrationState)
     (action : CourtAction)
-    (hType : action.action_type = "submit_artifact")
+    (hType : action.action_type = "submit_evidence")
     (hStep : step { state := s, action := action } = .ok t) :
     t.case.phase ≠ "deliberation" := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
     simpa [step, hType] using hStep
   have hMerits : meritsPhase s.case.phase :=
     submitEvidence_source_meritsPhase s t action.actor_role action.payload hSubmit
-  have hEq := step_submit_artifact_phase_eq_source s t action hType hStep
+  have hEq := step_submit_evidence_phase_eq_source s t action hType hStep
   intro hDeliberation
   rw [hEq] at hDeliberation
   simp [meritsPhase, hDeliberation] at hMerits
@@ -769,21 +769,21 @@ Adding exhibits or technical reports does not change council data.
 -/
 theorem appendSupplementalMaterials_preserves_council_votes
     (c : ArbitrationCase)
-    (offered : List OfferedArtifact)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     (appendSupplementalMaterials c offered reports).council_votes = c.council_votes := by
   simp [appendSupplementalMaterials]
 
 theorem appendSupplementalMaterials_preserves_deliberation_round
     (c : ArbitrationCase)
-    (offered : List OfferedArtifact)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     (appendSupplementalMaterials c offered reports).deliberation_round = c.deliberation_round := by
   simp [appendSupplementalMaterials]
 
 theorem appendSupplementalMaterials_preserves_council_members
     (c : ArbitrationCase)
-    (offered : List OfferedArtifact)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     (appendSupplementalMaterials c offered reports).council_members = c.council_members := by
   simp [appendSupplementalMaterials]
@@ -1058,10 +1058,10 @@ theorem step_pass_phase_opportunity_preserves_pristineCouncilState
                 rfl rfl rfl hPristine
     · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
 
-theorem step_submit_artifact_preserves_pristineCouncilState
+theorem step_submit_evidence_preserves_pristineCouncilState
     (s t : ArbitrationState)
     (action : CourtAction)
-    (hType : action.action_type = "submit_artifact")
+    (hType : action.action_type = "submit_evidence")
     (hPristine : pristineCouncilState s.case)
     (hStep : step { state := s, action := action } = .ok t) :
     pristineCouncilState t.case := by
@@ -1069,9 +1069,9 @@ theorem step_submit_artifact_preserves_pristineCouncilState
     simpa [step, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
   exact pristineCouncilState_congr
-    (by simp [stateWithCase, appendSubmittedArtifact])
-    (by simp [stateWithCase, appendSubmittedArtifact])
-    (by simp [stateWithCase, appendSubmittedArtifact])
+    (by simp [stateWithCase, appendSubmittedEvidence])
+    (by simp [stateWithCase, appendSubmittedEvidence])
+    (by simp [stateWithCase, appendSubmittedEvidence])
     hPristine
 
 /--
@@ -1182,12 +1182,12 @@ theorem reachable_meritsPhase_pristineCouncilState
                       exact step_pass_phase_opportunity_preserves_pristineCouncilState
                         u t action hPass (ih hMeritsU) hStep
                     · simp [step, hPass, hRebuttals, hSurrebuttals] at hStep
-                · by_cases hEvidence : action.action_type = "submit_artifact"
+                · by_cases hEvidence : action.action_type = "submit_evidence"
                   · have hSubmit : submitEvidence u action.actor_role action.payload = .ok t := by
                       simpa [step, hEvidence] using hStep
                     have hMeritsU : meritsPhase u.case.phase :=
                       submitEvidence_source_meritsPhase u t action.actor_role action.payload hSubmit
-                    exact step_submit_artifact_preserves_pristineCouncilState
+                    exact step_submit_evidence_preserves_pristineCouncilState
                       u t action hEvidence (ih hMeritsU) hStep
                   · by_cases hVote : action.action_type = "submit_council_vote"
                     · rcases step_submit_council_vote_result u t action hVote hStep with
@@ -1370,8 +1370,8 @@ theorem reachable_deliberation_has_nextCouncilMember
                 exact nextCouncilMember_some_of_empty_currentRoundVotes t.case hNoVotes hSeatedNonempty
               · by_cases hPass : action.action_type = "pass_phase_opportunity"
                 · exact False.elim ((step_pass_phase_opportunity_phase_ne_deliberation u t action hPass hStep) hPhase)
-                · by_cases hEvidence : action.action_type = "submit_artifact"
-                  · exact False.elim ((step_submit_artifact_phase_ne_deliberation u t action hEvidence hStep) hPhase)
+                · by_cases hEvidence : action.action_type = "submit_evidence"
+                  · exact False.elim ((step_submit_evidence_phase_ne_deliberation u t action hEvidence hStep) hPhase)
                   · by_cases hVote : action.action_type = "submit_council_vote"
                     · rcases step_submit_council_vote_details u t action hVote hStep with
                       ⟨memberId, vote, rationale, _hPhaseU, hSeated, hFresh, hCont⟩
@@ -1500,7 +1500,7 @@ theorem reachable_nonclosed_has_nextOpportunity
           role := role
           phase := "arguments"
           objective := s!"{role} merits argument"
-          allowed_tools := ["submit_artifact", "submit_argument"]
+          allowed_tools := ["submit_evidence", "submit_argument"]
         }, ?_⟩
         simp [nextOpportunity, hStatus, nextOpportunityForPhase, hArguments, hRole]
     · by_cases hRebuttals : s.case.phase = "rebuttals"
@@ -1520,7 +1520,7 @@ theorem reachable_nonclosed_has_nextOpportunity
             phase := "rebuttals"
             may_pass := true
             objective := "plaintiff rebuttal"
-            allowed_tools := ["submit_artifact", "submit_rebuttal", "pass_phase_opportunity"]
+            allowed_tools := ["submit_evidence", "submit_rebuttal", "pass_phase_opportunity"]
           }, ?_⟩
           simp [nextOpportunity, hStatus, nextOpportunityForPhase, hRebuttals, hEmpty]
       · by_cases hSurrebuttals : s.case.phase = "surrebuttals"

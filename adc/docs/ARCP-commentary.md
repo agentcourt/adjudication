@@ -41,4 +41,4 @@ Rule 83 confirms local-rule and judge-directive authority.  Rule 87 adds explici
 
 ARCP remains a procedural text.  It does not attempt to codify evidence doctrine, privilege doctrine, or appellate doctrine beyond the ordinary procedural references already present in civil rules.
 
-Questions likely to develop through case law and local rules include privilege treatment for agent workflows, discoverability of prompt and output artifacts, and sanctions calibration in mixed human-agent litigation conduct.
+Questions likely to develop through case law and local rules include privilege treatment for agent workflows, discoverability of prompt and output evidence, and sanctions calibration in mixed human-agent litigation conduct.

@@ -7,8 +7,8 @@ The opening becomes part of the record.  Do not claim a specific source, quote, 
 Do not assert specific dates, quotations, messages, contingencies, or file contents that are not already in the current record.
 Good example: "The dispute turns on whether X means Y or Z.  The proof that matters is the full transcript, the governing rules, and a dated source that fixes the sequence."
 Bad example: "A transcript shows Y," when no such transcript is in the record.
-Do not call artifact tools in this phase.
-Do not offer artifacts or technical reports in this phase.
+Do not call evidence tools in this phase.
+Do not offer evidence or technical reports in this phase.
 
 submit_decision call:
 `{"kind":"tool","tool_name":"record_opening_statement","payload":{"text":"opening statement"}}`

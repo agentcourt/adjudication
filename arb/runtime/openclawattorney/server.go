@@ -68,20 +68,20 @@ type lawyerJob struct {
 	SessionID        string                       `json:"session_id"`
 	Prompt           string                       `json:"prompt"`
 	Case             map[string]any               `json:"case,omitempty"`
-	TextArtifacts    []textArtifact               `json:"text_artifacts,omitempty"`
+	TextEvidence     []textEvidence               `json:"text_evidence,omitempty"`
 	RejectedFilings  []string                     `json:"rejected_filings,omitempty"`
 	AcceptedEvidence []acceptedEvidenceSubmission `json:"accepted_evidence,omitempty"`
 }
 
 type acceptedEvidenceSubmission struct {
-	ArtifactID   string `json:"artifact_id"`
+	EvidenceID   string `json:"evidence_id"`
 	Title        string `json:"title,omitempty"`
 	OfferLabel   string `json:"offer_label,omitempty"`
 	SubmittedNow bool   `json:"submitted_now,omitempty"`
 }
 
-type textArtifact struct {
-	ArtifactID string `json:"artifact_id"`
+type textEvidence struct {
+	EvidenceID string `json:"evidence_id"`
 	Title      string `json:"title"`
 	Text       string `json:"text"`
 }
@@ -258,11 +258,11 @@ func (s *Server) handlePrompt(ctx context.Context, params map[string]any) error 
 		}
 		caseView = result
 	}
-	textArtifacts, err := s.loadTextArtifacts(ctx)
+	textEvidence, err := s.loadTextEvidence(ctx)
 	if err != nil {
 		return err
 	}
-	job := lawyerJob{SessionID: sessionID, Prompt: prompt, Case: caseView, TextArtifacts: textArtifacts}
+	job := lawyerJob{SessionID: sessionID, Prompt: prompt, Case: caseView, TextEvidence: textEvidence}
 	var submitErr error
 	for attempt := 1; attempt <= 3; attempt++ {
 		response, err := s.obtainDecision(ctx, job)
@@ -288,38 +288,38 @@ func (s *Server) handlePrompt(ctx context.Context, params map[string]any) error 
 	return submitErr
 }
 
-func (s *Server) loadTextArtifacts(ctx context.Context) ([]textArtifact, error) {
+func (s *Server) loadTextEvidence(ctx context.Context) ([]textEvidence, error) {
 	if !s.cfg.IncludeTextFiles {
 		return nil, nil
 	}
-	result, err := s.clientRequest(ctx, "_aar/list_artifacts", map[string]any{})
+	result, err := s.clientRequest(ctx, "_aar/list_evidence", map[string]any{})
 	if err != nil {
-		if strings.Contains(err.Error(), "artifact access is not allowed") {
+		if strings.Contains(err.Error(), "evidence access is not allowed") {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("list AAR artifacts: %w", err)
+		return nil, fmt.Errorf("list AAR evidence: %w", err)
 	}
-	metas, _ := result["artifacts"].([]any)
-	out := make([]textArtifact, 0, len(metas))
+	metas, _ := result["evidence"].([]any)
+	out := make([]textEvidence, 0, len(metas))
 	for _, raw := range metas {
 		meta, _ := raw.(map[string]any)
 		if meta == nil || !boolValue(meta["text_readable"]) {
 			continue
 		}
-		artifactID := strings.TrimSpace(stringValue(meta["artifact_id"]))
-		if artifactID == "" {
+		evidenceID := strings.TrimSpace(stringValue(meta["evidence_id"]))
+		if evidenceID == "" {
 			continue
 		}
 		sizeBytes := intValue(meta["size_bytes"])
 		if sizeBytes <= 0 {
 			continue
 		}
-		text, err := s.readTextArtifact(ctx, artifactID, sizeBytes)
+		text, err := s.readTextEvidence(ctx, evidenceID, sizeBytes)
 		if err != nil {
-			return nil, fmt.Errorf("read AAR artifact %s: %w", artifactID, err)
+			return nil, fmt.Errorf("read AAR evidence %s: %w", evidenceID, err)
 		}
-		out = append(out, textArtifact{
-			ArtifactID: artifactID,
+		out = append(out, textEvidence{
+			EvidenceID: evidenceID,
 			Title:      stringValue(meta["title"]),
 			Text:       text,
 		})
@@ -327,8 +327,8 @@ func (s *Server) loadTextArtifacts(ctx context.Context) ([]textArtifact, error) 
 	return out, nil
 }
 
-func (s *Server) readTextArtifact(ctx context.Context, artifactID string, sizeBytes int) (string, error) {
-	stat, err := s.clientRequest(ctx, "_aar/stat_artifact", map[string]any{"artifact_id": artifactID})
+func (s *Server) readTextEvidence(ctx context.Context, evidenceID string, sizeBytes int) (string, error) {
+	stat, err := s.clientRequest(ctx, "_aar/stat_evidence", map[string]any{"evidence_id": evidenceID})
 	if err != nil {
 		return "", err
 	}
@@ -359,13 +359,13 @@ func (s *Server) readTextArtifact(ctx context.Context, artifactID string, sizeBy
 		if length <= 0 {
 			break
 		}
-		readResult, err := s.clientRequest(ctx, "_aar/read_artifact_range", map[string]any{"artifact_id": artifactID, "offset": offset, "length": length})
+		readResult, err := s.clientRequest(ctx, "_aar/read_evidence_range", map[string]any{"evidence_id": evidenceID, "offset": offset, "length": length})
 		if err != nil {
 			return "", err
 		}
 		rawText, err := base64.StdEncoding.DecodeString(stringValue(readResult["content_base64"]))
 		if err != nil {
-			return "", fmt.Errorf("decode artifact range: %w", err)
+			return "", fmt.Errorf("decode evidence range: %w", err)
 		}
 		n := intValue(readResult["length"])
 		if n <= 0 {
@@ -389,7 +389,7 @@ func (s *Server) readTextArtifact(ctx context.Context, artifactID string, sizeBy
 		}
 	}
 	if offset < sizeBytes {
-		b.WriteString(fmt.Sprintf("\n\n[artifact text truncated after %d of %d bytes by AAR read limits]", offset, sizeBytes))
+		b.WriteString(fmt.Sprintf("\n\n[evidence text truncated after %d of %d bytes by AAR read limits]", offset, sizeBytes))
 	}
 	return b.String(), nil
 }
@@ -507,14 +507,14 @@ func buildOpenClawAgentPrompt(job lawyerJob, extra string) (string, error) {
 	}
 	b.WriteString("Return exactly one JSON object. Do not include prose, markdown, or a code fence.\n")
 	b.WriteString("You may return either an ordinary aar_submit_decision object, or a structured bundle with evidence_submissions and decision.\n")
-	b.WriteString("Use the structured bundle when you found source material outside the record that should become evidence. Each evidence_submissions item may include title, source_url, source_description, retrieval_timestamp, mime_type, relevance, content or content_base64, preferred_filename_ext, offer_label, and offer_as_exhibit. The adapter submits those items with aar_submit_artifact before filing the decision. If offer_as_exhibit is omitted, accepted evidence is cited in offered_artifacts for arguments and rebuttals. Do not include evidence_submissions in closings.\n")
+	b.WriteString("Use the structured bundle when you found source material outside the record that should become evidence. Each evidence_submissions item may include title, source_url, source_description, retrieval_timestamp, mime_type, relevance, content or content_base64, preferred_filename_ext, offer_label, and offer_as_exhibit. The adapter submits those items with aar_submit_evidence before filing the decision. If offer_as_exhibit is omitted, accepted evidence is cited in offered_evidence for arguments and rebuttals. Do not include evidence_submissions in closings.\n")
 	b.WriteString("Ordinary decision form: {\"kind\":\"tool\",\"tool_name\":\"submit_argument\",\"payload\":{...}}. Structured bundle form: {\"evidence_submissions\":[{...}],\"decision\":{\"kind\":\"tool\",\"tool_name\":\"submit_argument\",\"payload\":{...}}}.\n\n")
 	if len(job.AcceptedEvidence) > 0 {
-		b.WriteString("Evidence already accepted during this opportunity. Do not resubmit these items; cite the artifact_id values in offered_artifacts if needed:\n")
+		b.WriteString("Evidence already accepted during this opportunity. Do not resubmit these items; cite the evidence_id values in offered_evidence if needed:\n")
 		for i, item := range job.AcceptedEvidence {
 			b.WriteString(strconv.Itoa(i + 1))
 			b.WriteString(". ")
-			b.WriteString(item.ArtifactID)
+			b.WriteString(item.EvidenceID)
 			if item.Title != "" {
 				b.WriteString(" — ")
 				b.WriteString(item.Title)
@@ -537,11 +537,11 @@ func buildOpenClawAgentPrompt(job lawyerJob, extra string) (string, error) {
 	b.WriteString(job.Prompt)
 	b.WriteString("\n\nVisible arbitration record from aar_get_case:\n")
 	b.Write(caseJSON)
-	if len(job.TextArtifacts) > 0 {
-		b.WriteString("\n\nVisible text artifacts:\n")
-		for _, file := range job.TextArtifacts {
-			b.WriteString("\n--- artifact_id: ")
-			b.WriteString(file.ArtifactID)
+	if len(job.TextEvidence) > 0 {
+		b.WriteString("\n\nVisible text evidence:\n")
+		for _, file := range job.TextEvidence {
+			b.WriteString("\n--- evidence_id: ")
+			b.WriteString(file.EvidenceID)
 			if file.Title != "" {
 				b.WriteString(" title: ")
 				b.WriteString(file.Title)
@@ -671,52 +671,52 @@ func (s *Server) prepareDecision(ctx context.Context, response map[string]any) (
 		offerAsExhibit := boolDefault(params["offer_as_exhibit"], true)
 		delete(params, "offer_label")
 		delete(params, "offer_as_exhibit")
-		result, err := s.clientRequest(ctx, "_aar/submit_artifact", params)
+		result, err := s.clientRequest(ctx, "_aar/submit_evidence", params)
 		if err != nil {
-			return nil, accepted, fmt.Errorf("submit AAR artifact %d: %w", i+1, err)
+			return nil, accepted, fmt.Errorf("submit AAR evidence %d: %w", i+1, err)
 		}
-		artifactID := strings.TrimSpace(stringValue(result["artifact_id"]))
-		if artifactID == "" {
+		evidenceID := strings.TrimSpace(stringValue(result["evidence_id"]))
+		if evidenceID == "" {
 			if evidence := mapValue(result["evidence"]); evidence != nil {
-				artifactID = strings.TrimSpace(stringValue(evidence["artifact_id"]))
+				evidenceID = strings.TrimSpace(stringValue(evidence["evidence_id"]))
 			}
 		}
-		if artifactID == "" {
-			return nil, accepted, fmt.Errorf("submit AAR artifact %d returned no artifact_id", i+1)
+		if evidenceID == "" {
+			return nil, accepted, fmt.Errorf("submit AAR evidence %d returned no evidence_id", i+1)
 		}
 		if offerLabel == "" {
 			offerLabel = strings.TrimSpace(stringValue(params["title"]))
 		}
 		if offerLabel == "" {
-			offerLabel = artifactID
+			offerLabel = evidenceID
 		}
 		accepted = append(accepted, acceptedEvidenceSubmission{
-			ArtifactID:   artifactID,
+			EvidenceID:   evidenceID,
 			Title:        strings.TrimSpace(stringValue(params["title"])),
 			OfferLabel:   offerLabel,
 			SubmittedNow: true,
 		})
 		if offerAsExhibit {
-			appendOfferedArtifact(decision, artifactID, offerLabel)
+			appendOfferedEvidence(decision, evidenceID, offerLabel)
 		}
 	}
 	return decision, accepted, nil
 }
 
-func appendOfferedArtifact(decision map[string]any, artifactID string, label string) {
+func appendOfferedEvidence(decision map[string]any, evidenceID string, label string) {
 	payload := mapValue(decision["payload"])
 	if payload == nil {
 		payload = map[string]any{}
 	}
-	offered := listOfMaps(payload["offered_artifacts"])
+	offered := listOfMaps(payload["offered_evidence"])
 	for _, item := range offered {
-		if strings.TrimSpace(stringValue(item["artifact_id"])) == artifactID {
+		if strings.TrimSpace(stringValue(item["evidence_id"])) == evidenceID {
 			decision["payload"] = payload
 			return
 		}
 	}
-	offered = append(offered, map[string]any{"artifact_id": artifactID, "label": label})
-	payload["offered_artifacts"] = offered
+	offered = append(offered, map[string]any{"evidence_id": evidenceID, "label": label})
+	payload["offered_evidence"] = offered
 	decision["payload"] = payload
 }
 

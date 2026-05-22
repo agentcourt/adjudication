@@ -68,7 +68,7 @@ Runner status lines are also `stderr` only.  These include messages such as:
 
 `xproxy` logs are separate again.  `xproxy` uses its own `logf` helper in `runtime/xproxy/util.go`, which writes directly to `stderr`.  Those request and response lines do not pass through the runner persistence layer.
 
-The final `run.json`, `digest.md`, and `transcript.md` are artifacts written after the run, not streamed event feeds.
+The final `run.json`, `digest.md`, and `transcript.md` are evidence written after the run, not streamed event feeds.
 
 ## What an external listener can do now
 

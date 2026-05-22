@@ -122,7 +122,7 @@ theorem addFiling_phaseRank_mono
 
 theorem appendSupplementalMaterials_preserves_phaseRank
     (c : ArbitrationCase)
-    (offered : List OfferedArtifact)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     phaseRank (appendSupplementalMaterials c offered reports).phase = phaseRank c.phase := by
   simp [appendSupplementalMaterials, phaseRank]
@@ -365,13 +365,13 @@ theorem step_phaseRank_mono
                 (⟨hPhase, rfl⟩ | ⟨hPhase, rfl⟩)
               · simp [stateWithCase, hPhase, phaseRank]
               · simp [stateWithCase, hPhase, phaseRank]
-            · by_cases hEvidence : action.action_type = "submit_artifact"
+            · by_cases hEvidence : action.action_type = "submit_evidence"
               · have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
                   simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing,
                     hPass, hEvidence] using hStep
                 rcases submitEvidence_result s t action.actor_role action.payload hSubmit with
                   ⟨evidence, rfl⟩
-                simp [stateWithCase, appendSubmittedArtifact]
+                simp [stateWithCase, appendSubmittedEvidence]
               · by_cases hVote : action.action_type = "submit_council_vote"
                 · rcases step_submit_council_vote_result s t action hVote hStep with
                     ⟨memberId, vote, rationale, hPhase, hCont⟩
@@ -495,13 +495,13 @@ theorem step_deliberation_round_mono
                 (⟨_hPhase, rfl⟩ | ⟨_hPhase, rfl⟩)
               · simp [stateWithCase]
               · simp [stateWithCase]
-            · by_cases hEvidence : action.action_type = "submit_artifact"
+            · by_cases hEvidence : action.action_type = "submit_evidence"
               · have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
                   simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing,
                     hPass, hEvidence] using hStep
                 rcases submitEvidence_result s t action.actor_role action.payload hSubmit with
                   ⟨evidence, rfl⟩
-                simp [stateWithCase, appendSubmittedArtifact]
+                simp [stateWithCase, appendSubmittedEvidence]
               · by_cases hVote : action.action_type = "submit_council_vote"
                 · rcases step_submit_council_vote_result s t action hVote hStep with
                     ⟨memberId, vote, rationale, _hPhase, hCont⟩

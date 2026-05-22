@@ -8,7 +8,7 @@ This repository contains the Lean engine, the Go runtime, the `aar` CLI, and a s
 
 | Path | Purpose |
 |---|---|
-| `docs/` | Project rules and notes. See [`docs/openclaw-attorneys.md`](docs/openclaw-attorneys.md) for the OpenClaw-attorney workflow and [`docs/evidence-handling.md`](docs/evidence-handling.md) for artifact custody and evidence-transfer semantics. |
+| `docs/` | Project rules and notes. See [`docs/openclaw-attorneys.md`](docs/openclaw-attorneys.md) for the OpenClaw-attorney workflow and [`docs/evidence-handling.md`](docs/evidence-handling.md) for evidence custody and evidence-transfer semantics. |
 | `engine/` | Lean arbitration engine |
 | `runtime/` | Go CLI and runtime bridge |
 | `examples/` | Example disputes |
@@ -46,7 +46,7 @@ mkdir -p work/defamation
   --out-dir out/defamation-demo
 ```
 
-`aar case` scans the complaint directory for initial case artifacts when `--file` is absent.  That scan skips the complaint itself, the situation file, `README.md`, signing artifacts, and directories.  It loads `.txt`, `.md`, `.pem`, and `.b64` artifacts as text-readable artifacts, and it records other file types as byte-bearing artifacts.  Each loaded artifact is registered with `artifact_id`, SHA-256, byte size, MIME type, and content-addressed storage metadata.
+`aar case` scans the complaint directory for initial case evidence when `--file` is absent.  That scan skips the complaint itself, the situation file, `README.md`, signing evidence, and directories.  It loads `.txt`, `.md`, `.pem`, and `.b64` evidence as text-readable evidence, and it records other file types as byte-bearing evidence.  Each loaded evidence is registered with `evidence_id`, SHA-256, byte size, MIME type, and content-addressed storage metadata.
 
 This variant shows the common parameters that change a run:
 
@@ -93,7 +93,7 @@ The remote endpoint path uses a persistent TCP connection that carries newline-d
 
 For OpenClaw attorneys, prefer `--*-acp-endpoint` and run an OpenClaw ACP attorney server at that endpoint.  AAR will connect over ACP and assume the remote OpenClaw side owns model selection, session policy, and native tool availability.  The full reproduction guide is [`docs/openclaw-attorneys.md`](docs/openclaw-attorneys.md).
 
-The `aar-openclaw-attorney` adapter is a local ACP wrapper for smoke tests and custom integrations.  It preloads the visible AAR record, inspects visible artifacts through the AAR artifact methods, asks OpenClaw for one strict JSON filing, and submits that filing through `_aar/submit_decision`.  It does not accept or forward an AAR model selection.
+The `aar-openclaw-attorney` adapter is a local ACP wrapper for smoke tests and custom integrations.  It preloads the visible AAR record, inspects visible evidence through the AAR evidence methods, asks OpenClaw for one strict JSON filing, and submits that filing through `_aar/submit_decision`.  It does not accept or forward an AAR model selection.
 
 ```bash
 AAR_OPENCLAW_AGENT=1 \
@@ -149,7 +149,7 @@ This command shows the same pattern with one global ACP command and a role-speci
 |---|---|
 | `--complaint` | Complaint markdown file.  Required. |
 | `--out-dir` | Output directory for the run packet.  Required. |
-| `--file` | Explicit initial artifact path or glob.  Repeating this flag replaces automatic complaint-directory scanning. |
+| `--file` | Explicit initial evidence path or glob.  Repeating this flag replaces automatic complaint-directory scanning. |
 | `--policy` | Policy JSON file.  Defaults to `./etc/policy.json` when present. |
 | `--council-size` | Override `policy.council_size`. |
 | `--evidence-standard` | Override `policy.evidence_standard`. |
@@ -161,7 +161,7 @@ This command shows the same pattern with one global ACP command and a role-speci
 | `--plaintiff-acp-command`, `--defendant-acp-command` | Role-specific ACP command overrides. |
 | `--plaintiff-acp-endpoint`, `--defendant-acp-endpoint` | Role-specific remote ACP endpoints.  Supported transport: `tcp://host:port`. |
 | `--plaintiff-acp-session-cwd`, `--defendant-acp-session-cwd` | Role-specific `session/new` working-directory overrides. |
-| `--council-backend` | Council execution backend. `direct` uses the xproxy Responses path. `pi` runs council members as Pi ACP juror agents with read-only artifact tools and rejects web-search-enabled council models. |
+| `--council-backend` | Council execution backend. `direct` uses the xproxy Responses path. `pi` runs council members as Pi ACP juror agents with read-only evidence tools and rejects web-search-enabled council models. |
 | `--council-acp-command` | ACP command override for `--council-backend pi`. Defaults to `--acp-command`. |
 | `--council-acp-session-cwd` | Council ACP `session/new` working-directory override for `--council-backend pi`. |
 | `--common-root` | Shared `common/` tree used for the pool, xproxy config, and ACP launcher. |
@@ -176,7 +176,7 @@ This command shows the same pattern with one global ACP command and a role-speci
 
 ## Outputs
 
-Each run writes a complete packet to `--out-dir`.  The main files are `complaint.md`, `policy.json`, `runtime.json`, `state.json`, `council.json`, `digest.md`, `transcript.md`, `events.ndjson`, and `artifact-manifest.json`.  `run.json` records the resolved attorney configuration for each side in its `attorneys` field and includes visible artifact metadata.  Exact artifact bytes are stored under `artifact-store/`; accepted attorney evidence is also copied under `submitted-evidence/` and exposed through artifact methods.  With `--council-backend pi`, juror artifact reads and materializations are logged in `events.ndjson` under role `council`. Attorney work product is exported into the run directory separately.
+Each run writes a complete packet to `--out-dir`.  The main files are `complaint.md`, `policy.json`, `runtime.json`, `state.json`, `council.json`, `digest.md`, `transcript.md`, `events.ndjson`, and `evidence-manifest.json`.  `run.json` records the resolved attorney configuration for each side in its `attorneys` field and includes visible evidence metadata.  Exact evidence bytes are stored under `evidence-store/`; accepted attorney evidence is also copied under `submitted-evidence/` and exposed through evidence methods.  With `--council-backend pi`, juror evidence reads and materializations are logged in `events.ndjson` under role `council`. Attorney work product is exported into the run directory separately.
 
 On success, `aar case` prints a JSON object like this:
 

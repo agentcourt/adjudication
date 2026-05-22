@@ -105,16 +105,16 @@ func resetEventLog(path string) error {
 	return nil
 }
 
-func (r *Runner) writeArtifacts(result Result) error {
+func (r *Runner) writeEvidence(result Result) error {
 	raw, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal artifact: %w", err)
+		return fmt.Errorf("marshal evidence: %w", err)
 	}
 	if r.cfg.OutputPath == "" {
 		return nil
 	}
 	if err := os.WriteFile(r.cfg.OutputPath, raw, 0o644); err != nil {
-		return fmt.Errorf("write artifact: %w", err)
+		return fmt.Errorf("write evidence: %w", err)
 	}
 	return nil
 }

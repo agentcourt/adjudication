@@ -81,7 +81,7 @@ func loadCaseFiles(dir string) ([]CaseFile, error) {
 		out = append(out, file)
 	}
 	slices.SortFunc(out, func(a, b CaseFile) int {
-		return strings.Compare(a.ArtifactID, b.ArtifactID)
+		return strings.Compare(a.EvidenceID, b.EvidenceID)
 	})
 	return out, nil
 }
@@ -109,7 +109,7 @@ func loadCaseFilesFromPaths(paths []string) ([]CaseFile, error) {
 		out = append(out, file)
 	}
 	slices.SortFunc(out, func(a, b CaseFile) int {
-		return strings.Compare(a.ArtifactID, b.ArtifactID)
+		return strings.Compare(a.EvidenceID, b.EvidenceID)
 	})
 	return out, nil
 }
@@ -124,7 +124,7 @@ func loadCaseFile(path string, name string) (CaseFile, error) {
 		return CaseFile{}, fmt.Errorf("case file %s is a directory", name)
 	}
 	file := CaseFile{
-		ArtifactID:   name,
+		EvidenceID:   name,
 		Name:         name,
 		Path:         path,
 		MimeType:     mimeType,
@@ -224,7 +224,7 @@ func caseFileMetas(files []CaseFile) []CaseFileMeta {
 	out := make([]CaseFileMeta, 0, len(files))
 	for _, file := range files {
 		out = append(out, CaseFileMeta{
-			ArtifactID:   file.ArtifactID,
+			EvidenceID:   file.EvidenceID,
 			Name:         file.Name,
 			MimeType:     file.MimeType,
 			TextReadable: file.TextReadable,

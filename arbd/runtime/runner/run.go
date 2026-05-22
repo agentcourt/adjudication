@@ -128,7 +128,7 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 				FinalState:       rc.state,
 				FinalReason:      reason,
 			}
-			if err := writeArtifacts(cfg, result, rc); err != nil {
+			if err := writeEvidence(cfg, result, rc); err != nil {
 				return Result{}, err
 			}
 			return result, nil

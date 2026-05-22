@@ -22,14 +22,14 @@ type Policy struct {
 	MaxReportsPerSide                  int    `json:"max_reports_per_side"`
 	MaxReportTitleBytes                int    `json:"max_report_title_bytes"`
 	MaxReportSummaryBytes              int    `json:"max_report_summary_bytes"`
-	MaxSubmittedArtifactPerSide        int    `json:"max_submitted_artifacts_per_side"`
-	MaxSubmittedArtifactBytes          int    `json:"max_submitted_artifacts_bytes"`
-	MaxDirectSubmittedArtifactBytes    int    `json:"max_direct_submitted_artifacts_bytes"`
-	MaxArtifactUploadBytes             int    `json:"max_artifact_upload_bytes"`
-	MaxArtifactChunkBytes              int    `json:"max_artifact_chunk_bytes"`
-	MaxArtifactReadBytes               int    `json:"max_artifact_read_bytes"`
-	MaxArtifactReadsPerOpportunity     int    `json:"max_artifact_reads_per_opportunity"`
-	MaxArtifactReadBytesPerOpportunity int    `json:"max_artifact_read_bytes_per_opportunity"`
+	MaxSubmittedEvidencePerSide        int    `json:"max_submitted_evidence_per_side"`
+	MaxSubmittedEvidenceBytes          int    `json:"max_submitted_evidence_bytes"`
+	MaxDirectSubmittedEvidenceBytes    int    `json:"max_direct_submitted_evidence_bytes"`
+	MaxEvidenceUploadBytes             int    `json:"max_evidence_upload_bytes"`
+	MaxEvidenceChunkBytes              int    `json:"max_evidence_chunk_bytes"`
+	MaxEvidenceReadBytes               int    `json:"max_evidence_read_bytes"`
+	MaxEvidenceReadsPerOpportunity     int    `json:"max_evidence_reads_per_opportunity"`
+	MaxEvidenceReadBytesPerOpportunity int    `json:"max_evidence_read_bytes_per_opportunity"`
 }
 
 type RuntimeLimits struct {
@@ -97,8 +97,8 @@ type Result struct {
 	CouncilBackend    string                  `json:"council_backend"`
 	Attorneys         []AttorneyRunInfo       `json:"attorneys"`
 	CaseFiles         []CaseFileMeta          `json:"case_files"`
-	SubmittedArtifact []SubmittedArtifactMeta `json:"submitted_artifacts,omitempty"`
-	Artifacts         []ArtifactMeta          `json:"artifacts,omitempty"`
+	SubmittedEvidence []SubmittedEvidenceMeta `json:"submitted_evidence,omitempty"`
+	Evidence          []EvidenceMeta          `json:"evidence,omitempty"`
 	Council           []CouncilSeat           `json:"council"`
 	Events            []Event                 `json:"events"`
 	FinalState        map[string]any          `json:"final_state"`
@@ -106,7 +106,7 @@ type Result struct {
 }
 
 type CaseFile struct {
-	ArtifactID   string
+	EvidenceID   string
 	Name         string
 	Path         string
 	MimeType     string
@@ -116,16 +116,16 @@ type CaseFile struct {
 }
 
 type CaseFileMeta struct {
-	ArtifactID   string `json:"artifact_id"`
+	EvidenceID   string `json:"evidence_id"`
 	Name         string `json:"name"`
 	MimeType     string `json:"mime_type"`
 	TextReadable bool   `json:"text_readable"`
 }
 
-type SubmittedArtifactMeta struct {
+type SubmittedEvidenceMeta struct {
 	Phase              string `json:"phase"`
 	Role               string `json:"role"`
-	ArtifactID         string `json:"artifact_id"`
+	EvidenceID         string `json:"evidence_id"`
 	Name               string `json:"name"`
 	Title              string `json:"title"`
 	SourceURL          string `json:"source_url,omitempty"`
@@ -137,7 +137,7 @@ type SubmittedArtifactMeta struct {
 	SizeBytes          int    `json:"size_bytes"`
 }
 
-type ArtifactUploadSession struct {
+type EvidenceUploadSession struct {
 	UploadID           string
 	Role               string
 	Phase              string
@@ -149,14 +149,14 @@ type ArtifactUploadSession struct {
 	SourceDescription  string
 	RetrievalTimestamp string
 	Relevance          string
-	ParentArtifactID   string
+	ParentEvidenceID   string
 	DerivationMethod   string
 	Path               string
 	ReceivedBytes      int
 }
 
-type ArtifactMeta struct {
-	ArtifactID          string `json:"artifact_id"`
+type EvidenceMeta struct {
+	EvidenceID          string `json:"evidence_id"`
 	SHA256              string `json:"sha256"`
 	SizeBytes           int    `json:"size_bytes"`
 	MimeType            string `json:"mime_type"`
@@ -171,7 +171,7 @@ type ArtifactMeta struct {
 	RetrievalTimestamp  string `json:"retrieval_timestamp,omitempty"`
 	SubmittedByRole     string `json:"submitted_by_role,omitempty"`
 	SubmittedPhase      string `json:"submitted_phase,omitempty"`
-	ParentArtifactID    string `json:"parent_artifact_id,omitempty"`
+	ParentEvidenceID    string `json:"parent_evidence_id,omitempty"`
 	ParentSHA256        string `json:"parent_sha256,omitempty"`
 	DerivationMethod    string `json:"derivation_method,omitempty"`
 	Relevance           string `json:"relevance,omitempty"`
@@ -209,11 +209,11 @@ type runContext struct {
 	state             map[string]any
 	caseFiles         []CaseFile
 	fileByID          map[string]CaseFile
-	submittedArtifact []SubmittedArtifactMeta
-	artifacts         []ArtifactMeta
-	artifactByID      map[string]ArtifactMeta
-	artifactStoreDir  string
-	uploadSessions    map[string]*ArtifactUploadSession
+	submittedEvidence []SubmittedEvidenceMeta
+	evidence          []EvidenceMeta
+	evidenceByID      map[string]EvidenceMeta
+	evidenceStoreDir  string
+	uploadSessions    map[string]*EvidenceUploadSession
 	council           []CouncilSeat
 	attorneys         map[string]AttorneyRunInfo
 	acpSessions       map[string]*acpPersistentSession

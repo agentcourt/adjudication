@@ -132,31 +132,31 @@ theorem addFiling_preserves_councilMemberIds
 
 theorem appendSupplementalMaterials_preserves_proposition
     (c : ArbitrationCase)
-    (offered : List OfferedArtifact)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     (appendSupplementalMaterials c offered reports).proposition = c.proposition := by
   simp [appendSupplementalMaterials]
 
 theorem appendSupplementalMaterials_preserves_councilMemberIds
     (c : ArbitrationCase)
-    (offered : List OfferedArtifact)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     councilMemberIds (appendSupplementalMaterials c offered reports).council_members =
       councilMemberIds c.council_members := by
   simp [appendSupplementalMaterials, councilMemberIds]
 
-theorem appendSubmittedArtifact_preserves_proposition
+theorem appendSubmittedEvidence_preserves_proposition
     (c : ArbitrationCase)
-    (evidence : SubmittedArtifact) :
-    (appendSubmittedArtifact c evidence).proposition = c.proposition := by
-  simp [appendSubmittedArtifact]
+    (evidence : SubmittedEvidence) :
+    (appendSubmittedEvidence c evidence).proposition = c.proposition := by
+  simp [appendSubmittedEvidence]
 
-theorem appendSubmittedArtifact_preserves_councilMemberIds
+theorem appendSubmittedEvidence_preserves_councilMemberIds
     (c : ArbitrationCase)
-    (evidence : SubmittedArtifact) :
-    councilMemberIds (appendSubmittedArtifact c evidence).council_members =
+    (evidence : SubmittedEvidence) :
+    councilMemberIds (appendSubmittedEvidence c evidence).council_members =
       councilMemberIds c.council_members := by
-  simp [appendSubmittedArtifact, councilMemberIds]
+  simp [appendSubmittedEvidence, councilMemberIds]
 
 theorem stateWithCase_preserves_caseFrame
     (s : ArbitrationState)
@@ -336,13 +336,13 @@ theorem step_pass_phase_opportunity_preserves_caseFrame
                 (by simp [councilMemberIds])
     · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
 
-theorem step_submit_artifact_preserves_caseFrame
+theorem step_submit_evidence_preserves_caseFrame
     (s t : ArbitrationState)
     (action : CourtAction)
     (proposition : String)
     (policy : ArbitrationPolicy)
     (memberIds : List String)
-    (hType : action.action_type = "submit_artifact")
+    (hType : action.action_type = "submit_evidence")
     (hFrame : caseFrameMatches proposition policy memberIds s)
     (hStep : step { state := s, action := action } = .ok t) :
     caseFrameMatches proposition policy memberIds t := by
@@ -350,8 +350,8 @@ theorem step_submit_artifact_preserves_caseFrame
     simpa [step, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
   exact stateWithCase_preserves_caseFrame s _ proposition policy memberIds hFrame
-    (appendSubmittedArtifact_preserves_proposition s.case evidence)
-    (appendSubmittedArtifact_preserves_councilMemberIds s.case evidence)
+    (appendSubmittedEvidence_preserves_proposition s.case evidence)
+    (appendSubmittedEvidence_preserves_councilMemberIds s.case evidence)
 
 /--
 Every successful public step preserves the case frame.
@@ -461,8 +461,8 @@ theorem step_preserves_caseFrame
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
             · exact step_pass_phase_opportunity_preserves_caseFrame
                 s t action proposition policy memberIds hPass hFrame hStep
-            · by_cases hEvidence : action.action_type = "submit_artifact"
-              · exact step_submit_artifact_preserves_caseFrame
+            · by_cases hEvidence : action.action_type = "submit_evidence"
+              · exact step_submit_evidence_preserves_caseFrame
                   s t action proposition policy memberIds hEvidence hFrame hStep
               · by_cases hVote : action.action_type = "submit_council_vote"
                 · rcases step_submit_council_vote_result s t action hVote hStep with

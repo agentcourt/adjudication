@@ -35,12 +35,12 @@ func TestLoadCaseFiles(t *testing.T) {
 	if len(files) != 2 {
 		t.Fatalf("loadCaseFiles returned %d files, want 2", len(files))
 	}
-	if files[0].ArtifactID != "instructions.txt" || files[1].ArtifactID != "samantha_public.pem" {
+	if files[0].EvidenceID != "instructions.txt" || files[1].EvidenceID != "samantha_public.pem" {
 		t.Fatalf("unexpected files: %#v", files)
 	}
 }
 
-func TestArtifactRegistryStoresCaseFilesAndReadsBoundedRanges(t *testing.T) {
+func TestEvidenceRegistryStoresCaseFilesAndReadsBoundedRanges(t *testing.T) {
 	dir := t.TempDir()
 	casePath := filepath.Join(dir, "source.txt")
 	body := []byte("abcdef")
@@ -53,7 +53,7 @@ func TestArtifactRegistryStoresCaseFilesAndReadsBoundedRanges(t *testing.T) {
 			Policy:    DefaultPolicy(),
 		},
 		caseFiles: []CaseFile{{
-			ArtifactID:   "source.txt",
+			EvidenceID:   "source.txt",
 			Name:         "source.txt",
 			Path:         casePath,
 			MimeType:     "text/plain",
@@ -62,47 +62,47 @@ func TestArtifactRegistryStoresCaseFilesAndReadsBoundedRanges(t *testing.T) {
 			Text:         string(body),
 		}},
 	}
-	if err := rc.initializeArtifactRegistry(); err != nil {
-		t.Fatalf("initializeArtifactRegistry returned error: %v", err)
+	if err := rc.initializeEvidenceRegistry(); err != nil {
+		t.Fatalf("initializeEvidenceRegistry returned error: %v", err)
 	}
-	if len(rc.artifacts) != 1 {
-		t.Fatalf("artifact count = %d, want 1", len(rc.artifacts))
+	if len(rc.evidence) != 1 {
+		t.Fatalf("evidence count = %d, want 1", len(rc.evidence))
 	}
-	artifact := rc.artifacts[0]
-	if !strings.HasPrefix(artifact.ArtifactID, "art_") || artifact.SHA256 == "" || artifact.StorageName == "" {
-		t.Fatalf("artifact metadata = %#v", artifact)
+	evidence := rc.evidence[0]
+	if !strings.HasPrefix(evidence.EvidenceID, "ev_") || evidence.SHA256 == "" || evidence.StorageName == "" {
+		t.Fatalf("evidence metadata = %#v", evidence)
 	}
-	if rc.caseFiles[0].ArtifactID != artifact.ArtifactID {
-		t.Fatalf("case file artifact id = %q, want %q", rc.caseFiles[0].ArtifactID, artifact.ArtifactID)
+	if rc.caseFiles[0].EvidenceID != evidence.EvidenceID {
+		t.Fatalf("case file evidence id = %q, want %q", rc.caseFiles[0].EvidenceID, evidence.EvidenceID)
 	}
-	if _, ok := rc.fileByID[artifact.ArtifactID]; !ok {
-		t.Fatalf("fileByID missing canonical artifact id %q", artifact.ArtifactID)
+	if _, ok := rc.fileByID[evidence.EvidenceID]; !ok {
+		t.Fatalf("fileByID missing canonical evidence id %q", evidence.EvidenceID)
 	}
 	if _, ok := rc.fileByID["source.txt"]; ok {
-		t.Fatalf("fileByID retained filename key after canonical artifact registration")
+		t.Fatalf("fileByID retained filename key after canonical evidence registration")
 	}
-	budget := &artifactReadBudget{}
-	got, err := rc.readArtifactRange(artifact.ArtifactID, 1, 3, budget)
+	budget := &evidenceReadBudget{}
+	got, err := rc.readEvidenceRange(evidence.EvidenceID, 1, 3, budget)
 	if err != nil {
-		t.Fatalf("readArtifactRange returned error: %v", err)
+		t.Fatalf("readEvidenceRange returned error: %v", err)
 	}
 	if got["content_base64"] != "YmNk" || got["length"] != 3 {
 		t.Fatalf("read result = %#v", got)
 	}
 }
 
-func TestPrepareSubmittedArtifactPreservesContentAndBuildsVisibleFile(t *testing.T) {
+func TestPrepareSubmittedEvidencePreservesContentAndBuildsVisibleFile(t *testing.T) {
 	dir := t.TempDir()
 	rc := &runContext{
 		cfg: Config{
 			OutputDir: dir,
 			Policy:    DefaultPolicy(),
 		},
-		submittedArtifact: []SubmittedArtifactMeta{},
+		submittedEvidence: []SubmittedEvidenceMeta{},
 	}
 	opportunity := Opportunity{Role: "plaintiff", Phase: "arguments"}
 	content := "  exact text\n"
-	meta, raw, err := rc.prepareSubmittedArtifact(opportunity, map[string]any{
+	meta, raw, err := rc.prepareSubmittedEvidence(opportunity, map[string]any{
 		"title":                  "Source post",
 		"source_url":             "https://example.test/post",
 		"mime_type":              "text/plain",
@@ -112,7 +112,7 @@ func TestPrepareSubmittedArtifactPreservesContentAndBuildsVisibleFile(t *testing
 		"preferred_filename_ext": "txt",
 	})
 	if err != nil {
-		t.Fatalf("prepareSubmittedArtifact returned error: %v", err)
+		t.Fatalf("prepareSubmittedEvidence returned error: %v", err)
 	}
 	if string(raw) != content {
 		t.Fatalf("raw content = %q, want %q", string(raw), content)
@@ -122,11 +122,11 @@ func TestPrepareSubmittedArtifactPreservesContentAndBuildsVisibleFile(t *testing
 	if meta.SHA256 != wantSHA {
 		t.Fatalf("sha = %s, want %s", meta.SHA256, wantSHA)
 	}
-	file, err := rc.writeSubmittedArtifactFile(meta, raw)
+	file, err := rc.writeSubmittedEvidenceFile(meta, raw)
 	if err != nil {
-		t.Fatalf("writeSubmittedArtifactFile returned error: %v", err)
+		t.Fatalf("writeSubmittedEvidenceFile returned error: %v", err)
 	}
-	if file.ArtifactID != meta.ArtifactID || !file.TextReadable || file.Text != content {
+	if file.EvidenceID != meta.EvidenceID || !file.TextReadable || file.Text != content {
 		t.Fatalf("written file metadata = %#v", file)
 	}
 	written, err := os.ReadFile(file.Path)
@@ -138,20 +138,20 @@ func TestPrepareSubmittedArtifactPreservesContentAndBuildsVisibleFile(t *testing
 	}
 }
 
-func TestChunkedArtifactUploadCommitsSubmittedArtifactArtifact(t *testing.T) {
+func TestChunkedEvidenceUploadCommitsSubmittedEvidenceEvidence(t *testing.T) {
 	dir := t.TempDir()
 	rc := &runContext{
 		cfg: Config{
 			OutputDir: dir,
 			Policy:    DefaultPolicy(),
 		},
-		artifactByID:     map[string]ArtifactMeta{},
-		artifactStoreDir: filepath.Join(dir, "artifact-store"),
-		uploadSessions:   map[string]*ArtifactUploadSession{},
+		evidenceByID:     map[string]EvidenceMeta{},
+		evidenceStoreDir: filepath.Join(dir, "evidence-store"),
+		uploadSessions:   map[string]*EvidenceUploadSession{},
 	}
 	raw := []byte("abcdef")
 	sha := sha256.Sum256(raw)
-	session, err := rc.beginArtifactUpload(Opportunity{Role: "plaintiff", Phase: "arguments"}, map[string]any{
+	session, err := rc.beginEvidenceUpload(Opportunity{Role: "plaintiff", Phase: "arguments"}, map[string]any{
 		"title":               "Binary source",
 		"mime_type":           "application/octet-stream",
 		"expected_size_bytes": int64(len(raw)),
@@ -160,28 +160,28 @@ func TestChunkedArtifactUploadCommitsSubmittedArtifactArtifact(t *testing.T) {
 		"relevance":           "test relevance",
 	})
 	if err != nil {
-		t.Fatalf("beginArtifactUpload returned error: %v", err)
+		t.Fatalf("beginEvidenceUpload returned error: %v", err)
 	}
-	if _, n, err := rc.writeArtifactChunk(session.UploadID, 0, "YWJj"); err != nil || n != 3 {
+	if _, n, err := rc.writeEvidenceChunk(session.UploadID, 0, "YWJj"); err != nil || n != 3 {
 		t.Fatalf("write first chunk = session, %d, %v", n, err)
 	}
-	if _, n, err := rc.writeArtifactChunk(session.UploadID, 3, "ZGVm"); err != nil || n != 3 {
+	if _, n, err := rc.writeEvidenceChunk(session.UploadID, 3, "ZGVm"); err != nil || n != 3 {
 		t.Fatalf("write second chunk = session, %d, %v", n, err)
 	}
-	meta, err := rc.prepareArtifactUploadCommit(session, "bin")
+	meta, err := rc.prepareEvidenceUploadCommit(session, "bin")
 	if err != nil {
-		t.Fatalf("prepareArtifactUploadCommit returned error: %v", err)
+		t.Fatalf("prepareEvidenceUploadCommit returned error: %v", err)
 	}
-	fileMeta := submittedArtifactPayload(meta)
-	if fileMeta["artifact_id"] != meta.ArtifactID {
-		t.Fatalf("submitted evidence payload missing artifact_id: %#v", fileMeta)
+	fileMeta := submittedEvidencePayload(meta)
+	if fileMeta["evidence_id"] != meta.EvidenceID {
+		t.Fatalf("submitted evidence payload missing evidence_id: %#v", fileMeta)
 	}
-	meta, file, artifact, err := rc.finalizeArtifactUpload(session, meta)
+	meta, file, evidence, err := rc.finalizeEvidenceUpload(session, meta)
 	if err != nil {
-		t.Fatalf("finalizeArtifactUpload returned error: %v", err)
+		t.Fatalf("finalizeEvidenceUpload returned error: %v", err)
 	}
-	if meta.ArtifactID == "" || file.ArtifactID != meta.ArtifactID || artifact.ArtifactID != meta.ArtifactID {
-		t.Fatalf("meta=%#v file=%#v artifact=%#v", meta, file, artifact)
+	if meta.EvidenceID == "" || file.EvidenceID != meta.EvidenceID || evidence.EvidenceID != meta.EvidenceID {
+		t.Fatalf("meta=%#v file=%#v evidence=%#v", meta, file, evidence)
 	}
 	if _, ok := rc.uploadSessions[session.UploadID]; ok {
 		t.Fatalf("upload session was not cleared")
@@ -191,22 +191,22 @@ func TestChunkedArtifactUploadCommitsSubmittedArtifactArtifact(t *testing.T) {
 	}
 }
 
-func TestSubmittedArtifactRegistersArtifact(t *testing.T) {
+func TestSubmittedEvidenceRegistersEvidence(t *testing.T) {
 	dir := t.TempDir()
 	rc := &runContext{
 		cfg: Config{
 			OutputDir: dir,
 			Policy:    DefaultPolicy(),
 		},
-		artifactByID:     map[string]ArtifactMeta{},
-		artifactStoreDir: filepath.Join(dir, "artifact-store"),
+		evidenceByID:     map[string]EvidenceMeta{},
+		evidenceStoreDir: filepath.Join(dir, "evidence-store"),
 	}
 	sha := sha256.Sum256([]byte("source"))
 	name := "submitted-evidence-01-plaintiff-abcd.txt"
-	meta := SubmittedArtifactMeta{
+	meta := SubmittedEvidenceMeta{
 		Phase:              "arguments",
 		Role:               "plaintiff",
-		ArtifactID:         artifactIDForFile(hex.EncodeToString(sha[:]), name),
+		EvidenceID:         evidenceIDForFile(hex.EncodeToString(sha[:]), name),
 		Name:               name,
 		Title:              "Source",
 		SourceURL:          "https://example.test/source",
@@ -214,45 +214,45 @@ func TestSubmittedArtifactRegistersArtifact(t *testing.T) {
 		RetrievalTimestamp: "2026-05-21T12:00:00Z",
 		Relevance:          "Shows the fact.",
 	}
-	file := CaseFile{ArtifactID: meta.ArtifactID, Name: meta.Name, Path: filepath.Join(dir, meta.Name), MimeType: meta.MimeType, TextReadable: true, Text: "source"}
+	file := CaseFile{EvidenceID: meta.EvidenceID, Name: meta.Name, Path: filepath.Join(dir, meta.Name), MimeType: meta.MimeType, TextReadable: true, Text: "source"}
 	if err := os.WriteFile(file.Path, []byte(file.Text), 0o644); err != nil {
 		t.Fatalf("write evidence file: %v", err)
 	}
-	artifact, err := rc.registerSubmittedArtifactArtifact(meta, file)
+	evidence, err := rc.registerSubmittedEvidenceEvidence(meta, file)
 	if err != nil {
-		t.Fatalf("registerSubmittedArtifactArtifact returned error: %v", err)
+		t.Fatalf("registerSubmittedEvidenceEvidence returned error: %v", err)
 	}
-	if artifact.AdmissibilityStatus != "submitted_artifacts" || artifact.SubmittedByRole != "plaintiff" || artifact.ArtifactID != meta.ArtifactID {
-		t.Fatalf("artifact metadata = %#v", artifact)
+	if evidence.AdmissibilityStatus != "submitted_evidence" || evidence.SubmittedByRole != "plaintiff" || evidence.EvidenceID != meta.EvidenceID {
+		t.Fatalf("evidence metadata = %#v", evidence)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "artifact-store", filepath.FromSlash(artifact.StorageName))); err != nil {
-		t.Fatalf("stored artifact not found: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, "evidence-store", filepath.FromSlash(evidence.StorageName))); err != nil {
+		t.Fatalf("stored evidence not found: %v", err)
 	}
 }
 
-func TestAddArtifactRejectsSameIDForDifferentBytes(t *testing.T) {
+func TestAddEvidenceRejectsSameIDForDifferentBytes(t *testing.T) {
 	rc := &runContext{}
-	_, err := rc.addArtifact(ArtifactMeta{ArtifactID: "art_same", SHA256: "aaa", SizeBytes: 3, StorageName: "aa/aaa"})
+	_, err := rc.addEvidence(EvidenceMeta{EvidenceID: "ev_same", SHA256: "aaa", SizeBytes: 3, StorageName: "aa/aaa"})
 	if err != nil {
-		t.Fatalf("add first artifact returned error: %v", err)
+		t.Fatalf("add first evidence returned error: %v", err)
 	}
-	_, err = rc.addArtifact(ArtifactMeta{ArtifactID: "art_same", SHA256: "bbb", SizeBytes: 3, StorageName: "bb/bbb"})
-	if err == nil || !strings.Contains(err.Error(), "artifact_id collision") {
-		t.Fatalf("add conflicting artifact error = %v, want collision", err)
+	_, err = rc.addEvidence(EvidenceMeta{EvidenceID: "ev_same", SHA256: "bbb", SizeBytes: 3, StorageName: "bb/bbb"})
+	if err == nil || !strings.Contains(err.Error(), "evidence_id collision") {
+		t.Fatalf("add conflicting evidence error = %v, want collision", err)
 	}
-	_, err = rc.addArtifact(ArtifactMeta{ArtifactID: "art_same", SHA256: "aaa", SizeBytes: 3, StorageName: "aa/aaa", ParentArtifactID: "parent"})
+	_, err = rc.addEvidence(EvidenceMeta{EvidenceID: "ev_same", SHA256: "aaa", SizeBytes: 3, StorageName: "aa/aaa", ParentEvidenceID: "parent"})
 	if err == nil || !strings.Contains(err.Error(), "metadata differs") {
 		t.Fatalf("add same-byte metadata conflict error = %v, want metadata conflict", err)
 	}
-	if rc.artifactByID["art_same"].ParentArtifactID != "" {
-		t.Fatalf("artifact metadata was overwritten: %#v", rc.artifactByID["art_same"])
+	if rc.evidenceByID["ev_same"].ParentEvidenceID != "" {
+		t.Fatalf("evidence metadata was overwritten: %#v", rc.evidenceByID["ev_same"])
 	}
 }
 
-func TestAddArtifactAllowsIdempotentRegistration(t *testing.T) {
+func TestAddEvidenceAllowsIdempotentRegistration(t *testing.T) {
 	rc := &runContext{}
-	meta := ArtifactMeta{
-		ArtifactID:          "art_abc123_source",
+	meta := EvidenceMeta{
+		EvidenceID:          "ev_abc123_source",
 		SHA256:              "abc123",
 		SizeBytes:           6,
 		MimeType:            "text/plain",
@@ -266,27 +266,27 @@ func TestAddArtifactAllowsIdempotentRegistration(t *testing.T) {
 		SubmittedPhase:      "case_packet",
 		TextReadable:        true,
 	}
-	first, err := rc.addArtifact(meta)
+	first, err := rc.addEvidence(meta)
 	if err != nil {
-		t.Fatalf("first addArtifact returned error: %v", err)
+		t.Fatalf("first addEvidence returned error: %v", err)
 	}
 	meta.CreatedAt = "2026-05-21T20:01:00Z"
-	second, err := rc.addArtifact(meta)
+	second, err := rc.addEvidence(meta)
 	if err != nil {
-		t.Fatalf("second addArtifact returned error: %v", err)
+		t.Fatalf("second addEvidence returned error: %v", err)
 	}
 	if second.CreatedAt != first.CreatedAt {
 		t.Fatalf("idempotent registration replaced existing metadata: first=%#v second=%#v", first, second)
 	}
-	if len(rc.artifacts) != 1 {
-		t.Fatalf("artifact count = %d, want 1", len(rc.artifacts))
+	if len(rc.evidence) != 1 {
+		t.Fatalf("evidence count = %d, want 1", len(rc.evidence))
 	}
 }
 
-func TestAddArtifactRejectsMetadataConflict(t *testing.T) {
+func TestAddEvidenceRejectsMetadataConflict(t *testing.T) {
 	rc := &runContext{}
-	meta := ArtifactMeta{
-		ArtifactID:          "art_abc123_source",
+	meta := EvidenceMeta{
+		EvidenceID:          "ev_abc123_source",
 		SHA256:              "abc123",
 		SizeBytes:           6,
 		MimeType:            "text/plain",
@@ -300,19 +300,19 @@ func TestAddArtifactRejectsMetadataConflict(t *testing.T) {
 		SubmittedPhase:      "case_packet",
 		TextReadable:        true,
 	}
-	if _, err := rc.addArtifact(meta); err != nil {
-		t.Fatalf("first addArtifact returned error: %v", err)
+	if _, err := rc.addEvidence(meta); err != nil {
+		t.Fatalf("first addEvidence returned error: %v", err)
 	}
 	conflicting := meta
 	conflicting.Title = "different title"
-	if _, err := rc.addArtifact(conflicting); err == nil || !strings.Contains(err.Error(), "metadata differs") {
-		t.Fatalf("conflicting addArtifact error = %v, want metadata conflict", err)
+	if _, err := rc.addEvidence(conflicting); err == nil || !strings.Contains(err.Error(), "metadata differs") {
+		t.Fatalf("conflicting addEvidence error = %v, want metadata conflict", err)
 	}
 }
 
-func TestBeginArtifactUploadRejectsNonIntegerSize(t *testing.T) {
+func TestBeginEvidenceUploadRejectsNonIntegerSize(t *testing.T) {
 	rc := &runContext{cfg: Config{OutputDir: t.TempDir(), Policy: DefaultPolicy()}}
-	_, err := rc.beginArtifactUpload(Opportunity{Role: "plaintiff", Phase: "arguments"}, map[string]any{
+	_, err := rc.beginEvidenceUpload(Opportunity{Role: "plaintiff", Phase: "arguments"}, map[string]any{
 		"title":               "Bad size",
 		"mime_type":           "text/plain",
 		"expected_size_bytes": "12",
@@ -320,16 +320,16 @@ func TestBeginArtifactUploadRejectsNonIntegerSize(t *testing.T) {
 		"relevance":           "test relevance",
 	})
 	if err == nil || !strings.Contains(err.Error(), "expected_size_bytes must be an integer") {
-		t.Fatalf("beginArtifactUpload error = %v, want integer error", err)
+		t.Fatalf("beginEvidenceUpload error = %v, want integer error", err)
 	}
 }
 
-func TestPrepareSubmittedArtifactHonorsDirectByteLimit(t *testing.T) {
+func TestPrepareSubmittedEvidenceHonorsDirectByteLimit(t *testing.T) {
 	policy := DefaultPolicy()
-	policy.MaxDirectSubmittedArtifactBytes = 4
-	policy.MaxSubmittedArtifactBytes = 8
+	policy.MaxDirectSubmittedEvidenceBytes = 4
+	policy.MaxSubmittedEvidenceBytes = 8
 	rc := &runContext{cfg: Config{OutputDir: t.TempDir(), Policy: policy}}
-	_, _, err := rc.prepareSubmittedArtifact(Opportunity{Role: "plaintiff", Phase: "arguments"}, map[string]any{
+	_, _, err := rc.prepareSubmittedEvidence(Opportunity{Role: "plaintiff", Phase: "arguments"}, map[string]any{
 		"title":              "Too large direct source",
 		"source_description": "test source",
 		"mime_type":          "text/plain",
@@ -337,17 +337,17 @@ func TestPrepareSubmittedArtifactHonorsDirectByteLimit(t *testing.T) {
 		"content":            "12345",
 	})
 	if err == nil || !strings.Contains(err.Error(), "direct submitted evidence exceeds byte limit") {
-		t.Fatalf("prepareSubmittedArtifact error = %v, want direct limit error", err)
+		t.Fatalf("prepareSubmittedEvidence error = %v, want direct limit error", err)
 	}
 }
 
 func TestValidatePolicyKeepsUploadLimitWithinRecordEvidenceLimit(t *testing.T) {
 	policy := DefaultPolicy()
-	policy.MaxSubmittedArtifactBytes = 8
-	policy.MaxDirectSubmittedArtifactBytes = 4
-	policy.MaxArtifactUploadBytes = 9
-	policy.MaxArtifactChunkBytes = 4
-	if err := ValidatePolicy(policy); err == nil || !strings.Contains(err.Error(), "max_artifact_upload_bytes") {
+	policy.MaxSubmittedEvidenceBytes = 8
+	policy.MaxDirectSubmittedEvidenceBytes = 4
+	policy.MaxEvidenceUploadBytes = 9
+	policy.MaxEvidenceChunkBytes = 4
+	if err := ValidatePolicy(policy); err == nil || !strings.Contains(err.Error(), "max_evidence_upload_bytes") {
 		t.Fatalf("ValidatePolicy error = %v, want upload limit error", err)
 	}
 }
@@ -416,7 +416,7 @@ func TestLoadCaseFilesFromPaths(t *testing.T) {
 	if len(files) != 2 {
 		t.Fatalf("loadCaseFilesFromPaths returned %d files, want 2", len(files))
 	}
-	if files[0].ArtifactID != "instructions.txt" || files[1].ArtifactID != "samantha_public.pem" {
+	if files[0].EvidenceID != "instructions.txt" || files[1].EvidenceID != "samantha_public.pem" {
 		t.Fatalf("unexpected files: %#v", files)
 	}
 	if files[0].Text != "hello\n" {
@@ -452,12 +452,12 @@ func TestLoadCaseFilesFromPathsRejectsDuplicateBaseNames(t *testing.T) {
 func TestValidateAttorneyPayload(t *testing.T) {
 	policy := DefaultPolicy()
 	fileByID := map[string]CaseFile{
-		"instructions.txt": {ArtifactID: "instructions.txt", SizeBytes: 128},
+		"instructions.txt": {EvidenceID: "instructions.txt", SizeBytes: 128},
 	}
 	valid := map[string]any{
 		"text": "argument",
-		"offered_artifacts": []any{
-			map[string]any{"artifact_id": "instructions.txt", "label": "PX-1"},
+		"offered_evidence": []any{
+			map[string]any{"evidence_id": "instructions.txt", "label": "PX-1"},
 		},
 		"technical_reports": []any{
 			map[string]any{"title": "Verification", "summary": "Verified OK."},
@@ -474,8 +474,8 @@ func TestValidateAttorneyPayload(t *testing.T) {
 	}
 	badFile := map[string]any{
 		"text": "argument",
-		"offered_artifacts": []any{
-			map[string]any{"artifact_id": "missing.txt"},
+		"offered_evidence": []any{
+			map[string]any{"evidence_id": "missing.txt"},
 		},
 	}
 	if err := validateAttorneyPayload("submit_argument", badFile, fileByID, policy); err == nil {
@@ -493,12 +493,12 @@ func TestCouncilMemberIDFromOpportunity(t *testing.T) {
 func TestValidateAttorneyPayloadAllowsSupplementalMaterialsInRebuttal(t *testing.T) {
 	policy := DefaultPolicy()
 	fileByID := map[string]CaseFile{
-		"instructions.txt": {ArtifactID: "instructions.txt", SizeBytes: 128},
+		"instructions.txt": {EvidenceID: "instructions.txt", SizeBytes: 128},
 	}
 	rebuttal := map[string]any{
 		"text": "reply",
-		"offered_artifacts": []any{
-			map[string]any{"artifact_id": "instructions.txt"},
+		"offered_evidence": []any{
+			map[string]any{"evidence_id": "instructions.txt"},
 		},
 		"technical_reports": []any{
 			map[string]any{"title": "Check", "summary": "Done."},
@@ -512,12 +512,12 @@ func TestValidateAttorneyPayloadAllowsSupplementalMaterialsInRebuttal(t *testing
 func TestValidateAttorneyPayloadRejectsSupplementalMaterialsInSurrebuttal(t *testing.T) {
 	policy := DefaultPolicy()
 	fileByID := map[string]CaseFile{
-		"instructions.txt": {ArtifactID: "instructions.txt", SizeBytes: 128},
+		"instructions.txt": {EvidenceID: "instructions.txt", SizeBytes: 128},
 	}
 	surrebuttal := map[string]any{
 		"text": "reply",
-		"offered_artifacts": []any{
-			map[string]any{"artifact_id": "instructions.txt"},
+		"offered_evidence": []any{
+			map[string]any{"evidence_id": "instructions.txt"},
 		},
 		"technical_reports": []any{
 			map[string]any{"title": "Check", "summary": "Done."},
@@ -531,16 +531,16 @@ func TestValidateAttorneyPayloadRejectsSupplementalMaterialsInSurrebuttal(t *tes
 func TestValidateAttorneyPayloadRejectsSupplementalMaterialsInClosing(t *testing.T) {
 	policy := DefaultPolicy()
 	fileByID := map[string]CaseFile{
-		"instructions.txt": {ArtifactID: "instructions.txt", SizeBytes: 128},
+		"instructions.txt": {EvidenceID: "instructions.txt", SizeBytes: 128},
 	}
 	closing := map[string]any{
 		"text": "closing",
-		"offered_artifacts": []any{
-			map[string]any{"artifact_id": "instructions.txt"},
+		"offered_evidence": []any{
+			map[string]any{"evidence_id": "instructions.txt"},
 		},
 	}
 	if err := validateAttorneyPayload("deliver_closing_statement", closing, fileByID, policy); err == nil {
-		t.Fatalf("expected closing offered_artifacts to be rejected")
+		t.Fatalf("expected closing offered_evidence to be rejected")
 	}
 	closing = map[string]any{
 		"text": "closing",
@@ -557,12 +557,12 @@ func TestValidateAttorneyPayloadRejectsOversizeExhibit(t *testing.T) {
 	policy := DefaultPolicy()
 	policy.MaxExhibitBytes = 16
 	fileByID := map[string]CaseFile{
-		"instructions.txt": {ArtifactID: "instructions.txt", SizeBytes: 32},
+		"instructions.txt": {EvidenceID: "instructions.txt", SizeBytes: 32},
 	}
 	payload := map[string]any{
 		"text": "argument",
-		"offered_artifacts": []any{
-			map[string]any{"artifact_id": "instructions.txt"},
+		"offered_evidence": []any{
+			map[string]any{"evidence_id": "instructions.txt"},
 		},
 	}
 	if err := validateAttorneyPayload("submit_argument", payload, fileByID, policy); err == nil {
@@ -692,7 +692,7 @@ func TestValidateAttorneyPayloadAgainstStateRejectsOverlongRebuttal(t *testing.T
 		cfg: Config{Policy: policy},
 		state: map[string]any{
 			"case": map[string]any{
-				"offered_artifacts": []map[string]any{},
+				"offered_evidence":  []map[string]any{},
 				"technical_reports": []map[string]any{},
 			},
 		},
@@ -723,7 +723,7 @@ func TestValidateAttorneyPayloadAgainstStateRejectsSideReportOverflow(t *testing
 		cfg: Config{Policy: policy},
 		state: map[string]any{
 			"case": map[string]any{
-				"offered_artifacts": []map[string]any{},
+				"offered_evidence":  []map[string]any{},
 				"technical_reports": existing,
 			},
 		},
@@ -798,7 +798,7 @@ func TestBuildAttorneyPromptStatesCouncilForum(t *testing.T) {
 				"rebuttals":         []map[string]any{},
 				"surrebuttals":      []map[string]any{},
 				"closings":          []map[string]any{},
-				"offered_artifacts": []map[string]any{},
+				"offered_evidence":  []map[string]any{},
 				"technical_reports": []map[string]any{},
 			},
 		},
@@ -865,7 +865,7 @@ func TestBuildAttorneyPromptStatesWhenSearchIsUnavailable(t *testing.T) {
 				"rebuttals":         []map[string]any{},
 				"surrebuttals":      []map[string]any{},
 				"closings":          []map[string]any{},
-				"offered_artifacts": []map[string]any{},
+				"offered_evidence":  []map[string]any{},
 				"technical_reports": []map[string]any{},
 			},
 		},
@@ -908,7 +908,7 @@ func TestBuildAttorneyPromptIncludesWorkProductGuidance(t *testing.T) {
 				"rebuttals":         []map[string]any{},
 				"surrebuttals":      []map[string]any{},
 				"closings":          []map[string]any{},
-				"offered_artifacts": []map[string]any{},
+				"offered_evidence":  []map[string]any{},
 				"technical_reports": []map[string]any{},
 			},
 		},
@@ -937,7 +937,7 @@ func TestACPToolSpecsArePhaseSpecific(t *testing.T) {
 	for _, spec := range openingSpecs {
 		openingTools = append(openingTools, mapString(spec["toolName"]))
 	}
-	if slices.Contains(openingTools, "aar_list_artifacts") || slices.Contains(openingTools, "aar_read_artifact_range") || slices.Contains(openingTools, "aar_begin_artifact_upload") {
+	if slices.Contains(openingTools, "aar_list_evidence") || slices.Contains(openingTools, "aar_read_evidence_range") || slices.Contains(openingTools, "aar_begin_evidence_upload") {
 		t.Fatalf("opening tools exposed evidence access: %#v", openingTools)
 	}
 	argumentSpecs := acpToolSpecs(Opportunity{Phase: "arguments"}, true)
@@ -945,16 +945,16 @@ func TestACPToolSpecsArePhaseSpecific(t *testing.T) {
 	for _, spec := range argumentSpecs {
 		argumentTools = append(argumentTools, mapString(spec["toolName"]))
 	}
-	if !slices.Contains(argumentTools, "aar_list_artifacts") || !slices.Contains(argumentTools, "aar_stat_artifact") || !slices.Contains(argumentTools, "aar_read_artifact_range") || !slices.Contains(argumentTools, "aar_materialize_artifact") || !slices.Contains(argumentTools, "aar_begin_artifact_upload") || !slices.Contains(argumentTools, "aar_write_artifact_chunk") || !slices.Contains(argumentTools, "aar_commit_artifact_upload") || !slices.Contains(argumentTools, "aar_submit_artifact") {
-		t.Fatalf("argument tools did not expose artifact access: %#v", argumentTools)
+	if !slices.Contains(argumentTools, "aar_list_evidence") || !slices.Contains(argumentTools, "aar_stat_evidence") || !slices.Contains(argumentTools, "aar_read_evidence_range") || !slices.Contains(argumentTools, "aar_materialize_evidence") || !slices.Contains(argumentTools, "aar_begin_evidence_upload") || !slices.Contains(argumentTools, "aar_write_evidence_chunk") || !slices.Contains(argumentTools, "aar_commit_evidence_upload") || !slices.Contains(argumentTools, "aar_submit_evidence") {
+		t.Fatalf("argument tools did not expose evidence access: %#v", argumentTools)
 	}
 	rebuttalSpecs := acpToolSpecs(Opportunity{Phase: "rebuttals"}, true)
 	rebuttalTools := make([]string, 0, len(rebuttalSpecs))
 	for _, spec := range rebuttalSpecs {
 		rebuttalTools = append(rebuttalTools, mapString(spec["toolName"]))
 	}
-	if !slices.Contains(rebuttalTools, "aar_list_artifacts") || !slices.Contains(rebuttalTools, "aar_stat_artifact") || !slices.Contains(rebuttalTools, "aar_read_artifact_range") || !slices.Contains(rebuttalTools, "aar_materialize_artifact") || !slices.Contains(rebuttalTools, "aar_begin_artifact_upload") || !slices.Contains(rebuttalTools, "aar_write_artifact_chunk") || !slices.Contains(rebuttalTools, "aar_commit_artifact_upload") || !slices.Contains(rebuttalTools, "aar_submit_artifact") {
-		t.Fatalf("rebuttal tools did not expose artifact access: %#v", rebuttalTools)
+	if !slices.Contains(rebuttalTools, "aar_list_evidence") || !slices.Contains(rebuttalTools, "aar_stat_evidence") || !slices.Contains(rebuttalTools, "aar_read_evidence_range") || !slices.Contains(rebuttalTools, "aar_materialize_evidence") || !slices.Contains(rebuttalTools, "aar_begin_evidence_upload") || !slices.Contains(rebuttalTools, "aar_write_evidence_chunk") || !slices.Contains(rebuttalTools, "aar_commit_evidence_upload") || !slices.Contains(rebuttalTools, "aar_submit_evidence") {
+		t.Fatalf("rebuttal tools did not expose evidence access: %#v", rebuttalTools)
 	}
 	var submitSpec map[string]any
 	for _, spec := range argumentSpecs {
@@ -975,16 +975,16 @@ func TestACPToolSpecsArePhaseSpecific(t *testing.T) {
 		t.Fatalf("payload schema type = %#v, want object", payload["type"])
 	}
 	payloadProps := mapAny(payload["properties"])
-	offeredArtifacts := mapAny(payloadProps["offered_artifacts"])
-	if mapString(offeredArtifacts["type"]) != "array" {
-		t.Fatalf("offered_artifacts schema type = %#v, want array", offeredArtifacts["type"])
+	offeredEvidence := mapAny(payloadProps["offered_evidence"])
+	if mapString(offeredEvidence["type"]) != "array" {
+		t.Fatalf("offered_evidence schema type = %#v, want array", offeredEvidence["type"])
 	}
-	offeredItemProps := mapAny(mapAny(offeredArtifacts["items"])["properties"])
-	if _, ok := offeredItemProps["artifact_id"]; !ok {
-		t.Fatalf("offered_artifacts items missing artifact_id: %#v", offeredItemProps)
+	offeredItemProps := mapAny(mapAny(offeredEvidence["items"])["properties"])
+	if _, ok := offeredItemProps["evidence_id"]; !ok {
+		t.Fatalf("offered_evidence items missing evidence_id: %#v", offeredItemProps)
 	}
 	if _, ok := offeredItemProps["label"]; !ok {
-		t.Fatalf("offered_artifacts items missing label: %#v", offeredItemProps)
+		t.Fatalf("offered_evidence items missing label: %#v", offeredItemProps)
 	}
 	reports := mapAny(payloadProps["technical_reports"])
 	if mapString(reports["type"]) != "array" {
@@ -1006,10 +1006,10 @@ func TestJurorACPToolSpecsAreReadOnly(t *testing.T) {
 	}
 	for _, want := range []string{
 		"aar_get_case",
-		"aar_list_artifacts",
-		"aar_stat_artifact",
-		"aar_read_artifact_range",
-		"aar_materialize_artifact",
+		"aar_list_evidence",
+		"aar_stat_evidence",
+		"aar_read_evidence_range",
+		"aar_materialize_evidence",
 		"aar_submit_council_vote",
 	} {
 		if !slices.Contains(tools, want) {
@@ -1017,10 +1017,10 @@ func TestJurorACPToolSpecsAreReadOnly(t *testing.T) {
 		}
 	}
 	for _, forbidden := range []string{
-		"aar_begin_artifact_upload",
-		"aar_write_artifact_chunk",
-		"aar_commit_artifact_upload",
-		"aar_submit_artifact",
+		"aar_begin_evidence_upload",
+		"aar_write_evidence_chunk",
+		"aar_commit_evidence_upload",
+		"aar_submit_evidence",
 		"aar_submit_decision",
 	} {
 		if slices.Contains(tools, forbidden) {
@@ -1048,7 +1048,7 @@ func TestBuildCouncilACPPromptConstrainsJurorInvestigation(t *testing.T) {
 				"rebuttals":          []map[string]any{},
 				"surrebuttals":       []map[string]any{},
 				"closings":           []map[string]any{},
-				"offered_artifacts":  []map[string]any{},
+				"offered_evidence":   []map[string]any{},
 				"technical_reports":  []map[string]any{},
 				"council_votes":      []map[string]any{},
 			},
@@ -1059,9 +1059,9 @@ func TestBuildCouncilACPPromptConstrainsJurorInvestigation(t *testing.T) {
 		t.Fatalf("buildCouncilACPPrompt returned error: %v", err)
 	}
 	for _, want := range []string{
-		"You may examine admitted artifacts through the read-only AAR tools.",
-		"Do not search the web, introduce new facts, create new evidence, upload artifacts",
-		"Artifact identity is artifact_id plus SHA-256.",
+		"You may examine admitted evidence through the read-only AAR tools.",
+		"Do not search the web, introduce new facts, create new evidence, upload evidence",
+		"Evidence identity is evidence_id plus SHA-256.",
 		"call aar_submit_council_vote exactly once",
 	} {
 		if !strings.Contains(prompt, want) {
@@ -1111,7 +1111,7 @@ func TestBuildAttorneyPromptConstrainsArgumentExperiments(t *testing.T) {
 		complaint: spec.Complaint{
 			Proposition: "P",
 		},
-		caseFiles: []CaseFile{{ArtifactID: "instructions.txt", Name: "instructions.txt", MimeType: "text/plain", TextReadable: true}},
+		caseFiles: []CaseFile{{EvidenceID: "instructions.txt", Name: "instructions.txt", MimeType: "text/plain", TextReadable: true}},
 		state: map[string]any{
 			"policy": map[string]any{
 				"evidence_standard": "preponderance",
@@ -1123,7 +1123,7 @@ func TestBuildAttorneyPromptConstrainsArgumentExperiments(t *testing.T) {
 				"rebuttals":         []map[string]any{},
 				"surrebuttals":      []map[string]any{},
 				"closings":          []map[string]any{},
-				"offered_artifacts": []map[string]any{},
+				"offered_evidence":  []map[string]any{},
 				"technical_reports": []map[string]any{},
 			},
 		},
@@ -1147,14 +1147,14 @@ func TestBuildAttorneyPromptConstrainsArgumentExperiments(t *testing.T) {
 	if !strings.Contains(prompt, "Technical reports: at most 3 in this filing. This side has used 0 of 4 total, with 4 left.") {
 		t.Fatalf("argument prompt did not state report limits:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "submit its content and provenance with aar_submit_artifact") {
-		t.Fatalf("argument prompt did not require outside source material to enter as submitted artifact:\n%s", prompt)
+	if !strings.Contains(prompt, "submit its content and provenance with aar_submit_evidence") {
+		t.Fatalf("argument prompt did not require outside source material to enter as submitted evidence:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "materialize the needed artifact into the workspace first") {
+	if !strings.Contains(prompt, "materialize the needed evidence into the workspace first") {
 		t.Fatalf("argument prompt did not instruct counsel to materialize exact file bytes:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "Use only visible case artifact_id values in offered_artifacts. Submit new source material first with aar_submit_artifact") {
-		t.Fatalf("argument prompt did not restrict offered_artifacts to visible artifact ids:\n%s", prompt)
+	if !strings.Contains(prompt, "Use only visible case evidence_id values in offered_evidence. Submit new source material first with aar_submit_evidence") {
+		t.Fatalf("argument prompt did not restrict offered_evidence to visible evidence ids:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "Use technical_reports for attorney analysis or synthesized work product") {
 		t.Fatalf("argument prompt did not distinguish technical reports from source evidence:\n%s", prompt)
@@ -1173,7 +1173,7 @@ func TestBuildAttorneyPromptConstrainsArgumentExperimentsWithoutSearch(t *testin
 		complaint: spec.Complaint{
 			Proposition: "P",
 		},
-		caseFiles: []CaseFile{{ArtifactID: "instructions.txt", Name: "instructions.txt", MimeType: "text/plain", TextReadable: true}},
+		caseFiles: []CaseFile{{EvidenceID: "instructions.txt", Name: "instructions.txt", MimeType: "text/plain", TextReadable: true}},
 		state: map[string]any{
 			"policy": map[string]any{
 				"evidence_standard": "preponderance",
@@ -1185,7 +1185,7 @@ func TestBuildAttorneyPromptConstrainsArgumentExperimentsWithoutSearch(t *testin
 				"rebuttals":         []map[string]any{},
 				"surrebuttals":      []map[string]any{},
 				"closings":          []map[string]any{},
-				"offered_artifacts": []map[string]any{},
+				"offered_evidence":  []map[string]any{},
 				"technical_reports": []map[string]any{},
 			},
 		},
@@ -1221,13 +1221,13 @@ func TestBuildAttorneyPromptAllowsRebuttalSupplementalMaterials(t *testing.T) {
 				"evidence_standard": "preponderance",
 			},
 			"case": map[string]any{
-				"phase":             "rebuttals",
-				"openings":          []map[string]any{},
-				"arguments":         []map[string]any{},
-				"rebuttals":         []map[string]any{},
-				"surrebuttals":      []map[string]any{},
-				"closings":          []map[string]any{},
-				"offered_artifacts": []map[string]any{},
+				"phase":            "rebuttals",
+				"openings":         []map[string]any{},
+				"arguments":        []map[string]any{},
+				"rebuttals":        []map[string]any{},
+				"surrebuttals":     []map[string]any{},
+				"closings":         []map[string]any{},
+				"offered_evidence": []map[string]any{},
 				"technical_reports": []map[string]any{
 					{"role": "plaintiff", "title": "One", "summary": "A"},
 					{"role": "plaintiff", "title": "Two", "summary": "B"},
@@ -1258,17 +1258,17 @@ func TestBuildAttorneyPromptAllowsRebuttalSupplementalMaterials(t *testing.T) {
 	if !strings.Contains(prompt, "Technical reports: at most 3 in this filing. This side has used 3 of 4 total, with 1 left.") {
 		t.Fatalf("rebuttal prompt did not state remaining report capacity:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "\"offered_artifacts\"") || !strings.Contains(prompt, "\"technical_reports\"") {
+	if !strings.Contains(prompt, "\"offered_evidence\"") || !strings.Contains(prompt, "\"technical_reports\"") {
 		t.Fatalf("rebuttal example payload did not show supplemental materials:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "materialize the needed artifact into the workspace first") {
+	if !strings.Contains(prompt, "materialize the needed evidence into the workspace first") {
 		t.Fatalf("rebuttal prompt did not instruct counsel to materialize exact file bytes:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "Use offered_artifacts only for visible artifacts, by artifact_id.") {
-		t.Fatalf("rebuttal prompt did not restrict offered_artifacts to visible artifact ids:\n%s", prompt)
+	if !strings.Contains(prompt, "Use offered_evidence only for visible evidence, by evidence_id.") {
+		t.Fatalf("rebuttal prompt did not restrict offered_evidence to visible evidence ids:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "submit its content and provenance with aar_submit_artifact") {
-		t.Fatalf("rebuttal prompt did not require outside source material to enter as submitted artifact:\n%s", prompt)
+	if !strings.Contains(prompt, "submit its content and provenance with aar_submit_evidence") {
+		t.Fatalf("rebuttal prompt did not require outside source material to enter as submitted evidence:\n%s", prompt)
 	}
 }
 
@@ -1295,7 +1295,7 @@ func TestBuildAttorneyPromptConstrainsRebuttalWithoutSearch(t *testing.T) {
 				"rebuttals":         []map[string]any{},
 				"surrebuttals":      []map[string]any{},
 				"closings":          []map[string]any{},
-				"offered_artifacts": []map[string]any{},
+				"offered_evidence":  []map[string]any{},
 				"technical_reports": []map[string]any{},
 			},
 		},
@@ -1337,7 +1337,7 @@ func TestBuildCouncilPromptIncludesPersonaAndRecord(t *testing.T) {
 				"rebuttals":          []map[string]any{},
 				"surrebuttals":       []map[string]any{},
 				"closings":           []map[string]any{},
-				"offered_artifacts":  []map[string]any{},
+				"offered_evidence":   []map[string]any{},
 				"technical_reports":  []map[string]any{},
 				"council_votes":      []map[string]any{{"round": 1, "member_id": "C1", "vote": "demonstrated", "rationale": "r"}},
 			},

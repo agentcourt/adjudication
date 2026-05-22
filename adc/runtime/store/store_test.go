@@ -50,11 +50,11 @@ func TestStoreLifecyclePersistsRunAndEvents(t *testing.T) {
 		t.Fatalf("FinishRun error = %v", err)
 	}
 
-	var startedAt, finishedAt, status, finalStateJSON, artifactJSON string
+	var startedAt, finishedAt, status, finalStateJSON, evidenceJSON string
 	err := s.db.QueryRow(
-		`SELECT started_at, finished_at, status, final_state_json, artifact_json FROM runs WHERE run_id=?`,
+		`SELECT started_at, finished_at, status, final_state_json, evidence_json FROM runs WHERE run_id=?`,
 		"run-1",
-	).Scan(&startedAt, &finishedAt, &status, &finalStateJSON, &artifactJSON)
+	).Scan(&startedAt, &finishedAt, &status, &finalStateJSON, &evidenceJSON)
 	if err != nil {
 		t.Fatalf("QueryRow runs error = %v", err)
 	}
@@ -67,8 +67,8 @@ func TestStoreLifecyclePersistsRunAndEvents(t *testing.T) {
 	if !strings.Contains(finalStateJSON, "\"case_id\":\"case-1\"") {
 		t.Fatalf("final_state_json = %s", finalStateJSON)
 	}
-	if !strings.Contains(artifactJSON, "\"digest\":\"done\"") {
-		t.Fatalf("artifact_json = %s", artifactJSON)
+	if !strings.Contains(evidenceJSON, "\"digest\":\"done\"") {
+		t.Fatalf("evidence_json = %s", evidenceJSON)
 	}
 
 	var turnIndex, stepIndex int
@@ -192,13 +192,13 @@ func TestFinishRunStoresValidJSON(t *testing.T) {
 		t.Fatalf("CreateRun error = %v", err)
 	}
 	finalState := map[string]any{"case": map[string]any{"case_id": "case-9"}}
-	artifact := map[string]any{"digest": map[string]any{"status": "ok"}}
-	if err := s.FinishRun("run-2", "dismissed", finalState, artifact); err != nil {
+	evidence := map[string]any{"digest": map[string]any{"status": "ok"}}
+	if err := s.FinishRun("run-2", "dismissed", finalState, evidence); err != nil {
 		t.Fatalf("FinishRun error = %v", err)
 	}
 
-	var finalStateJSON, artifactJSON string
-	if err := s.db.QueryRow(`SELECT final_state_json, artifact_json FROM runs WHERE run_id=?`, "run-2").Scan(&finalStateJSON, &artifactJSON); err != nil {
+	var finalStateJSON, evidenceJSON string
+	if err := s.db.QueryRow(`SELECT final_state_json, evidence_json FROM runs WHERE run_id=?`, "run-2").Scan(&finalStateJSON, &evidenceJSON); err != nil {
 		t.Fatalf("QueryRow error = %v", err)
 	}
 
@@ -206,9 +206,9 @@ func TestFinishRunStoresValidJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(finalStateJSON), &gotState); err != nil {
 		t.Fatalf("final_state_json unmarshal error = %v", err)
 	}
-	var gotArtifact map[string]any
-	if err := json.Unmarshal([]byte(artifactJSON), &gotArtifact); err != nil {
-		t.Fatalf("artifact_json unmarshal error = %v", err)
+	var gotEvidence map[string]any
+	if err := json.Unmarshal([]byte(evidenceJSON), &gotEvidence); err != nil {
+		t.Fatalf("evidence_json unmarshal error = %v", err)
 	}
 }
 

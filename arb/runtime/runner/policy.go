@@ -26,14 +26,14 @@ func DefaultPolicy() Policy {
 		MaxReportsPerSide:                  4,
 		MaxReportTitleBytes:                256,
 		MaxReportSummaryBytes:              8192,
-		MaxSubmittedArtifactPerSide:        8,
-		MaxSubmittedArtifactBytes:          64 * 1024 * 1024,
-		MaxDirectSubmittedArtifactBytes:    128 * 1024,
-		MaxArtifactUploadBytes:             64 * 1024 * 1024,
-		MaxArtifactChunkBytes:              64 * 1024,
-		MaxArtifactReadBytes:               64 * 1024,
-		MaxArtifactReadsPerOpportunity:     32,
-		MaxArtifactReadBytesPerOpportunity: 512 * 1024,
+		MaxSubmittedEvidencePerSide:        8,
+		MaxSubmittedEvidenceBytes:          64 * 1024 * 1024,
+		MaxDirectSubmittedEvidenceBytes:    128 * 1024,
+		MaxEvidenceUploadBytes:             64 * 1024 * 1024,
+		MaxEvidenceChunkBytes:              64 * 1024,
+		MaxEvidenceReadBytes:               64 * 1024,
+		MaxEvidenceReadsPerOpportunity:     32,
+		MaxEvidenceReadBytesPerOpportunity: 512 * 1024,
 	}
 }
 
@@ -104,30 +104,30 @@ func ValidatePolicy(policy Policy) error {
 		return fmt.Errorf("policy.max_report_title_bytes must be positive")
 	case policy.MaxReportSummaryBytes <= 0:
 		return fmt.Errorf("policy.max_report_summary_bytes must be positive")
-	case policy.MaxSubmittedArtifactPerSide < 0:
-		return fmt.Errorf("policy.max_submitted_artifacts_per_side must be non-negative")
-	case policy.MaxSubmittedArtifactBytes <= 0:
-		return fmt.Errorf("policy.max_submitted_artifacts_bytes must be positive")
-	case policy.MaxDirectSubmittedArtifactBytes <= 0:
-		return fmt.Errorf("policy.max_direct_submitted_artifacts_bytes must be positive")
-	case policy.MaxDirectSubmittedArtifactBytes > policy.MaxSubmittedArtifactBytes:
-		return fmt.Errorf("policy.max_direct_submitted_artifacts_bytes %d exceeds max_submitted_artifacts_bytes %d", policy.MaxDirectSubmittedArtifactBytes, policy.MaxSubmittedArtifactBytes)
-	case policy.MaxArtifactUploadBytes <= 0:
-		return fmt.Errorf("policy.max_artifact_upload_bytes must be positive")
-	case policy.MaxArtifactChunkBytes <= 0:
-		return fmt.Errorf("policy.max_artifact_chunk_bytes must be positive")
-	case policy.MaxArtifactUploadBytes > policy.MaxSubmittedArtifactBytes:
-		return fmt.Errorf("policy.max_artifact_upload_bytes %d exceeds max_submitted_artifacts_bytes %d", policy.MaxArtifactUploadBytes, policy.MaxSubmittedArtifactBytes)
-	case policy.MaxArtifactChunkBytes > policy.MaxArtifactUploadBytes:
-		return fmt.Errorf("policy.max_artifact_chunk_bytes %d exceeds max_artifact_upload_bytes %d", policy.MaxArtifactChunkBytes, policy.MaxArtifactUploadBytes)
-	case policy.MaxArtifactReadBytes <= 0:
-		return fmt.Errorf("policy.max_artifact_read_bytes must be positive")
-	case policy.MaxArtifactReadsPerOpportunity <= 0:
-		return fmt.Errorf("policy.max_artifact_reads_per_opportunity must be positive")
-	case policy.MaxArtifactReadBytesPerOpportunity <= 0:
-		return fmt.Errorf("policy.max_artifact_read_bytes_per_opportunity must be positive")
-	case policy.MaxArtifactReadBytes > policy.MaxArtifactReadBytesPerOpportunity:
-		return fmt.Errorf("policy.max_artifact_read_bytes %d exceeds max_artifact_read_bytes_per_opportunity %d", policy.MaxArtifactReadBytes, policy.MaxArtifactReadBytesPerOpportunity)
+	case policy.MaxSubmittedEvidencePerSide < 0:
+		return fmt.Errorf("policy.max_submitted_evidence_per_side must be non-negative")
+	case policy.MaxSubmittedEvidenceBytes <= 0:
+		return fmt.Errorf("policy.max_submitted_evidence_bytes must be positive")
+	case policy.MaxDirectSubmittedEvidenceBytes <= 0:
+		return fmt.Errorf("policy.max_direct_submitted_evidence_bytes must be positive")
+	case policy.MaxDirectSubmittedEvidenceBytes > policy.MaxSubmittedEvidenceBytes:
+		return fmt.Errorf("policy.max_direct_submitted_evidence_bytes %d exceeds max_submitted_evidence_bytes %d", policy.MaxDirectSubmittedEvidenceBytes, policy.MaxSubmittedEvidenceBytes)
+	case policy.MaxEvidenceUploadBytes <= 0:
+		return fmt.Errorf("policy.max_evidence_upload_bytes must be positive")
+	case policy.MaxEvidenceChunkBytes <= 0:
+		return fmt.Errorf("policy.max_evidence_chunk_bytes must be positive")
+	case policy.MaxEvidenceUploadBytes > policy.MaxSubmittedEvidenceBytes:
+		return fmt.Errorf("policy.max_evidence_upload_bytes %d exceeds max_submitted_evidence_bytes %d", policy.MaxEvidenceUploadBytes, policy.MaxSubmittedEvidenceBytes)
+	case policy.MaxEvidenceChunkBytes > policy.MaxEvidenceUploadBytes:
+		return fmt.Errorf("policy.max_evidence_chunk_bytes %d exceeds max_evidence_upload_bytes %d", policy.MaxEvidenceChunkBytes, policy.MaxEvidenceUploadBytes)
+	case policy.MaxEvidenceReadBytes <= 0:
+		return fmt.Errorf("policy.max_evidence_read_bytes must be positive")
+	case policy.MaxEvidenceReadsPerOpportunity <= 0:
+		return fmt.Errorf("policy.max_evidence_reads_per_opportunity must be positive")
+	case policy.MaxEvidenceReadBytesPerOpportunity <= 0:
+		return fmt.Errorf("policy.max_evidence_read_bytes_per_opportunity must be positive")
+	case policy.MaxEvidenceReadBytes > policy.MaxEvidenceReadBytesPerOpportunity:
+		return fmt.Errorf("policy.max_evidence_read_bytes %d exceeds max_evidence_read_bytes_per_opportunity %d", policy.MaxEvidenceReadBytes, policy.MaxEvidenceReadBytesPerOpportunity)
 	default:
 		return nil
 	}
@@ -201,13 +201,13 @@ func (policy Policy) StateMap() map[string]any {
 		"max_reports_per_side":                    policy.MaxReportsPerSide,
 		"max_report_title_bytes":                  policy.MaxReportTitleBytes,
 		"max_report_summary_bytes":                policy.MaxReportSummaryBytes,
-		"max_submitted_artifacts_per_side":        policy.MaxSubmittedArtifactPerSide,
-		"max_submitted_artifacts_bytes":           policy.MaxSubmittedArtifactBytes,
-		"max_direct_submitted_artifacts_bytes":    policy.MaxDirectSubmittedArtifactBytes,
-		"max_artifact_upload_bytes":               policy.MaxArtifactUploadBytes,
-		"max_artifact_chunk_bytes":                policy.MaxArtifactChunkBytes,
-		"max_artifact_read_bytes":                 policy.MaxArtifactReadBytes,
-		"max_artifact_reads_per_opportunity":      policy.MaxArtifactReadsPerOpportunity,
-		"max_artifact_read_bytes_per_opportunity": policy.MaxArtifactReadBytesPerOpportunity,
+		"max_submitted_evidence_per_side":         policy.MaxSubmittedEvidencePerSide,
+		"max_submitted_evidence_bytes":            policy.MaxSubmittedEvidenceBytes,
+		"max_direct_submitted_evidence_bytes":     policy.MaxDirectSubmittedEvidenceBytes,
+		"max_evidence_upload_bytes":               policy.MaxEvidenceUploadBytes,
+		"max_evidence_chunk_bytes":                policy.MaxEvidenceChunkBytes,
+		"max_evidence_read_bytes":                 policy.MaxEvidenceReadBytes,
+		"max_evidence_reads_per_opportunity":      policy.MaxEvidenceReadsPerOpportunity,
+		"max_evidence_read_bytes_per_opportunity": policy.MaxEvidenceReadBytesPerOpportunity,
 	}
 }
