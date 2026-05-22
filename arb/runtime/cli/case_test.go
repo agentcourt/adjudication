@@ -84,6 +84,60 @@ func TestResolveAttorneyInstructionsPathRejectsMissingFile(t *testing.T) {
 	}
 }
 
+func TestResolvePromptDirUsesExplicitDirectory(t *testing.T) {
+	dir := t.TempDir()
+	got, err := resolvePromptDir(dir)
+	if err != nil {
+		t.Fatalf("resolvePromptDir returned error: %v", err)
+	}
+	want, err := filepath.Abs(dir)
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
+	if got != want {
+		t.Fatalf("resolvePromptDir = %q, want %q", got, want)
+	}
+}
+
+func TestResolvePromptDirRejectsFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "prompt.md")
+	if err := os.WriteFile(path, []byte("prompt"), 0o644); err != nil {
+		t.Fatalf("write prompt: %v", err)
+	}
+	_, err := resolvePromptDir(path)
+	if err == nil || !strings.Contains(err.Error(), "must be a directory") {
+		t.Fatalf("resolvePromptDir error = %v, want directory error", err)
+	}
+}
+
+func TestResolvePromptFileUsesExplicitFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "prompt.md")
+	if err := os.WriteFile(path, []byte("prompt"), 0o644); err != nil {
+		t.Fatalf("write prompt: %v", err)
+	}
+	got, err := resolvePromptFile("test prompt", path)
+	if err != nil {
+		t.Fatalf("resolvePromptFile returned error: %v", err)
+	}
+	want, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
+	if got != want {
+		t.Fatalf("resolvePromptFile = %q, want %q", got, want)
+	}
+}
+
+func TestResolvePromptFileRejectsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	_, err := resolvePromptFile("test prompt", dir)
+	if err == nil || !strings.Contains(err.Error(), "must be a file") {
+		t.Fatalf("resolvePromptFile error = %v, want file error", err)
+	}
+}
+
 func TestFinalVoteCountsUsesFinalRound(t *testing.T) {
 	state := map[string]any{
 		"case": map[string]any{

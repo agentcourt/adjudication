@@ -76,7 +76,7 @@ func sampleRenderResult() (Result, *runContext) {
 	rc := &runContext{
 		fileByID: map[string]CaseFile{
 			"instructions.txt": {
-				FileID:       "instructions.txt",
+				ArtifactID:   "instructions.txt",
 				Name:         "instructions.txt",
 				TextReadable: true,
 				Text:         "instructions body",
@@ -101,10 +101,10 @@ func sampleRenderResult() (Result, *runContext) {
 				"arguments": []any{
 					map[string]any{"phase": "arguments", "role": "plaintiff", "text": "argument"},
 				},
-				"rebuttals":     []any{},
-				"surrebuttals":  []any{},
-				"closings":      []any{},
-				"offered_files": []any{map[string]any{"phase": "arguments", "role": "plaintiff", "file_id": "instructions.txt", "label": "PX-1"}},
+				"rebuttals":         []any{},
+				"surrebuttals":      []any{},
+				"closings":          []any{},
+				"offered_artifacts": []any{map[string]any{"phase": "arguments", "role": "plaintiff", "artifact_id": "instructions.txt", "label": "PX-1"}},
 				"technical_reports": []any{
 					map[string]any{"phase": "arguments", "role": "plaintiff", "title": "Verification", "summary": "Verified OK."},
 				},

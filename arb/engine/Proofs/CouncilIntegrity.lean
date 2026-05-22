@@ -219,7 +219,7 @@ the council roster, the stored votes, or the round counter.
 -/
 theorem appendSupplementalMaterials_preserves_councilVoteIntegrity
     (c : ArbitrationCase)
-    (offered : List OfferedFile)
+    (offered : List OfferedArtifact)
     (reports : List TechnicalReport)
     (hIntegrity : councilVoteIntegrity c) :
     councilVoteIntegrity (appendSupplementalMaterials c offered reports) := by
@@ -785,17 +785,17 @@ theorem step_pass_phase_opportunity_preserves_councilVoteIntegrity
 A successful evidence submission preserves deliberation-record integrity.
 Evidence submission appends source material, not council votes or membership.
 -/
-theorem step_submit_evidence_preserves_councilVoteIntegrity
+theorem step_submit_artifact_preserves_councilVoteIntegrity
     (s t : ArbitrationState)
     (action : CourtAction)
-    (hType : action.action_type = "submit_evidence")
+    (hType : action.action_type = "submit_artifact")
     (hIntegrity : councilVoteIntegrity s.case)
     (hStep : step { state := s, action := action } = .ok t) :
     councilVoteIntegrity t.case := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
     simpa [step, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
-  simpa [stateWithCase, appendSubmittedEvidence] using hIntegrity
+  simpa [stateWithCase, appendSubmittedArtifact] using hIntegrity
 
 /--
 A successful council vote preserves deliberation-record integrity.
@@ -877,8 +877,8 @@ theorem step_preserves_councilVoteIntegrity
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
             · exact step_pass_phase_opportunity_preserves_councilVoteIntegrity
                 s t action hPass hIntegrity hStep
-            · by_cases hEvidence : action.action_type = "submit_evidence"
-              · exact step_submit_evidence_preserves_councilVoteIntegrity
+            · by_cases hEvidence : action.action_type = "submit_artifact"
+              · exact step_submit_artifact_preserves_councilVoteIntegrity
                   s t action hEvidence hIntegrity hStep
               · by_cases hVote : action.action_type = "submit_council_vote"
                 · exact step_submit_council_vote_preserves_councilVoteIntegrity

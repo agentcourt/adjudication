@@ -33,19 +33,19 @@ def materialOriginAllowed (phase role : String) : Prop :=
   (phase = "arguments" ∧ (role = "plaintiff" ∨ role = "defendant")) ∨
     (phase = "rebuttals" ∧ role = "plaintiff")
 
-def offeredFileOriginAllowed (item : OfferedFile) : Prop :=
+def offeredArtifactOriginAllowed (item : OfferedArtifact) : Prop :=
   materialOriginAllowed item.phase item.role
 
 def technicalReportOriginAllowed (item : TechnicalReport) : Prop :=
   materialOriginAllowed item.phase item.role
 
 def recordProvenance (s : ArbitrationState) : Prop :=
-  (∀ item ∈ s.case.offered_files, offeredFileOriginAllowed item) ∧
+  (∀ item ∈ s.case.offered_artifacts, offeredArtifactOriginAllowed item) ∧
     ∀ item ∈ s.case.technical_reports, technicalReportOriginAllowed item
 
 def materialsExtend (s t : ArbitrationState) : Prop :=
-  ∃ offered : List OfferedFile, ∃ reports : List TechnicalReport,
-    t.case.offered_files = s.case.offered_files ++ offered ∧
+  ∃ offered : List OfferedArtifact, ∃ reports : List TechnicalReport,
+    t.case.offered_artifacts = s.case.offered_artifacts ++ offered ∧
       t.case.technical_reports = s.case.technical_reports ++ reports
 
 /--
@@ -66,14 +66,14 @@ theorem materialOriginAllowed_of_rebuttals :
 Every successfully parsed offered-file entry carries the phase supplied to the
 parser.
 -/
-theorem parseOfferedFileEntry_phase
+theorem parseOfferedArtifactEntry_phase
     (entry : Lean.Json)
     (phase role : String)
-    (item : OfferedFile)
-    (hParse : parseOfferedFileEntry entry phase role = .ok item) :
+    (item : OfferedArtifact)
+    (hParse : parseOfferedArtifactEntry entry phase role = .ok item) :
     item.phase = phase := by
-  unfold parseOfferedFileEntry at hParse
-  cases hFileId : getString entry "file_id" with
+  unfold parseOfferedArtifactEntry at hParse
+  cases hFileId : getString entry "artifact_id" with
   | error err =>
       rw [hFileId] at hParse
       cases hParse
@@ -81,18 +81,18 @@ theorem parseOfferedFileEntry_phase
       rw [hFileId] at hParse
       have hParse' :
           (if trimString rawFileId = "" then
-              (Except.error "offered_files entry requires file_id" : Except String OfferedFile)
+              (Except.error "offered_artifacts entry requires artifact_id" : Except String OfferedArtifact)
             else
               Except.ok
                 { phase := phase
                   role := role
-                  file_id := trimString rawFileId
+                  artifact_id := trimString rawFileId
                   label := getOptionalString entry "label" }) = .ok item := by
         simpa [Except.bind] using hParse
       by_cases hEmpty : trimString rawFileId = ""
       · have : False := by
           have hBad :
-              (Except.error "offered_files entry requires file_id" : Except String OfferedFile) = .ok item := by
+              (Except.error "offered_artifacts entry requires artifact_id" : Except String OfferedArtifact) = .ok item := by
             simp [hEmpty] at hParse'
           cases hBad
         contradiction
@@ -100,37 +100,37 @@ theorem parseOfferedFileEntry_phase
             (Except.ok
               { phase := phase
                 role := role
-                file_id := trimString rawFileId
-                label := getOptionalString entry "label" } : Except String OfferedFile) = .ok item := by
+                artifact_id := trimString rawFileId
+                label := getOptionalString entry "label" } : Except String OfferedArtifact) = .ok item := by
           simpa [hEmpty] using hParse'
         cases hOk
         rfl
 
-theorem parseOfferedFileEntries_all_phase
+theorem parseOfferedArtifactEntries_all_phase
     (entries : List Lean.Json)
     (phase role : String)
-    (offered : List OfferedFile)
-    (hParse : parseOfferedFileEntries entries phase role = .ok offered) :
+    (offered : List OfferedArtifact)
+    (hParse : parseOfferedArtifactEntries entries phase role = .ok offered) :
     ∀ item ∈ offered, item.phase = phase := by
   revert offered
   induction entries with
   | nil =>
       intro offered hParse item hMem
-      unfold parseOfferedFileEntries at hParse
+      unfold parseOfferedArtifactEntries at hParse
       cases hParse
       simp at hMem
   | cons entry rest ih =>
       intro offered hParse item hMem
-      unfold parseOfferedFileEntries at hParse
-      cases hEntry : parseOfferedFileEntry entry phase role with
+      unfold parseOfferedArtifactEntries at hParse
+      cases hEntry : parseOfferedArtifactEntry entry phase role with
       | error err =>
           rw [hEntry] at hParse
           cases hParse
       | ok first =>
           have hFirstPhase : first.phase = phase := by
-            exact parseOfferedFileEntry_phase entry phase role first hEntry
+            exact parseOfferedArtifactEntry_phase entry phase role first hEntry
           rw [hEntry] at hParse
-          cases hRest : parseOfferedFileEntries rest phase role with
+          cases hRest : parseOfferedArtifactEntries rest phase role with
           | error err =>
               rw [hRest] at hParse
               cases hParse
@@ -142,20 +142,20 @@ theorem parseOfferedFileEntries_all_phase
               · exact hFirstPhase
               · exact ih tail hRest item hTailMem
 
-theorem parseOfferedFiles_all_phase
+theorem parseOfferedArtifacts_all_phase
     (payload : Lean.Json)
     (phase role : String)
-    (offered : List OfferedFile)
-    (hParse : parseOfferedFiles payload phase role = .ok offered) :
+    (offered : List OfferedArtifact)
+    (hParse : parseOfferedArtifacts payload phase role = .ok offered) :
     ∀ item ∈ offered, item.phase = phase := by
-  unfold parseOfferedFiles at hParse
-  cases hEntries : getOptionalArray payload "offered_files" with
+  unfold parseOfferedArtifacts at hParse
+  cases hEntries : getOptionalArray payload "offered_artifacts" with
   | error err =>
       rw [hEntries] at hParse
       cases hParse
   | ok entries =>
       rw [hEntries] at hParse
-      exact parseOfferedFileEntries_all_phase entries phase role offered hParse
+      exact parseOfferedArtifactEntries_all_phase entries phase role offered hParse
 
 /--
 Every successfully parsed technical report entry carries the phase supplied to
@@ -323,7 +323,7 @@ record provenance.
 theorem stateWithCase_preserves_recordProvenance
     (s : ArbitrationState)
     (c : ArbitrationCase)
-    (hOffered : c.offered_files = s.case.offered_files)
+    (hOffered : c.offered_artifacts = s.case.offered_artifacts)
     (hReports : c.technical_reports = s.case.technical_reports)
     (hProv : recordProvenance s) :
     recordProvenance (stateWithCase s c) := by
@@ -336,19 +336,19 @@ items have allowed origins.
 theorem appendSupplementalMaterials_preserves_recordProvenance
     (s : ArbitrationState)
     (c : ArbitrationCase)
-    (offered : List OfferedFile)
+    (offered : List OfferedArtifact)
     (reports : List TechnicalReport)
-    (hOffered : c.offered_files = s.case.offered_files)
+    (hOffered : c.offered_artifacts = s.case.offered_artifacts)
     (hReports : c.technical_reports = s.case.technical_reports)
     (hProv : recordProvenance s)
-    (hOfferedNew : ∀ item ∈ offered, offeredFileOriginAllowed item)
+    (hOfferedNew : ∀ item ∈ offered, offeredArtifactOriginAllowed item)
     (hReportsNew : ∀ item ∈ reports, technicalReportOriginAllowed item) :
     recordProvenance (stateWithCase s (appendSupplementalMaterials c offered reports)) := by
   rcases hProv with ⟨hOldOffered, hOldReports⟩
   refine ⟨?_, ?_⟩
   · intro item hMem
     simp [stateWithCase, appendSupplementalMaterials, hOffered] at hMem
-    simp [offeredFileOriginAllowed]
+    simp [offeredArtifactOriginAllowed]
     rcases hMem with hOld | hNew
     · exact hOldOffered item hOld
     · exact hOfferedNew item hNew
@@ -378,9 +378,9 @@ theorem materialsExtend_trans
   rcases hTU with ⟨offeredTU, reportsTU, hOfferedTU, hReportsTU⟩
   refine ⟨offeredST ++ offeredTU, reportsST ++ reportsTU, ?_, ?_⟩
   · calc
-      u.case.offered_files = t.case.offered_files ++ offeredTU := hOfferedTU
-      _ = (s.case.offered_files ++ offeredST) ++ offeredTU := by rw [hOfferedST]
-      _ = s.case.offered_files ++ (offeredST ++ offeredTU) := by simp [List.append_assoc]
+      u.case.offered_artifacts = t.case.offered_artifacts ++ offeredTU := hOfferedTU
+      _ = (s.case.offered_artifacts ++ offeredST) ++ offeredTU := by rw [hOfferedST]
+      _ = s.case.offered_artifacts ++ (offeredST ++ offeredTU) := by simp [List.append_assoc]
   · calc
       u.case.technical_reports = t.case.technical_reports ++ reportsTU := hReportsTU
       _ = (s.case.technical_reports ++ reportsST) ++ reportsTU := by rw [hReportsST]
@@ -393,7 +393,7 @@ state extends the old one by an empty suffix.
 theorem stateWithCase_extends_materials
     (s : ArbitrationState)
     (c : ArbitrationCase)
-    (hOffered : c.offered_files = s.case.offered_files)
+    (hOffered : c.offered_artifacts = s.case.offered_artifacts)
     (hReports : c.technical_reports = s.case.technical_reports) :
     materialsExtend s (stateWithCase s c) := by
   refine ⟨[], [], ?_, ?_⟩ <;> simp [stateWithCase, hOffered, hReports]
@@ -405,9 +405,9 @@ suffixes.
 theorem appendSupplementalMaterials_extends_materials
     (s : ArbitrationState)
     (c : ArbitrationCase)
-    (offered : List OfferedFile)
+    (offered : List OfferedArtifact)
     (reports : List TechnicalReport)
-    (hOffered : c.offered_files = s.case.offered_files)
+    (hOffered : c.offered_artifacts = s.case.offered_artifacts)
     (hReports : c.technical_reports = s.case.technical_reports) :
     materialsExtend s (stateWithCase s (appendSupplementalMaterials c offered reports)) := by
   refine ⟨offered, reports, ?_, ?_⟩
@@ -422,7 +422,7 @@ theorem continueDeliberation_preserves_recordProvenance_for
     (s t : ArbitrationState)
     (c : ArbitrationCase)
     (hProv : recordProvenance s)
-    (hOffered : c.offered_files = s.case.offered_files)
+    (hOffered : c.offered_artifacts = s.case.offered_artifacts)
     (hReports : c.technical_reports = s.case.technical_reports)
     (hCont : continueDeliberation s c = .ok t) :
     recordProvenance t := by
@@ -456,7 +456,7 @@ with an empty suffix.
 theorem continueDeliberation_extends_materials_for
     (s t : ArbitrationState)
     (c : ArbitrationCase)
-    (hOffered : c.offered_files = s.case.offered_files)
+    (hOffered : c.offered_artifacts = s.case.offered_artifacts)
     (hReports : c.technical_reports = s.case.technical_reports)
     (hCont : continueDeliberation s c = .ok t) :
     materialsExtend s t := by
@@ -492,7 +492,7 @@ theorem step_record_opening_statement_preserves_recordProvenance
     recordProvenance t := by
   rcases step_record_opening_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact stateWithCase_preserves_recordProvenance s _
-    (addFiling_preserves_offered_files s.case "openings"
+    (addFiling_preserves_offered_artifacts s.case "openings"
       (if s.case.openings.isEmpty then "plaintiff" else "defendant")
       (trimString rawText))
     (addFiling_preserves_technical_reports s.case "openings"
@@ -508,7 +508,7 @@ theorem step_record_opening_statement_extends_materials
     materialsExtend s t := by
   rcases step_record_opening_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact stateWithCase_extends_materials s _
-    (addFiling_preserves_offered_files s.case "openings"
+    (addFiling_preserves_offered_artifacts s.case "openings"
       (if s.case.openings.isEmpty then "plaintiff" else "defendant")
       (trimString rawText))
     (addFiling_preserves_technical_reports s.case "openings"
@@ -531,15 +531,15 @@ theorem step_submit_argument_preserves_recordProvenance
   have hRoleCase : role = "plaintiff" ∨ role = "defendant" := by
     unfold role
     by_cases hEmpty : s.case.arguments.isEmpty <;> simp [hEmpty]
-  have hOfferedNew : ∀ item ∈ offered, offeredFileOriginAllowed item := by
+  have hOfferedNew : ∀ item ∈ offered, offeredArtifactOriginAllowed item := by
     intro item hMem
     have hItemPhase : item.phase = "arguments" :=
-      parseOfferedFiles_all_phase action.payload "arguments" role offered hOfferedParse item hMem
+      parseOfferedArtifacts_all_phase action.payload "arguments" role offered hOfferedParse item hMem
     have hItemRole : item.role = role :=
-      parseOfferedFiles_all_role action.payload "arguments" role offered hOfferedParse item hMem
+      parseOfferedArtifacts_all_role action.payload "arguments" role offered hOfferedParse item hMem
     have hAllowed : materialOriginAllowed "arguments" role :=
       materialOriginAllowed_of_arguments hRoleCase
-    simpa [offeredFileOriginAllowed, hItemPhase, hItemRole] using hAllowed
+    simpa [offeredArtifactOriginAllowed, hItemPhase, hItemRole] using hAllowed
   have hReportsNew : ∀ item ∈ reports, technicalReportOriginAllowed item := by
     intro item hMem
     have hItemPhase : item.phase = "arguments" :=
@@ -552,7 +552,7 @@ theorem step_submit_argument_preserves_recordProvenance
   exact appendSupplementalMaterials_preserves_recordProvenance s
     (addFiling s.case "arguments" role (trimString rawText))
     offered reports
-    (addFiling_preserves_offered_files s.case "arguments" role (trimString rawText))
+    (addFiling_preserves_offered_artifacts s.case "arguments" role (trimString rawText))
     (addFiling_preserves_technical_reports s.case "arguments" role (trimString rawText))
     hProv hOfferedNew hReportsNew
 
@@ -571,7 +571,7 @@ theorem step_submit_argument_extends_materials
   exact appendSupplementalMaterials_extends_materials s
     (addFiling s.case "arguments" role (trimString rawText))
     offered reports
-    (addFiling_preserves_offered_files s.case "arguments" role (trimString rawText))
+    (addFiling_preserves_offered_artifacts s.case "arguments" role (trimString rawText))
     (addFiling_preserves_technical_reports s.case "arguments" role (trimString rawText))
 
 theorem step_submit_rebuttal_preserves_recordProvenance
@@ -586,13 +586,13 @@ theorem step_submit_rebuttal_preserves_recordProvenance
       "rebuttal" s.policy.max_rebuttal_chars action.payload
       (by simpa [step, hType] using hStep) with
     ⟨rawText, offered, reports, hOfferedParse, hReportsParse, _hOfferedCap, _hReportsCap, rfl⟩
-  have hOfferedNew : ∀ item ∈ offered, offeredFileOriginAllowed item := by
+  have hOfferedNew : ∀ item ∈ offered, offeredArtifactOriginAllowed item := by
     intro item hMem
     have hItemPhase : item.phase = "rebuttals" :=
-      parseOfferedFiles_all_phase action.payload "rebuttals" "plaintiff" offered hOfferedParse item hMem
+      parseOfferedArtifacts_all_phase action.payload "rebuttals" "plaintiff" offered hOfferedParse item hMem
     have hItemRole : item.role = "plaintiff" :=
-      parseOfferedFiles_all_role action.payload "rebuttals" "plaintiff" offered hOfferedParse item hMem
-    simpa [offeredFileOriginAllowed, hItemPhase, hItemRole] using materialOriginAllowed_of_rebuttals
+      parseOfferedArtifacts_all_role action.payload "rebuttals" "plaintiff" offered hOfferedParse item hMem
+    simpa [offeredArtifactOriginAllowed, hItemPhase, hItemRole] using materialOriginAllowed_of_rebuttals
   have hReportsNew : ∀ item ∈ reports, technicalReportOriginAllowed item := by
     intro item hMem
     have hItemPhase : item.phase = "rebuttals" :=
@@ -603,7 +603,7 @@ theorem step_submit_rebuttal_preserves_recordProvenance
   exact appendSupplementalMaterials_preserves_recordProvenance s
     (addFiling s.case "rebuttals" "plaintiff" (trimString rawText))
     offered reports
-    (addFiling_preserves_offered_files s.case "rebuttals" "plaintiff" (trimString rawText))
+    (addFiling_preserves_offered_artifacts s.case "rebuttals" "plaintiff" (trimString rawText))
     (addFiling_preserves_technical_reports s.case "rebuttals" "plaintiff" (trimString rawText))
     hProv hOfferedNew hReportsNew
 
@@ -621,7 +621,7 @@ theorem step_submit_rebuttal_extends_materials
   exact appendSupplementalMaterials_extends_materials s
     (addFiling s.case "rebuttals" "plaintiff" (trimString rawText))
     offered reports
-    (addFiling_preserves_offered_files s.case "rebuttals" "plaintiff" (trimString rawText))
+    (addFiling_preserves_offered_artifacts s.case "rebuttals" "plaintiff" (trimString rawText))
     (addFiling_preserves_technical_reports s.case "rebuttals" "plaintiff" (trimString rawText))
 
 theorem step_submit_surrebuttal_preserves_recordProvenance
@@ -637,7 +637,7 @@ theorem step_submit_surrebuttal_preserves_recordProvenance
       (by simpa [step, hType] using hStep) with
     ⟨rawText, rfl⟩
   exact stateWithCase_preserves_recordProvenance s _
-    (addFiling_preserves_offered_files s.case "surrebuttals" "defendant" (trimString rawText))
+    (addFiling_preserves_offered_artifacts s.case "surrebuttals" "defendant" (trimString rawText))
     (addFiling_preserves_technical_reports s.case "surrebuttals" "defendant" (trimString rawText))
     hProv
 
@@ -653,13 +653,13 @@ theorem step_submit_surrebuttal_extends_materials
       (by simpa [step, hType] using hStep) with
     ⟨rawText, rfl⟩
   exact stateWithCase_extends_materials s _
-    (addFiling_preserves_offered_files s.case "surrebuttals" "defendant" (trimString rawText))
+    (addFiling_preserves_offered_artifacts s.case "surrebuttals" "defendant" (trimString rawText))
     (addFiling_preserves_technical_reports s.case "surrebuttals" "defendant" (trimString rawText))
 
-theorem step_submit_evidence_preserves_recordProvenance
+theorem step_submit_artifact_preserves_recordProvenance
     (s t : ArbitrationState)
     (action : CourtAction)
-    (hType : action.action_type = "submit_evidence")
+    (hType : action.action_type = "submit_artifact")
     (hProv : recordProvenance s)
     (hStep : step { state := s, action := action } = .ok t) :
     recordProvenance t := by
@@ -667,22 +667,22 @@ theorem step_submit_evidence_preserves_recordProvenance
     simpa [step, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
   exact stateWithCase_preserves_recordProvenance s _
-    (by simp [appendSubmittedEvidence])
-    (by simp [appendSubmittedEvidence])
+    (by simp [appendSubmittedArtifact])
+    (by simp [appendSubmittedArtifact])
     hProv
 
-theorem step_submit_evidence_extends_materials
+theorem step_submit_artifact_extends_materials
     (s t : ArbitrationState)
     (action : CourtAction)
-    (hType : action.action_type = "submit_evidence")
+    (hType : action.action_type = "submit_artifact")
     (hStep : step { state := s, action := action } = .ok t) :
     materialsExtend s t := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
     simpa [step, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
   exact stateWithCase_extends_materials s _
-    (by simp [appendSubmittedEvidence])
-    (by simp [appendSubmittedEvidence])
+    (by simp [appendSubmittedArtifact])
+    (by simp [appendSubmittedArtifact])
 
 theorem step_deliver_closing_statement_preserves_recordProvenance
     (s t : ArbitrationState)
@@ -693,7 +693,7 @@ theorem step_deliver_closing_statement_preserves_recordProvenance
     recordProvenance t := by
   rcases step_deliver_closing_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact stateWithCase_preserves_recordProvenance s _
-    (addFiling_preserves_offered_files s.case "closings"
+    (addFiling_preserves_offered_artifacts s.case "closings"
       (if s.case.closings.isEmpty then "plaintiff" else "defendant")
       (trimString rawText))
     (addFiling_preserves_technical_reports s.case "closings"
@@ -709,7 +709,7 @@ theorem step_deliver_closing_statement_extends_materials
     materialsExtend s t := by
   rcases step_deliver_closing_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact stateWithCase_extends_materials s _
-    (addFiling_preserves_offered_files s.case "closings"
+    (addFiling_preserves_offered_artifacts s.case "closings"
       (if s.case.closings.isEmpty then "plaintiff" else "defendant")
       (trimString rawText))
     (addFiling_preserves_technical_reports s.case "closings"
@@ -926,8 +926,8 @@ theorem step_preserves_recordProvenance
       · exact step_submit_rebuttal_preserves_recordProvenance s t action hRebuttal hProv hStep
       · by_cases hSurrebuttal : action.action_type = "submit_surrebuttal"
         · exact step_submit_surrebuttal_preserves_recordProvenance s t action hSurrebuttal hProv hStep
-        · by_cases hEvidence : action.action_type = "submit_evidence"
-          · exact step_submit_evidence_preserves_recordProvenance s t action hEvidence hProv hStep
+        · by_cases hEvidence : action.action_type = "submit_artifact"
+          · exact step_submit_artifact_preserves_recordProvenance s t action hEvidence hProv hStep
           · by_cases hClosing : action.action_type = "deliver_closing_statement"
             · exact step_deliver_closing_statement_preserves_recordProvenance s t action hClosing hProv hStep
             · by_cases hPass : action.action_type = "pass_phase_opportunity"
@@ -955,8 +955,8 @@ theorem step_extends_materials
       · exact step_submit_rebuttal_extends_materials s t action hRebuttal hStep
       · by_cases hSurrebuttal : action.action_type = "submit_surrebuttal"
         · exact step_submit_surrebuttal_extends_materials s t action hSurrebuttal hStep
-        · by_cases hEvidence : action.action_type = "submit_evidence"
-          · exact step_submit_evidence_extends_materials s t action hEvidence hStep
+        · by_cases hEvidence : action.action_type = "submit_artifact"
+          · exact step_submit_artifact_extends_materials s t action hEvidence hStep
           · by_cases hClosing : action.action_type = "deliver_closing_statement"
             · exact step_deliver_closing_statement_extends_materials s t action hClosing hStep
             · by_cases hPass : action.action_type = "pass_phase_opportunity"

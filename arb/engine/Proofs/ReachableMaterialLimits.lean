@@ -38,8 +38,8 @@ theorem reachable_materialLimitsRespected
           · exact step_submit_rebuttal_preserves_material_limits s t action hRebuttal ih hStep
           · by_cases hSurrebuttal : action.action_type = "submit_surrebuttal"
             · exact step_submit_surrebuttal_preserves_material_limits s t action hSurrebuttal ih hStep
-            · by_cases hEvidence : action.action_type = "submit_evidence"
-              · exact step_submit_evidence_preserves_material_limits s t action hEvidence ih hStep
+            · by_cases hEvidence : action.action_type = "submit_artifact"
+              · exact step_submit_artifact_preserves_material_limits s t action hEvidence ih hStep
               · by_cases hClosing : action.action_type = "deliver_closing_statement"
                 · exact step_deliver_closing_statement_preserves_material_limits s t action hClosing ih hStep
                 · by_cases hPass : action.action_type = "pass_phase_opportunity"

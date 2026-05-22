@@ -44,6 +44,9 @@ func writeArtifacts(cfg Config, result Result, rc *runContext) error {
 	if err := writeJSONFile(filepath.Join(cfg.OutputDir, "run.json"), result); err != nil {
 		return err
 	}
+	if err := writeJSONFile(filepath.Join(cfg.OutputDir, "artifact-manifest.json"), rc.artifactManifest()); err != nil {
+		return err
+	}
 	if err := writeJSONFile(filepath.Join(cfg.OutputDir, "state.json"), result.FinalState); err != nil {
 		return err
 	}
@@ -107,9 +110,9 @@ func renderTranscript(result Result, rc *runContext) string {
 	b.WriteString("## Council Deliberation\n\n")
 	b.WriteString(renderVoteRounds(mapList(caseObj["council_votes"])))
 	b.WriteString("\n\n## Exhibits\n\n")
-	b.WriteString(rc.renderExhibitBodies(mapList(caseObj["offered_files"])))
+	b.WriteString(rc.renderExhibitBodies(mapList(caseObj["offered_artifacts"])))
 	b.WriteString("\n\n## Submitted Evidence\n\n")
-	b.WriteString(renderSubmittedEvidence(mapList(caseObj["submitted_evidence"])))
+	b.WriteString(renderSubmittedArtifact(mapList(caseObj["submitted_artifacts"])))
 	b.WriteString("\n\n## Technical Reports\n\n")
 	b.WriteString(renderReports(mapList(caseObj["technical_reports"])))
 	b.WriteString("\n\n## Result\n\n")
@@ -134,9 +137,9 @@ func renderDigest(result Result, rc *runContext) string {
 	appendFilingSection(&b, "Surrebuttals", mapList(caseObj["surrebuttals"]))
 	appendFilingSection(&b, "Closings", mapList(caseObj["closings"]))
 	b.WriteString("## Exhibits\n\n")
-	b.WriteString(rc.renderExhibitIndex(mapList(caseObj["offered_files"])))
+	b.WriteString(rc.renderExhibitIndex(mapList(caseObj["offered_artifacts"])))
 	b.WriteString("\n\n## Submitted Evidence\n\n")
-	b.WriteString(renderSubmittedEvidence(mapList(caseObj["submitted_evidence"])))
+	b.WriteString(renderSubmittedArtifact(mapList(caseObj["submitted_artifacts"])))
 	b.WriteString("\n\n## Technical Reports\n\n")
 	b.WriteString(renderReports(mapList(caseObj["technical_reports"])))
 	b.WriteString("\n\n## Council Votes\n\n")
@@ -185,7 +188,7 @@ func appendTranscriptPhase(b *strings.Builder, title string, phase string, items
 		b.WriteString("\n\n")
 		b.WriteString(mapString(item["text"]))
 		b.WriteString("\n\n")
-		exhibits := filterArtifacts(mapList(caseObj["offered_files"]), phase, role)
+		exhibits := filterArtifacts(mapList(caseObj["offered_artifacts"]), phase, role)
 		if len(exhibits) > 0 {
 			b.WriteString("Exhibits offered:\n")
 			b.WriteString(renderInlineExhibitIndex(exhibits, rc.fileByID))
@@ -240,10 +243,10 @@ func filterArtifacts(items []map[string]any, phase string, role string) []map[st
 func renderInlineExhibitIndex(items []map[string]any, fileByID map[string]CaseFile) string {
 	lines := make([]string, 0, len(items))
 	for _, item := range items {
-		fileID := mapString(item["file_id"])
+		artifactID := mapString(item["artifact_id"])
 		label := mapString(item["label"])
-		name := fileID
-		if file, ok := fileByID[fileID]; ok && strings.TrimSpace(file.Name) != "" {
+		name := artifactID
+		if file, ok := fileByID[artifactID]; ok && strings.TrimSpace(file.Name) != "" {
 			name = file.Name
 		}
 		if label == "" {
@@ -263,7 +266,7 @@ func renderInlineReportIndex(items []map[string]any) string {
 	return strings.Join(lines, "\n")
 }
 
-func renderSubmittedEvidence(items []map[string]any) string {
+func renderSubmittedArtifact(items []map[string]any) string {
 	if len(items) == 0 {
 		return "(none)"
 	}
@@ -278,7 +281,7 @@ func renderSubmittedEvidence(items []map[string]any) string {
 			mapString(item["role"]),
 			mapString(item["phase"]),
 			mapString(item["title"]),
-			mapString(item["file_id"]),
+			mapString(item["artifact_id"]),
 			source,
 			mapString(item["sha256"]),
 			mapString(item["size_bytes"]),

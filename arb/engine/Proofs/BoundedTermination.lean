@@ -35,17 +35,17 @@ def remainingDeliberationSteps (s : ArbitrationState) : Nat :=
   (s.policy.max_deliberation_rounds - s.case.deliberation_round) * s.policy.council_size +
     (seatedCouncilMemberCount s.case - (currentRoundVotes s.case).length)
 
-def remainingSubmittedEvidenceSteps (s : ArbitrationState) : Nat :=
-  (s.policy.max_submitted_evidence_per_side -
-      submittedEvidenceCountForRole s.case.submitted_evidence "plaintiff") +
-    (s.policy.max_submitted_evidence_per_side -
-      submittedEvidenceCountForRole s.case.submitted_evidence "defendant")
+def remainingSubmittedArtifactSteps (s : ArbitrationState) : Nat :=
+  (s.policy.max_submitted_artifacts_per_side -
+      submittedArtifactCountForRole s.case.submitted_artifacts "plaintiff") +
+    (s.policy.max_submitted_artifacts_per_side -
+      submittedArtifactCountForRole s.case.submitted_artifacts "defendant")
 
 def remainingStepBudget (s : ArbitrationState) : Nat :=
   if s.case.phase = "closed" then
     0
   else
-    remainingSubmittedEvidenceSteps s + remainingMeritsSteps s.case + remainingDeliberationSteps s
+    remainingSubmittedArtifactSteps s + remainingMeritsSteps s.case + remainingDeliberationSteps s
 
 /-
 `Reachable` says only that some successful run exists.  Bounded termination
@@ -129,7 +129,7 @@ theorem remainingDeliberationSteps_addFiling
 
 theorem remainingDeliberationSteps_appendSupplementalMaterials
     (s : ArbitrationState)
-    (offered : List OfferedFile)
+    (offered : List OfferedArtifact)
     (reports : List TechnicalReport) :
     remainingDeliberationSteps
         (stateWithCase s (appendSupplementalMaterials s.case offered reports)) =
@@ -137,14 +137,14 @@ theorem remainingDeliberationSteps_appendSupplementalMaterials
   unfold remainingDeliberationSteps seatedCouncilMemberCount seatedCouncilMembers currentRoundVotes
   simp [stateWithCase, appendSupplementalMaterials]
 
-theorem remainingDeliberationSteps_appendSubmittedEvidence
+theorem remainingDeliberationSteps_appendSubmittedArtifact
     (s : ArbitrationState)
-    (evidence : SubmittedEvidence) :
+    (evidence : SubmittedArtifact) :
     remainingDeliberationSteps
-        (stateWithCase s (appendSubmittedEvidence s.case evidence)) =
+        (stateWithCase s (appendSubmittedArtifact s.case evidence)) =
       remainingDeliberationSteps s := by
   unfold remainingDeliberationSteps seatedCouncilMemberCount seatedCouncilMembers currentRoundVotes
-  simp [stateWithCase, appendSubmittedEvidence]
+  simp [stateWithCase, appendSubmittedArtifact]
 
 theorem remainingDeliberationSteps_phase_update
     (s : ArbitrationState)
@@ -165,19 +165,19 @@ theorem remainingStepBudget_of_phase_ne_closed
     (s : ArbitrationState)
     (hPhase : s.case.phase ≠ "closed") :
     remainingStepBudget s =
-      remainingSubmittedEvidenceSteps s + remainingMeritsSteps s.case + remainingDeliberationSteps s := by
+      remainingSubmittedArtifactSteps s + remainingMeritsSteps s.case + remainingDeliberationSteps s := by
   simp [remainingStepBudget, hPhase]
 
-theorem remainingSubmittedEvidenceSteps_stateWithCase_of_submitted_evidence_eq
+theorem remainingSubmittedArtifactSteps_stateWithCase_of_submitted_artifacts_eq
     (s : ArbitrationState)
     (c : ArbitrationCase)
-    (hEvidence : c.submitted_evidence = s.case.submitted_evidence) :
-    remainingSubmittedEvidenceSteps (stateWithCase s c) = remainingSubmittedEvidenceSteps s := by
-  simp [remainingSubmittedEvidenceSteps, stateWithCase, hEvidence]
+    (hEvidence : c.submitted_artifacts = s.case.submitted_artifacts) :
+    remainingSubmittedArtifactSteps (stateWithCase s c) = remainingSubmittedArtifactSteps s := by
+  simp [remainingSubmittedArtifactSteps, stateWithCase, hEvidence]
 
-theorem advanceAfterMerits_preserves_submitted_evidence
+theorem advanceAfterMerits_preserves_submitted_artifacts
     (c : ArbitrationCase) :
-    (advanceAfterMerits c).submitted_evidence = c.submitted_evidence := by
+    (advanceAfterMerits c).submitted_artifacts = c.submitted_artifacts := by
   unfold advanceAfterMerits
   by_cases hOpen : (decide (c.openings.length ≥ 2) && decide (c.phase = "openings")) = true
   · simp [hOpen]
@@ -191,114 +191,114 @@ theorem advanceAfterMerits_preserves_submitted_evidence
           · simp [hOpen, hArguments, hRebuttals, hSurrebuttals, hClosings]
           · simp [hOpen, hArguments, hRebuttals, hSurrebuttals, hClosings]
 
-theorem addFiling_preserves_submitted_evidence
+theorem addFiling_preserves_submitted_artifacts
     (c : ArbitrationCase)
     (phase role text : String) :
-    (addFiling c phase role text).submitted_evidence = c.submitted_evidence := by
+    (addFiling c phase role text).submitted_artifacts = c.submitted_artifacts := by
   unfold addFiling
-  split <;> simp [advanceAfterMerits_preserves_submitted_evidence]
+  split <;> simp [advanceAfterMerits_preserves_submitted_artifacts]
 
-theorem appendSupplementalMaterials_preserves_submitted_evidence
+theorem appendSupplementalMaterials_preserves_submitted_artifacts
     (c : ArbitrationCase)
-    (offered : List OfferedFile)
+    (offered : List OfferedArtifact)
     (reports : List TechnicalReport) :
-    (appendSupplementalMaterials c offered reports).submitted_evidence = c.submitted_evidence := by
+    (appendSupplementalMaterials c offered reports).submitted_artifacts = c.submitted_artifacts := by
   simp [appendSupplementalMaterials]
 
-theorem remainingSubmittedEvidenceSteps_addFiling
+theorem remainingSubmittedArtifactSteps_addFiling
     (s : ArbitrationState)
     (phase role text : String) :
-    remainingSubmittedEvidenceSteps (stateWithCase s (addFiling s.case phase role text)) =
-      remainingSubmittedEvidenceSteps s := by
-  exact remainingSubmittedEvidenceSteps_stateWithCase_of_submitted_evidence_eq s _
-    (addFiling_preserves_submitted_evidence s.case phase role text)
+    remainingSubmittedArtifactSteps (stateWithCase s (addFiling s.case phase role text)) =
+      remainingSubmittedArtifactSteps s := by
+  exact remainingSubmittedArtifactSteps_stateWithCase_of_submitted_artifacts_eq s _
+    (addFiling_preserves_submitted_artifacts s.case phase role text)
 
-theorem remainingSubmittedEvidenceSteps_appendSupplementalMaterials_addFiling
+theorem remainingSubmittedArtifactSteps_appendSupplementalMaterials_addFiling
     (s : ArbitrationState)
     (phase role text : String)
-    (offered : List OfferedFile)
+    (offered : List OfferedArtifact)
     (reports : List TechnicalReport) :
-    remainingSubmittedEvidenceSteps
+    remainingSubmittedArtifactSteps
         (stateWithCase s (appendSupplementalMaterials (addFiling s.case phase role text) offered reports)) =
-      remainingSubmittedEvidenceSteps s := by
-  exact remainingSubmittedEvidenceSteps_stateWithCase_of_submitted_evidence_eq s _ (by
-    rw [appendSupplementalMaterials_preserves_submitted_evidence]
-    exact addFiling_preserves_submitted_evidence s.case phase role text)
+      remainingSubmittedArtifactSteps s := by
+  exact remainingSubmittedArtifactSteps_stateWithCase_of_submitted_artifacts_eq s _ (by
+    rw [appendSupplementalMaterials_preserves_submitted_artifacts]
+    exact addFiling_preserves_submitted_artifacts s.case phase role text)
 
-theorem remainingSubmittedEvidenceSteps_phase_update
+theorem remainingSubmittedArtifactSteps_phase_update
     (s : ArbitrationState)
     (phase : String) :
-    remainingSubmittedEvidenceSteps (stateWithCase s { s.case with phase := phase }) =
-      remainingSubmittedEvidenceSteps s := by
-  exact remainingSubmittedEvidenceSteps_stateWithCase_of_submitted_evidence_eq s _ rfl
+    remainingSubmittedArtifactSteps (stateWithCase s { s.case with phase := phase }) =
+      remainingSubmittedArtifactSteps s := by
+  exact remainingSubmittedArtifactSteps_stateWithCase_of_submitted_artifacts_eq s _ rfl
 
-theorem submittedEvidenceCountForRole_concat_same
-    (items : List SubmittedEvidence)
+theorem submittedArtifactCountForRole_concat_same
+    (items : List SubmittedArtifact)
     (role : String)
-    (evidence : SubmittedEvidence)
+    (evidence : SubmittedArtifact)
     (hRole : evidence.role = role) :
-    submittedEvidenceCountForRole (items.concat evidence) role =
-      submittedEvidenceCountForRole items role + 1 := by
-  unfold submittedEvidenceCountForRole
+    submittedArtifactCountForRole (items.concat evidence) role =
+      submittedArtifactCountForRole items role + 1 := by
+  unfold submittedArtifactCountForRole
   simp [hRole]
 
-theorem submittedEvidenceCountForRole_concat_different
-    (items : List SubmittedEvidence)
+theorem submittedArtifactCountForRole_concat_different
+    (items : List SubmittedArtifact)
     (role : String)
-    (evidence : SubmittedEvidence)
+    (evidence : SubmittedArtifact)
     (hRole : evidence.role ≠ role) :
-    submittedEvidenceCountForRole (items.concat evidence) role =
-      submittedEvidenceCountForRole items role := by
-  unfold submittedEvidenceCountForRole
+    submittedArtifactCountForRole (items.concat evidence) role =
+      submittedArtifactCountForRole items role := by
+  unfold submittedArtifactCountForRole
   simp [hRole]
 
-theorem submittedEvidenceCountForRole_append_singleton_same
-    (items : List SubmittedEvidence)
+theorem submittedArtifactCountForRole_append_singleton_same
+    (items : List SubmittedArtifact)
     (role : String)
-    (evidence : SubmittedEvidence)
+    (evidence : SubmittedArtifact)
     (hRole : evidence.role = role) :
-    submittedEvidenceCountForRole (items ++ [evidence]) role =
-      submittedEvidenceCountForRole items role + 1 := by
+    submittedArtifactCountForRole (items ++ [evidence]) role =
+      submittedArtifactCountForRole items role + 1 := by
   simpa [List.concat_eq_append] using
-    submittedEvidenceCountForRole_concat_same items role evidence hRole
+    submittedArtifactCountForRole_concat_same items role evidence hRole
 
-theorem submittedEvidenceCountForRole_append_singleton_different
-    (items : List SubmittedEvidence)
+theorem submittedArtifactCountForRole_append_singleton_different
+    (items : List SubmittedArtifact)
     (role : String)
-    (evidence : SubmittedEvidence)
+    (evidence : SubmittedArtifact)
     (hRole : evidence.role ≠ role) :
-    submittedEvidenceCountForRole (items ++ [evidence]) role =
-      submittedEvidenceCountForRole items role := by
+    submittedArtifactCountForRole (items ++ [evidence]) role =
+      submittedArtifactCountForRole items role := by
   simpa [List.concat_eq_append] using
-    submittedEvidenceCountForRole_concat_different items role evidence hRole
+    submittedArtifactCountForRole_concat_different items role evidence hRole
 
-theorem remainingSubmittedEvidenceSteps_appendSubmittedEvidence_decreases
+theorem remainingSubmittedArtifactSteps_appendSubmittedArtifact_decreases
     (s : ArbitrationState)
-    (evidence : SubmittedEvidence)
+    (evidence : SubmittedArtifact)
     (hRole : evidence.role = "plaintiff" ∨ evidence.role = "defendant")
-    (hCount : submittedEvidenceCountForRole s.case.submitted_evidence evidence.role + 1 ≤
-      s.policy.max_submitted_evidence_per_side) :
-    remainingSubmittedEvidenceSteps (stateWithCase s (appendSubmittedEvidence s.case evidence)) + 1 ≤
-      remainingSubmittedEvidenceSteps s := by
+    (hCount : submittedArtifactCountForRole s.case.submitted_artifacts evidence.role + 1 ≤
+      s.policy.max_submitted_artifacts_per_side) :
+    remainingSubmittedArtifactSteps (stateWithCase s (appendSubmittedArtifact s.case evidence)) + 1 ≤
+      remainingSubmittedArtifactSteps s := by
   rcases hRole with hPlaintiff | hDefendant
-  · have hPlaintiffCount := submittedEvidenceCountForRole_append_singleton_same
-      s.case.submitted_evidence "plaintiff" evidence hPlaintiff
-    have hDefendantCount := submittedEvidenceCountForRole_append_singleton_different
-      s.case.submitted_evidence "defendant" evidence (by simp [hPlaintiff])
-    have hCountP : submittedEvidenceCountForRole s.case.submitted_evidence "plaintiff" + 1 ≤
-        s.policy.max_submitted_evidence_per_side := by
+  · have hPlaintiffCount := submittedArtifactCountForRole_append_singleton_same
+      s.case.submitted_artifacts "plaintiff" evidence hPlaintiff
+    have hDefendantCount := submittedArtifactCountForRole_append_singleton_different
+      s.case.submitted_artifacts "defendant" evidence (by simp [hPlaintiff])
+    have hCountP : submittedArtifactCountForRole s.case.submitted_artifacts "plaintiff" + 1 ≤
+        s.policy.max_submitted_artifacts_per_side := by
       simpa [hPlaintiff] using hCount
-    simp [remainingSubmittedEvidenceSteps, stateWithCase, appendSubmittedEvidence,
+    simp [remainingSubmittedArtifactSteps, stateWithCase, appendSubmittedArtifact,
       hPlaintiffCount, hDefendantCount]
     omega
-  · have hDefendantCount := submittedEvidenceCountForRole_append_singleton_same
-      s.case.submitted_evidence "defendant" evidence hDefendant
-    have hPlaintiffCount := submittedEvidenceCountForRole_append_singleton_different
-      s.case.submitted_evidence "plaintiff" evidence (by simp [hDefendant])
-    have hCountD : submittedEvidenceCountForRole s.case.submitted_evidence "defendant" + 1 ≤
-        s.policy.max_submitted_evidence_per_side := by
+  · have hDefendantCount := submittedArtifactCountForRole_append_singleton_same
+      s.case.submitted_artifacts "defendant" evidence hDefendant
+    have hPlaintiffCount := submittedArtifactCountForRole_append_singleton_different
+      s.case.submitted_artifacts "plaintiff" evidence (by simp [hDefendant])
+    have hCountD : submittedArtifactCountForRole s.case.submitted_artifacts "defendant" + 1 ≤
+        s.policy.max_submitted_artifacts_per_side := by
       simpa [hDefendant] using hCount
-    simp [remainingSubmittedEvidenceSteps, stateWithCase, appendSubmittedEvidence,
+    simp [remainingSubmittedArtifactSteps, stateWithCase, appendSubmittedArtifact,
       hPlaintiffCount, hDefendantCount]
     omega
 
@@ -566,13 +566,13 @@ theorem step_record_opening_statement_decreases_remainingStepBudget
           (trimString rawText))).case.phase ≠ "closed" := by
     simpa [List.isEmpty_iff] using hTarget0
   have hEvidenceBudget :
-      remainingSubmittedEvidenceSteps
+      remainingSubmittedArtifactSteps
           (stateWithCase s
             (addFiling s.case "openings"
               (if s.case.openings.isEmpty then "plaintiff" else "defendant")
               (trimString rawText))) =
-        remainingSubmittedEvidenceSteps s := by
-    exact remainingSubmittedEvidenceSteps_addFiling s "openings"
+        remainingSubmittedArtifactSteps s := by
+    exact remainingSubmittedArtifactSteps_addFiling s "openings"
       (if s.case.openings.isEmpty then "plaintiff" else "defendant")
       (trimString rawText)
   rw [remainingStepBudget_of_phase_ne_closed _ hTarget]
@@ -580,7 +580,7 @@ theorem step_record_opening_statement_decreases_remainingStepBudget
   rw [hDelib]
   rw [hEvidenceBudget]
   simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
-    congrArg (fun n => remainingSubmittedEvidenceSteps s + n + remainingDeliberationSteps s) hMerits
+    congrArg (fun n => remainingSubmittedArtifactSteps s + n + remainingDeliberationSteps s) hMerits
 
 theorem step_submit_argument_decreases_remainingStepBudget
     (s t : ArbitrationState)
@@ -659,7 +659,7 @@ theorem step_submit_argument_decreases_remainingStepBudget
           reports)).case.phase ≠ "closed" := by
     simpa [List.isEmpty_iff] using hTarget0
   have hEvidenceBudget :
-      remainingSubmittedEvidenceSteps
+      remainingSubmittedArtifactSteps
           (stateWithCase s
             (appendSupplementalMaterials
               (addFiling s.case "arguments"
@@ -667,8 +667,8 @@ theorem step_submit_argument_decreases_remainingStepBudget
                 (trimString rawText))
               offered
               reports)) =
-        remainingSubmittedEvidenceSteps s := by
-    exact remainingSubmittedEvidenceSteps_appendSupplementalMaterials_addFiling s "arguments"
+        remainingSubmittedArtifactSteps s := by
+    exact remainingSubmittedArtifactSteps_appendSupplementalMaterials_addFiling s "arguments"
       (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
       (trimString rawText) offered reports
   rw [remainingStepBudget_of_phase_ne_closed _ hTarget]
@@ -676,7 +676,7 @@ theorem step_submit_argument_decreases_remainingStepBudget
   rw [hDelib]
   rw [hEvidenceBudget]
   simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
-    congrArg (fun n => remainingSubmittedEvidenceSteps s + n + remainingDeliberationSteps s) hMerits
+    congrArg (fun n => remainingSubmittedArtifactSteps s + n + remainingDeliberationSteps s) hMerits
 
 theorem step_submit_rebuttal_decreases_remainingStepBudget
     (s t : ArbitrationState)
@@ -746,21 +746,21 @@ theorem step_submit_rebuttal_decreases_remainingStepBudget
           reports)).case.phase ≠ "closed" := by
     exact hTarget0
   have hEvidenceBudget :
-      remainingSubmittedEvidenceSteps
+      remainingSubmittedArtifactSteps
           (stateWithCase s
             (appendSupplementalMaterials
               (addFiling s.case "rebuttals" "plaintiff" (trimString rawText))
               offered
               reports)) =
-        remainingSubmittedEvidenceSteps s := by
-    exact remainingSubmittedEvidenceSteps_appendSupplementalMaterials_addFiling s "rebuttals"
+        remainingSubmittedArtifactSteps s := by
+    exact remainingSubmittedArtifactSteps_appendSupplementalMaterials_addFiling s "rebuttals"
       "plaintiff" (trimString rawText) offered reports
   rw [remainingStepBudget_of_phase_ne_closed _ hTarget]
   rw [remainingStepBudget_of_phase_ne_closed s (by simp [hPhase])]
   rw [hDelib]
   rw [hEvidenceBudget]
   simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
-    congrArg (fun n => remainingSubmittedEvidenceSteps s + n + remainingDeliberationSteps s) hMerits
+    congrArg (fun n => remainingSubmittedArtifactSteps s + n + remainingDeliberationSteps s) hMerits
 
 theorem step_submit_surrebuttal_decreases_remainingStepBudget
     (s t : ArbitrationState)
@@ -816,17 +816,17 @@ theorem step_submit_surrebuttal_decreases_remainingStepBudget
         (addFiling s.case "surrebuttals" "defendant" (trimString rawText))).case.phase ≠ "closed" := by
     exact hTarget0
   have hEvidenceBudget :
-      remainingSubmittedEvidenceSteps
+      remainingSubmittedArtifactSteps
           (stateWithCase s
             (addFiling s.case "surrebuttals" "defendant" (trimString rawText))) =
-        remainingSubmittedEvidenceSteps s := by
-    exact remainingSubmittedEvidenceSteps_addFiling s "surrebuttals" "defendant" (trimString rawText)
+        remainingSubmittedArtifactSteps s := by
+    exact remainingSubmittedArtifactSteps_addFiling s "surrebuttals" "defendant" (trimString rawText)
   rw [remainingStepBudget_of_phase_ne_closed _ hTarget]
   rw [remainingStepBudget_of_phase_ne_closed s (by simp [hPhase])]
   rw [hDelib]
   rw [hEvidenceBudget]
   simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
-    congrArg (fun n => remainingSubmittedEvidenceSteps s + n + remainingDeliberationSteps s) hMerits
+    congrArg (fun n => remainingSubmittedArtifactSteps s + n + remainingDeliberationSteps s) hMerits
 
 theorem step_deliver_closing_statement_decreases_remainingStepBudget
     (s t : ArbitrationState)
@@ -875,13 +875,13 @@ theorem step_deliver_closing_statement_decreases_remainingStepBudget
           (trimString rawText))).case.phase ≠ "closed" := by
     simpa [List.isEmpty_iff] using hTarget0
   have hEvidenceBudget :
-      remainingSubmittedEvidenceSteps
+      remainingSubmittedArtifactSteps
           (stateWithCase s
             (addFiling s.case "closings"
               (if s.case.closings.isEmpty then "plaintiff" else "defendant")
               (trimString rawText))) =
-        remainingSubmittedEvidenceSteps s := by
-    exact remainingSubmittedEvidenceSteps_addFiling s "closings"
+        remainingSubmittedArtifactSteps s := by
+    exact remainingSubmittedArtifactSteps_addFiling s "closings"
       (if s.case.closings.isEmpty then "plaintiff" else "defendant")
       (trimString rawText)
   rw [remainingStepBudget_of_phase_ne_closed _ hTarget]
@@ -889,7 +889,7 @@ theorem step_deliver_closing_statement_decreases_remainingStepBudget
   rw [hDelib]
   rw [hEvidenceBudget]
   simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
-    congrArg (fun n => remainingSubmittedEvidenceSteps s + n + remainingDeliberationSteps s) hMerits
+    congrArg (fun n => remainingSubmittedArtifactSteps s + n + remainingDeliberationSteps s) hMerits
 
 /--
 Passing a rebuttal or surrebuttal also consumes exactly one merits step.
@@ -940,15 +940,15 @@ theorem step_pass_phase_opportunity_decreases_remainingStepBudget
                   remainingDeliberationSteps s := by
               exact remainingDeliberationSteps_phase_update s "surrebuttals"
             have hEvidenceBudget :
-                remainingSubmittedEvidenceSteps (stateWithCase s { s.case with phase := "surrebuttals" }) =
-                  remainingSubmittedEvidenceSteps s := by
-              exact remainingSubmittedEvidenceSteps_phase_update s "surrebuttals"
+                remainingSubmittedArtifactSteps (stateWithCase s { s.case with phase := "surrebuttals" }) =
+                  remainingSubmittedArtifactSteps s := by
+              exact remainingSubmittedArtifactSteps_phase_update s "surrebuttals"
             rw [remainingStepBudget_of_phase_ne_closed _ (by simpa using hTarget0)]
             rw [remainingStepBudget_of_phase_ne_closed s (by simp [hRebuttals])]
             rw [hDelib]
             rw [hEvidenceBudget]
             simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
-              congrArg (fun n => remainingSubmittedEvidenceSteps s + n + remainingDeliberationSteps s) hMerits
+              congrArg (fun n => remainingSubmittedArtifactSteps s + n + remainingDeliberationSteps s) hMerits
   · by_cases hSurrebuttals : s.case.phase = "surrebuttals"
     · have hPass :
           (do
@@ -981,15 +981,15 @@ theorem step_pass_phase_opportunity_decreases_remainingStepBudget
                     remainingDeliberationSteps s := by
                 exact remainingDeliberationSteps_phase_update s "closings"
               have hEvidenceBudget :
-                  remainingSubmittedEvidenceSteps (stateWithCase s { s.case with phase := "closings" }) =
-                    remainingSubmittedEvidenceSteps s := by
-                exact remainingSubmittedEvidenceSteps_phase_update s "closings"
+                  remainingSubmittedArtifactSteps (stateWithCase s { s.case with phase := "closings" }) =
+                    remainingSubmittedArtifactSteps s := by
+                exact remainingSubmittedArtifactSteps_phase_update s "closings"
               rw [remainingStepBudget_of_phase_ne_closed _ (by simpa using hTarget0)]
               rw [remainingStepBudget_of_phase_ne_closed s (by simp [hSurrebuttals])]
               rw [hDelib]
               rw [hEvidenceBudget]
               simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
-                congrArg (fun n => remainingSubmittedEvidenceSteps s + n + remainingDeliberationSteps s) hMerits
+                congrArg (fun n => remainingSubmittedArtifactSteps s + n + remainingDeliberationSteps s) hMerits
     · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
 
 theorem submitEvidence_budget_result
@@ -998,30 +998,30 @@ theorem submitEvidence_budget_result
     (payload : Lean.Json)
     (hSubmit : submitEvidence s actorRole payload = .ok t) :
     ∃ evidence,
-      t = stateWithCase s (appendSubmittedEvidence s.case evidence) ∧
+      t = stateWithCase s (appendSubmittedArtifact s.case evidence) ∧
       (evidence.role = "plaintiff" ∨ evidence.role = "defendant") ∧
-      submittedEvidenceCountForRole s.case.submitted_evidence evidence.role + 1 ≤
-        s.policy.max_submitted_evidence_per_side := by
+      submittedArtifactCountForRole s.case.submitted_artifacts evidence.role + 1 ≤
+        s.policy.max_submitted_artifacts_per_side := by
   have handle (expectedRole : String)
       (hExpected : expectedRole = "plaintiff" ∨ expectedRole = "defendant")
       (hCore :
         (do
           requireRole actorRole expectedRole
-          let parsedEvidence ← parseSubmittedEvidence payload s.case.phase expectedRole
+          let parsedEvidence ← parseSubmittedArtifact payload s.case.phase expectedRole
           let evidence := { parsedEvidence with role := expectedRole }
-          if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-            throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
-          else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
-            throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+          if s.case.submitted_artifacts.any (fun item => item.artifact_id = evidence.artifact_id) then
+            throw s!"duplicate submitted evidence artifact_id: {evidence.artifact_id}"
+          else if evidence.size_bytes > s.policy.max_submitted_artifacts_bytes then
+            throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_artifacts_bytes}"
           else
-            let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
-            requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
-            pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t) :
+            let total := submittedArtifactCountForRole s.case.submitted_artifacts expectedRole + 1
+            requireCountWithinLimit "submitted_artifacts for this side" total s.policy.max_submitted_artifacts_per_side
+            pure <| stateWithCase s (appendSubmittedArtifact s.case evidence)) = .ok t) :
       ∃ evidence,
-        t = stateWithCase s (appendSubmittedEvidence s.case evidence) ∧
+        t = stateWithCase s (appendSubmittedArtifact s.case evidence) ∧
         (evidence.role = "plaintiff" ∨ evidence.role = "defendant") ∧
-        submittedEvidenceCountForRole s.case.submitted_evidence evidence.role + 1 ≤
-          s.policy.max_submitted_evidence_per_side := by
+        submittedArtifactCountForRole s.case.submitted_artifacts evidence.role + 1 ≤
+          s.policy.max_submitted_artifacts_per_side := by
     cases hRoleCheck : requireRole actorRole expectedRole with
     | error err =>
         rw [hRoleCheck] at hCore
@@ -1031,33 +1031,33 @@ theorem submitEvidence_budget_result
         cases okv
         rw [hRoleCheck] at hCore
         simp at hCore
-        cases hParse : parseSubmittedEvidence payload s.case.phase expectedRole with
+        cases hParse : parseSubmittedArtifact payload s.case.phase expectedRole with
         | error err =>
             rw [hParse] at hCore
             cases hCore
         | ok parsedEvidence =>
             rw [hParse] at hCore
-            let evidence : SubmittedEvidence := { parsedEvidence with role := expectedRole }
+            let evidence : SubmittedArtifact := { parsedEvidence with role := expectedRole }
             change
-              (if ∃ x, x ∈ s.case.submitted_evidence ∧ x.file_id = evidence.file_id then
-                throw (toString "duplicate submitted evidence file_id: " ++ toString evidence.file_id)
-              else if s.policy.max_submitted_evidence_bytes < evidence.size_bytes then
+              (if ∃ x, x ∈ s.case.submitted_artifacts ∧ x.artifact_id = evidence.artifact_id then
+                throw (toString "duplicate submitted evidence artifact_id: " ++ toString evidence.artifact_id)
+              else if s.policy.max_submitted_artifacts_bytes < evidence.size_bytes then
                 throw (toString "submitted evidence exceeds byte limit of " ++
-                  toString s.policy.max_submitted_evidence_bytes)
+                  toString s.policy.max_submitted_artifacts_bytes)
               else
-                (fun _ => stateWithCase s (appendSubmittedEvidence s.case evidence)) <$>
-                  requireCountWithinLimit "submitted_evidence for this side"
-                    (submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1)
-                    s.policy.max_submitted_evidence_per_side) = .ok t at hCore
-            by_cases hDup : ∃ x, x ∈ s.case.submitted_evidence ∧ x.file_id = evidence.file_id
+                (fun _ => stateWithCase s (appendSubmittedArtifact s.case evidence)) <$>
+                  requireCountWithinLimit "submitted_artifacts for this side"
+                    (submittedArtifactCountForRole s.case.submitted_artifacts expectedRole + 1)
+                    s.policy.max_submitted_artifacts_per_side) = .ok t at hCore
+            by_cases hDup : ∃ x, x ∈ s.case.submitted_artifacts ∧ x.artifact_id = evidence.artifact_id
             · simp [hDup] at hCore
             · simp [hDup] at hCore
-              by_cases hSize : s.policy.max_submitted_evidence_bytes < evidence.size_bytes
+              by_cases hSize : s.policy.max_submitted_artifacts_bytes < evidence.size_bytes
               · simp [hSize] at hCore
               · simp [hSize] at hCore
-                let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
-                cases hCountCheck : requireCountWithinLimit "submitted_evidence for this side"
-                    total s.policy.max_submitted_evidence_per_side with
+                let total := submittedArtifactCountForRole s.case.submitted_artifacts expectedRole + 1
+                cases hCountCheck : requireCountWithinLimit "submitted_artifacts for this side"
+                    total s.policy.max_submitted_artifacts_per_side with
                 | error err =>
                     simp [total, hCountCheck] at hCore
                     cases hCore
@@ -1065,9 +1065,9 @@ theorem submitEvidence_budget_result
                     cases okv
                     simp [total, hCountCheck] at hCore
                     cases hCore
-                    have hCount : total ≤ s.policy.max_submitted_evidence_per_side := by
+                    have hCount : total ≤ s.policy.max_submitted_artifacts_per_side := by
                       unfold requireCountWithinLimit at hCountCheck
-                      by_cases hTooMany : total > s.policy.max_submitted_evidence_per_side
+                      by_cases hTooMany : total > s.policy.max_submitted_artifacts_per_side
                       · simp [hTooMany] at hCountCheck
                       · omega
                     refine ⟨evidence, rfl, ?_, ?_⟩
@@ -1077,16 +1077,16 @@ theorem submitEvidence_budget_result
   · have hCore :
         (do
           requireRole actorRole (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
-          let parsedEvidence ← parseSubmittedEvidence payload s.case.phase (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
+          let parsedEvidence ← parseSubmittedArtifact payload s.case.phase (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
           let evidence := { parsedEvidence with role := (if s.case.arguments.isEmpty then "plaintiff" else "defendant") }
-          if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-            throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
-          else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
-            throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+          if s.case.submitted_artifacts.any (fun item => item.artifact_id = evidence.artifact_id) then
+            throw s!"duplicate submitted evidence artifact_id: {evidence.artifact_id}"
+          else if evidence.size_bytes > s.policy.max_submitted_artifacts_bytes then
+            throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_artifacts_bytes}"
           else
-            let total := submittedEvidenceCountForRole s.case.submitted_evidence (if s.case.arguments.isEmpty then "plaintiff" else "defendant") + 1
-            requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
-            pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
+            let total := submittedArtifactCountForRole s.case.submitted_artifacts (if s.case.arguments.isEmpty then "plaintiff" else "defendant") + 1
+            requireCountWithinLimit "submitted_artifacts for this side" total s.policy.max_submitted_artifacts_per_side
+            pure <| stateWithCase s (appendSubmittedArtifact s.case evidence)) = .ok t := by
         simpa [submitEvidence, hArgs] using hSubmit
     exact handle (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
       (by by_cases hEmpty : s.case.arguments.isEmpty <;> simp [hEmpty]) hCore
@@ -1096,16 +1096,16 @@ theorem submitEvidence_budget_result
           have hCore :
               (do
                 requireRole actorRole "plaintiff"
-                let parsedEvidence ← parseSubmittedEvidence payload s.case.phase "plaintiff"
+                let parsedEvidence ← parseSubmittedArtifact payload s.case.phase "plaintiff"
                 let evidence := { parsedEvidence with role := "plaintiff" }
-                if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-                  throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
-                else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
-                  throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+                if s.case.submitted_artifacts.any (fun item => item.artifact_id = evidence.artifact_id) then
+                  throw s!"duplicate submitted evidence artifact_id: {evidence.artifact_id}"
+                else if evidence.size_bytes > s.policy.max_submitted_artifacts_bytes then
+                  throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_artifacts_bytes}"
                 else
-                  let total := submittedEvidenceCountForRole s.case.submitted_evidence "plaintiff" + 1
-                  requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
-                  pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
+                  let total := submittedArtifactCountForRole s.case.submitted_artifacts "plaintiff" + 1
+                  requireCountWithinLimit "submitted_artifacts for this side" total s.policy.max_submitted_artifacts_per_side
+                  pure <| stateWithCase s (appendSubmittedArtifact s.case evidence)) = .ok t := by
             simpa [submitEvidence, hArgs, hRebuttals, hEmpty] using hSubmit
           exact handle "plaintiff" (Or.inl rfl) hCore
       | false =>
@@ -1116,10 +1116,10 @@ theorem submitEvidence_budget_result
       change Except.error "submitted evidence is allowed only in arguments and rebuttals" = .ok t at hSubmit
       cases hSubmit
 
-theorem step_submit_evidence_decreases_remainingStepBudget
+theorem step_submit_artifact_decreases_remainingStepBudget
     (s t : ArbitrationState)
     (action : CourtAction)
-    (hType : action.action_type = "submit_evidence")
+    (hType : action.action_type = "submit_artifact")
     (_hs : Reachable s)
     (hStep : step { state := s, action := action } = .ok t) :
     remainingStepBudget t + 1 ≤ remainingStepBudget s := by
@@ -1130,20 +1130,20 @@ theorem step_submit_evidence_decreases_remainingStepBudget
   have hSourceOpen : s.case.phase ≠ "closed" := by
     intro hClosed
     simp [submitEvidence, hClosed] at hSubmit
-    change Except.error "submitted evidence is allowed only in arguments and rebuttals" = .ok (stateWithCase s (appendSubmittedEvidence s.case evidence)) at hSubmit
+    change Except.error "submitted evidence is allowed only in arguments and rebuttals" = .ok (stateWithCase s (appendSubmittedArtifact s.case evidence)) at hSubmit
     cases hSubmit
-  have hTargetOpen : (stateWithCase s (appendSubmittedEvidence s.case evidence)).case.phase ≠ "closed" := by
-    simpa [stateWithCase, appendSubmittedEvidence] using hSourceOpen
+  have hTargetOpen : (stateWithCase s (appendSubmittedArtifact s.case evidence)).case.phase ≠ "closed" := by
+    simpa [stateWithCase, appendSubmittedArtifact] using hSourceOpen
   rw [remainingStepBudget_of_phase_ne_closed _ hTargetOpen]
   rw [remainingStepBudget_of_phase_ne_closed s hSourceOpen]
-  have hEvidenceBudget := remainingSubmittedEvidenceSteps_appendSubmittedEvidence_decreases s evidence hRole hCount
-  have hMerits : remainingMeritsSteps (stateWithCase s (appendSubmittedEvidence s.case evidence)).case =
+  have hEvidenceBudget := remainingSubmittedArtifactSteps_appendSubmittedArtifact_decreases s evidence hRole hCount
+  have hMerits : remainingMeritsSteps (stateWithCase s (appendSubmittedArtifact s.case evidence)).case =
       remainingMeritsSteps s.case := by
     cases s.case
     rfl
-  have hDelib : remainingDeliberationSteps (stateWithCase s (appendSubmittedEvidence s.case evidence)) =
+  have hDelib : remainingDeliberationSteps (stateWithCase s (appendSubmittedArtifact s.case evidence)) =
       remainingDeliberationSteps s := by
-    exact remainingDeliberationSteps_appendSubmittedEvidence s evidence
+    exact remainingDeliberationSteps_appendSubmittedArtifact s evidence
   rw [hMerits, hDelib]
   omega
 
@@ -1455,9 +1455,9 @@ theorem continueDeliberation_does_not_increase_remainingStepBudget
                       rw [hSub, Nat.add_mul]
                       simp
                 _ = remainingDeliberationSteps (stateWithCase s c) := hBudgetC.symm
-            simpa [remainingSubmittedEvidenceSteps, remainingMeritsSteps, stateWithCase, c1, hPhase,
+            simpa [remainingSubmittedArtifactSteps, remainingMeritsSteps, stateWithCase, c1, hPhase,
               Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
-              Nat.add_le_add_right hDelibBudget (remainingSubmittedEvidenceSteps (stateWithCase s c))
+              Nat.add_le_add_right hDelibBudget (remainingSubmittedArtifactSteps (stateWithCase s c))
   · simp [hRoundComplete, stateWithCase] at hCont
     cases hCont
     exact Nat.le_refl _
@@ -1509,12 +1509,12 @@ theorem step_submit_council_vote_decreases_remainingStepBudget
     rw [remainingStepBudget_of_phase_ne_closed (stateWithCase s c1) (by simp [stateWithCase, c1, hPhase])]
     rw [remainingStepBudget_of_phase_ne_closed s (by simp [hPhase])]
     have hEvidenceBudget :
-        remainingSubmittedEvidenceSteps (stateWithCase s c1) = remainingSubmittedEvidenceSteps s := by
-      simp [remainingSubmittedEvidenceSteps, stateWithCase, c1]
+        remainingSubmittedArtifactSteps (stateWithCase s c1) = remainingSubmittedArtifactSteps s := by
+      simp [remainingSubmittedArtifactSteps, stateWithCase, c1]
     rw [hEvidenceBudget]
     simpa [remainingMeritsSteps, stateWithCase, c1, hPhase, Nat.add_assoc,
       Nat.add_left_comm, Nat.add_comm] using
-      congrArg (fun n => remainingSubmittedEvidenceSteps s + n) hVoteBudget
+      congrArg (fun n => remainingSubmittedArtifactSteps s + n) hVoteBudget
   calc
     remainingStepBudget t + 1 ≤ remainingStepBudget (stateWithCase s c1) + 1 := by
       exact Nat.add_le_add_right hContBudget 1
@@ -1575,12 +1575,12 @@ theorem step_remove_council_member_decreases_remainingStepBudget
     rw [remainingStepBudget_of_phase_ne_closed (stateWithCase s c1) (by simp [stateWithCase, c1, hPhase])]
     rw [remainingStepBudget_of_phase_ne_closed s (by simp [hPhase])]
     have hEvidenceBudget :
-        remainingSubmittedEvidenceSteps (stateWithCase s c1) = remainingSubmittedEvidenceSteps s := by
-      simp [remainingSubmittedEvidenceSteps, stateWithCase, c1]
+        remainingSubmittedArtifactSteps (stateWithCase s c1) = remainingSubmittedArtifactSteps s := by
+      simp [remainingSubmittedArtifactSteps, stateWithCase, c1]
     rw [hEvidenceBudget]
     simpa [remainingMeritsSteps, stateWithCase, c1, hPhase, Nat.add_assoc,
       Nat.add_left_comm, Nat.add_comm] using
-      congrArg (fun n => remainingSubmittedEvidenceSteps s + n) hRemovalBudget
+      congrArg (fun n => remainingSubmittedArtifactSteps s + n) hRemovalBudget
   calc
     remainingStepBudget t + 1 ≤ remainingStepBudget (stateWithCase s c1) + 1 := by
       exact Nat.add_le_add_right hContBudget 1
@@ -1618,8 +1618,8 @@ theorem step_decreases_remainingStepBudget
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
             · exact Nat.le_of_eq <|
                 step_pass_phase_opportunity_decreases_remainingStepBudget s t action hPass hs hStep
-            · by_cases hEvidence : action.action_type = "submit_evidence"
-              · exact step_submit_evidence_decreases_remainingStepBudget s t action hEvidence hs hStep
+            · by_cases hEvidence : action.action_type = "submit_artifact"
+              · exact step_submit_artifact_decreases_remainingStepBudget s t action hEvidence hs hStep
               · by_cases hVote : action.action_type = "submit_council_vote"
                 · exact step_submit_council_vote_decreases_remainingStepBudget s t action hVote hs hStep
                 · by_cases hRemoval : action.action_type = "remove_council_member"
@@ -1731,7 +1731,7 @@ theorem initializeCase_remainingStepBudget
     (s : ArbitrationState)
     (hInit : initializeCase req = .ok s) :
     remainingStepBudget s =
-      2 * s.policy.max_submitted_evidence_per_side +
+      2 * s.policy.max_submitted_artifacts_per_side +
         8 + s.policy.max_deliberation_rounds * s.policy.council_size := by
   have hPhase : s.case.phase = "openings" := initializeCase_phase_openings req s hInit
   have hPristine : pristineCouncilState s.case := initializeCase_establishes_pristineCouncilState req s hInit
@@ -1771,7 +1771,7 @@ theorem initializeCase_remainingStepBudget
                     stateWithCase] at hInit
                   cases hInit
                   rfl
-  have hSubmittedEvidenceEmpty : s.case.submitted_evidence = [] := by
+  have hSubmittedArtifactEmpty : s.case.submitted_artifacts = [] := by
     unfold initializeCase at hInit
     cases hPolicy : validatePolicy req.state.policy with
     | error err =>
@@ -1816,9 +1816,9 @@ theorem initializeCase_remainingStepBudget
         (Nat.add_mul (s.policy.max_deliberation_rounds - 1) 1 s.policy.council_size).symm
     rw [hMul, hSub]
   have hEvidenceBudget :
-      remainingSubmittedEvidenceSteps s = 2 * s.policy.max_submitted_evidence_per_side := by
-    simpa [remainingSubmittedEvidenceSteps, hSubmittedEvidenceEmpty, submittedEvidenceCountForRole]
-      using (Nat.two_mul s.policy.max_submitted_evidence_per_side).symm
+      remainingSubmittedArtifactSteps s = 2 * s.policy.max_submitted_artifacts_per_side := by
+    simpa [remainingSubmittedArtifactSteps, hSubmittedArtifactEmpty, submittedArtifactCountForRole]
+      using (Nat.two_mul s.policy.max_submitted_artifacts_per_side).symm
   rw [hMerits, hDelib, hEvidenceBudget]
 
 /--
@@ -1835,19 +1835,19 @@ theorem stepPath_length_le_initializedBudget
     (n : Nat)
     (hInit : initializeCase req = .ok start)
     (hPath : StepPath start n s) :
-    n ≤ 2 * start.policy.max_submitted_evidence_per_side +
+    n ≤ 2 * start.policy.max_submitted_artifacts_per_side +
       8 + start.policy.max_deliberation_rounds * start.policy.council_size := by
   have hReachStart : Reachable start := Reachable.init req start hInit
   have hBound := stepPath_length_plus_budget_le start s n hReachStart hPath
   have hBudget : remainingStepBudget start =
-      2 * start.policy.max_submitted_evidence_per_side +
+      2 * start.policy.max_submitted_artifacts_per_side +
         8 + start.policy.max_deliberation_rounds * start.policy.council_size := by
     exact initializeCase_remainingStepBudget req start hInit
   calc
     n ≤ n + remainingStepBudget s := by
       omega
     _ ≤ remainingStepBudget start := hBound
-    _ = 2 * start.policy.max_submitted_evidence_per_side +
+    _ = 2 * start.policy.max_submitted_artifacts_per_side +
         8 + start.policy.max_deliberation_rounds * start.policy.council_size := hBudget
 
 

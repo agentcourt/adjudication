@@ -6,24 +6,30 @@ import (
 )
 
 type Policy struct {
-	CouncilSize                 int    `json:"council_size"`
-	EvidenceStandard            string `json:"evidence_standard"`
-	RequiredVotesForDecision    int    `json:"required_votes_for_decision"`
-	MaxDeliberationRounds       int    `json:"max_deliberation_rounds"`
-	MaxOpeningChars             int    `json:"max_opening_chars"`
-	MaxArgumentChars            int    `json:"max_argument_chars"`
-	MaxRebuttalChars            int    `json:"max_rebuttal_chars"`
-	MaxSurrebuttalChars         int    `json:"max_surrebuttal_chars"`
-	MaxClosingChars             int    `json:"max_closing_chars"`
-	MaxExhibitsPerFiling        int    `json:"max_exhibits_per_filing"`
-	MaxExhibitsPerSide          int    `json:"max_exhibits_per_side"`
-	MaxExhibitBytes             int    `json:"max_exhibit_bytes"`
-	MaxReportsPerFiling         int    `json:"max_reports_per_filing"`
-	MaxReportsPerSide           int    `json:"max_reports_per_side"`
-	MaxReportTitleBytes         int    `json:"max_report_title_bytes"`
-	MaxReportSummaryBytes       int    `json:"max_report_summary_bytes"`
-	MaxSubmittedEvidencePerSide int    `json:"max_submitted_evidence_per_side"`
-	MaxSubmittedEvidenceBytes   int    `json:"max_submitted_evidence_bytes"`
+	CouncilSize                        int    `json:"council_size"`
+	EvidenceStandard                   string `json:"evidence_standard"`
+	RequiredVotesForDecision           int    `json:"required_votes_for_decision"`
+	MaxDeliberationRounds              int    `json:"max_deliberation_rounds"`
+	MaxOpeningChars                    int    `json:"max_opening_chars"`
+	MaxArgumentChars                   int    `json:"max_argument_chars"`
+	MaxRebuttalChars                   int    `json:"max_rebuttal_chars"`
+	MaxSurrebuttalChars                int    `json:"max_surrebuttal_chars"`
+	MaxClosingChars                    int    `json:"max_closing_chars"`
+	MaxExhibitsPerFiling               int    `json:"max_exhibits_per_filing"`
+	MaxExhibitsPerSide                 int    `json:"max_exhibits_per_side"`
+	MaxExhibitBytes                    int    `json:"max_exhibit_bytes"`
+	MaxReportsPerFiling                int    `json:"max_reports_per_filing"`
+	MaxReportsPerSide                  int    `json:"max_reports_per_side"`
+	MaxReportTitleBytes                int    `json:"max_report_title_bytes"`
+	MaxReportSummaryBytes              int    `json:"max_report_summary_bytes"`
+	MaxSubmittedArtifactPerSide        int    `json:"max_submitted_artifacts_per_side"`
+	MaxSubmittedArtifactBytes          int    `json:"max_submitted_artifacts_bytes"`
+	MaxDirectSubmittedArtifactBytes    int    `json:"max_direct_submitted_artifacts_bytes"`
+	MaxArtifactUploadBytes             int    `json:"max_artifact_upload_bytes"`
+	MaxArtifactChunkBytes              int    `json:"max_artifact_chunk_bytes"`
+	MaxArtifactReadBytes               int    `json:"max_artifact_read_bytes"`
+	MaxArtifactReadsPerOpportunity     int    `json:"max_artifact_reads_per_opportunity"`
+	MaxArtifactReadBytesPerOpportunity int    `json:"max_artifact_read_bytes_per_opportunity"`
 }
 
 type RuntimeLimits struct {
@@ -52,24 +58,28 @@ type AttorneyRunInfo struct {
 }
 
 type Config struct {
-	RunID                    string
-	ComplaintPath            string
-	CaseFilePaths            []string
-	OutputDir                string
-	CommonRoot               string
-	CouncilPoolPath          string
-	AttorneyModel            string
-	AttorneyInstructionsPath string
-	PlaintiffAttorney        AttorneyRoleConfig
-	DefendantAttorney        AttorneyRoleConfig
-	Policy                   Policy
-	Runtime                  RuntimeLimits
-	XProxyConfigPath         string
-	XProxyPort               int
-	ACPCommand               string
-	ACPArgs                  []string
-	ACPEnv                   []string
-	Engine                   lean.Engine
+	RunID                      string
+	ComplaintPath              string
+	CaseFilePaths              []string
+	OutputDir                  string
+	CommonRoot                 string
+	CouncilPoolPath            string
+	AttorneyModel              string
+	AttorneyInstructionsPath   string
+	PromptDir                  string
+	AttorneyCommonPromptPath   string
+	AttorneyArgumentPromptPath string
+	AttorneyRebuttalPromptPath string
+	PlaintiffAttorney          AttorneyRoleConfig
+	DefendantAttorney          AttorneyRoleConfig
+	Policy                     Policy
+	Runtime                    RuntimeLimits
+	XProxyConfigPath           string
+	XProxyPort                 int
+	ACPCommand                 string
+	ACPArgs                    []string
+	ACPEnv                     []string
+	Engine                     lean.Engine
 }
 
 type Result struct {
@@ -83,7 +93,8 @@ type Result struct {
 	EvidenceStandard  string                  `json:"evidence_standard"`
 	Attorneys         []AttorneyRunInfo       `json:"attorneys"`
 	CaseFiles         []CaseFileMeta          `json:"case_files"`
-	SubmittedEvidence []SubmittedEvidenceMeta `json:"submitted_evidence,omitempty"`
+	SubmittedArtifact []SubmittedArtifactMeta `json:"submitted_artifacts,omitempty"`
+	Artifacts         []ArtifactMeta          `json:"artifacts,omitempty"`
 	Council           []CouncilSeat           `json:"council"`
 	Events            []Event                 `json:"events"`
 	FinalState        map[string]any          `json:"final_state"`
@@ -91,7 +102,7 @@ type Result struct {
 }
 
 type CaseFile struct {
-	FileID       string
+	ArtifactID   string
 	Name         string
 	Path         string
 	MimeType     string
@@ -101,16 +112,16 @@ type CaseFile struct {
 }
 
 type CaseFileMeta struct {
-	FileID       string `json:"file_id"`
+	ArtifactID   string `json:"artifact_id"`
 	Name         string `json:"name"`
 	MimeType     string `json:"mime_type"`
 	TextReadable bool   `json:"text_readable"`
 }
 
-type SubmittedEvidenceMeta struct {
+type SubmittedArtifactMeta struct {
 	Phase              string `json:"phase"`
 	Role               string `json:"role"`
-	FileID             string `json:"file_id"`
+	ArtifactID         string `json:"artifact_id"`
 	Name               string `json:"name"`
 	Title              string `json:"title"`
 	SourceURL          string `json:"source_url,omitempty"`
@@ -120,6 +131,47 @@ type SubmittedEvidenceMeta struct {
 	Relevance          string `json:"relevance"`
 	SHA256             string `json:"sha256"`
 	SizeBytes          int    `json:"size_bytes"`
+}
+
+type ArtifactUploadSession struct {
+	UploadID           string
+	Role               string
+	Phase              string
+	Title              string
+	MimeType           string
+	ExpectedSizeBytes  int
+	ExpectedSHA256     string
+	SourceURL          string
+	SourceDescription  string
+	RetrievalTimestamp string
+	Relevance          string
+	ParentArtifactID   string
+	DerivationMethod   string
+	Path               string
+	ReceivedBytes      int
+}
+
+type ArtifactMeta struct {
+	ArtifactID          string `json:"artifact_id"`
+	SHA256              string `json:"sha256"`
+	SizeBytes           int    `json:"size_bytes"`
+	MimeType            string `json:"mime_type"`
+	StorageName         string `json:"storage_name"`
+	CreatedAt           string `json:"created_at"`
+	AdmissibilityStatus string `json:"admissibility_status"`
+	RecordVisibility    string `json:"record_visibility"`
+	Title               string `json:"title,omitempty"`
+	OriginalName        string `json:"original_name,omitempty"`
+	SourceURL           string `json:"source_url,omitempty"`
+	SourceDescription   string `json:"source_description,omitempty"`
+	RetrievalTimestamp  string `json:"retrieval_timestamp,omitempty"`
+	SubmittedByRole     string `json:"submitted_by_role,omitempty"`
+	SubmittedPhase      string `json:"submitted_phase,omitempty"`
+	ParentArtifactID    string `json:"parent_artifact_id,omitempty"`
+	ParentSHA256        string `json:"parent_sha256,omitempty"`
+	DerivationMethod    string `json:"derivation_method,omitempty"`
+	Relevance           string `json:"relevance,omitempty"`
+	TextReadable        bool   `json:"text_readable"`
 }
 
 type CouncilSeat struct {
@@ -153,7 +205,11 @@ type runContext struct {
 	state             map[string]any
 	caseFiles         []CaseFile
 	fileByID          map[string]CaseFile
-	submittedEvidence []SubmittedEvidenceMeta
+	submittedArtifact []SubmittedArtifactMeta
+	artifacts         []ArtifactMeta
+	artifactByID      map[string]ArtifactMeta
+	artifactStoreDir  string
+	uploadSessions    map[string]*ArtifactUploadSession
 	council           []CouncilSeat
 	attorneys         map[string]AttorneyRunInfo
 	acpSessions       map[string]*acpPersistentSession

@@ -124,7 +124,7 @@ A successful opening-statement step preserves the aggregate material limits.
 
 Openings add only a filing.  They never add exhibits or technical reports.
 Once the previous theorem makes the resulting state explicit, the material-limit
-claim reduces to `addFiling_preserves_offered_files`,
+claim reduces to `addFiling_preserves_offered_artifacts`,
 `addFiling_preserves_technical_reports`, and
 `stateWithCase_preserves_material_limits`.
 -/
@@ -137,7 +137,7 @@ theorem step_record_opening_statement_preserves_material_limits
     materialLimitsRespected t := by
   rcases step_record_opening_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact stateWithCase_preserves_material_limits s _ hLimits
-    (addFiling_preserves_offered_files s.case "openings"
+    (addFiling_preserves_offered_artifacts s.case "openings"
       (if s.case.openings.isEmpty then "plaintiff" else "defendant")
       (trimString rawText))
     (addFiling_preserves_technical_reports s.case "openings"
@@ -276,7 +276,7 @@ theorem step_deliver_closing_statement_preserves_material_limits
     materialLimitsRespected t := by
   rcases step_deliver_closing_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact stateWithCase_preserves_material_limits s _ hLimits
-    (addFiling_preserves_offered_files s.case "closings"
+    (addFiling_preserves_offered_artifacts s.case "closings"
       (if s.case.closings.isEmpty then "plaintiff" else "defendant")
       (trimString rawText))
     (addFiling_preserves_technical_reports s.case "closings"
@@ -304,14 +304,14 @@ theorem requireCountWithinLimit_ok_implies_le
 Every successfully parsed offered-file entry carries the role supplied to the
 parser.
 -/
-theorem parseOfferedFileEntry_role
+theorem parseOfferedArtifactEntry_role
     (entry : Lean.Json)
     (phase role : String)
-    (item : OfferedFile)
-    (hParse : parseOfferedFileEntry entry phase role = .ok item) :
+    (item : OfferedArtifact)
+    (hParse : parseOfferedArtifactEntry entry phase role = .ok item) :
     item.role = role := by
-  unfold parseOfferedFileEntry at hParse
-  cases hFileId : getString entry "file_id" with
+  unfold parseOfferedArtifactEntry at hParse
+  cases hFileId : getString entry "artifact_id" with
   | error err =>
       rw [hFileId] at hParse
       cases hParse
@@ -319,17 +319,17 @@ theorem parseOfferedFileEntry_role
       rw [hFileId] at hParse
       have hParse' :
           (if trimString rawFileId = "" then
-              (Except.error "offered_files entry requires file_id" : Except String OfferedFile)
+              (Except.error "offered_artifacts entry requires artifact_id" : Except String OfferedArtifact)
             else
               Except.ok
                 { phase := phase
                   role := role
-                  file_id := trimString rawFileId
+                  artifact_id := trimString rawFileId
                   label := getOptionalString entry "label" }) = .ok item := by
         simpa [Except.bind] using hParse
       by_cases hEmpty : trimString rawFileId = ""
       · have : False := by
-          have hBad : (Except.error "offered_files entry requires file_id" : Except String OfferedFile) = .ok item := by
+          have hBad : (Except.error "offered_artifacts entry requires artifact_id" : Except String OfferedArtifact) = .ok item := by
             simp [hEmpty] at hParse'
           cases hBad
         contradiction
@@ -337,37 +337,37 @@ theorem parseOfferedFileEntry_role
             (Except.ok
               { phase := phase
                 role := role
-                file_id := trimString rawFileId
-                label := getOptionalString entry "label" } : Except String OfferedFile) = .ok item := by
+                artifact_id := trimString rawFileId
+                label := getOptionalString entry "label" } : Except String OfferedArtifact) = .ok item := by
             simpa [hEmpty] using hParse'
         cases hOk
         rfl
 
-theorem parseOfferedFileEntries_all_role
+theorem parseOfferedArtifactEntries_all_role
     (entries : List Lean.Json)
     (phase role : String)
-    (offered : List OfferedFile)
-    (hParse : parseOfferedFileEntries entries phase role = .ok offered) :
+    (offered : List OfferedArtifact)
+    (hParse : parseOfferedArtifactEntries entries phase role = .ok offered) :
     ∀ item ∈ offered, item.role = role := by
   revert offered
   induction entries with
   | nil =>
       intro offered hParse item hMem
-      unfold parseOfferedFileEntries at hParse
+      unfold parseOfferedArtifactEntries at hParse
       cases hParse
       simp at hMem
   | cons entry rest ih =>
       intro offered hParse item hMem
-      unfold parseOfferedFileEntries at hParse
-      cases hEntry : parseOfferedFileEntry entry phase role with
+      unfold parseOfferedArtifactEntries at hParse
+      cases hEntry : parseOfferedArtifactEntry entry phase role with
       | error err =>
           rw [hEntry] at hParse
           cases hParse
       | ok first =>
           have hFirstRole : first.role = role := by
-            exact parseOfferedFileEntry_role entry phase role first hEntry
+            exact parseOfferedArtifactEntry_role entry phase role first hEntry
           rw [hEntry] at hParse
-          cases hRest : parseOfferedFileEntries rest phase role with
+          cases hRest : parseOfferedArtifactEntries rest phase role with
           | error err =>
               rw [hRest] at hParse
               cases hParse
@@ -382,20 +382,20 @@ theorem parseOfferedFileEntries_all_role
 /--
 Every offered file in a successfully parsed batch carries the acting side.
 -/
-theorem parseOfferedFiles_all_role
+theorem parseOfferedArtifacts_all_role
     (payload : Lean.Json)
     (phase role : String)
-    (offered : List OfferedFile)
-    (hParse : parseOfferedFiles payload phase role = .ok offered) :
+    (offered : List OfferedArtifact)
+    (hParse : parseOfferedArtifacts payload phase role = .ok offered) :
     ∀ item ∈ offered, item.role = role := by
-  unfold parseOfferedFiles at hParse
-  cases hEntries : getOptionalArray payload "offered_files" with
+  unfold parseOfferedArtifacts at hParse
+  cases hEntries : getOptionalArray payload "offered_artifacts" with
   | error err =>
       rw [hEntries] at hParse
       cases hParse
   | ok entries =>
       rw [hEntries] at hParse
-      exact parseOfferedFileEntries_all_role entries phase role offered hParse
+      exact parseOfferedArtifactEntries_all_role entries phase role offered hParse
 
 /--
 Every successfully parsed technical report entry carries the role supplied to
@@ -528,7 +528,7 @@ theorem recordMeritsSubmission_with_materials_result
     (payload : Lean.Json)
     (hSubmit : recordMeritsSubmission
       s phase actorRole expectedRole textLabel limit true payload = .ok t) :
-    ∃ rawText : String, ∃ offered : List OfferedFile, ∃ reports : List TechnicalReport,
+    ∃ rawText : String, ∃ offered : List OfferedArtifact, ∃ reports : List TechnicalReport,
       t =
         stateWithCase s
           (appendSupplementalMaterials
@@ -547,13 +547,13 @@ theorem recordMeritsSubmission_with_materials_result
         let rawText ← getString payload "text"
         let text := trimString rawText
         requireTextWithinLimit textLabel text limit
-        let offered ← parseOfferedFiles payload phase expectedRole
+        let offered ← parseOfferedArtifacts payload phase expectedRole
         let reports ← parseTechnicalReports payload phase expectedRole
-        requireCountWithinLimit "offered_files" offered.length s.policy.max_exhibits_per_filing
+        requireCountWithinLimit "offered_artifacts" offered.length s.policy.max_exhibits_per_filing
         requireCountWithinLimit "technical_reports" reports.length s.policy.max_reports_per_filing
-        let totalOffered := offeredFileCountForRole s.case.offered_files expectedRole + offered.length
+        let totalOffered := offeredArtifactCountForRole s.case.offered_artifacts expectedRole + offered.length
         let totalReports := technicalReportCountForRole s.case.technical_reports expectedRole + reports.length
-        requireCountWithinLimit "offered_files for this side" totalOffered s.policy.max_exhibits_per_side
+        requireCountWithinLimit "offered_artifacts for this side" totalOffered s.policy.max_exhibits_per_side
         requireCountWithinLimit "technical_reports for this side" totalReports s.policy.max_reports_per_side
         pure <| stateWithCase s
           (appendSupplementalMaterials
@@ -580,13 +580,13 @@ theorem recordMeritsSubmission_with_materials_result
               (do
                 let text := trimString rawText
                 requireTextWithinLimit textLabel text limit
-                let offered ← parseOfferedFiles payload phase expectedRole
+                let offered ← parseOfferedArtifacts payload phase expectedRole
                 let reports ← parseTechnicalReports payload phase expectedRole
-                requireCountWithinLimit "offered_files" offered.length s.policy.max_exhibits_per_filing
+                requireCountWithinLimit "offered_artifacts" offered.length s.policy.max_exhibits_per_filing
                 requireCountWithinLimit "technical_reports" reports.length s.policy.max_reports_per_filing
-                let totalOffered := offeredFileCountForRole s.case.offered_files expectedRole + offered.length
+                let totalOffered := offeredArtifactCountForRole s.case.offered_artifacts expectedRole + offered.length
                 let totalReports := technicalReportCountForRole s.case.technical_reports expectedRole + reports.length
-                requireCountWithinLimit "offered_files for this side" totalOffered s.policy.max_exhibits_per_side
+                requireCountWithinLimit "offered_artifacts for this side" totalOffered s.policy.max_exhibits_per_side
                 requireCountWithinLimit "technical_reports for this side" totalReports s.policy.max_reports_per_side
                 pure <| stateWithCase s
                   (appendSupplementalMaterials
@@ -601,7 +601,7 @@ theorem recordMeritsSubmission_with_materials_result
           | ok okv =>
               cases okv
               simp [hTextCheck] at hSubmit''
-              cases hOffered : parseOfferedFiles payload phase expectedRole with
+              cases hOffered : parseOfferedArtifacts payload phase expectedRole with
               | error err =>
                   rw [hOffered] at hSubmit''
                   cases hSubmit''
@@ -615,11 +615,11 @@ theorem recordMeritsSubmission_with_materials_result
                       rw [hReports] at hSubmit''
                       have hSubmit''' :
                           (do
-                            requireCountWithinLimit "offered_files" offered.length s.policy.max_exhibits_per_filing
+                            requireCountWithinLimit "offered_artifacts" offered.length s.policy.max_exhibits_per_filing
                             requireCountWithinLimit "technical_reports" reports.length s.policy.max_reports_per_filing
-                            let totalOffered := offeredFileCountForRole s.case.offered_files expectedRole + offered.length
+                            let totalOffered := offeredArtifactCountForRole s.case.offered_artifacts expectedRole + offered.length
                             let totalReports := technicalReportCountForRole s.case.technical_reports expectedRole + reports.length
-                            requireCountWithinLimit "offered_files for this side" totalOffered s.policy.max_exhibits_per_side
+                            requireCountWithinLimit "offered_artifacts for this side" totalOffered s.policy.max_exhibits_per_side
                             requireCountWithinLimit "technical_reports for this side" totalReports s.policy.max_reports_per_side
                             pure <| stateWithCase s
                               (appendSupplementalMaterials
@@ -628,7 +628,7 @@ theorem recordMeritsSubmission_with_materials_result
                                 reports)) = .ok t := by
                         simpa [Except.bind] using hSubmit''
                       cases hOfferedPer :
-                          requireCountWithinLimit "offered_files" offered.length s.policy.max_exhibits_per_filing with
+                          requireCountWithinLimit "offered_artifacts" offered.length s.policy.max_exhibits_per_filing with
                       | error err =>
                           simp [hOfferedPer] at hSubmit'''
                           cases hSubmit'''
@@ -643,11 +643,11 @@ theorem recordMeritsSubmission_with_materials_result
                           | ok okv =>
                               cases okv
                               simp [hReportsPer] at hSubmit'''
-                              let totalOffered := offeredFileCountForRole s.case.offered_files expectedRole + offered.length
+                              let totalOffered := offeredArtifactCountForRole s.case.offered_artifacts expectedRole + offered.length
                               let totalReports := technicalReportCountForRole s.case.technical_reports expectedRole + reports.length
                               have hSubmit'''' :
                                   (do
-                                    requireCountWithinLimit "offered_files for this side" totalOffered s.policy.max_exhibits_per_side
+                                    requireCountWithinLimit "offered_artifacts for this side" totalOffered s.policy.max_exhibits_per_side
                                     requireCountWithinLimit "technical_reports for this side" totalReports s.policy.max_reports_per_side
                                     pure <| stateWithCase s
                                       (appendSupplementalMaterials
@@ -656,7 +656,7 @@ theorem recordMeritsSubmission_with_materials_result
                                         reports)) = .ok t := by
                                 simpa [Except.bind] using hSubmit'''
                               cases hOfferedSide :
-                                  requireCountWithinLimit "offered_files for this side" totalOffered s.policy.max_exhibits_per_side with
+                                  requireCountWithinLimit "offered_artifacts for this side" totalOffered s.policy.max_exhibits_per_side with
                               | error err =>
                                   simp [hOfferedSide] at hSubmit''''
                                   cases hSubmit''''
@@ -691,10 +691,10 @@ theorem recordMeritsSubmission_with_materials_details
     (payload : Lean.Json)
     (hSubmit : recordMeritsSubmission
       s phase actorRole expectedRole textLabel limit true payload = .ok t) :
-    ∃ rawText : String, ∃ offered : List OfferedFile, ∃ reports : List TechnicalReport,
-      parseOfferedFiles payload phase expectedRole = .ok offered ∧
+    ∃ rawText : String, ∃ offered : List OfferedArtifact, ∃ reports : List TechnicalReport,
+      parseOfferedArtifacts payload phase expectedRole = .ok offered ∧
       parseTechnicalReports payload phase expectedRole = .ok reports ∧
-      offeredCount s.case.offered_files expectedRole + offered.length ≤ s.policy.max_exhibits_per_side ∧
+      offeredCount s.case.offered_artifacts expectedRole + offered.length ≤ s.policy.max_exhibits_per_side ∧
       reportCount s.case.technical_reports expectedRole + reports.length ≤ s.policy.max_reports_per_side ∧
       t =
         stateWithCase s
@@ -714,13 +714,13 @@ theorem recordMeritsSubmission_with_materials_details
         let rawText ← getString payload "text"
         let text := trimString rawText
         requireTextWithinLimit textLabel text limit
-        let offered ← parseOfferedFiles payload phase expectedRole
+        let offered ← parseOfferedArtifacts payload phase expectedRole
         let reports ← parseTechnicalReports payload phase expectedRole
-        requireCountWithinLimit "offered_files" offered.length s.policy.max_exhibits_per_filing
+        requireCountWithinLimit "offered_artifacts" offered.length s.policy.max_exhibits_per_filing
         requireCountWithinLimit "technical_reports" reports.length s.policy.max_reports_per_filing
-        let totalOffered := offeredFileCountForRole s.case.offered_files expectedRole + offered.length
+        let totalOffered := offeredArtifactCountForRole s.case.offered_artifacts expectedRole + offered.length
         let totalReports := technicalReportCountForRole s.case.technical_reports expectedRole + reports.length
-        requireCountWithinLimit "offered_files for this side" totalOffered s.policy.max_exhibits_per_side
+        requireCountWithinLimit "offered_artifacts for this side" totalOffered s.policy.max_exhibits_per_side
         requireCountWithinLimit "technical_reports for this side" totalReports s.policy.max_reports_per_side
         pure <| stateWithCase s
           (appendSupplementalMaterials
@@ -747,13 +747,13 @@ theorem recordMeritsSubmission_with_materials_details
               (do
                 let text := trimString rawText
                 requireTextWithinLimit textLabel text limit
-                let offered ← parseOfferedFiles payload phase expectedRole
+                let offered ← parseOfferedArtifacts payload phase expectedRole
                 let reports ← parseTechnicalReports payload phase expectedRole
-                requireCountWithinLimit "offered_files" offered.length s.policy.max_exhibits_per_filing
+                requireCountWithinLimit "offered_artifacts" offered.length s.policy.max_exhibits_per_filing
                 requireCountWithinLimit "technical_reports" reports.length s.policy.max_reports_per_filing
-                let totalOffered := offeredFileCountForRole s.case.offered_files expectedRole + offered.length
+                let totalOffered := offeredArtifactCountForRole s.case.offered_artifacts expectedRole + offered.length
                 let totalReports := technicalReportCountForRole s.case.technical_reports expectedRole + reports.length
-                requireCountWithinLimit "offered_files for this side" totalOffered s.policy.max_exhibits_per_side
+                requireCountWithinLimit "offered_artifacts for this side" totalOffered s.policy.max_exhibits_per_side
                 requireCountWithinLimit "technical_reports for this side" totalReports s.policy.max_reports_per_side
                 pure <| stateWithCase s
                   (appendSupplementalMaterials
@@ -768,7 +768,7 @@ theorem recordMeritsSubmission_with_materials_details
           | ok okv =>
               cases okv
               simp [hTextCheck] at hSubmit''
-              cases hOffered : parseOfferedFiles payload phase expectedRole with
+              cases hOffered : parseOfferedArtifacts payload phase expectedRole with
               | error err =>
                   rw [hOffered] at hSubmit''
                   cases hSubmit''
@@ -782,11 +782,11 @@ theorem recordMeritsSubmission_with_materials_details
                       rw [hReports] at hSubmit''
                       have hSubmit''' :
                           (do
-                            requireCountWithinLimit "offered_files" offered.length s.policy.max_exhibits_per_filing
+                            requireCountWithinLimit "offered_artifacts" offered.length s.policy.max_exhibits_per_filing
                             requireCountWithinLimit "technical_reports" reports.length s.policy.max_reports_per_filing
-                            let totalOffered := offeredFileCountForRole s.case.offered_files expectedRole + offered.length
+                            let totalOffered := offeredArtifactCountForRole s.case.offered_artifacts expectedRole + offered.length
                             let totalReports := technicalReportCountForRole s.case.technical_reports expectedRole + reports.length
-                            requireCountWithinLimit "offered_files for this side" totalOffered s.policy.max_exhibits_per_side
+                            requireCountWithinLimit "offered_artifacts for this side" totalOffered s.policy.max_exhibits_per_side
                             requireCountWithinLimit "technical_reports for this side" totalReports s.policy.max_reports_per_side
                             pure <| stateWithCase s
                               (appendSupplementalMaterials
@@ -795,7 +795,7 @@ theorem recordMeritsSubmission_with_materials_details
                                 reports)) = .ok t := by
                         simpa [Except.bind] using hSubmit''
                       cases hOfferedPer :
-                          requireCountWithinLimit "offered_files" offered.length s.policy.max_exhibits_per_filing with
+                          requireCountWithinLimit "offered_artifacts" offered.length s.policy.max_exhibits_per_filing with
                       | error err =>
                           simp [hOfferedPer] at hSubmit'''
                           cases hSubmit'''
@@ -810,11 +810,11 @@ theorem recordMeritsSubmission_with_materials_details
                           | ok okv =>
                               cases okv
                               simp [hReportsPer] at hSubmit'''
-                              let totalOffered := offeredFileCountForRole s.case.offered_files expectedRole + offered.length
+                              let totalOffered := offeredArtifactCountForRole s.case.offered_artifacts expectedRole + offered.length
                               let totalReports := technicalReportCountForRole s.case.technical_reports expectedRole + reports.length
                               have hSubmit'''' :
                                   (do
-                                    requireCountWithinLimit "offered_files for this side" totalOffered s.policy.max_exhibits_per_side
+                                    requireCountWithinLimit "offered_artifacts for this side" totalOffered s.policy.max_exhibits_per_side
                                     requireCountWithinLimit "technical_reports for this side" totalReports s.policy.max_reports_per_side
                                     pure <| stateWithCase s
                                       (appendSupplementalMaterials
@@ -823,7 +823,7 @@ theorem recordMeritsSubmission_with_materials_details
                                         reports)) = .ok t := by
                                 simpa [Except.bind] using hSubmit'''
                               cases hOfferedSide :
-                                  requireCountWithinLimit "offered_files for this side" totalOffered s.policy.max_exhibits_per_side with
+                                  requireCountWithinLimit "offered_artifacts for this side" totalOffered s.policy.max_exhibits_per_side with
                               | error err =>
                                   simp [hOfferedSide] at hSubmit''''
                                   cases hSubmit''''
@@ -840,15 +840,15 @@ theorem recordMeritsSubmission_with_materials_details
                                       have hOfferedCap :
                                           totalOffered ≤ s.policy.max_exhibits_per_side := by
                                         exact requireCountWithinLimit_ok_implies_le
-                                          "offered_files for this side" totalOffered s.policy.max_exhibits_per_side hOfferedSide
+                                          "offered_artifacts for this side" totalOffered s.policy.max_exhibits_per_side hOfferedSide
                                       have hReportsCap :
                                           totalReports ≤ s.policy.max_reports_per_side := by
                                         exact requireCountWithinLimit_ok_implies_le
                                           "technical_reports for this side" totalReports s.policy.max_reports_per_side hReportsSide
                                       have hOfferedCap' :
-                                          offeredCount s.case.offered_files expectedRole + offered.length ≤
+                                          offeredCount s.case.offered_artifacts expectedRole + offered.length ≤
                                             s.policy.max_exhibits_per_side := by
-                                        simpa [totalOffered, offeredFileCountForRole_eq_offeredCount] using hOfferedCap
+                                        simpa [totalOffered, offeredArtifactCountForRole_eq_offeredCount] using hOfferedCap
                                       have hReportsCap' :
                                           reportCount s.case.technical_reports expectedRole + reports.length ≤
                                             s.policy.max_reports_per_side := by
@@ -1005,15 +1005,15 @@ theorem step_submit_argument_preserves_material_limits
   let s1 := stateWithCase s c1
   have hBase1 : materialLimitsRespected s1 := by
     exact stateWithCase_preserves_material_limits s c1 hLimits
-      (addFiling_preserves_offered_files s.case "arguments" role (trimString rawText))
+      (addFiling_preserves_offered_artifacts s.case "arguments" role (trimString rawText))
       (addFiling_preserves_technical_reports s.case "arguments" role (trimString rawText))
   have hOfferedRole : ∀ item ∈ offered, item.role = role := by
-    exact parseOfferedFiles_all_role action.payload "arguments" role offered hOfferedParse
+    exact parseOfferedArtifacts_all_role action.payload "arguments" role offered hOfferedParse
   have hReportRole : ∀ item ∈ reports, item.role = role := by
     exact parseTechnicalReports_all_role action.payload "arguments" role reports hReportsParse
   have hOfferedCap1 :
-      offeredCount s1.case.offered_files role + offered.length ≤ s1.policy.max_exhibits_per_side := by
-    simpa [s1, c1, stateWithCase, addFiling_preserves_offered_files] using hOfferedCap
+      offeredCount s1.case.offered_artifacts role + offered.length ≤ s1.policy.max_exhibits_per_side := by
+    simpa [s1, c1, stateWithCase, addFiling_preserves_offered_artifacts] using hOfferedCap
   have hReportCap1 :
       reportCount s1.case.technical_reports role + reports.length ≤ s1.policy.max_reports_per_side := by
     simpa [s1, c1, stateWithCase, addFiling_preserves_technical_reports] using hReportCap
@@ -1089,15 +1089,15 @@ theorem step_submit_rebuttal_preserves_material_limits
   let s1 := stateWithCase s c1
   have hBase1 : materialLimitsRespected s1 := by
     exact stateWithCase_preserves_material_limits s c1 hLimits
-      (addFiling_preserves_offered_files s.case "rebuttals" "plaintiff" (trimString rawText))
+      (addFiling_preserves_offered_artifacts s.case "rebuttals" "plaintiff" (trimString rawText))
       (addFiling_preserves_technical_reports s.case "rebuttals" "plaintiff" (trimString rawText))
   have hOfferedRole : ∀ item ∈ offered, item.role = "plaintiff" := by
-    exact parseOfferedFiles_all_role action.payload "rebuttals" "plaintiff" offered hOfferedParse
+    exact parseOfferedArtifacts_all_role action.payload "rebuttals" "plaintiff" offered hOfferedParse
   have hReportRole : ∀ item ∈ reports, item.role = "plaintiff" := by
     exact parseTechnicalReports_all_role action.payload "rebuttals" "plaintiff" reports hReportsParse
   have hOfferedCap1 :
-      offeredCount s1.case.offered_files "plaintiff" + offered.length ≤ s1.policy.max_exhibits_per_side := by
-    simpa [s1, c1, stateWithCase, addFiling_preserves_offered_files] using hOfferedCap
+      offeredCount s1.case.offered_artifacts "plaintiff" + offered.length ≤ s1.policy.max_exhibits_per_side := by
+    simpa [s1, c1, stateWithCase, addFiling_preserves_offered_artifacts] using hOfferedCap
   have hReportCap1 :
       reportCount s1.case.technical_reports "plaintiff" + reports.length ≤ s1.policy.max_reports_per_side := by
     simpa [s1, c1, stateWithCase, addFiling_preserves_technical_reports] using hReportCap
@@ -1111,23 +1111,23 @@ theorem submitEvidence_result
     (payload : Lean.Json)
     (hSubmit : submitEvidence s actorRole payload = .ok t) :
     ∃ evidence,
-      t = stateWithCase s (appendSubmittedEvidence s.case evidence) := by
+      t = stateWithCase s (appendSubmittedArtifact s.case evidence) := by
   have handle (expectedRole : String)
       (hCore :
         (do
           requireRole actorRole expectedRole
-          let parsedEvidence ← parseSubmittedEvidence payload s.case.phase expectedRole
+          let parsedEvidence ← parseSubmittedArtifact payload s.case.phase expectedRole
           let evidence := { parsedEvidence with role := expectedRole }
-          if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-            throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
-          else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
-            throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+          if s.case.submitted_artifacts.any (fun item => item.artifact_id = evidence.artifact_id) then
+            throw s!"duplicate submitted evidence artifact_id: {evidence.artifact_id}"
+          else if evidence.size_bytes > s.policy.max_submitted_artifacts_bytes then
+            throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_artifacts_bytes}"
           else
-            let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
-            requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
-            pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t) :
+            let total := submittedArtifactCountForRole s.case.submitted_artifacts expectedRole + 1
+            requireCountWithinLimit "submitted_artifacts for this side" total s.policy.max_submitted_artifacts_per_side
+            pure <| stateWithCase s (appendSubmittedArtifact s.case evidence)) = .ok t) :
       ∃ evidence,
-        t = stateWithCase s (appendSubmittedEvidence s.case evidence) := by
+        t = stateWithCase s (appendSubmittedArtifact s.case evidence) := by
     cases hRole : requireRole actorRole expectedRole with
     | error err =>
         rw [hRole] at hCore
@@ -1137,33 +1137,33 @@ theorem submitEvidence_result
         cases okv
         rw [hRole] at hCore
         simp at hCore
-        cases hEvidence : parseSubmittedEvidence payload s.case.phase expectedRole with
+        cases hEvidence : parseSubmittedArtifact payload s.case.phase expectedRole with
         | error err =>
             rw [hEvidence] at hCore
             cases hCore
         | ok parsedEvidence =>
             rw [hEvidence] at hCore
-            let evidence : SubmittedEvidence := { parsedEvidence with role := expectedRole }
+            let evidence : SubmittedArtifact := { parsedEvidence with role := expectedRole }
             change
-              (if ∃ x, x ∈ s.case.submitted_evidence ∧ x.file_id = evidence.file_id then
-                throw (toString "duplicate submitted evidence file_id: " ++ toString evidence.file_id)
-              else if s.policy.max_submitted_evidence_bytes < evidence.size_bytes then
+              (if ∃ x, x ∈ s.case.submitted_artifacts ∧ x.artifact_id = evidence.artifact_id then
+                throw (toString "duplicate submitted evidence artifact_id: " ++ toString evidence.artifact_id)
+              else if s.policy.max_submitted_artifacts_bytes < evidence.size_bytes then
                 throw (toString "submitted evidence exceeds byte limit of " ++
-                  toString s.policy.max_submitted_evidence_bytes)
+                  toString s.policy.max_submitted_artifacts_bytes)
               else
-                (fun _ => stateWithCase s (appendSubmittedEvidence s.case evidence)) <$>
-                  requireCountWithinLimit "submitted_evidence for this side"
-                    (submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1)
-                    s.policy.max_submitted_evidence_per_side) = .ok t at hCore
-            by_cases hDup : ∃ x, x ∈ s.case.submitted_evidence ∧ x.file_id = evidence.file_id
+                (fun _ => stateWithCase s (appendSubmittedArtifact s.case evidence)) <$>
+                  requireCountWithinLimit "submitted_artifacts for this side"
+                    (submittedArtifactCountForRole s.case.submitted_artifacts expectedRole + 1)
+                    s.policy.max_submitted_artifacts_per_side) = .ok t at hCore
+            by_cases hDup : ∃ x, x ∈ s.case.submitted_artifacts ∧ x.artifact_id = evidence.artifact_id
             · simp [hDup] at hCore
             · simp [hDup] at hCore
-              by_cases hSize : s.policy.max_submitted_evidence_bytes < evidence.size_bytes
+              by_cases hSize : s.policy.max_submitted_artifacts_bytes < evidence.size_bytes
               · simp [hSize] at hCore
               · simp [hSize] at hCore
-                let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
-                cases hCount : requireCountWithinLimit "submitted_evidence for this side"
-                    total s.policy.max_submitted_evidence_per_side with
+                let total := submittedArtifactCountForRole s.case.submitted_artifacts expectedRole + 1
+                cases hCount : requireCountWithinLimit "submitted_artifacts for this side"
+                    total s.policy.max_submitted_artifacts_per_side with
                 | error err =>
                     simp [total, hCount] at hCore
                     cases hCore
@@ -1176,16 +1176,16 @@ theorem submitEvidence_result
   · have hCore :
         (do
           requireRole actorRole (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
-          let parsedEvidence ← parseSubmittedEvidence payload s.case.phase (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
+          let parsedEvidence ← parseSubmittedArtifact payload s.case.phase (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
           let evidence := { parsedEvidence with role := (if s.case.arguments.isEmpty then "plaintiff" else "defendant") }
-          if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-            throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
-          else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
-            throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+          if s.case.submitted_artifacts.any (fun item => item.artifact_id = evidence.artifact_id) then
+            throw s!"duplicate submitted evidence artifact_id: {evidence.artifact_id}"
+          else if evidence.size_bytes > s.policy.max_submitted_artifacts_bytes then
+            throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_artifacts_bytes}"
           else
-            let total := submittedEvidenceCountForRole s.case.submitted_evidence (if s.case.arguments.isEmpty then "plaintiff" else "defendant") + 1
-            requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
-            pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
+            let total := submittedArtifactCountForRole s.case.submitted_artifacts (if s.case.arguments.isEmpty then "plaintiff" else "defendant") + 1
+            requireCountWithinLimit "submitted_artifacts for this side" total s.policy.max_submitted_artifacts_per_side
+            pure <| stateWithCase s (appendSubmittedArtifact s.case evidence)) = .ok t := by
         simpa [submitEvidence, hArgs] using hSubmit
     exact handle (if s.case.arguments.isEmpty then "plaintiff" else "defendant") hCore
   · by_cases hRebuttals : s.case.phase = "rebuttals"
@@ -1194,16 +1194,16 @@ theorem submitEvidence_result
         have hCore :
             (do
               requireRole actorRole "plaintiff"
-              let parsedEvidence ← parseSubmittedEvidence payload s.case.phase "plaintiff"
+              let parsedEvidence ← parseSubmittedArtifact payload s.case.phase "plaintiff"
               let evidence := { parsedEvidence with role := "plaintiff" }
-              if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-                throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
-              else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
-                throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+              if s.case.submitted_artifacts.any (fun item => item.artifact_id = evidence.artifact_id) then
+                throw s!"duplicate submitted evidence artifact_id: {evidence.artifact_id}"
+              else if evidence.size_bytes > s.policy.max_submitted_artifacts_bytes then
+                throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_artifacts_bytes}"
               else
-                let total := submittedEvidenceCountForRole s.case.submitted_evidence "plaintiff" + 1
-                requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
-                pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
+                let total := submittedArtifactCountForRole s.case.submitted_artifacts "plaintiff" + 1
+                requireCountWithinLimit "submitted_artifacts for this side" total s.policy.max_submitted_artifacts_per_side
+                pure <| stateWithCase s (appendSubmittedArtifact s.case evidence)) = .ok t := by
             simpa [submitEvidence, hArgs, hRebuttals, hEmpty] using hSubmit
         exact handle "plaintiff" hCore
       | false =>
@@ -1211,16 +1211,16 @@ theorem submitEvidence_result
             (do
               let expectedRole ← (throw "rebuttal evidence is closed" : Except String String)
               requireRole actorRole expectedRole
-              let parsedEvidence ← parseSubmittedEvidence payload s.case.phase expectedRole
+              let parsedEvidence ← parseSubmittedArtifact payload s.case.phase expectedRole
               let evidence := { parsedEvidence with role := expectedRole }
-              if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-                throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
-              else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
-                throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+              if s.case.submitted_artifacts.any (fun item => item.artifact_id = evidence.artifact_id) then
+                throw s!"duplicate submitted evidence artifact_id: {evidence.artifact_id}"
+              else if evidence.size_bytes > s.policy.max_submitted_artifacts_bytes then
+                throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_artifacts_bytes}"
               else
-                let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
-                requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
-                pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
+                let total := submittedArtifactCountForRole s.case.submitted_artifacts expectedRole + 1
+                requireCountWithinLimit "submitted_artifacts for this side" total s.policy.max_submitted_artifacts_per_side
+                pure <| stateWithCase s (appendSubmittedArtifact s.case evidence)) = .ok t := by
           simpa [submitEvidence, hArgs, hRebuttals, hEmpty] using hSubmit
         change Except.error "rebuttal evidence is closed" = .ok t at hClosed
         cases hClosed
@@ -1228,24 +1228,24 @@ theorem submitEvidence_result
           (do
             let expectedRole ← (throw "submitted evidence is allowed only in arguments and rebuttals" : Except String String)
             requireRole actorRole expectedRole
-            let parsedEvidence ← parseSubmittedEvidence payload s.case.phase expectedRole
+            let parsedEvidence ← parseSubmittedArtifact payload s.case.phase expectedRole
             let evidence := { parsedEvidence with role := expectedRole }
-            if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-              throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
-            else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
-              throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+            if s.case.submitted_artifacts.any (fun item => item.artifact_id = evidence.artifact_id) then
+              throw s!"duplicate submitted evidence artifact_id: {evidence.artifact_id}"
+            else if evidence.size_bytes > s.policy.max_submitted_artifacts_bytes then
+              throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_artifacts_bytes}"
             else
-              let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
-              requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
-              pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
+              let total := submittedArtifactCountForRole s.case.submitted_artifacts expectedRole + 1
+              requireCountWithinLimit "submitted_artifacts for this side" total s.policy.max_submitted_artifacts_per_side
+              pure <| stateWithCase s (appendSubmittedArtifact s.case evidence)) = .ok t := by
         simpa [submitEvidence, hArgs, hRebuttals] using hSubmit
       change Except.error "submitted evidence is allowed only in arguments and rebuttals" = .ok t at hClosed
       cases hClosed
 
-theorem step_submit_evidence_preserves_phaseShape
+theorem step_submit_artifact_preserves_phaseShape
     (s t : ArbitrationState)
     (action : CourtAction)
-    (hType : action.action_type = "submit_evidence")
+    (hType : action.action_type = "submit_artifact")
     (hShape : phaseShape s.case)
     (hStep : step { state := s, action := action } = .ok t) :
     phaseShape t.case := by
@@ -1253,19 +1253,19 @@ theorem step_submit_evidence_preserves_phaseShape
     simpa [step, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
   exact stateWithCase_preserves_phaseShape s _
-    (appendSubmittedEvidence_preserves_phaseShape s.case evidence hShape)
+    (appendSubmittedArtifact_preserves_phaseShape s.case evidence hShape)
 
-theorem step_submit_evidence_preserves_material_limits
+theorem step_submit_artifact_preserves_material_limits
     (s t : ArbitrationState)
     (action : CourtAction)
-    (hType : action.action_type = "submit_evidence")
+    (hType : action.action_type = "submit_artifact")
     (hLimits : materialLimitsRespected s)
     (hStep : step { state := s, action := action } = .ok t) :
     materialLimitsRespected t := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
     simpa [step, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
-  simpa [stateWithCase] using appendSubmittedEvidence_preserves_material_limits s evidence hLimits
+  simpa [stateWithCase] using appendSubmittedArtifact_preserves_material_limits s evidence hLimits
 
 /--
 A successful surrebuttal step preserves the merits-sequence invariant.
@@ -1334,7 +1334,7 @@ theorem step_submit_surrebuttal_preserves_material_limits
       "surrebuttal" s.policy.max_surrebuttal_chars action.payload hSubmit with
     ⟨rawText, rfl⟩
   exact stateWithCase_preserves_material_limits s _ hLimits
-    (addFiling_preserves_offered_files s.case "surrebuttals" "defendant" (trimString rawText))
+    (addFiling_preserves_offered_artifacts s.case "surrebuttals" "defendant" (trimString rawText))
     (addFiling_preserves_technical_reports s.case "surrebuttals" "defendant" (trimString rawText))
 
 /--
@@ -1537,7 +1537,7 @@ theorem continueDeliberation_preserves_material_limits_for
     (s t : ArbitrationState)
     (c : ArbitrationCase)
     (hBase : materialLimitsRespected s)
-    (hOffered : c.offered_files = s.case.offered_files)
+    (hOffered : c.offered_artifacts = s.case.offered_artifacts)
     (hReports : c.technical_reports = s.case.technical_reports)
     (hCont : continueDeliberation s c = .ok t) :
     materialLimitsRespected t := by

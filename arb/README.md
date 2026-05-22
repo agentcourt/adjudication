@@ -8,7 +8,7 @@ This repository contains the Lean engine, the Go runtime, the `aar` CLI, and a s
 
 | Path | Purpose |
 |---|---|
-| `docs/` | Project rules and notes. See [`docs/openclaw-attorneys.md`](docs/openclaw-attorneys.md) for the OpenClaw-attorney workflow. |
+| `docs/` | Project rules and notes. See [`docs/openclaw-attorneys.md`](docs/openclaw-attorneys.md) for the OpenClaw-attorney workflow and [`docs/evidence-handling.md`](docs/evidence-handling.md) for artifact custody and evidence-transfer semantics. |
 | `engine/` | Lean arbitration engine |
 | `runtime/` | Go CLI and runtime bridge |
 | `examples/` | Example disputes |
@@ -46,7 +46,7 @@ mkdir -p work/defamation
   --out-dir out/defamation-demo
 ```
 
-`aar case` scans the complaint directory for case files when `--file` is absent.  That scan skips the complaint itself, the situation file, `README.md`, signing artifacts, and directories.  It loads `.txt`, `.md`, `.pem`, and `.b64` files as readable case files, and it records other file types as byte-bearing exhibits.
+`aar case` scans the complaint directory for initial case artifacts when `--file` is absent.  That scan skips the complaint itself, the situation file, `README.md`, signing artifacts, and directories.  It loads `.txt`, `.md`, `.pem`, and `.b64` artifacts as text-readable artifacts, and it records other file types as byte-bearing artifacts.  Each loaded artifact is registered with `artifact_id`, SHA-256, byte size, MIME type, and content-addressed storage metadata.
 
 This variant shows the common parameters that change a run:
 
@@ -93,7 +93,7 @@ The remote endpoint path uses a persistent TCP connection that carries newline-d
 
 For OpenClaw attorneys, prefer `--*-acp-endpoint` and run an OpenClaw ACP attorney server at that endpoint.  AAR will connect over ACP and assume the remote OpenClaw side owns model selection, session policy, and native tool availability.  The full reproduction guide is [`docs/openclaw-attorneys.md`](docs/openclaw-attorneys.md).
 
-The `aar-openclaw-attorney` adapter is a local compatibility wrapper for smoke tests and custom integrations.  It preloads the visible AAR record and text-readable case files, asks OpenClaw for one strict JSON filing, and submits that filing through `_aar/submit_decision`.  It does not accept or forward an AAR model selection.
+The `aar-openclaw-attorney` adapter is a local ACP wrapper for smoke tests and custom integrations.  It preloads the visible AAR record, inspects visible artifacts through the AAR artifact methods, asks OpenClaw for one strict JSON filing, and submits that filing through `_aar/submit_decision`.  It does not accept or forward an AAR model selection.
 
 ```bash
 AAR_OPENCLAW_AGENT=1 \
@@ -149,7 +149,7 @@ This command shows the same pattern with one global ACP command and a role-speci
 |---|---|
 | `--complaint` | Complaint markdown file.  Required. |
 | `--out-dir` | Output directory for the run packet.  Required. |
-| `--file` | Explicit case file path or glob.  Repeating this flag replaces automatic complaint-directory scanning. |
+| `--file` | Explicit initial artifact path or glob.  Repeating this flag replaces automatic complaint-directory scanning. |
 | `--policy` | Policy JSON file.  Defaults to `./etc/policy.json` when present. |
 | `--council-size` | Override `policy.council_size`. |
 | `--evidence-standard` | Override `policy.evidence_standard`. |
@@ -173,7 +173,7 @@ This command shows the same pattern with one global ACP command and a role-speci
 
 ## Outputs
 
-Each run writes a complete packet to `--out-dir`.  The main files are `complaint.md`, `policy.json`, `runtime.json`, `run.json`, `state.json`, `council.json`, `digest.md`, `transcript.md`, and `events.ndjson`.  `run.json` records the resolved attorney configuration for each side in its `attorneys` field.  Attorney work product is also exported into the run directory.
+Each run writes a complete packet to `--out-dir`.  The main files are `complaint.md`, `policy.json`, `runtime.json`, `run.json`, `state.json`, `council.json`, `digest.md`, `transcript.md`, `events.ndjson`, and `artifact-manifest.json`.  `run.json` records the resolved attorney configuration for each side in its `attorneys` field and includes visible artifact metadata.  Exact artifact bytes are stored under `artifact-store/`; accepted attorney evidence is also copied under `submitted-evidence/` and exposed through artifact methods.  Attorney work product is exported into the run directory separately.
 
 On success, `aar case` prints a JSON object like this:
 

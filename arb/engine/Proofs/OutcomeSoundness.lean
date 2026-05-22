@@ -745,36 +745,36 @@ Evidence submission never closes the case.  It is accepted only during the
 arguments phase or the open plaintiff rebuttal evidence window, and it preserves
 the current phase.
 -/
-theorem step_submit_evidence_phase_ne_closed
+theorem step_submit_artifact_phase_ne_closed
     (s t : ArbitrationState)
     (action : CourtAction)
-    (hType : action.action_type = "submit_evidence")
+    (hType : action.action_type = "submit_artifact")
     (hStep : step { state := s, action := action } = .ok t) :
     t.case.phase ≠ "closed" := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
     simpa [step, hType] using hStep
   by_cases hArgs : s.case.phase = "arguments"
   · rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
-    simp [stateWithCase, appendSubmittedEvidence, hArgs]
+    simp [stateWithCase, appendSubmittedArtifact, hArgs]
   · by_cases hRebuttals : s.case.phase = "rebuttals"
     · cases hEmpty : s.case.rebuttals.isEmpty with
       | true =>
           rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
-          simp [stateWithCase, appendSubmittedEvidence, hRebuttals]
+          simp [stateWithCase, appendSubmittedArtifact, hRebuttals]
       | false =>
           have hClosed :
               (do
                 let expectedRole ← (throw "rebuttal evidence is closed" : Except String String)
                 requireRole action.actor_role expectedRole
-                let evidence ← parseSubmittedEvidence action.payload s.case.phase expectedRole
-                if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-                  throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
-                else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
-                  throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+                let evidence ← parseSubmittedArtifact action.payload s.case.phase expectedRole
+                if s.case.submitted_artifacts.any (fun item => item.artifact_id = evidence.artifact_id) then
+                  throw s!"duplicate submitted evidence artifact_id: {evidence.artifact_id}"
+                else if evidence.size_bytes > s.policy.max_submitted_artifacts_bytes then
+                  throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_artifacts_bytes}"
                 else
-                  let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
-                  requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
-                  pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
+                  let total := submittedArtifactCountForRole s.case.submitted_artifacts expectedRole + 1
+                  requireCountWithinLimit "submitted_artifacts for this side" total s.policy.max_submitted_artifacts_per_side
+                  pure <| stateWithCase s (appendSubmittedArtifact s.case evidence)) = .ok t := by
             simpa [submitEvidence, hArgs, hRebuttals, hEmpty] using hSubmit
           change Except.error "rebuttal evidence is closed" = .ok t at hClosed
           cases hClosed
@@ -782,15 +782,15 @@ theorem step_submit_evidence_phase_ne_closed
           (do
             let expectedRole ← (throw "submitted evidence is allowed only in arguments and rebuttals" : Except String String)
             requireRole action.actor_role expectedRole
-            let evidence ← parseSubmittedEvidence action.payload s.case.phase expectedRole
-            if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-              throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
-            else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
-              throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+            let evidence ← parseSubmittedArtifact action.payload s.case.phase expectedRole
+            if s.case.submitted_artifacts.any (fun item => item.artifact_id = evidence.artifact_id) then
+              throw s!"duplicate submitted evidence artifact_id: {evidence.artifact_id}"
+            else if evidence.size_bytes > s.policy.max_submitted_artifacts_bytes then
+              throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_artifacts_bytes}"
             else
-              let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
-              requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
-              pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
+              let total := submittedArtifactCountForRole s.case.submitted_artifacts expectedRole + 1
+              requireCountWithinLimit "submitted_artifacts for this side" total s.policy.max_submitted_artifacts_per_side
+              pure <| stateWithCase s (appendSubmittedArtifact s.case evidence)) = .ok t := by
           simpa [submitEvidence, hArgs, hRebuttals] using hSubmit
       change Except.error "submitted evidence is allowed only in arguments and rebuttals" = .ok t at hClosed
       cases hClosed
@@ -821,8 +821,8 @@ theorem step_closed_demonstrated_sound
           · exact False.elim ((step_deliver_closing_statement_phase_ne_closed s t action hClosing hStep) hClosed)
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
             · exact False.elim ((step_pass_phase_opportunity_phase_ne_closed s t action hPass hStep) hClosed)
-            · by_cases hEvidence : action.action_type = "submit_evidence"
-              · exact False.elim ((step_submit_evidence_phase_ne_closed s t action hEvidence hStep) hClosed)
+            · by_cases hEvidence : action.action_type = "submit_artifact"
+              · exact False.elim ((step_submit_artifact_phase_ne_closed s t action hEvidence hStep) hClosed)
               · by_cases hVote : action.action_type = "submit_council_vote"
                 · rcases step_submit_council_vote_result s t action hVote hStep with
                   ⟨memberId, vote, rationale, hDeliberation, hCont⟩
@@ -871,8 +871,8 @@ theorem step_closed_not_demonstrated_sound
           · exact False.elim ((step_deliver_closing_statement_phase_ne_closed s t action hClosing hStep) hClosed)
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
             · exact False.elim ((step_pass_phase_opportunity_phase_ne_closed s t action hPass hStep) hClosed)
-            · by_cases hEvidence : action.action_type = "submit_evidence"
-              · exact False.elim ((step_submit_evidence_phase_ne_closed s t action hEvidence hStep) hClosed)
+            · by_cases hEvidence : action.action_type = "submit_artifact"
+              · exact False.elim ((step_submit_artifact_phase_ne_closed s t action hEvidence hStep) hClosed)
               · by_cases hVote : action.action_type = "submit_council_vote"
                 · rcases step_submit_council_vote_result s t action hVote hStep with
                   ⟨memberId, vote, rationale, hDeliberation, hCont⟩
@@ -921,8 +921,8 @@ theorem step_closed_no_majority_sound
           · exact False.elim ((step_deliver_closing_statement_phase_ne_closed s t action hClosing hStep) hClosed)
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
             · exact False.elim ((step_pass_phase_opportunity_phase_ne_closed s t action hPass hStep) hClosed)
-            · by_cases hEvidence : action.action_type = "submit_evidence"
-              · exact False.elim ((step_submit_evidence_phase_ne_closed s t action hEvidence hStep) hClosed)
+            · by_cases hEvidence : action.action_type = "submit_artifact"
+              · exact False.elim ((step_submit_artifact_phase_ne_closed s t action hEvidence hStep) hClosed)
               · by_cases hVote : action.action_type = "submit_council_vote"
                 · rcases step_submit_council_vote_result s t action hVote hStep with
                   ⟨memberId, vote, rationale, hDeliberation, hCont⟩

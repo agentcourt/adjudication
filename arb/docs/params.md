@@ -30,8 +30,14 @@ One part remains open.  The proof-friendly policy shape is now in place, but the
 | Procedure | `max_reports_per_side` | Maximum technical reports by one side across the whole case | policy | Lean |
 | Procedure | `max_report_title_bytes` | Maximum title size for one report | policy | Lean and Go |
 | Procedure | `max_report_summary_bytes` | Maximum summary size for one report | policy | Lean and Go |
-| Procedure | `max_submitted_evidence_per_side` | Maximum source-evidence items submitted by one side across the case | policy | Lean and Go |
-| Procedure | `max_submitted_evidence_bytes` | Maximum bytes for one submitted source-evidence item | policy | Lean and Go |
+| Procedure | `max_submitted_artifacts_per_side` | Maximum source-evidence items submitted by one side across the case | policy | Lean and Go |
+| Procedure | `max_submitted_artifacts_bytes` | Maximum bytes for one admitted submitted-evidence item | policy | Lean and Go |
+| Runtime/protocol | `max_direct_submitted_artifacts_bytes` | Maximum bytes accepted through one JSON/base64 `aar_submit_artifact` call | policy | Go |
+| Runtime/protocol | `max_artifact_upload_bytes` | Maximum bytes accepted through one chunked artifact upload | policy | Go, bounded by `max_submitted_artifacts_bytes` |
+| Runtime/protocol | `max_artifact_chunk_bytes` | Maximum bytes accepted in one uploaded artifact chunk | policy | Go |
+| Runtime/protocol | `max_artifact_read_bytes` | Maximum bytes returned by one artifact range read | policy | Go |
+| Runtime/protocol | `max_artifact_reads_per_opportunity` | Maximum artifact range-read count in one attorney opportunity | policy | Go |
+| Runtime/protocol | `max_artifact_read_bytes_per_opportunity` | Maximum total artifact bytes returned in one attorney opportunity | policy | Go |
 | Complaint | `proposition` | The disputed proposition | complaint | complaint parser |
 | Runtime | `council_llm_timeout_seconds` | Timeout for council turns | runner config | Go |
 | Runtime | `attorney_acp_timeout_seconds` | Timeout for attorney ACP turns | runner config | Go |
@@ -56,7 +62,7 @@ This matters for cumulative limits.  Per-filing limits and per-side limits solve
 
 ## Enforcement split
 
-Lean should continue to enforce procedural rules that affect the legal state: filing phase, text limits, vote thresholds, round limits, and counts of exhibits, submitted evidence, or reports. Go should enforce byte-based limits and transport limits before material reaches the engine. A file-size limit is about what the runner will carry and persist. A phase rule is about what the procedure allows. They are different constraints and should stay in different layers.
+Lean should continue to enforce procedural rules that affect the legal state: filing phase, text limits, vote thresholds, round limits, counts of exhibits, submitted evidence, or reports, and the authoritative maximum size of admitted submitted evidence. Go should enforce transport limits and byte-transfer budgets before material reaches the engine. The direct JSON/base64 limit, artifact chunk size, artifact upload budget, and artifact read budget are protocol constraints. The submitted-evidence size limit is a record constraint. Go validates that protocol limits do not exceed the record limit.
 
 This split also determines persistence.  Policy values that affect the legal case should be written into the arbitration state and therefore into artifacts such as `run.json`, `state.json`, and the event log.  Runtime limits should stay in runner config and, if we want them recorded, they should appear in run metadata rather than in the legal state.
 

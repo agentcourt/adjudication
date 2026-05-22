@@ -343,12 +343,12 @@ theorem step_shrinks_seatedCouncilMemberIds
                           cases hPassResult
                           exact seatedCouncilMemberIdsShrink_of_same_members rfl
                 · simp [step, hPass, hRebuttals, hSurrebuttals] at hStep
-            · by_cases hEvidence : action.action_type = "submit_evidence"
+            · by_cases hEvidence : action.action_type = "submit_artifact"
               · have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
                   simpa [step, hEvidence] using hStep
                 rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
                 exact seatedCouncilMemberIdsShrink_of_same_members <| by
-                  simp [stateWithCase, appendSubmittedEvidence]
+                  simp [stateWithCase, appendSubmittedArtifact]
               · by_cases hVote : action.action_type = "submit_council_vote"
                 · rcases step_submit_council_vote_details s t action hVote hStep with
                   ⟨memberId, vote, rationale, _hPhase, _hSeated, _hFresh, hCont⟩
@@ -592,12 +592,12 @@ theorem step_introduces_newCouncilVotes_only_from_seated
                           cases hPassResult
                           exact newCouncilVotesComeFromSeated_of_same_votes rfl
                 · simp [step, hPass, hRebuttals, hSurrebuttals] at hStep
-            · by_cases hEvidence : action.action_type = "submit_evidence"
+            · by_cases hEvidence : action.action_type = "submit_artifact"
               · have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
                   simpa [step, hEvidence] using hStep
                 rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
                 exact newCouncilVotesComeFromSeated_of_same_votes <| by
-                  simp [stateWithCase, appendSubmittedEvidence]
+                  simp [stateWithCase, appendSubmittedArtifact]
               · by_cases hVote : action.action_type = "submit_council_vote"
                 · exact step_submit_council_vote_introduces_only_seated_currentRoundVote
                     s t action hVote hStep

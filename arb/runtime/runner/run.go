@@ -65,10 +65,7 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 			return Result{}, err
 		}
 	}
-	fileByID := make(map[string]CaseFile, len(caseFiles))
-	for _, file := range caseFiles {
-		fileByID[file.FileID] = file
-	}
+	artifactStoreDir := filepath.Join(cfg.OutputDir, "artifact-store")
 	council, err := sampleCouncil(cfg.CouncilPoolPath, cfg.CommonRoot, cfg.Policy.CouncilSize)
 	if err != nil {
 		return Result{}, err
@@ -86,12 +83,17 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 		complaint:         complaint,
 		state:             mapAny(initResp["state"]),
 		caseFiles:         caseFiles,
-		fileByID:          fileByID,
-		submittedEvidence: []SubmittedEvidenceMeta{},
+		submittedArtifact: []SubmittedArtifactMeta{},
+		artifactByID:      map[string]ArtifactMeta{},
+		artifactStoreDir:  artifactStoreDir,
+		uploadSessions:    map[string]*ArtifactUploadSession{},
 		council:           council,
 		attorneys:         attorneyMap,
 		acpSessions:       map[string]*acpPersistentSession{},
 		workProductDirs:   map[string]string{},
+	}
+	if err := rc.initializeArtifactRegistry(); err != nil {
+		return Result{}, err
 	}
 	defer func() {
 		if closeErr := rc.closeACPSessions(); closeErr != nil {
@@ -124,7 +126,8 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 				EvidenceStandard:  currentEvidenceStandard(rc.state, cfg.Policy),
 				Attorneys:         attorneys,
 				CaseFiles:         caseFileMetas(rc.caseFiles),
-				SubmittedEvidence: rc.submittedEvidence,
+				SubmittedArtifact: rc.submittedArtifact,
+				Artifacts:         rc.listVisibleArtifacts(),
 				Council:           council,
 				Events:            rc.events,
 				FinalState:        rc.state,
@@ -156,23 +159,23 @@ func initialState(policy Policy) map[string]any {
 		"schema_version": "v1",
 		"forum_name":     "Agent Arbitration",
 		"case": map[string]any{
-			"case_id":            "arb-1",
-			"caption":            "Claimant v. Respondent",
-			"proposition":        "",
-			"status":             "draft",
-			"phase":              "draft",
-			"council_members":    []map[string]any{},
-			"openings":           []map[string]any{},
-			"arguments":          []map[string]any{},
-			"rebuttals":          []map[string]any{},
-			"surrebuttals":       []map[string]any{},
-			"closings":           []map[string]any{},
-			"offered_files":      []map[string]any{},
-			"technical_reports":  []map[string]any{},
-			"submitted_evidence": []map[string]any{},
-			"deliberation_round": 1,
-			"council_votes":      []map[string]any{},
-			"resolution":         "",
+			"case_id":             "arb-1",
+			"caption":             "Claimant v. Respondent",
+			"proposition":         "",
+			"status":              "draft",
+			"phase":               "draft",
+			"council_members":     []map[string]any{},
+			"openings":            []map[string]any{},
+			"arguments":           []map[string]any{},
+			"rebuttals":           []map[string]any{},
+			"surrebuttals":        []map[string]any{},
+			"closings":            []map[string]any{},
+			"offered_artifacts":   []map[string]any{},
+			"technical_reports":   []map[string]any{},
+			"submitted_artifacts": []map[string]any{},
+			"deliberation_round":  1,
+			"council_votes":       []map[string]any{},
+			"resolution":          "",
 		},
 		"policy":        policy.StateMap(),
 		"state_version": 0,

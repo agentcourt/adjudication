@@ -245,7 +245,7 @@ theorem nextOpportunityForPhase_offers_rebuttal_only_to_plaintiff
         phase := "rebuttals"
         may_pass := true
         objective := "plaintiff rebuttal"
-        allowed_tools := ["submit_evidence", "submit_rebuttal", "pass_phase_opportunity"]
+        allowed_tools := ["submit_artifact", "submit_rebuttal", "pass_phase_opportunity"]
       } := by
   simp [nextOpportunityForPhase, hPhase, hEmpty]
 

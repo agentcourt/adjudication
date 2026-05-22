@@ -15,10 +15,10 @@ structure Filing where
   text : String
   deriving Inhabited, ToJson, FromJson, DecidableEq
 
-structure OfferedFile where
+structure OfferedArtifact where
   phase : String
   role : String
-  file_id : String
+  artifact_id : String
   label : String := ""
   deriving Inhabited, ToJson, FromJson, DecidableEq
 
@@ -29,10 +29,10 @@ structure TechnicalReport where
   summary : String
   deriving Inhabited, ToJson, FromJson, DecidableEq
 
-structure SubmittedEvidence where
+structure SubmittedArtifact where
   phase : String
   role : String
-  file_id : String
+  artifact_id : String
   title : String
   source_url : String := ""
   source_description : String := ""
@@ -62,9 +62,9 @@ structure ArbitrationCase where
   rebuttals : List Filing := []
   surrebuttals : List Filing := []
   closings : List Filing := []
-  offered_files : List OfferedFile := []
+  offered_artifacts : List OfferedArtifact := []
   technical_reports : List TechnicalReport := []
-  submitted_evidence : List SubmittedEvidence := []
+  submitted_artifacts : List SubmittedArtifact := []
   deliberation_round : Nat := 1
   council_votes : List CouncilVote := []
   resolution : String := ""
@@ -87,8 +87,8 @@ structure ArbitrationPolicy where
   max_reports_per_side : Nat := 4
   max_report_title_bytes : Nat := 256
   max_report_summary_bytes : Nat := 8192
-  max_submitted_evidence_per_side : Nat := 8
-  max_submitted_evidence_bytes : Nat := 131072
+  max_submitted_artifacts_per_side : Nat := 8
+  max_submitted_artifacts_bytes : Nat := 131072
   deriving Inhabited, ToJson, FromJson, DecidableEq
 
 structure ArbitrationState where
@@ -200,13 +200,13 @@ def voteCountFor (votes : List CouncilVote) (value : String) : Nat :=
 def filingCountForRole (items : List Filing) (role : String) : Nat :=
   items.foldl (fun acc item => if item.role = role then acc + 1 else acc) 0
 
-def offeredFileCountForRole (items : List OfferedFile) (role : String) : Nat :=
+def offeredArtifactCountForRole (items : List OfferedArtifact) (role : String) : Nat :=
   items.foldl (fun acc item => if item.role = role then acc + 1 else acc) 0
 
 def technicalReportCountForRole (items : List TechnicalReport) (role : String) : Nat :=
   items.foldl (fun acc item => if item.role = role then acc + 1 else acc) 0
 
-def submittedEvidenceCountForRole (items : List SubmittedEvidence) (role : String) : Nat :=
+def submittedArtifactCountForRole (items : List SubmittedArtifact) (role : String) : Nat :=
   items.foldl (fun acc item => if item.role = role then acc + 1 else acc) 0
 
 def nextCouncilMember? (c : ArbitrationCase) : Option CouncilMember :=
@@ -248,7 +248,7 @@ def nextOpportunityForPhase (s : ArbitrationState) : NextOpportunityOk :=
               role := role
               phase := "arguments"
               objective := s!"{role} merits argument"
-              allowed_tools := ["submit_evidence", "submit_argument"]
+              allowed_tools := ["submit_artifact", "submit_argument"]
             } }
       | none =>
           { terminal := true, reason := "no_argument_opportunity", state_version := s.state_version }
@@ -261,7 +261,7 @@ def nextOpportunityForPhase (s : ArbitrationState) : NextOpportunityOk :=
             phase := "rebuttals"
             may_pass := true
             objective := "plaintiff rebuttal"
-            allowed_tools := ["submit_evidence", "submit_rebuttal", "pass_phase_opportunity"]
+            allowed_tools := ["submit_artifact", "submit_rebuttal", "pass_phase_opportunity"]
           } }
       else
         { terminal := true, reason := "no_rebuttal_opportunity", state_version := s.state_version }
@@ -366,8 +366,8 @@ def validatePolicy (p : ArbitrationPolicy) : Except String Unit := do
     throw "policy.max_report_title_bytes must be positive"
   if p.max_report_summary_bytes = 0 then
     throw "policy.max_report_summary_bytes must be positive"
-  if p.max_submitted_evidence_bytes = 0 then
-    throw "policy.max_submitted_evidence_bytes must be positive"
+  if p.max_submitted_artifacts_bytes = 0 then
+    throw "policy.max_submitted_artifacts_bytes must be positive"
 
 def advanceAfterMerits (c : ArbitrationCase) : ArbitrationCase :=
   if c.openings.length >= 2 && c.phase = "openings" then
@@ -397,42 +397,42 @@ def addFiling (c : ArbitrationCase) (phase role text : String) : ArbitrationCase
 
 def appendSupplementalMaterials
   (c : ArbitrationCase)
-  (offered : List OfferedFile)
+  (offered : List OfferedArtifact)
   (reports : List TechnicalReport) : ArbitrationCase :=
   { c with
-    offered_files := c.offered_files ++ offered
+    offered_artifacts := c.offered_artifacts ++ offered
     technical_reports := c.technical_reports ++ reports
   }
 
-def appendSubmittedEvidence
+def appendSubmittedArtifact
   (c : ArbitrationCase)
-  (evidence : SubmittedEvidence) : ArbitrationCase :=
-  { c with submitted_evidence := c.submitted_evidence.concat evidence }
+  (evidence : SubmittedArtifact) : ArbitrationCase :=
+  { c with submitted_artifacts := c.submitted_artifacts.concat evidence }
 
-def parseOfferedFileEntry (entry : Json) (phase role : String) : Except String OfferedFile := do
-  let rawFileId ← getString entry "file_id"
+def parseOfferedArtifactEntry (entry : Json) (phase role : String) : Except String OfferedArtifact := do
+  let rawFileId ← getString entry "artifact_id"
   let fileId := trimString rawFileId
   if fileId = "" then
-    .error "offered_files entry requires file_id"
+    .error "offered_artifacts entry requires artifact_id"
   else
     .ok {
       phase := phase
       role := role
-      file_id := fileId
+      artifact_id := fileId
       label := getOptionalString entry "label"
     }
 
-def parseOfferedFileEntries (entries : List Json) (phase role : String) : Except String (List OfferedFile) := do
+def parseOfferedArtifactEntries (entries : List Json) (phase role : String) : Except String (List OfferedArtifact) := do
   match entries with
   | [] => pure []
   | entry :: rest =>
-      let first ← parseOfferedFileEntry entry phase role
-      let tail ← parseOfferedFileEntries rest phase role
+      let first ← parseOfferedArtifactEntry entry phase role
+      let tail ← parseOfferedArtifactEntries rest phase role
       pure (first :: tail)
 
-def parseOfferedFiles (payload : Json) (phase role : String) : Except String (List OfferedFile) := do
-  let entries ← getOptionalArray payload "offered_files"
-  parseOfferedFileEntries entries phase role
+def parseOfferedArtifacts (payload : Json) (phase role : String) : Except String (List OfferedArtifact) := do
+  let entries ← getOptionalArray payload "offered_artifacts"
+  parseOfferedArtifactEntries entries phase role
 
 def parseTechnicalReportEntry (entry : Json) (phase role : String) : Except String TechnicalReport := do
   let rawTitle ← getString entry "title"
@@ -465,8 +465,8 @@ def parseTechnicalReports (payload : Json) (phase role : String) : Except String
   let entries ← getOptionalArray payload "technical_reports"
   parseTechnicalReportEntries entries phase role
 
-def parseSubmittedEvidence (payload : Json) (phase role : String) : Except String SubmittedEvidence := do
-  let rawFileId ← getString payload "file_id"
+def parseSubmittedArtifact (payload : Json) (phase role : String) : Except String SubmittedArtifact := do
+  let rawFileId ← getString payload "artifact_id"
   let rawTitle ← getString payload "title"
   let rawMimeType ← getString payload "mime_type"
   let rawRelevance ← getString payload "relevance"
@@ -481,7 +481,7 @@ def parseSubmittedEvidence (payload : Json) (phase role : String) : Except Strin
   let retrievalTimestamp := getOptionalString payload "retrieval_timestamp"
   let sizeBytes ← payload.getObjValAs? Nat "size_bytes"
   if fileId = "" then
-    throw "submitted evidence requires file_id"
+    throw "submitted evidence requires artifact_id"
   if title = "" then
     throw "submitted evidence requires title"
   if sourceUrl = "" && sourceDescription = "" then
@@ -497,7 +497,7 @@ def parseSubmittedEvidence (payload : Json) (phase role : String) : Except Strin
   pure {
     phase := phase
     role := role
-    file_id := fileId
+    artifact_id := fileId
     title := title
     source_url := sourceUrl
     source_description := sourceDescription
@@ -524,21 +524,21 @@ def submitEvidence
           throw "rebuttal evidence is closed"
     | _ => throw "submitted evidence is allowed only in arguments and rebuttals"
   requireRole actorRole expectedRole
-  let parsedEvidence ← parseSubmittedEvidence payload c.phase expectedRole
+  let parsedEvidence ← parseSubmittedArtifact payload c.phase expectedRole
   let evidence := { parsedEvidence with role := expectedRole }
-  if c.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-    throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
-  else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
-    throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+  if c.submitted_artifacts.any (fun item => item.artifact_id = evidence.artifact_id) then
+    throw s!"duplicate submitted evidence artifact_id: {evidence.artifact_id}"
+  else if evidence.size_bytes > s.policy.max_submitted_artifacts_bytes then
+    throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_artifacts_bytes}"
   else
-    let total := submittedEvidenceCountForRole c.submitted_evidence expectedRole + 1
-    requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
-    pure <| stateWithCase s (appendSubmittedEvidence c evidence)
+    let total := submittedArtifactCountForRole c.submitted_artifacts expectedRole + 1
+    requireCountWithinLimit "submitted_artifacts for this side" total s.policy.max_submitted_artifacts_per_side
+    pure <| stateWithCase s (appendSubmittedArtifact c evidence)
 
 def requireNoSupplementalMaterials (payload : Json) : Except String Unit := do
-  let offered ← getOptionalArray payload "offered_files"
+  let offered ← getOptionalArray payload "offered_artifacts"
   if !offered.isEmpty then
-    throw "offered_files are allowed only in arguments and rebuttals"
+    throw "offered_artifacts are allowed only in arguments and rebuttals"
   let reports ← getOptionalArray payload "technical_reports"
   if !reports.isEmpty then
     throw "technical_reports are allowed only in arguments and rebuttals"
@@ -556,13 +556,13 @@ def recordMeritsSubmission
   let text := trimString (← getString payload "text")
   requireTextWithinLimit textLabel text limit
   if allowSupplementalMaterials then
-    let offered ← parseOfferedFiles payload phase expectedRole
+    let offered ← parseOfferedArtifacts payload phase expectedRole
     let reports ← parseTechnicalReports payload phase expectedRole
-    requireCountWithinLimit "offered_files" offered.length s.policy.max_exhibits_per_filing
+    requireCountWithinLimit "offered_artifacts" offered.length s.policy.max_exhibits_per_filing
     requireCountWithinLimit "technical_reports" reports.length s.policy.max_reports_per_filing
-    let totalOffered := offeredFileCountForRole c.offered_files expectedRole + offered.length
+    let totalOffered := offeredArtifactCountForRole c.offered_artifacts expectedRole + offered.length
     let totalReports := technicalReportCountForRole c.technical_reports expectedRole + reports.length
-    requireCountWithinLimit "offered_files for this side" totalOffered s.policy.max_exhibits_per_side
+    requireCountWithinLimit "offered_artifacts for this side" totalOffered s.policy.max_exhibits_per_side
     requireCountWithinLimit "technical_reports for this side" totalReports s.policy.max_reports_per_side
     let c1 := addFiling c phase expectedRole text
     let c2 := appendSupplementalMaterials c1 offered reports
@@ -656,9 +656,9 @@ def initializeCase (req : InitializeCaseRequest) : Except String ArbitrationStat
     rebuttals := []
     surrebuttals := []
     closings := []
-    offered_files := []
+    offered_artifacts := []
     technical_reports := []
-    submitted_evidence := []
+    submitted_artifacts := []
     deliberation_round := 1
     council_votes := []
     resolution := ""
@@ -706,7 +706,7 @@ def step (req : StepRequest) : Except String ArbitrationState := do
         req.state.policy.max_surrebuttal_chars
         false
         req.action.payload
-  | "submit_evidence" =>
+  | "submit_artifact" =>
       submitEvidence req.state req.action.actor_role req.action.payload
   | "deliver_closing_statement" =>
       if c.phase != "closings" then

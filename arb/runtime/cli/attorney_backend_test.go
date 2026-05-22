@@ -24,13 +24,13 @@ func TestRunAttorneyToolsIncludesWorkspaceWriter(t *testing.T) {
 	}
 	var found bool
 	for _, tool := range tools {
-		if tool["method"] == "_aar/write_case_file" {
+		if tool["method"] == "_aar/materialize_artifact" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("tool list missing _aar/write_case_file: %#v", tools)
+		t.Fatalf("tool list missing _aar/materialize_artifact: %#v", tools)
 	}
 }
 

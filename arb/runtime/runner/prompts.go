@@ -14,11 +14,22 @@ var promptBaseDir string
 var promptPlaceholderPattern = regexp.MustCompile(`\{\{([A-Z0-9_]+)\}\}`)
 
 func renderPromptFile(name string, values map[string]string) (string, error) {
-	root, err := promptDir()
+	path, err := defaultPromptPath(name)
 	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(root, name)
+	return renderPromptPath(path, name, values)
+}
+
+func (cfg Config) renderPromptFile(name string, values map[string]string) (string, error) {
+	path, err := cfg.promptPath(name)
+	if err != nil {
+		return "", err
+	}
+	return renderPromptPath(path, name, values)
+}
+
+func renderPromptPath(path string, name string, values map[string]string) (string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("read prompt %s: %w", path, err)
@@ -47,6 +58,42 @@ func renderPromptFile(name string, values map[string]string) (string, error) {
 		return "", fmt.Errorf("prompt %s left placeholder %s unresolved", name, leftover[1])
 	}
 	return strings.TrimSpace(rendered), nil
+}
+
+func defaultPromptPath(name string) (string, error) {
+	root, err := promptDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, name), nil
+}
+
+func (cfg Config) promptPath(name string) (string, error) {
+	if override := strings.TrimSpace(cfg.promptFileOverride(name)); override != "" {
+		return override, nil
+	}
+	if dir := strings.TrimSpace(cfg.PromptDir); dir != "" {
+		candidate := filepath.Join(dir, name)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, nil
+		} else if err != nil && !os.IsNotExist(err) {
+			return "", fmt.Errorf("stat prompt %s: %w", candidate, err)
+		}
+	}
+	return defaultPromptPath(name)
+}
+
+func (cfg Config) promptFileOverride(name string) string {
+	switch name {
+	case "attorney-common.md":
+		return cfg.AttorneyCommonPromptPath
+	case "attorney-arguments.md":
+		return cfg.AttorneyArgumentPromptPath
+	case "attorney-rebuttals.md":
+		return cfg.AttorneyRebuttalPromptPath
+	default:
+		return ""
+	}
 }
 
 func promptDir() (string, error) {
