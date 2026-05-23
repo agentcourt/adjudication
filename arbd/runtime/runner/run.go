@@ -65,10 +65,6 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 			return Result{}, err
 		}
 	}
-	fileByID := make(map[string]CaseFile, len(caseFiles))
-	for _, file := range caseFiles {
-		fileByID[file.FileID] = file
-	}
 	council, err := sampleCouncil(cfg.CouncilPoolPath, cfg.CommonRoot, cfg.Policy.CouncilSize)
 	if err != nil {
 		return Result{}, err
@@ -82,15 +78,20 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 		return Result{}, fmt.Errorf("initialize_case rejected: %s", mapString(initResp["error"]))
 	}
 	rc := &runContext{
-		cfg:             cfg,
-		complaint:       complaint,
-		state:           mapAny(initResp["state"]),
-		caseFiles:       caseFiles,
-		fileByID:        fileByID,
-		council:         council,
-		attorneys:       attorneyMap,
-		acpSessions:     map[string]*acpPersistentSession{},
-		workProductDirs: map[string]string{},
+		cfg:               cfg,
+		complaint:         complaint,
+		state:             mapAny(initResp["state"]),
+		caseFiles:         caseFiles,
+		submittedEvidence: []SubmittedEvidenceMeta{},
+		evidenceByID:      map[string]EvidenceMeta{},
+		uploadSessions:    map[string]*EvidenceUploadSession{},
+		council:           council,
+		attorneys:         attorneyMap,
+		acpSessions:       map[string]*acpPersistentSession{},
+		workProductDirs:   map[string]string{},
+	}
+	if err := rc.initializeEvidenceRegistry(); err != nil {
+		return Result{}, err
 	}
 	defer func() {
 		if closeErr := rc.closeACPSessions(); closeErr != nil {
@@ -113,20 +114,22 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 		if terminal {
 			finishedAt := time.Now().UTC()
 			result := Result{
-				RunID:            cfg.RunID,
-				StartedAt:        startedAt.Format(time.RFC3339),
-				FinishedAt:       finishedAt.Format(time.RFC3339),
-				Status:           "ok",
-				Phase:            currentPhase(rc.state),
-				Complaint:        complaint,
-				JudgmentStandard: currentJudgmentStandard(rc.state, cfg.Policy),
-				Answers:          currentAnswers(rc.state),
-				Attorneys:        attorneys,
-				CaseFiles:        caseFileMetas(caseFiles),
-				Council:          finalCouncil(rc.state),
-				Events:           rc.events,
-				FinalState:       rc.state,
-				FinalReason:      reason,
+				RunID:             cfg.RunID,
+				StartedAt:         startedAt.Format(time.RFC3339),
+				FinishedAt:        finishedAt.Format(time.RFC3339),
+				Status:            "ok",
+				Phase:             currentPhase(rc.state),
+				Complaint:         complaint,
+				JudgmentStandard:  currentJudgmentStandard(rc.state, cfg.Policy),
+				Answers:           currentAnswers(rc.state),
+				Attorneys:         attorneys,
+				CaseFiles:         caseFileMetas(rc.caseFiles),
+				SubmittedEvidence: rc.submittedEvidence,
+				Evidence:          rc.evidence,
+				Council:           finalCouncil(rc.state),
+				Events:            rc.events,
+				FinalState:        rc.state,
+				FinalReason:       reason,
 			}
 			if err := writeEvidence(cfg, result, rc); err != nil {
 				return Result{}, err
@@ -165,8 +168,9 @@ func initialState(policy Policy) map[string]any {
 			"rebuttals":          []map[string]any{},
 			"surrebuttals":       []map[string]any{},
 			"closings":           []map[string]any{},
-			"offered_files":      []map[string]any{},
+			"offered_evidence":   []map[string]any{},
 			"technical_reports":  []map[string]any{},
+			"submitted_evidence": []map[string]any{},
 			"deliberation_round": 1,
 			"council_answers":    []map[string]any{},
 		},

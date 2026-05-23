@@ -18,7 +18,7 @@ The arbitration proceeds in this order: openings, arguments, rebuttals, surrebut
 
 ## Rule 5: Arguments and Record Material
 
-The parties present merits arguments during the arguments phase.  They may offer case files as exhibits and submit technical reports during arguments.  The claimant may also offer exhibits and submit technical reports during rebuttal when those materials answer the respondent's argument.  Surrebuttal is text-only.  All admitted materials become part of the record considered by the council.
+The parties present merits arguments during the arguments phase.  They may offer visible evidence as exhibits, submit new source evidence, and submit technical reports during arguments.  The claimant may also offer exhibits, submit new source evidence, and submit technical reports during rebuttal when those materials answer the respondent's argument.  Surrebuttal is text-only.  All admitted materials become part of the record considered by the council.
 
 ## Rule 6: Closings
 

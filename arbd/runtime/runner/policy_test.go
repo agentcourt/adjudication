@@ -10,6 +10,22 @@ func TestValidatePolicyRejectsBlankJudgmentStandard(t *testing.T) {
 	}
 }
 
+func TestValidatePolicyRejectsOversizedEvidenceUploadLimit(t *testing.T) {
+	policy := DefaultPolicy()
+	policy.MaxEvidenceUploadBytes = policy.MaxSubmittedEvidenceBytes + 1
+	if err := ValidatePolicy(policy); err == nil {
+		t.Fatal("ValidatePolicy returned nil error, want failure")
+	}
+}
+
+func TestValidatePolicyRejectsReadLimitAboveOpportunityBudget(t *testing.T) {
+	policy := DefaultPolicy()
+	policy.MaxEvidenceReadBytes = policy.MaxEvidenceReadBytesPerOpportunity + 1
+	if err := ValidatePolicy(policy); err == nil {
+		t.Fatal("ValidatePolicy returned nil error, want failure")
+	}
+}
+
 func TestCurrentAnswersBuildsMemberMap(t *testing.T) {
 	state := map[string]any{
 		"case": map[string]any{

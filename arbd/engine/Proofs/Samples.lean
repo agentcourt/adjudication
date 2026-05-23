@@ -127,7 +127,7 @@ def textPayload (text : String) : Json :=
 def meritsPayload (text : String) : Json :=
   Json.mkObj
     [ ("text", Json.str text)
-    , ("offered_files", Json.arr #[])
+    , ("offered_evidence", Json.arr #[])
     , ("technical_reports", Json.arr #[])
     ]
 

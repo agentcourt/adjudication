@@ -44,6 +44,9 @@ func writeEvidence(cfg Config, result Result, rc *runContext) error {
 	if err := writeJSONFile(filepath.Join(cfg.OutputDir, "run.json"), result); err != nil {
 		return err
 	}
+	if err := writeJSONFile(filepath.Join(cfg.OutputDir, "evidence-manifest.json"), rc.evidenceManifest()); err != nil {
+		return err
+	}
 	if err := writeJSONFile(filepath.Join(cfg.OutputDir, "state.json"), result.FinalState); err != nil {
 		return err
 	}
@@ -107,7 +110,7 @@ func renderTranscript(result Result, rc *runContext) string {
 	b.WriteString("## Council Answers\n\n")
 	b.WriteString(renderAnswerRounds(mapList(caseObj["council_answers"])))
 	b.WriteString("\n\n## Exhibits\n\n")
-	b.WriteString(rc.renderExhibitBodies(mapList(caseObj["offered_files"])))
+	b.WriteString(rc.renderExhibitBodies(mapList(caseObj["offered_evidence"])))
 	b.WriteString("\n\n## Technical Reports\n\n")
 	b.WriteString(renderReports(mapList(caseObj["technical_reports"])))
 	b.WriteString("\n\n## Answers\n\n")
@@ -133,7 +136,7 @@ func renderDigest(result Result, rc *runContext) string {
 	appendFilingSection(&b, "Surrebuttals", mapList(caseObj["surrebuttals"]))
 	appendFilingSection(&b, "Closings", mapList(caseObj["closings"]))
 	b.WriteString("## Exhibits\n\n")
-	b.WriteString(rc.renderExhibitIndex(mapList(caseObj["offered_files"])))
+	b.WriteString(rc.renderExhibitIndex(mapList(caseObj["offered_evidence"])))
 	b.WriteString("\n\n## Technical Reports\n\n")
 	b.WriteString(renderReports(mapList(caseObj["technical_reports"])))
 	b.WriteString("\n\n## Council Answers\n\n")
@@ -186,7 +189,7 @@ func appendTranscriptPhase(b *strings.Builder, title string, phase string, items
 		b.WriteString("\n\n")
 		b.WriteString(mapString(item["text"]))
 		b.WriteString("\n\n")
-		exhibits := filterEvidence(mapList(caseObj["offered_files"]), phase, role)
+		exhibits := filterEvidence(mapList(caseObj["offered_evidence"]), phase, role)
 		if len(exhibits) > 0 {
 			b.WriteString("Exhibits offered:\n")
 			b.WriteString(renderInlineExhibitIndex(exhibits, rc.fileByID))
@@ -241,10 +244,10 @@ func filterEvidence(items []map[string]any, phase string, role string) []map[str
 func renderInlineExhibitIndex(items []map[string]any, fileByID map[string]CaseFile) string {
 	lines := make([]string, 0, len(items))
 	for _, item := range items {
-		fileID := mapString(item["file_id"])
+		evidenceID := mapString(item["evidence_id"])
 		label := mapString(item["label"])
-		name := fileID
-		if file, ok := fileByID[fileID]; ok && strings.TrimSpace(file.Name) != "" {
+		name := evidenceID
+		if file, ok := fileByID[evidenceID]; ok && strings.TrimSpace(file.Name) != "" {
 			name = file.Name
 		}
 		if label == "" {
