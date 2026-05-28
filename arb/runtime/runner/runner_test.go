@@ -40,6 +40,40 @@ func TestLoadCaseFiles(t *testing.T) {
 	}
 }
 
+func TestSampleCouncilCarriesJSONRequestSpec(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "personas"), 0o755); err != nil {
+		t.Fatalf("mkdir personas: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "personas", "juror.txt"), []byte("skeptical juror"), 0o644); err != nil {
+		t.Fatalf("write persona: %v", err)
+	}
+	pool := filepath.Join(dir, "pool.jsonl")
+	line := `{"openrouter_model_id":"deepseek/deepseek-v4-flash","endpoint_tag":"deepinfra/fp4","quantization":"fp4","request":{"temperature":0,"top_p":1,"max_tokens":32},"persona":"personas/juror.txt"}`
+	if err := os.WriteFile(pool, []byte(line+"\n"), 0o644); err != nil {
+		t.Fatalf("write pool: %v", err)
+	}
+
+	council, err := sampleCouncil(pool, dir, 1)
+	if err != nil {
+		t.Fatalf("sampleCouncil error = %v", err)
+	}
+	seat := council[0]
+	if seat.Model != "openrouter://deepseek/deepseek-v4-flash" {
+		t.Fatalf("seat.Model = %q", seat.Model)
+	}
+	if seat.RequestSpec == nil {
+		t.Fatalf("seat.RequestSpec = nil")
+	}
+	provider := seat.RequestSpec.ProviderBody()
+	if provider["only"].([]string)[0] != "deepinfra/fp4" {
+		t.Fatalf("provider = %#v", provider)
+	}
+	if seat.PersonaFile != "personas/juror.txt" || seat.PersonaText != "skeptical juror" {
+		t.Fatalf("persona = %q/%q", seat.PersonaFile, seat.PersonaText)
+	}
+}
+
 func TestEvidenceRegistryStoresCaseFilesAndReadsBoundedRanges(t *testing.T) {
 	dir := t.TempDir()
 	casePath := filepath.Join(dir, "source.txt")
