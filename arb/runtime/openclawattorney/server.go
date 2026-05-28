@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -67,22 +68,22 @@ type lawyerJob struct {
 	SessionID        string                       `json:"session_id"`
 	Prompt           string                       `json:"prompt"`
 	Case             map[string]any               `json:"case,omitempty"`
-	CaseFiles        []caseTextFile               `json:"case_files,omitempty"`
+	TextEvidence     []textEvidence               `json:"text_evidence,omitempty"`
 	RejectedFilings  []string                     `json:"rejected_filings,omitempty"`
 	AcceptedEvidence []acceptedEvidenceSubmission `json:"accepted_evidence,omitempty"`
 }
 
 type acceptedEvidenceSubmission struct {
-	FileID       string `json:"file_id"`
+	EvidenceID   string `json:"evidence_id"`
 	Title        string `json:"title,omitempty"`
 	OfferLabel   string `json:"offer_label,omitempty"`
 	SubmittedNow bool   `json:"submitted_now,omitempty"`
 }
 
-type caseTextFile struct {
-	FileID string `json:"file_id"`
-	Name   string `json:"name"`
-	Text   string `json:"text"`
+type textEvidence struct {
+	EvidenceID string `json:"evidence_id"`
+	Title      string `json:"title"`
+	Text       string `json:"text"`
 }
 
 func ConfigFromEnv() Config {
@@ -257,11 +258,11 @@ func (s *Server) handlePrompt(ctx context.Context, params map[string]any) error 
 		}
 		caseView = result
 	}
-	caseFiles, err := s.loadTextCaseFiles(ctx)
+	textEvidence, err := s.loadTextEvidence(ctx)
 	if err != nil {
 		return err
 	}
-	job := lawyerJob{SessionID: sessionID, Prompt: prompt, Case: caseView, CaseFiles: caseFiles}
+	job := lawyerJob{SessionID: sessionID, Prompt: prompt, Case: caseView, TextEvidence: textEvidence}
 	var submitErr error
 	for attempt := 1; attempt <= 3; attempt++ {
 		response, err := s.obtainDecision(ctx, job)
@@ -287,36 +288,110 @@ func (s *Server) handlePrompt(ctx context.Context, params map[string]any) error 
 	return submitErr
 }
 
-func (s *Server) loadTextCaseFiles(ctx context.Context) ([]caseTextFile, error) {
+func (s *Server) loadTextEvidence(ctx context.Context) ([]textEvidence, error) {
 	if !s.cfg.IncludeTextFiles {
 		return nil, nil
 	}
-	result, err := s.clientRequest(ctx, "_aar/list_case_files", map[string]any{})
+	result, err := s.clientRequest(ctx, "_aar/list_evidence", map[string]any{})
 	if err != nil {
-		return nil, fmt.Errorf("list AAR case files: %w", err)
+		if strings.Contains(err.Error(), "evidence access is not allowed") {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("list AAR evidence: %w", err)
 	}
-	metas, _ := result["files"].([]any)
-	out := make([]caseTextFile, 0, len(metas))
+	metas, _ := result["evidence"].([]any)
+	out := make([]textEvidence, 0, len(metas))
 	for _, raw := range metas {
 		meta, _ := raw.(map[string]any)
 		if meta == nil || !boolValue(meta["text_readable"]) {
 			continue
 		}
-		fileID := strings.TrimSpace(stringValue(meta["file_id"]))
-		if fileID == "" {
+		evidenceID := strings.TrimSpace(stringValue(meta["evidence_id"]))
+		if evidenceID == "" {
 			continue
 		}
-		readResult, err := s.clientRequest(ctx, "_aar/read_case_text_file", map[string]any{"file_id": fileID})
-		if err != nil {
-			return nil, fmt.Errorf("read AAR case file %s: %w", fileID, err)
+		sizeBytes := intValue(meta["size_bytes"])
+		if sizeBytes <= 0 {
+			continue
 		}
-		out = append(out, caseTextFile{
-			FileID: fileID,
-			Name:   stringValue(meta["name"]),
-			Text:   stringValue(readResult["text"]),
+		text, err := s.readTextEvidence(ctx, evidenceID, sizeBytes)
+		if err != nil {
+			return nil, fmt.Errorf("read AAR evidence %s: %w", evidenceID, err)
+		}
+		out = append(out, textEvidence{
+			EvidenceID: evidenceID,
+			Title:      stringValue(meta["title"]),
+			Text:       text,
 		})
 	}
 	return out, nil
+}
+
+func (s *Server) readTextEvidence(ctx context.Context, evidenceID string, sizeBytes int) (string, error) {
+	stat, err := s.clientRequest(ctx, "_aar/stat_evidence", map[string]any{"evidence_id": evidenceID})
+	if err != nil {
+		return "", err
+	}
+	limits := mapValue(stat["limits"])
+	maxReadBytes := intValue(limits["max_read_bytes"])
+	if maxReadBytes <= 0 {
+		maxReadBytes = sizeBytes
+	}
+	remainingBytes := sizeBytes
+	if raw, ok := limits["remaining_read_bytes_for_opportunity"]; ok {
+		remainingBytes = intValue(raw)
+	}
+	remainingReads := (sizeBytes + maxReadBytes - 1) / maxReadBytes
+	if raw, ok := limits["remaining_reads_for_opportunity"]; ok {
+		remainingReads = intValue(raw)
+	}
+
+	var b strings.Builder
+	offset := 0
+	for offset < sizeBytes && remainingReads > 0 && remainingBytes > 0 {
+		length := sizeBytes - offset
+		if length > maxReadBytes {
+			length = maxReadBytes
+		}
+		if length > remainingBytes {
+			length = remainingBytes
+		}
+		if length <= 0 {
+			break
+		}
+		readResult, err := s.clientRequest(ctx, "_aar/read_evidence_range", map[string]any{"evidence_id": evidenceID, "offset": offset, "length": length})
+		if err != nil {
+			return "", err
+		}
+		rawText, err := base64.StdEncoding.DecodeString(stringValue(readResult["content_base64"]))
+		if err != nil {
+			return "", fmt.Errorf("decode evidence range: %w", err)
+		}
+		n := intValue(readResult["length"])
+		if n <= 0 {
+			n = len(rawText)
+		}
+		if n <= 0 {
+			break
+		}
+		if n > len(rawText) {
+			n = len(rawText)
+		}
+		b.Write(rawText[:n])
+		offset += n
+		remainingBytes -= n
+		remainingReads--
+		if raw, ok := readResult["remaining_read_bytes_for_opportunity"]; ok {
+			remainingBytes = intValue(raw)
+		}
+		if raw, ok := readResult["remaining_reads_for_opportunity"]; ok {
+			remainingReads = intValue(raw)
+		}
+	}
+	if offset < sizeBytes {
+		b.WriteString(fmt.Sprintf("\n\n[evidence text truncated after %d of %d bytes by AAR read limits]", offset, sizeBytes))
+	}
+	return b.String(), nil
 }
 
 func (s *Server) obtainDecision(ctx context.Context, job lawyerJob) (map[string]any, error) {
@@ -432,14 +507,14 @@ func buildOpenClawAgentPrompt(job lawyerJob, extra string) (string, error) {
 	}
 	b.WriteString("Return exactly one JSON object. Do not include prose, markdown, or a code fence.\n")
 	b.WriteString("You may return either an ordinary aar_submit_decision object, or a structured bundle with evidence_submissions and decision.\n")
-	b.WriteString("Use the structured bundle when you found source material outside the record that should become evidence. Each evidence_submissions item may include title, source_url, source_description, retrieval_timestamp, mime_type, relevance, content or content_base64, preferred_filename_ext, offer_label, and offer_as_exhibit. The adapter submits those items with aar_submit_evidence before filing the decision. If offer_as_exhibit is omitted, accepted evidence is cited in offered_files for arguments and rebuttals. Do not include evidence_submissions in closings.\n")
+	b.WriteString("Use the structured bundle when you found source material outside the record that should become evidence. Each evidence_submissions item may include title, source_url, source_description, retrieval_timestamp, mime_type, relevance, content or content_base64, preferred_filename_ext, offer_label, and offer_as_exhibit. The adapter submits those items with aar_submit_evidence before filing the decision. If offer_as_exhibit is omitted, accepted evidence is cited in offered_evidence for arguments and rebuttals. Do not include evidence_submissions in closings.\n")
 	b.WriteString("Ordinary decision form: {\"kind\":\"tool\",\"tool_name\":\"submit_argument\",\"payload\":{...}}. Structured bundle form: {\"evidence_submissions\":[{...}],\"decision\":{\"kind\":\"tool\",\"tool_name\":\"submit_argument\",\"payload\":{...}}}.\n\n")
 	if len(job.AcceptedEvidence) > 0 {
-		b.WriteString("Evidence already accepted during this opportunity. Do not resubmit these items; cite the file_id values in offered_files if needed:\n")
+		b.WriteString("Evidence already accepted during this opportunity. Do not resubmit these items; cite the evidence_id values in offered_evidence if needed:\n")
 		for i, item := range job.AcceptedEvidence {
 			b.WriteString(strconv.Itoa(i + 1))
 			b.WriteString(". ")
-			b.WriteString(item.FileID)
+			b.WriteString(item.EvidenceID)
 			if item.Title != "" {
 				b.WriteString(" — ")
 				b.WriteString(item.Title)
@@ -462,14 +537,14 @@ func buildOpenClawAgentPrompt(job lawyerJob, extra string) (string, error) {
 	b.WriteString(job.Prompt)
 	b.WriteString("\n\nVisible arbitration record from aar_get_case:\n")
 	b.Write(caseJSON)
-	if len(job.CaseFiles) > 0 {
-		b.WriteString("\n\nVisible text case files:\n")
-		for _, file := range job.CaseFiles {
-			b.WriteString("\n--- file_id: ")
-			b.WriteString(file.FileID)
-			if file.Name != "" {
-				b.WriteString(" name: ")
-				b.WriteString(file.Name)
+	if len(job.TextEvidence) > 0 {
+		b.WriteString("\n\nVisible text evidence:\n")
+		for _, file := range job.TextEvidence {
+			b.WriteString("\n--- evidence_id: ")
+			b.WriteString(file.EvidenceID)
+			if file.Title != "" {
+				b.WriteString(" title: ")
+				b.WriteString(file.Title)
 			}
 			b.WriteString(" ---\n")
 			b.WriteString(file.Text)
@@ -600,48 +675,48 @@ func (s *Server) prepareDecision(ctx context.Context, response map[string]any) (
 		if err != nil {
 			return nil, accepted, fmt.Errorf("submit AAR evidence %d: %w", i+1, err)
 		}
-		fileID := strings.TrimSpace(stringValue(result["file_id"]))
-		if fileID == "" {
+		evidenceID := strings.TrimSpace(stringValue(result["evidence_id"]))
+		if evidenceID == "" {
 			if evidence := mapValue(result["evidence"]); evidence != nil {
-				fileID = strings.TrimSpace(stringValue(evidence["file_id"]))
+				evidenceID = strings.TrimSpace(stringValue(evidence["evidence_id"]))
 			}
 		}
-		if fileID == "" {
-			return nil, accepted, fmt.Errorf("submit AAR evidence %d returned no file_id", i+1)
+		if evidenceID == "" {
+			return nil, accepted, fmt.Errorf("submit AAR evidence %d returned no evidence_id", i+1)
 		}
 		if offerLabel == "" {
 			offerLabel = strings.TrimSpace(stringValue(params["title"]))
 		}
 		if offerLabel == "" {
-			offerLabel = fileID
+			offerLabel = evidenceID
 		}
 		accepted = append(accepted, acceptedEvidenceSubmission{
-			FileID:       fileID,
+			EvidenceID:   evidenceID,
 			Title:        strings.TrimSpace(stringValue(params["title"])),
 			OfferLabel:   offerLabel,
 			SubmittedNow: true,
 		})
 		if offerAsExhibit {
-			appendOfferedFile(decision, fileID, offerLabel)
+			appendOfferedEvidence(decision, evidenceID, offerLabel)
 		}
 	}
 	return decision, accepted, nil
 }
 
-func appendOfferedFile(decision map[string]any, fileID string, label string) {
+func appendOfferedEvidence(decision map[string]any, evidenceID string, label string) {
 	payload := mapValue(decision["payload"])
 	if payload == nil {
 		payload = map[string]any{}
 	}
-	offered := listOfMaps(payload["offered_files"])
+	offered := listOfMaps(payload["offered_evidence"])
 	for _, item := range offered {
-		if strings.TrimSpace(stringValue(item["file_id"])) == fileID {
+		if strings.TrimSpace(stringValue(item["evidence_id"])) == evidenceID {
 			decision["payload"] = payload
 			return
 		}
 	}
-	offered = append(offered, map[string]any{"file_id": fileID, "label": label})
-	payload["offered_files"] = offered
+	offered = append(offered, map[string]any{"evidence_id": evidenceID, "label": label})
+	payload["offered_evidence"] = offered
 	decision["payload"] = payload
 }
 
@@ -787,6 +862,19 @@ func stringValue(v any) string {
 func boolValue(v any) bool {
 	b, _ := v.(bool)
 	return b
+}
+
+func intValue(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	default:
+		return 0
+	}
 }
 
 func envBool(name string, fallback bool) bool {

@@ -100,7 +100,7 @@ Build the `pi` container image:
 
 ## Run `ex1`
 
-`ex1` is the main end-to-end example.  It starts from `examples/ex1/situation.md`, regenerates the signature artifacts, drafts `examples/ex1/complaint.md`, delegates both attorneys through ACP, runs `pi` and `pi-acp` in Podman for those attorneys, keeps provider keys on the host with `xproxy`, and proceeds through discovery, motions, trial, verdict, and judgment.  The attorney container receives only a fresh writable home directory for the turn.  It does not receive the repository checkout, the run output directory, or a persistent host `~/.pi` tree.
+`ex1` is the main end-to-end example.  It starts from `examples/ex1/situation.md`, regenerates the signature evidence, drafts `examples/ex1/complaint.md`, delegates both attorneys through ACP, runs `pi` and `pi-acp` in Podman for those attorneys, keeps provider keys on the host with `xproxy`, and proceeds through discovery, motions, trial, verdict, and judgment.  The attorney container receives only a fresh writable home directory for the turn.  It does not receive the repository checkout, the run output directory, or a persistent host `~/.pi` tree.
 
 From the repository root:
 
@@ -138,7 +138,7 @@ The `--out-dir` directory contains the complete record of the run:
 | `generated-scenario.json` | Seeded case bundle used by the runner |
 | `events.ndjson`           | Event log                             |
 | `run.db`                  | SQLite run database                   |
-| `run.json`                | Full authoritative run artifact       |
+| `run.json`                | Full authoritative run evidence       |
 | `digest.md`               | Case digest                           |
 | `transcript.md`           | Trial transcript                      |
 

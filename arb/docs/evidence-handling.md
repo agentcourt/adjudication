@@ -1,0 +1,121 @@
+# Evidence Handling
+
+This note documents the AAR runtime evidence layer used by `aar case`.
+
+## Model
+
+AAR owns record custody. It stores admitted bytes, assigns stable evidence identifiers, records provenance metadata, enforces policy limits, and logs access. Attorneys and later juror agents inspect evidence through media-agnostic methods. AAR does not parse, render, OCR, transcribe, extract, execute, or otherwise interpret evidence formats.
+
+`evidence_id` is the record identity for an evidence item. It is deterministic from the stored SHA-256 and a normalized source name. It is not a local path, workspace path, or content-addressed storage path. Filings cite visible `evidence_id` values in `offered_evidence`.
+
+Local paths, workspace paths, and content-addressed storage names are implementation details. Use `evidence_id` plus SHA-256 when exact byte custody matters.
+
+## Runtime storage
+
+Each run writes evidence state under `--out-dir`:
+
+```text
+evidence-manifest.json
+evidence-store/<sha-prefix>/<sha256>
+submitted-evidence/
+events.ndjson
+run.json
+state.json
+```
+
+`evidence-store/` is content-addressed by SHA-256. Repeated identical bytes may share the same stored object. `evidence-manifest.json` records the AAR view of each visible evidence:
+
+- `evidence_id`
+- `sha256`
+- `size_bytes`
+- `mime_type`
+- `storage_name`
+- `created_at`
+- `admissibility_status`
+- `record_visibility`
+- optional title, original filename, provenance, parent evidence, derivation, and readability fields
+
+Initial case materials are registered as `case_packet` evidence. Accepted attorney submissions are registered as `submitted_evidence` evidence.
+
+## Attorney methods
+
+AAR exposes these methods over the existing ACP custom-method channel during arguments and rebuttals:
+
+- `aar_get_case` returns the visible arbitration record.
+- `aar_list_evidence` lists visible evidence metadata. It returns metadata only, not bytes.
+- `aar_stat_evidence` returns metadata, allowed operations, and remaining limits for one evidence.
+- `aar_read_evidence_range` returns a bounded byte range as base64. It never mutates the record. Successful reads are logged as `evidence_read` events.
+- `aar_materialize_evidence` copies exact evidence bytes into the managed attorney workspace and returns a workspace path. The returned path is not the record identity. Successful materializations are logged as `evidence_materialized` events.
+- `aar_submit_evidence` submits small source evidence in one JSON request using `content` or `content_base64`.
+- `aar_submit_decision` submits the legal act for the current opportunity.
+
+## Juror methods
+
+When `aar case` runs with `--council-backend pi`, council members are Pi ACP juror agents. Juror evidence access is read-only and available only during deliberation. Jurors receive these AAR methods:
+
+- `aar_get_case` returns the visible arbitration record.
+- `aar_list_evidence` lists visible evidence metadata.
+- `aar_stat_evidence` returns metadata, allowed read operations, and remaining limits for one evidence.
+- `aar_read_evidence_range` returns a bounded byte range as base64 and logs an `evidence_read` event with role `council`.
+- `aar_materialize_evidence` copies exact bytes into the managed juror workspace and logs an `evidence_materialized` event with role `council`.
+- `aar_submit_council_vote` submits the juror's vote through the same Lean `submit_council_vote` transition used by the direct council path.
+
+Jurors do not receive upload, submit-evidence, or attorney-decision methods. AAR does not grant jurors web search or a path to introduce new facts. The Pi backend rejects council models that request web-search tools. The procedural boundary is: attorneys build the record; jurors examine the admitted record.
+
+## Chunked upload methods
+
+Chunked upload is for evidence too large or unsuitable for single-request `aar_submit_evidence`.
+
+- `aar_begin_evidence_upload` starts an upload session. It requires title, MIME type, expected size, relevance, and either source URL or source description. Nothing is admitted at this step.
+- `aar_write_evidence_chunk` writes one base64 chunk at the next expected offset. Chunks must be sequential. The runtime enforces chunk and total upload limits.
+- `aar_commit_evidence_upload` verifies size and SHA-256, admits the evidence through the Lean `submit_evidence` state transition, moves the uploaded bytes into `submitted-evidence/`, registers the evidence in `evidence-store/`, and returns `evidence_id`.
+
+A failed or incomplete upload session is not evidence. A completed upload becomes record evidence only after commit succeeds and the Lean engine accepts the corresponding `submit_evidence` action.
+
+## Policy limits
+
+The policy has three evidence-size limits:
+
+- `max_submitted_evidence_bytes` is the authoritative record limit enforced by the Lean engine for each submitted evidence.
+- `max_direct_submitted_evidence_bytes` is the smaller direct JSON/base64 limit for `aar_submit_evidence`.
+- `max_evidence_upload_bytes` is the chunked-upload limit. It must not exceed `max_submitted_evidence_bytes`.
+
+Evidence read policy:
+
+- `max_evidence_chunk_bytes` caps each uploaded chunk.
+- `max_evidence_read_bytes` caps each evidence range read.
+- `max_evidence_reads_per_opportunity` caps read count per opportunity.
+- `max_evidence_read_bytes_per_opportunity` caps returned evidence bytes per opportunity.
+
+The runtime rejects invalid policies at startup. Evidence access is enforced server-side by phase; it is allowed only during arguments and rebuttals.
+
+## Custody invariants
+
+The implementation must preserve these invariants:
+
+1. AAR stores exact bytes before exposing an item as accepted evidence.
+2. `evidence_id` and SHA-256 identify record bytes. Paths do not.
+3. Upload commit does not bypass the Lean `submit_evidence` transition.
+4. `offered_evidence` uses visible `evidence_id` values.
+5. Evidence reads and materializations are logged.
+6. AAR remains media-agnostic. Agents examine bytes with their own tools.
+7. Juror-facing evidence access is read-only and narrower than attorney access.
+8. Juror evidence inspection does not authorize independent investigation or new evidence.
+
+## Inspection checklist
+
+After a run that uses submitted evidence:
+
+```bash
+jq '.evidence | length' "$out_dir/run.json"
+jq '.evidence_count' "$out_dir/evidence-manifest.json"
+jq '.evidence[] | {evidence_id,sha256,size_bytes,mime_type,admissibility_status}' "$out_dir/evidence-manifest.json"
+grep -n 'evidence_read\|evidence_materialized\|submitted_evidence' "$out_dir/events.ndjson"
+```
+
+For each important exhibit, verify that:
+
+- the `offered_evidence` entry uses a visible `evidence_id`;
+- the corresponding evidence has the expected SHA-256 and size;
+- any derived evidence names its source evidence and derivation method;
+- the attorney's filing distinguishes source evidence from analysis or work product.

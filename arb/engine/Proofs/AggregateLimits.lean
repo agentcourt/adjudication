@@ -17,7 +17,7 @@ counting argument that later step-level proofs will need.
 -/
 
 theorem offeredCount_eq_length_of_all_role
-    (items : List OfferedFile)
+    (items : List OfferedEvidence)
     (role : String)
     (hAll : ∀ item ∈ items, item.role = role) :
     offeredCount items role = items.length := by
@@ -33,7 +33,7 @@ theorem offeredCount_eq_length_of_all_role
       simpa [offeredCount, hHead] using congrArg Nat.succ hTailCount
 
 theorem offeredCount_zero_of_all_other_role
-    (items : List OfferedFile)
+    (items : List OfferedEvidence)
     (role other : String)
     (hAll : ∀ item ∈ items, item.role = role)
     (hNe : role ≠ other) :
@@ -106,14 +106,14 @@ invariant.
 -/
 theorem appendSupplementalMaterials_preserves_material_limits
     (s : ArbitrationState)
-    (offered : List OfferedFile)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport)
     (role : String)
     (hBase : materialLimitsRespected s)
     (hOfferedRole : ∀ item ∈ offered, item.role = role)
     (hReportRole : ∀ item ∈ reports, item.role = role)
     (hOfferedCap :
-      offeredCount s.case.offered_files role + offered.length ≤ s.policy.max_exhibits_per_side)
+      offeredCount s.case.offered_evidence role + offered.length ≤ s.policy.max_exhibits_per_side)
     (hReportCap :
       reportCount s.case.technical_reports role + reports.length ≤ s.policy.max_reports_per_side) :
     materialLimitsRespected { s with case := appendSupplementalMaterials s.case offered reports } := by
@@ -193,9 +193,9 @@ should point to one of two precise causes: either the append arithmetic was
 wrong, or a transition unexpectedly changed the material lists.
 -/
 
-theorem advanceAfterMerits_preserves_offered_files
+theorem advanceAfterMerits_preserves_offered_evidence
     (c : ArbitrationCase) :
-    (advanceAfterMerits c).offered_files = c.offered_files := by
+    (advanceAfterMerits c).offered_evidence = c.offered_evidence := by
   unfold advanceAfterMerits
   by_cases hOpen : c.openings.length >= 2 ∧ c.phase = "openings"
   · simp [hOpen]
@@ -233,12 +233,12 @@ theorem advanceAfterMerits_preserves_technical_reports
           · simp [hClose]
           · simp [hClose]
 
-theorem addFiling_preserves_offered_files
+theorem addFiling_preserves_offered_evidence
     (c : ArbitrationCase)
     (phase role text : String) :
-    (addFiling c phase role text).offered_files = c.offered_files := by
+    (addFiling c phase role text).offered_evidence = c.offered_evidence := by
   unfold addFiling
-  split <;> simp [advanceAfterMerits_preserves_offered_files]
+  split <;> simp [advanceAfterMerits_preserves_offered_evidence]
 
 theorem addFiling_preserves_technical_reports
     (c : ArbitrationCase)
@@ -251,7 +251,7 @@ theorem stateWithCase_preserves_material_limits
     (s : ArbitrationState)
     (c : ArbitrationCase)
     (hBase : materialLimitsRespected s)
-    (hOffered : c.offered_files = s.case.offered_files)
+    (hOffered : c.offered_evidence = s.case.offered_evidence)
     (hReports : c.technical_reports = s.case.technical_reports) :
     materialLimitsRespected (stateWithCase s c) := by
   simpa [materialLimitsRespected, stateWithCase, hOffered, hReports] using hBase

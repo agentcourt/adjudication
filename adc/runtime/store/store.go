@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS runs (
   finished_at TEXT,
   status TEXT NOT NULL,
   final_state_json TEXT,
-  artifact_json TEXT
+  evidence_json TEXT
 );
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,21 +111,21 @@ func (s *Store) AppendEvent(
 	return nil
 }
 
-func (s *Store) FinishRun(runID string, status string, finalState map[string]any, artifact map[string]any) error {
+func (s *Store) FinishRun(runID string, status string, finalState map[string]any, evidence map[string]any) error {
 	finalStateJSON, err := json.Marshal(finalState)
 	if err != nil {
 		return fmt.Errorf("marshal final state: %w", err)
 	}
-	artifactJSON, err := json.Marshal(artifact)
+	evidenceJSON, err := json.Marshal(evidence)
 	if err != nil {
-		return fmt.Errorf("marshal artifact: %w", err)
+		return fmt.Errorf("marshal evidence: %w", err)
 	}
 	_, err = s.db.Exec(
-		`UPDATE runs SET finished_at=?, status=?, final_state_json=?, artifact_json=? WHERE run_id=?`,
+		`UPDATE runs SET finished_at=?, status=?, final_state_json=?, evidence_json=? WHERE run_id=?`,
 		time.Now().UTC().Format(time.RFC3339),
 		status,
 		string(finalStateJSON),
-		string(artifactJSON),
+		string(evidenceJSON),
 		runID,
 	)
 	if err != nil {

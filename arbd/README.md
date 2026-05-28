@@ -8,6 +8,7 @@ The procedure does not aggregate those answers.  It records the final answer map
 
 | Path | Purpose |
 |---|---|
+| `docs/` | Project rules and notes. See [`docs/evidence-handling.md`](docs/evidence-handling.md) for evidence custody and evidence-transfer semantics. |
 | `engine/` | Lean engine and proofs |
 | `runtime/` | Go runtime and `aard` CLI |
 | `prompts/` | Attorney and council prompts |
@@ -47,7 +48,7 @@ make build
   --out-dir out/ex1-demo
 ```
 
-`aard case` scans the complaint directory for case files when `--file` is absent.  It skips the complaint, the situation file, `README.md`, signing artifacts, and directories.  It loads `.txt`, `.md`, `.pem`, and `.b64` files as readable case files and records other file types as byte-bearing exhibits.
+`aard case` scans the complaint directory for initial case evidence when `--file` is absent.  That scan skips the complaint itself, the situation file, `README.md`, signing evidence, and directories.  It loads `.txt`, `.md`, `.pem`, and `.b64` evidence as text-readable evidence, and it records other file types as byte-bearing evidence.  Each loaded evidence is registered with `evidence_id`, SHA-256, byte size, MIME type, and content-addressed storage metadata.
 
 The default attorney path uses `../common/pi-container/acp-podman.sh`.  That path also requires a provider API key in the environment for the selected model endpoint, such as `OPENAI_API_KEY` for `openai://...` models or `OPENROUTER_API_KEY` for `openrouter://...` models.
 
@@ -57,7 +58,7 @@ The default attorney path uses `../common/pi-container/acp-podman.sh`.  That pat
 |---|---|
 | `--complaint` | Complaint markdown file.  Required. |
 | `--out-dir` | Output directory for the run packet.  Required. |
-| `--file` | Explicit case file path or glob.  Repeating this flag replaces automatic complaint-directory scanning. |
+| `--file` | Explicit evidence path or glob.  Repeating this flag replaces automatic complaint-directory scanning. |
 | `--policy` | Policy JSON file.  Defaults to `./etc/policy.json` when present. |
 | `--council-size` | Override `policy.council_size`. |
 | `--judgment-standard` | Override `policy.judgment_standard`. |
@@ -68,7 +69,7 @@ The default attorney path uses `../common/pi-container/acp-podman.sh`.  That pat
 
 ## Outputs
 
-Each run writes a full packet to `--out-dir`: `complaint.md`, `policy.json`, `runtime.json`, `run.json`, `state.json`, `council.json`, `digest.md`, `transcript.md`, and `events.ndjson`.
+Each run writes a full packet to `--out-dir`: `complaint.md`, `policy.json`, `runtime.json`, `run.json`, `state.json`, `council.json`, `evidence-manifest.json`, `evidence-store/`, `digest.md`, `transcript.md`, and `events.ndjson`.
 
 On success, `aard case` prints one JSON object to stdout:
 

@@ -67,31 +67,37 @@ func TestResolveLLMPersonaSpecFallsBackToEtcBase(t *testing.T) {
 	}
 }
 
-func TestExtractToolCheckAnswer(t *testing.T) {
+func TestExtractToolCheckArguments(t *testing.T) {
 	t.Parallel()
 
 	resp := openai.Response{
 		ToolCalls: []openai.ToolCall{
 			{
-				Name:      llmToolCheckName,
-				Arguments: map[string]any{"answer": "requires corroboration"},
+				Name: llmToolCheckName,
+				Arguments: map[string]any{
+					"juror_id":    "J1",
+					"damages":     float64(1),
+					"vote":        "plaintiff",
+					"confidence":  "high",
+					"explanation": "defendant admitted breach",
+				},
 			},
 		},
 	}
-	got, err := extractToolCheckAnswer(resp)
+	got, err := extractToolCheckArguments(resp)
 	if err != nil {
-		t.Fatalf("extractToolCheckAnswer error = %v", err)
+		t.Fatalf("extractToolCheckArguments error = %v", err)
 	}
-	if got != "requires corroboration" {
-		t.Fatalf("extractToolCheckAnswer = %q", got)
+	if got != `{"confidence":"high","damages":1,"explanation":"defendant admitted breach","juror_id":"J1","vote":"plaintiff"}` {
+		t.Fatalf("extractToolCheckArguments = %q", got)
 	}
 }
 
-func TestExtractToolCheckAnswerRejectsMissingRequiredTool(t *testing.T) {
+func TestExtractToolCheckArgumentsRejectsMissingRequiredTool(t *testing.T) {
 	t.Parallel()
 
-	_, err := extractToolCheckAnswer(openai.Response{Text: "plain text"})
+	_, err := extractToolCheckArguments(openai.Response{Text: "plain text"})
 	if err == nil {
-		t.Fatalf("extractToolCheckAnswer error = nil")
+		t.Fatalf("extractToolCheckArguments error = nil")
 	}
 }

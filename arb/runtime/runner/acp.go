@@ -64,6 +64,7 @@ func (rc *runContext) executeAttorneyOpportunity(ctx context.Context, _ any, opp
 	lastAgentToolStatus := map[string]string{}
 	pendingAgentToolInput := map[string]any{}
 	countedToolInput := map[string]bool{}
+	evidenceBudget := &evidenceReadBudget{}
 	var notifyErr error
 	setNotifyErr := func(err error) {
 		if err == nil {
@@ -193,44 +194,168 @@ func (rc *runContext) executeAttorneyOpportunity(ctx context.Context, _ any, opp
 			"case": view,
 		}, nil
 	})
-	client.HandleMethod(acpCustomMethod("list_case_files"), func(_ context.Context, _ map[string]any) (map[string]any, error) {
-		files := caseFileMetas(rc.caseFiles)
-		appendTranscript(map[string]any{"custom_method": acpCustomMethod("list_case_files"), "result": files})
+	client.HandleMethod(acpCustomMethod("list_evidence"), func(_ context.Context, _ map[string]any) (map[string]any, error) {
+		if !evidenceAccessAllowed(opportunity) {
+			return nil, fmt.Errorf("evidence access is not allowed in phase %q", opportunity.Phase)
+		}
+		evidence := rc.listVisibleEvidence()
+		appendTranscript(map[string]any{"custom_method": acpCustomMethod("list_evidence"), "evidence_count": len(evidence)})
 		return map[string]any{
-			"text":  marshalInline(map[string]any{"files": files}),
-			"files": files,
+			"text":     marshalInline(map[string]any{"evidence": evidence}),
+			"evidence": evidence,
 		}, nil
 	})
-	client.HandleMethod(acpCustomMethod("read_case_text_file"), func(_ context.Context, params map[string]any) (map[string]any, error) {
-		fileID := mapString(params["file_id"])
-		file, ok := rc.fileByID[fileID]
-		if !ok {
-			return nil, fmt.Errorf("unknown case file %q", fileID)
+	client.HandleMethod(acpCustomMethod("stat_evidence"), func(_ context.Context, params map[string]any) (map[string]any, error) {
+		if !evidenceAccessAllowed(opportunity) {
+			return nil, fmt.Errorf("evidence access is not allowed in phase %q", opportunity.Phase)
 		}
-		if !file.TextReadable {
-			return nil, fmt.Errorf("case file %q is not text-readable", fileID)
-		}
-		appendTranscript(map[string]any{"custom_method": acpCustomMethod("read_case_text_file"), "file_id": fileID})
-		return map[string]any{
-			"text":    file.Text,
-			"file_id": fileID,
-		}, nil
-	})
-	client.HandleMethod(acpCustomMethod("write_case_file"), func(_ context.Context, params map[string]any) (map[string]any, error) {
-		fileID := mapString(params["file_id"])
-		file, ok := rc.fileByID[fileID]
-		if !ok {
-			return nil, fmt.Errorf("unknown case file %q", fileID)
-		}
-		path, err := writeCaseFileToWorkspace(session.workspaceDir, file)
+		evidence, err := rc.statEvidence(mapString(params["evidence_id"]))
 		if err != nil {
 			return nil, err
 		}
-		appendTranscript(map[string]any{"custom_method": acpCustomMethod("write_case_file"), "file_id": fileID, "workspace_path": path})
+		appendTranscript(map[string]any{"custom_method": acpCustomMethod("stat_evidence"), "evidence_id": evidence.EvidenceID})
 		return map[string]any{
-			"text":           fmt.Sprintf("Wrote %s to %s", fileID, path),
-			"file_id":        fileID,
-			"workspace_path": path,
+			"text":               marshalInline(map[string]any{"evidence": evidence}),
+			"evidence":           evidence,
+			"allowed_operations": []string{"read_range", "materialize"},
+			"limits": map[string]any{
+				"max_read_bytes":                       rc.cfg.Policy.MaxEvidenceReadBytes,
+				"max_reads_per_opportunity":            rc.cfg.Policy.MaxEvidenceReadsPerOpportunity,
+				"max_read_bytes_per_opportunity":       rc.cfg.Policy.MaxEvidenceReadBytesPerOpportunity,
+				"remaining_read_bytes_for_opportunity": remainingCapacity(rc.cfg.Policy.MaxEvidenceReadBytesPerOpportunity, evidenceBudget.bytes),
+				"remaining_reads_for_opportunity":      remainingCapacity(rc.cfg.Policy.MaxEvidenceReadsPerOpportunity, evidenceBudget.reads),
+			},
+		}, nil
+	})
+	client.HandleMethod(acpCustomMethod("read_evidence_range"), func(_ context.Context, params map[string]any) (map[string]any, error) {
+		if !evidenceAccessAllowed(opportunity) {
+			return nil, fmt.Errorf("evidence access is not allowed in phase %q", opportunity.Phase)
+		}
+		offset, err := requiredIntParam(params, "offset")
+		if err != nil {
+			return nil, err
+		}
+		length, err := requiredIntParam(params, "length")
+		if err != nil {
+			return nil, err
+		}
+		result, err := rc.readEvidenceRange(mapString(params["evidence_id"]), int64(offset), length, evidenceBudget)
+		if err != nil {
+			return nil, err
+		}
+		result["remaining_read_bytes_for_opportunity"] = remainingCapacity(rc.cfg.Policy.MaxEvidenceReadBytesPerOpportunity, evidenceBudget.bytes)
+		result["remaining_reads_for_opportunity"] = remainingCapacity(rc.cfg.Policy.MaxEvidenceReadsPerOpportunity, evidenceBudget.reads)
+		appendTranscript(map[string]any{
+			"custom_method": acpCustomMethod("read_evidence_range"),
+			"evidence_id":   result["evidence_id"],
+			"offset":        result["offset"],
+			"length":        result["length"],
+		})
+		if err := rc.recordEventAtTurn(turn, "evidence_read", opportunity.Role, opportunity.Phase, map[string]any{
+			"evidence_id": result["evidence_id"],
+			"offset":      result["offset"],
+			"length":      result["length"],
+			"byte_count":  result["length"],
+		}); err != nil {
+			setNotifyErr(err)
+		}
+		return result, nil
+	})
+	client.HandleMethod(acpCustomMethod("materialize_evidence"), func(_ context.Context, params map[string]any) (map[string]any, error) {
+		if !evidenceAccessAllowed(opportunity) {
+			return nil, fmt.Errorf("evidence access is not allowed in phase %q", opportunity.Phase)
+		}
+		result, err := rc.materializeEvidence(session.workspaceDir, mapString(params["evidence_id"]))
+		if err != nil {
+			return nil, err
+		}
+		appendTranscript(map[string]any{"custom_method": acpCustomMethod("materialize_evidence"), "evidence_id": result["evidence_id"], "workspace_path": result["workspace_path"]})
+		if err := rc.recordEventAtTurn(turn, "evidence_materialized", opportunity.Role, opportunity.Phase, map[string]any{
+			"evidence_id":    result["evidence_id"],
+			"workspace_path": result["workspace_path"],
+			"byte_count":     result["size_bytes"],
+		}); err != nil {
+			setNotifyErr(err)
+		}
+		return result, nil
+	})
+	client.HandleMethod(acpCustomMethod("begin_evidence_upload"), func(_ context.Context, params map[string]any) (map[string]any, error) {
+		session, err := rc.beginEvidenceUpload(opportunity, params)
+		if err != nil {
+			return nil, recordInvalidDecision(err)
+		}
+		appendTranscript(map[string]any{"custom_method": acpCustomMethod("begin_evidence_upload"), "upload_id": session.UploadID, "expected_size_bytes": session.ExpectedSizeBytes})
+		return map[string]any{
+			"upload_id":              session.UploadID,
+			"max_chunk_bytes":        rc.cfg.Policy.MaxEvidenceChunkBytes,
+			"remaining_upload_bytes": session.ExpectedSizeBytes,
+		}, nil
+	})
+	client.HandleMethod(acpCustomMethod("write_evidence_chunk"), func(_ context.Context, params map[string]any) (map[string]any, error) {
+		offset, err := requiredIntParam(params, "offset")
+		if err != nil {
+			return nil, recordInvalidDecision(err)
+		}
+		session, n, err := rc.writeEvidenceChunk(mapString(params["upload_id"]), offset, mapString(params["content_base64"]))
+		if err != nil {
+			return nil, recordInvalidDecision(err)
+		}
+		appendTranscript(map[string]any{"custom_method": acpCustomMethod("write_evidence_chunk"), "upload_id": session.UploadID, "offset": session.ReceivedBytes - n, "length": n})
+		return map[string]any{
+			"upload_id":              session.UploadID,
+			"accepted_offset":        session.ReceivedBytes - n,
+			"accepted_length":        n,
+			"received_bytes":         session.ReceivedBytes,
+			"remaining_upload_bytes": remainingCapacity(session.ExpectedSizeBytes, session.ReceivedBytes),
+		}, nil
+	})
+	client.HandleMethod(acpCustomMethod("commit_evidence_upload"), func(_ context.Context, params map[string]any) (map[string]any, error) {
+		uploadID := mapString(params["upload_id"])
+		session := rc.uploadSessions[uploadID]
+		if session == nil {
+			return nil, recordInvalidDecision(fmt.Errorf("unknown upload_id %q", uploadID))
+		}
+		if expected := strings.ToLower(mapString(params["expected_sha256"])); expected != "" {
+			session.ExpectedSHA256 = expected
+		}
+		meta, err := rc.prepareEvidenceUploadCommit(session, mapString(params["preferred_filename_ext"]))
+		if err != nil {
+			return nil, recordInvalidDecision(err)
+		}
+		payload := submittedEvidencePayload(meta)
+		stepResp, err := rc.cfg.Engine.Step(rc.state, "submit_evidence", opportunity.Role, payload)
+		if err != nil {
+			return nil, recordInvalidDecision(err)
+		}
+		if ok, _ := stepResp["ok"].(bool); !ok {
+			return nil, recordInvalidDecision(fmt.Errorf("%s", mapString(stepResp["error"])))
+		}
+		meta, file, evidence, err := rc.finalizeEvidenceUpload(session, meta)
+		if err != nil {
+			return nil, err
+		}
+		rc.state = mapAny(stepResp["state"])
+		rc.caseFiles = append(rc.caseFiles, file)
+		rc.fileByID[file.EvidenceID] = file
+		rc.submittedEvidence = append(rc.submittedEvidence, meta)
+		appendTranscript(map[string]any{"custom_method": acpCustomMethod("commit_evidence_upload"), "upload_id": uploadID, "evidence_meta": meta, "evidence": evidence})
+		if err := rc.recordEventAtTurn(turn, "submitted_evidence", opportunity.Role, opportunity.Phase, map[string]any{
+			"evidence_id":         meta.EvidenceID,
+			"title":               meta.Title,
+			"source_url":          meta.SourceURL,
+			"source_description":  meta.SourceDescription,
+			"mime_type":           meta.MimeType,
+			"retrieval_timestamp": meta.RetrievalTimestamp,
+			"relevance":           meta.Relevance,
+			"sha256":              meta.SHA256,
+			"size_bytes":          meta.SizeBytes,
+		}); err != nil {
+			setNotifyErr(err)
+		}
+		return map[string]any{
+			"text":        fmt.Sprintf("Evidence upload accepted as evidence_id %s. Cite this evidence_id in offered_evidence if you want it admitted as an exhibit.", meta.EvidenceID),
+			"evidence_id": meta.EvidenceID,
+			"evidence":    evidence,
 		}, nil
 	})
 	client.HandleMethod(acpCustomMethod("submit_evidence"), func(_ context.Context, params map[string]any) (map[string]any, error) {
@@ -250,16 +375,21 @@ func (rc *runContext) executeAttorneyOpportunity(ctx context.Context, _ any, opp
 		if err != nil {
 			return nil, err
 		}
+		evidence, err := rc.registerSubmittedEvidenceEvidence(meta, file)
+		if err != nil {
+			return nil, err
+		}
+		meta.EvidenceID = evidence.EvidenceID
 		rc.state = mapAny(stepResp["state"])
 		rc.caseFiles = append(rc.caseFiles, file)
-		rc.fileByID[file.FileID] = file
+		rc.fileByID[file.EvidenceID] = file
 		rc.submittedEvidence = append(rc.submittedEvidence, meta)
 		appendTranscript(map[string]any{
 			"custom_method": acpCustomMethod("submit_evidence"),
 			"result":        meta,
 		})
 		if err := rc.recordEventAtTurn(turn, "submitted_evidence", opportunity.Role, opportunity.Phase, map[string]any{
-			"file_id":             meta.FileID,
+			"evidence_id":         meta.EvidenceID,
 			"title":               meta.Title,
 			"source_url":          meta.SourceURL,
 			"source_description":  meta.SourceDescription,
@@ -272,9 +402,9 @@ func (rc *runContext) executeAttorneyOpportunity(ctx context.Context, _ any, opp
 			setNotifyErr(err)
 		}
 		return map[string]any{
-			"text":     fmt.Sprintf("Evidence accepted as file_id %s. Cite this file_id in offered_files if you want it admitted as an exhibit.", meta.FileID),
-			"file_id":  meta.FileID,
-			"evidence": meta,
+			"text":        fmt.Sprintf("Evidence accepted as evidence_id %s. Cite this evidence_id in offered_evidence if you want it admitted as an exhibit.", meta.EvidenceID),
+			"evidence_id": meta.EvidenceID,
+			"evidence":    evidence,
 		}, nil
 	})
 	client.HandleMethod(acpCustomMethod("submit_decision"), func(_ context.Context, params map[string]any) (map[string]any, error) {
@@ -468,8 +598,8 @@ func validateAttorneyPayload(actionType string, payload map[string]any, fileByID
 		if mapString(payload["text"]) == "" {
 			return fmt.Errorf("payload.text is required")
 		}
-		if len(listOfMaps(payload["offered_files"])) != 0 {
-			return fmt.Errorf("offered_files are allowed only in arguments and rebuttals")
+		if len(listOfMaps(payload["offered_evidence"])) != 0 {
+			return fmt.Errorf("offered_evidence are allowed only in arguments and rebuttals")
 		}
 		if len(listOfMaps(payload["technical_reports"])) != 0 {
 			return fmt.Errorf("technical_reports are allowed only in arguments and rebuttals")
@@ -478,7 +608,7 @@ func validateAttorneyPayload(actionType string, payload map[string]any, fileByID
 		if mapString(payload["text"]) == "" {
 			return fmt.Errorf("payload.text is required")
 		}
-		if err := validateOfferedFiles(payload["offered_files"], fileByID, policy); err != nil {
+		if err := validateOfferedEvidence(payload["offered_evidence"], fileByID, policy); err != nil {
 			return err
 		}
 		if err := validateReports(payload["technical_reports"], policy); err != nil {
@@ -488,7 +618,7 @@ func validateAttorneyPayload(actionType string, payload map[string]any, fileByID
 		if mapString(payload["text"]) == "" {
 			return fmt.Errorf("payload.text is required")
 		}
-		if err := validateOfferedFiles(payload["offered_files"], fileByID, policy); err != nil {
+		if err := validateOfferedEvidence(payload["offered_evidence"], fileByID, policy); err != nil {
 			return err
 		}
 		if err := validateReports(payload["technical_reports"], policy); err != nil {
@@ -498,8 +628,8 @@ func validateAttorneyPayload(actionType string, payload map[string]any, fileByID
 		if mapString(payload["text"]) == "" {
 			return fmt.Errorf("payload.text is required")
 		}
-		if len(listOfMaps(payload["offered_files"])) != 0 {
-			return fmt.Errorf("offered_files are allowed only in arguments and rebuttals")
+		if len(listOfMaps(payload["offered_evidence"])) != 0 {
+			return fmt.Errorf("offered_evidence are allowed only in arguments and rebuttals")
 		}
 		if len(listOfMaps(payload["technical_reports"])) != 0 {
 			return fmt.Errorf("technical_reports are allowed only in arguments and rebuttals")
@@ -511,22 +641,22 @@ func validateAttorneyPayload(actionType string, payload map[string]any, fileByID
 	return nil
 }
 
-func validateOfferedFiles(value any, fileByID map[string]CaseFile, policy Policy) error {
+func validateOfferedEvidence(value any, fileByID map[string]CaseFile, policy Policy) error {
 	entries := listOfMaps(value)
 	if len(entries) > policy.MaxExhibitsPerFiling {
-		return fmt.Errorf("offered_files exceed per-filing limit of %d (attempted %d)", policy.MaxExhibitsPerFiling, len(entries))
+		return fmt.Errorf("offered_evidence exceed per-filing limit of %d (attempted %d)", policy.MaxExhibitsPerFiling, len(entries))
 	}
 	for _, entry := range entries {
-		fileID := mapString(entry["file_id"])
-		if fileID == "" {
-			return fmt.Errorf("offered_files entry requires file_id")
+		evidenceID := mapString(entry["evidence_id"])
+		if evidenceID == "" {
+			return fmt.Errorf("offered_evidence entry requires evidence_id")
 		}
-		file, ok := fileByID[fileID]
+		file, ok := fileByID[evidenceID]
 		if !ok {
-			return fmt.Errorf("unknown offered file %q; offered_files must use visible case file_id values, not workspace paths or downloaded filenames", fileID)
+			return fmt.Errorf("unknown offered file %q; offered_evidence must use visible case evidence_id values, not workspace paths or downloaded filenames", evidenceID)
 		}
 		if file.SizeBytes > policy.MaxExhibitBytes {
-			return fmt.Errorf("offered file %q exceeds byte limit of %d", fileID, policy.MaxExhibitBytes)
+			return fmt.Errorf("offered file %q exceeds byte limit of %d", evidenceID, policy.MaxExhibitBytes)
 		}
 	}
 	return nil
@@ -597,13 +727,14 @@ func ACPClientToolSpecs(includeWorkspaceWriter bool) []map[string]any {
 func acpClientToolSpecs(includeWorkspaceWriter bool) []map[string]any {
 	specs := []map[string]any{
 		getCaseToolSpec(),
-		listCaseFilesToolSpec(),
-		readCaseTextFileToolSpec(),
+		listEvidenceToolSpec(),
+		statEvidenceToolSpec(),
+		readEvidenceRangeToolSpec(),
 	}
 	if includeWorkspaceWriter {
-		specs = append(specs, writeCaseFileToolSpec())
+		specs = append(specs, materializeEvidenceToolSpec())
 	}
-	specs = append(specs, submitEvidenceToolSpec(), submitDecisionToolSpec())
+	specs = append(specs, beginEvidenceUploadToolSpec(), writeEvidenceChunkToolSpec(), commitEvidenceUploadToolSpec(), submitEvidenceToolSpec(), submitDecisionToolSpec())
 	return specs
 }
 
@@ -616,42 +747,121 @@ func getCaseToolSpec() map[string]any {
 	}
 }
 
-func listCaseFilesToolSpec() map[string]any {
+func listEvidenceToolSpec() map[string]any {
 	return map[string]any{
-		"method":      acpCustomMethod("list_case_files"),
-		"toolName":    "aar_list_case_files",
-		"description": "List visible case files, including any evidence submitted earlier in this run.",
+		"method":      acpCustomMethod("list_evidence"),
+		"toolName":    "aar_list_evidence",
+		"description": "List visible immutable record evidence with metadata, including case-packet files and accepted submitted evidence.",
 		"parameters":  map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
 	}
 }
 
-func readCaseTextFileToolSpec() map[string]any {
+func statEvidenceToolSpec() map[string]any {
 	return map[string]any{
-		"method":      acpCustomMethod("read_case_text_file"),
-		"toolName":    "aar_read_case_text_file",
-		"description": "Read one visible text case file by file_id.",
+		"method":      acpCustomMethod("stat_evidence"),
+		"toolName":    "aar_stat_evidence",
+		"description": "Return metadata, allowed operations, and read limits for one visible evidence.",
 		"parameters": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"file_id": map[string]any{"type": "string"},
+				"evidence_id": map[string]any{"type": "string"},
 			},
-			"required":             []string{"file_id"},
+			"required":             []string{"evidence_id"},
 			"additionalProperties": false,
 		},
 	}
 }
 
-func writeCaseFileToolSpec() map[string]any {
+func readEvidenceRangeToolSpec() map[string]any {
 	return map[string]any{
-		"method":      acpCustomMethod("write_case_file"),
-		"toolName":    "aar_write_case_file",
-		"description": "Write one visible case file into the local workspace with exact bytes.",
+		"method":      acpCustomMethod("read_evidence_range"),
+		"toolName":    "aar_read_evidence_range",
+		"description": "Read a bounded byte range from one visible evidence as base64. This never mutates the record.",
 		"parameters": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"file_id": map[string]any{"type": "string"},
+				"evidence_id": map[string]any{"type": "string"},
+				"offset":      map[string]any{"type": "integer", "minimum": 0},
+				"length":      map[string]any{"type": "integer", "minimum": 1},
 			},
-			"required":             []string{"file_id"},
+			"required":             []string{"evidence_id", "offset", "length"},
+			"additionalProperties": false,
+		},
+	}
+}
+
+func materializeEvidenceToolSpec() map[string]any {
+	return map[string]any{
+		"method":      acpCustomMethod("materialize_evidence"),
+		"toolName":    "aar_materialize_evidence",
+		"description": "Copy one visible evidence into the managed attorney workspace and return its workspace path. The evidence_id and hash remain the record identity.",
+		"parameters": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"evidence_id": map[string]any{"type": "string"},
+			},
+			"required":             []string{"evidence_id"},
+			"additionalProperties": false,
+		},
+	}
+}
+
+func beginEvidenceUploadToolSpec() map[string]any {
+	return map[string]any{
+		"method":      acpCustomMethod("begin_evidence_upload"),
+		"toolName":    "aar_begin_evidence_upload",
+		"description": "Begin a chunked upload session for source evidence or a derived evidence. Nothing is admitted until aar_commit_evidence_upload succeeds.",
+		"parameters": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"title":               map[string]any{"type": "string"},
+				"mime_type":           map[string]any{"type": "string"},
+				"expected_size_bytes": map[string]any{"type": "integer", "minimum": 1},
+				"expected_sha256":     map[string]any{"type": "string"},
+				"source_url":          map[string]any{"type": "string"},
+				"source_description":  map[string]any{"type": "string"},
+				"retrieval_timestamp": map[string]any{"type": "string"},
+				"relevance":           map[string]any{"type": "string"},
+				"parent_evidence_id":  map[string]any{"type": "string"},
+				"derivation_method":   map[string]any{"type": "string"},
+			},
+			"required":             []string{"title", "mime_type", "expected_size_bytes", "relevance"},
+			"additionalProperties": false,
+		},
+	}
+}
+
+func writeEvidenceChunkToolSpec() map[string]any {
+	return map[string]any{
+		"method":      acpCustomMethod("write_evidence_chunk"),
+		"toolName":    "aar_write_evidence_chunk",
+		"description": "Write one base64 chunk into an upload session at the next expected offset.",
+		"parameters": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"upload_id":      map[string]any{"type": "string"},
+				"offset":         map[string]any{"type": "integer", "minimum": 0},
+				"content_base64": map[string]any{"type": "string"},
+			},
+			"required":             []string{"upload_id", "offset", "content_base64"},
+			"additionalProperties": false,
+		},
+	}
+}
+
+func commitEvidenceUploadToolSpec() map[string]any {
+	return map[string]any{
+		"method":      acpCustomMethod("commit_evidence_upload"),
+		"toolName":    "aar_commit_evidence_upload",
+		"description": "Verify and admit a completed evidence upload. The response returns evidence_id for later offered_evidence citations.",
+		"parameters": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"upload_id":              map[string]any{"type": "string"},
+				"expected_sha256":        map[string]any{"type": "string"},
+				"preferred_filename_ext": map[string]any{"type": "string"},
+			},
+			"required":             []string{"upload_id"},
 			"additionalProperties": false,
 		},
 	}
@@ -661,7 +871,7 @@ func submitEvidenceToolSpec() map[string]any {
 	return map[string]any{
 		"method":      acpCustomMethod("submit_evidence"),
 		"toolName":    "aar_submit_evidence",
-		"description": "Submit source evidence with provenance. The accepted response returns a file_id that can be cited later in offered_files.",
+		"description": "Submit source evidence with provenance. The accepted response returns an evidence_id that can be cited later in offered_evidence.",
 		"parameters":  submittedEvidenceSchema(),
 	}
 }
@@ -699,23 +909,23 @@ func attorneyPayloadSchema() map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"text":              map[string]any{"type": "string"},
-			"offered_files":     offeredFilesSchema(),
+			"offered_evidence":  offeredEvidenceSchema(),
 			"technical_reports": technicalReportsSchema(),
 		},
 		"additionalProperties": false,
 	}
 }
 
-func offeredFilesSchema() map[string]any {
+func offeredEvidenceSchema() map[string]any {
 	return map[string]any{
 		"type": "array",
 		"items": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"file_id": map[string]any{"type": "string"},
-				"label":   map[string]any{"type": "string"},
+				"evidence_id": map[string]any{"type": "string"},
+				"label":       map[string]any{"type": "string"},
 			},
-			"required":             []string{"file_id", "label"},
+			"required":             []string{"evidence_id", "label"},
 			"additionalProperties": false,
 		},
 	}
@@ -757,15 +967,19 @@ func submittedEvidenceSchema() map[string]any {
 
 func acpToolSpecs(opportunity Opportunity, includeWorkspaceWriter bool) []map[string]any {
 	specs := []map[string]any{getCaseToolSpec()}
-	if opportunity.Phase == "arguments" || opportunity.Phase == "rebuttals" {
-		specs = append(specs, listCaseFilesToolSpec(), readCaseTextFileToolSpec())
+	if evidenceAccessAllowed(opportunity) {
+		specs = append(specs, listEvidenceToolSpec(), statEvidenceToolSpec(), readEvidenceRangeToolSpec())
 		if includeWorkspaceWriter {
-			specs = append(specs, writeCaseFileToolSpec())
+			specs = append(specs, materializeEvidenceToolSpec())
 		}
-		specs = append(specs, submitEvidenceToolSpec())
+		specs = append(specs, beginEvidenceUploadToolSpec(), writeEvidenceChunkToolSpec(), commitEvidenceUploadToolSpec(), submitEvidenceToolSpec())
 	}
 	specs = append(specs, submitDecisionToolSpec())
 	return specs
+}
+
+func evidenceAccessAllowed(opportunity Opportunity) bool {
+	return opportunity.Phase == "arguments" || opportunity.Phase == "rebuttals"
 }
 
 func acpCustomMethod(name string) string {
@@ -820,6 +1034,7 @@ func (rc *runContext) attorneyView(opportunity Opportunity) map[string]any {
 			"may_pass":      opportunity.MayPass,
 		},
 		"record": map[string]any{
+			"evidence":           rc.listVisibleEvidence(),
 			"openings":           mapList(mapAny(rc.state["case"])["openings"]),
 			"arguments":          mapList(mapAny(rc.state["case"])["arguments"]),
 			"rebuttals":          mapList(mapAny(rc.state["case"])["rebuttals"]),
@@ -854,8 +1069,8 @@ func (rc *runContext) buildAttorneyPrompt(opportunity Opportunity) (string, erro
 	workspaceSection := ""
 	workProductSection := ""
 	if opportunity.Phase == "arguments" || opportunity.Phase == "rebuttals" {
-		visibleFilesSection = "Visible case files:\n" + marshalIndented(caseFileMetas(rc.caseFiles)) + "\n"
-		workspaceSection = "If local tools need exact file bytes, write the visible file into the workspace first. Do not reconstruct byte-sensitive files by hand.\n"
+		visibleFilesSection = "Visible evidence:\n" + marshalIndented(rc.listVisibleEvidence()) + "\n"
+		workspaceSection = "If local tools need exact bytes, materialize the evidence into the workspace first. Do not reconstruct byte-sensitive evidence by hand. Use evidence_id plus hash as record identity; local paths are only workspace implementation details.\n"
 	}
 	if attorney, err := rc.attorneyInfo(opportunity.Role); err == nil && usesPIContainerWrapper(attorney.ACPCommand) {
 		workProductSection = "Private work product: Use `/home/user/work-product/` for internal notes, timelines, source leads, adverse facts, unresolved questions, and draft analyses. This directory is not part of the record unless you later turn material from it into an exhibit or technical report. Its contents may be exported after the proceeding for review.\n"
@@ -864,7 +1079,7 @@ func (rc *runContext) buildAttorneyPrompt(opportunity Opportunity) (string, erro
 	if err != nil {
 		return "", err
 	}
-	common, err := renderPromptFile("attorney-common.md", map[string]string{
+	common, err := rc.cfg.renderPromptFile("attorney-common.md", map[string]string{
 		"ROLE":                       opportunity.Role,
 		"PHASE":                      opportunity.Phase,
 		"OBJECTIVE":                  opportunity.Objective,
@@ -886,31 +1101,11 @@ func (rc *runContext) buildAttorneyPrompt(opportunity Opportunity) (string, erro
 	if err != nil {
 		return "", err
 	}
-	phaseText, err := renderPromptFile(phaseFile, nil)
+	phaseText, err := rc.cfg.renderPromptFile(phaseFile, nil)
 	if err != nil {
 		return "", err
 	}
 	return common + "\n\n" + phaseText + "\n\nWhen you have submitted the legal act for this opportunity, reply exactly: decision-submitted.", nil
-}
-
-func writeCaseFileToWorkspace(workspaceDir string, file CaseFile) (string, error) {
-	workspaceDir = strings.TrimSpace(workspaceDir)
-	if workspaceDir == "" {
-		return "", fmt.Errorf("workspace file writing is not available in this session")
-	}
-	name := filepath.Base(strings.TrimSpace(file.Name))
-	if name == "" || name == "." || name == string(filepath.Separator) {
-		return "", fmt.Errorf("invalid case file name %q", file.Name)
-	}
-	raw, err := os.ReadFile(file.Path)
-	if err != nil {
-		return "", fmt.Errorf("read case file %s: %w", file.FileID, err)
-	}
-	hostPath := filepath.Join(workspaceDir, name)
-	if err := os.WriteFile(hostPath, raw, 0o644); err != nil {
-		return "", fmt.Errorf("write workspace file %s: %w", hostPath, err)
-	}
-	return filepath.ToSlash(filepath.Join(defaultRemoteSessionCwd, name)), nil
 }
 
 func (rc *runContext) prepareSubmittedEvidence(opportunity Opportunity, params map[string]any) (SubmittedEvidenceMeta, []byte, error) {
@@ -942,6 +1137,9 @@ func (rc *runContext) prepareSubmittedEvidence(opportunity Opportunity, params m
 	if len(raw) == 0 {
 		return SubmittedEvidenceMeta{}, nil, fmt.Errorf("submitted evidence content must not be empty")
 	}
+	if len(raw) > rc.cfg.Policy.MaxDirectSubmittedEvidenceBytes {
+		return SubmittedEvidenceMeta{}, nil, fmt.Errorf("direct submitted evidence exceeds byte limit of %d", rc.cfg.Policy.MaxDirectSubmittedEvidenceBytes)
+	}
 	if len(raw) > rc.cfg.Policy.MaxSubmittedEvidenceBytes {
 		return SubmittedEvidenceMeta{}, nil, fmt.Errorf("submitted evidence exceeds byte limit of %d", rc.cfg.Policy.MaxSubmittedEvidenceBytes)
 	}
@@ -954,7 +1152,7 @@ func (rc *runContext) prepareSubmittedEvidence(opportunity Opportunity, params m
 	return SubmittedEvidenceMeta{
 		Phase:              opportunity.Phase,
 		Role:               opportunity.Role,
-		FileID:             name,
+		EvidenceID:         evidenceIDForFile(sha, name),
 		Name:               name,
 		Title:              title,
 		SourceURL:          sourceURL,
@@ -1057,8 +1255,8 @@ func evidenceExtensionForMIME(mimeType string) string {
 }
 
 func submittedEvidencePayload(meta SubmittedEvidenceMeta) map[string]any {
-	return map[string]any{
-		"file_id":             meta.FileID,
+	payload := map[string]any{
+		"evidence_id":         meta.EvidenceID,
 		"title":               meta.Title,
 		"source_url":          meta.SourceURL,
 		"source_description":  meta.SourceDescription,
@@ -1068,6 +1266,10 @@ func submittedEvidencePayload(meta SubmittedEvidenceMeta) map[string]any {
 		"sha256":              meta.SHA256,
 		"size_bytes":          meta.SizeBytes,
 	}
+	if meta.EvidenceID != "" {
+		payload["evidence_id"] = meta.EvidenceID
+	}
+	return payload
 }
 
 func (rc *runContext) writeSubmittedEvidenceFile(meta SubmittedEvidenceMeta, raw []byte) (CaseFile, error) {
@@ -1090,7 +1292,7 @@ func (rc *runContext) writeSubmittedEvidenceFile(meta SubmittedEvidenceMeta, raw
 	}
 	_, readable := caseFileKind(name)
 	file := CaseFile{
-		FileID:       meta.FileID,
+		EvidenceID:   meta.EvidenceID,
 		Name:         name,
 		Path:         path,
 		MimeType:     meta.MimeType,
@@ -1104,18 +1306,18 @@ func (rc *runContext) writeSubmittedEvidenceFile(meta SubmittedEvidenceMeta, raw
 }
 
 func (rc *runContext) attorneyExhibits() []map[string]any {
-	items := mapList(mapAny(rc.state["case"])["offered_files"])
+	items := mapList(mapAny(rc.state["case"])["offered_evidence"])
 	out := make([]map[string]any, 0, len(items))
 	for _, item := range items {
-		fileID := mapString(item["file_id"])
+		evidenceID := mapString(item["evidence_id"])
 		label := mapString(item["label"])
 		entry := map[string]any{
-			"phase":   mapString(item["phase"]),
-			"role":    mapString(item["role"]),
-			"file_id": fileID,
-			"label":   label,
+			"phase":       mapString(item["phase"]),
+			"role":        mapString(item["role"]),
+			"evidence_id": evidenceID,
+			"label":       label,
 		}
-		if file, ok := rc.fileByID[fileID]; ok {
+		if file, ok := rc.fileByID[evidenceID]; ok {
 			if file.TextReadable {
 				entry["text"] = file.Text
 			} else {
@@ -1131,7 +1333,7 @@ func (rc *runContext) attorneyExhibits() []map[string]any {
 
 func (rc *runContext) attorneyLimits(opportunity Opportunity) map[string]any {
 	caseObj := mapAny(rc.state["case"])
-	usedExhibits := filingCountForRole(mapList(caseObj["offered_files"]), opportunity.Role)
+	usedExhibits := filingCountForRole(mapList(caseObj["offered_evidence"]), opportunity.Role)
 	usedReports := filingCountForRole(mapList(caseObj["technical_reports"]), opportunity.Role)
 	limits := map[string]any{
 		"text_char_limit": phaseTextCharLimit(rc.cfg.Policy, opportunity.Phase),
@@ -1148,13 +1350,19 @@ func (rc *runContext) attorneyLimits(opportunity Opportunity) map[string]any {
 		usedSubmittedEvidence := submittedEvidenceCountForRole(rc.submittedEvidence, opportunity.Role)
 		limits["max_submitted_evidence_per_side"] = rc.cfg.Policy.MaxSubmittedEvidencePerSide
 		limits["max_submitted_evidence_bytes"] = rc.cfg.Policy.MaxSubmittedEvidenceBytes
+		limits["max_direct_submitted_evidence_bytes"] = rc.cfg.Policy.MaxDirectSubmittedEvidenceBytes
+		limits["max_evidence_upload_bytes"] = rc.cfg.Policy.MaxEvidenceUploadBytes
+		limits["max_evidence_chunk_bytes"] = rc.cfg.Policy.MaxEvidenceChunkBytes
+		limits["max_evidence_read_bytes"] = rc.cfg.Policy.MaxEvidenceReadBytes
+		limits["max_evidence_reads_per_opportunity"] = rc.cfg.Policy.MaxEvidenceReadsPerOpportunity
+		limits["max_evidence_read_bytes_per_opportunity"] = rc.cfg.Policy.MaxEvidenceReadBytesPerOpportunity
 		limits["used_submitted_evidence_for_side"] = usedSubmittedEvidence
 		limits["remaining_submitted_evidence_for_side"] = remainingCapacity(rc.cfg.Policy.MaxSubmittedEvidencePerSide, usedSubmittedEvidence)
-		limits["offered_files_rule"] = "Use only visible case file_id values in offered_files. Submit new evidence first with aar_submit_evidence, then cite the returned file_id in offered_files."
+		limits["offered_evidence_rule"] = "Use only visible case evidence_id values in offered_evidence. Submit new evidence first with aar_submit_evidence, then cite the returned evidence_id in offered_evidence."
 		limits["outside_material_rule"] = "Outside source material belongs in submitted evidence when the source content matters, or in technical_reports when only attorney analysis is being offered."
 	}
 	if opportunity.Phase == "surrebuttals" {
-		limits["outside_material_rule"] = "offered_files and technical_reports are not allowed in this phase."
+		limits["outside_material_rule"] = "offered_evidence and technical_reports are not allowed in this phase."
 	}
 	return limits
 }
@@ -1188,17 +1396,21 @@ func (rc *runContext) attorneyLimitsSection(opportunity Opportunity) string {
 		)
 		lines = append(lines,
 			fmt.Sprintf(
-				"Submitted evidence: each item may be at most %d bytes. This side has submitted %d of %d total, with %d left.",
+				"Submitted evidence: admitted items may be at most %d bytes. Direct aar_submit_evidence items may be at most %d bytes; chunked evidence uploads may be at most %d bytes with %d-byte chunks. This side has submitted %d of %d total, with %d left.",
 				limits["max_submitted_evidence_bytes"].(int),
+				limits["max_direct_submitted_evidence_bytes"].(int),
+				limits["max_evidence_upload_bytes"].(int),
+				limits["max_evidence_chunk_bytes"].(int),
 				limits["used_submitted_evidence_for_side"].(int),
 				limits["max_submitted_evidence_per_side"].(int),
 				limits["remaining_submitted_evidence_for_side"].(int),
 			),
 		)
-		lines = append(lines, "Use only visible case file_id values in offered_files. Submit new source material first with aar_submit_evidence, then cite the returned file_id in offered_files.")
+		lines = append(lines, fmt.Sprintf("Evidence reads: at most %d bytes per read, %d reads per opportunity, and %d bytes total per opportunity.", limits["max_evidence_read_bytes"].(int), limits["max_evidence_reads_per_opportunity"].(int), limits["max_evidence_read_bytes_per_opportunity"].(int)))
+		lines = append(lines, "Use only visible case evidence_id values in offered_evidence. Submit new source material first with aar_submit_evidence, then cite the returned evidence_id in offered_evidence. Use evidence_id and hash for custody checks and exact byte inspection.")
 		lines = append(lines, "Use technical_reports for attorney analysis or synthesized work product, not as a substitute for source evidence when exact source content matters.")
 	case "surrebuttals":
-		lines = append(lines, "offered_files and technical_reports are not allowed in this phase.")
+		lines = append(lines, "offered_evidence and technical_reports are not allowed in this phase.")
 	}
 	return strings.Join(lines, "\n")
 }
@@ -1269,11 +1481,11 @@ func (rc *runContext) validateAttorneyPayloadAgainstState(opportunity Opportunit
 	switch actionType {
 	case "submit_argument", "submit_rebuttal":
 		caseObj := mapAny(rc.state["case"])
-		usedExhibits := filingCountForRole(mapList(caseObj["offered_files"]), opportunity.Role)
-		attemptedExhibits := len(listOfMaps(payload["offered_files"]))
+		usedExhibits := filingCountForRole(mapList(caseObj["offered_evidence"]), opportunity.Role)
+		attemptedExhibits := len(listOfMaps(payload["offered_evidence"]))
 		if usedExhibits+attemptedExhibits > rc.cfg.Policy.MaxExhibitsPerSide {
 			return fmt.Errorf(
-				"offered_files for this side exceed limit of %d (%d already used, %d attempted, %d remaining)",
+				"offered_evidence for this side exceed limit of %d (%d already used, %d attempted, %d remaining)",
 				rc.cfg.Policy.MaxExhibitsPerSide,
 				usedExhibits,
 				attemptedExhibits,

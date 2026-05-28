@@ -767,8 +767,8 @@ theorem step_submit_evidence_phase_ne_closed
                 let expectedRole ← (throw "rebuttal evidence is closed" : Except String String)
                 requireRole action.actor_role expectedRole
                 let evidence ← parseSubmittedEvidence action.payload s.case.phase expectedRole
-                if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-                  throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
+                if s.case.submitted_evidence.any (fun item => item.evidence_id = evidence.evidence_id) then
+                  throw s!"duplicate submitted evidence_id: {evidence.evidence_id}"
                 else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
                   throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
                 else
@@ -783,8 +783,8 @@ theorem step_submit_evidence_phase_ne_closed
             let expectedRole ← (throw "submitted evidence is allowed only in arguments and rebuttals" : Except String String)
             requireRole action.actor_role expectedRole
             let evidence ← parseSubmittedEvidence action.payload s.case.phase expectedRole
-            if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-              throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
+            if s.case.submitted_evidence.any (fun item => item.evidence_id = evidence.evidence_id) then
+              throw s!"duplicate submitted evidence_id: {evidence.evidence_id}"
             else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
               throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
             else

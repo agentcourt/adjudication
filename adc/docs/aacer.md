@@ -19,7 +19,7 @@ For command-line details, see the [AACER CLI Guide](aacer-cli.md).
 
 ## Example docket
 
-This table is a reduced and simplified presentation of the docket from the checked-in [Example 1](../examples/ex1/README.md).  It omits many entries and shortens long descriptions for clarity.  The full record remains in the example artifacts.
+This table is a reduced and simplified presentation of the docket from the checked-in [Example 1](../examples/ex1/README.md).  It omits many entries and shortens long descriptions for clarity.  The full record remains in the example evidence.
 
 | No. | Docket entry | Short description |
 |---:|---|---|

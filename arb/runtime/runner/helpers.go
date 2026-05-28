@@ -81,7 +81,7 @@ func loadCaseFiles(dir string) ([]CaseFile, error) {
 		out = append(out, file)
 	}
 	slices.SortFunc(out, func(a, b CaseFile) int {
-		return strings.Compare(a.FileID, b.FileID)
+		return strings.Compare(a.EvidenceID, b.EvidenceID)
 	})
 	return out, nil
 }
@@ -109,7 +109,7 @@ func loadCaseFilesFromPaths(paths []string) ([]CaseFile, error) {
 		out = append(out, file)
 	}
 	slices.SortFunc(out, func(a, b CaseFile) int {
-		return strings.Compare(a.FileID, b.FileID)
+		return strings.Compare(a.EvidenceID, b.EvidenceID)
 	})
 	return out, nil
 }
@@ -124,7 +124,7 @@ func loadCaseFile(path string, name string) (CaseFile, error) {
 		return CaseFile{}, fmt.Errorf("case file %s is a directory", name)
 	}
 	file := CaseFile{
-		FileID:       name,
+		EvidenceID:   name,
 		Name:         name,
 		Path:         path,
 		MimeType:     mimeType,
@@ -224,7 +224,7 @@ func caseFileMetas(files []CaseFile) []CaseFileMeta {
 	out := make([]CaseFileMeta, 0, len(files))
 	for _, file := range files {
 		out = append(out, CaseFileMeta{
-			FileID:       file.FileID,
+			EvidenceID:   file.EvidenceID,
 			Name:         file.Name,
 			MimeType:     file.MimeType,
 			TextReadable: file.TextReadable,
@@ -266,6 +266,29 @@ func mapString(value any) string {
 		return ""
 	}
 	return strings.TrimSpace(fmt.Sprintf("%v", value))
+}
+
+func requiredIntParam(params map[string]any, key string) (int, error) {
+	value, ok := params[key]
+	if !ok || value == nil {
+		return 0, fmt.Errorf("%s is required", key)
+	}
+	switch v := value.(type) {
+	case int:
+		return v, nil
+	case int64:
+		return int(v), nil
+	case float64:
+		if float64(int(v)) == v {
+			return int(v), nil
+		}
+	case json.Number:
+		n, err := v.Int64()
+		if err == nil {
+			return int(n), nil
+		}
+	}
+	return 0, fmt.Errorf("%s must be an integer", key)
 }
 
 func mapAny(value any) map[string]any {

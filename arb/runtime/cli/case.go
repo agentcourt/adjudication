@@ -39,6 +39,10 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	councilSize := fs.Int("council-size", 0, "Override policy council_size")
 	evidenceStandard := fs.String("evidence-standard", "", "Override policy evidence_standard")
 	attorneyInstructionsPath := fs.String("attorney-instructions", "", "Attorney instructions markdown file. Default: ./attorney-instructions/default.md when present")
+	promptDir := fs.String("prompt-dir", "", "Prompt directory override. Files found here override ./prompts by matching filename")
+	attorneyCommonPrompt := fs.String("attorney-common-prompt", "", "Attorney common prompt file override")
+	attorneyArgumentPrompt := fs.String("attorney-arguments-prompt", "", "Attorney arguments prompt file override")
+	attorneyRebuttalPrompt := fs.String("attorney-rebuttals-prompt", "", "Attorney rebuttals prompt file override")
 	commonRoot := fs.String("common-root", defaultCommonRoot(), "Path to the sibling shared common directory")
 	legacyCommonRoot := fs.String("agentcourt-root", "", "Deprecated alias for --common-root")
 	councilPool := fs.String("council-pool", "", "Council model/persona pool file. Default: <common-root>/data/personas/pool.csv")
@@ -52,6 +56,9 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	defendantACPEndpoint := fs.String("defendant-acp-endpoint", "", "Defendant ACP endpoint override. Supported transport: tcp://host:port")
 	plaintiffACPSessionCwd := fs.String("plaintiff-acp-session-cwd", "", "Plaintiff ACP session cwd override")
 	defendantACPSessionCwd := fs.String("defendant-acp-session-cwd", "", "Defendant ACP session cwd override")
+	councilBackend := fs.String("council-backend", "direct", "Council backend: direct or pi. pi runs jurors as read-only Pi ACP agents")
+	councilACPCommand := fs.String("council-acp-command", "", "Council ACP command override for --council-backend=pi. Default: --acp-command")
+	councilACPSessionCwd := fs.String("council-acp-session-cwd", "", "Council ACP session cwd override for --council-backend=pi")
 	xproxyConfig := fs.String("xproxy-config", "", "xproxy config path. Default: <common-root>/etc/xproxy.json")
 	xproxyPort := fs.Int("xproxy-port", 18459, "xproxy port")
 	timeoutSeconds := fs.Int("timeout-seconds", 0, "Override runtime council LLM timeout in seconds")
@@ -97,6 +104,22 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err != nil {
 		return reportCaseError(stdout, err)
 	}
+	resolvedPromptDir, err := resolvePromptDir(*promptDir)
+	if err != nil {
+		return reportCaseError(stdout, err)
+	}
+	resolvedAttorneyCommonPrompt, err := resolvePromptFile("attorney common prompt", *attorneyCommonPrompt)
+	if err != nil {
+		return reportCaseError(stdout, err)
+	}
+	resolvedAttorneyArgumentPrompt, err := resolvePromptFile("attorney arguments prompt", *attorneyArgumentPrompt)
+	if err != nil {
+		return reportCaseError(stdout, err)
+	}
+	resolvedAttorneyRebuttalPrompt, err := resolvePromptFile("attorney rebuttals prompt", *attorneyRebuttalPrompt)
+	if err != nil {
+		return reportCaseError(stdout, err)
+	}
 	if *councilSize > 0 {
 		policy.CouncilSize = *councilSize
 	}
@@ -120,6 +143,9 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		runtimeLimits.InvalidAttemptLimit = *invalidAttemptLimit
 	}
 	if err := runner.ValidateRuntimeLimits(runtimeLimits); err != nil {
+		return reportCaseError(stdout, err)
+	}
+	if err := runner.ValidateCouncilBackend(*councilBackend); err != nil {
 		return reportCaseError(stdout, err)
 	}
 	effectiveAttorneyModel := strings.TrimSpace(*attorneyModel)
@@ -169,14 +195,18 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		return reportCaseError(stdout, err)
 	}
 	cfg := runner.Config{
-		RunID:                    effectiveRunID,
-		ComplaintPath:            *complaintPath,
-		CaseFilePaths:            explicitCaseFiles,
-		OutputDir:                *outDir,
-		CommonRoot:               commonRootResolved,
-		CouncilPoolPath:          councilPoolPath,
-		AttorneyModel:            effectiveAttorneyModel,
-		AttorneyInstructionsPath: resolvedAttorneyInstructionsPath,
+		RunID:                      effectiveRunID,
+		ComplaintPath:              *complaintPath,
+		CaseFilePaths:              explicitCaseFiles,
+		OutputDir:                  *outDir,
+		CommonRoot:                 commonRootResolved,
+		CouncilPoolPath:            councilPoolPath,
+		AttorneyModel:              effectiveAttorneyModel,
+		AttorneyInstructionsPath:   resolvedAttorneyInstructionsPath,
+		PromptDir:                  resolvedPromptDir,
+		AttorneyCommonPromptPath:   resolvedAttorneyCommonPrompt,
+		AttorneyArgumentPromptPath: resolvedAttorneyArgumentPrompt,
+		AttorneyRebuttalPromptPath: resolvedAttorneyRebuttalPrompt,
 		PlaintiffAttorney: runner.AttorneyRoleConfig{
 			Model:       strings.TrimSpace(*plaintiffAttorneyModel),
 			ACPCommand:  strings.TrimSpace(*plaintiffACPCommand),
@@ -189,12 +219,15 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 			ACPEndpoint: strings.TrimSpace(*defendantACPEndpoint),
 			SessionCwd:  strings.TrimSpace(*defendantACPSessionCwd),
 		},
-		Policy:           policy,
-		Runtime:          runtimeLimits,
-		XProxyConfigPath: xproxyConfigPath,
-		XProxyPort:       *xproxyPort,
-		ACPCommand:       acpCommandPath,
-		Engine:           lean.New([]string{*enginePath}),
+		Policy:               policy,
+		Runtime:              runtimeLimits,
+		XProxyConfigPath:     xproxyConfigPath,
+		XProxyPort:           *xproxyPort,
+		ACPCommand:           acpCommandPath,
+		CouncilBackend:       runner.NormalizeCouncilBackend(*councilBackend),
+		CouncilACPCommand:    strings.TrimSpace(*councilACPCommand),
+		CouncilACPSessionCwd: strings.TrimSpace(*councilACPSessionCwd),
+		Engine:               lean.New([]string{*enginePath}),
 	}
 	result, err := runner.Run(context.Background(), cfg, complaint)
 	if err != nil {
@@ -448,6 +481,44 @@ func resolveAttorneyInstructionsPath(flagValue string) (string, error) {
 	}
 	if info.IsDir() {
 		return "", fmt.Errorf("attorney instructions %s must be a file", resolved)
+	}
+	return resolved, nil
+}
+
+func resolvePromptDir(flagValue string) (string, error) {
+	path := strings.TrimSpace(flagValue)
+	if path == "" {
+		return "", nil
+	}
+	resolved, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve prompt dir %s: %w", path, err)
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("stat prompt dir %s: %w", resolved, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("prompt dir %s must be a directory", resolved)
+	}
+	return resolved, nil
+}
+
+func resolvePromptFile(label string, flagValue string) (string, error) {
+	path := strings.TrimSpace(flagValue)
+	if path == "" {
+		return "", nil
+	}
+	resolved, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve %s %s: %w", label, path, err)
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("stat %s %s: %w", label, resolved, err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("%s %s must be a file", label, resolved)
 	}
 	return resolved, nil
 }

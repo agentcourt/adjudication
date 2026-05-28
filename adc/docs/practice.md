@@ -368,7 +368,7 @@ Example [Rule 79](ARCP.md#rule-79-records-kept-by-the-clerk) use: party disputes
 
 [Rule 85](ARCP.md#rule-85-title) and [Rule 86](ARCP.md#rule-86-effective-dates) rarely drive contested motion practice, but they define citation discipline and amendment timing.  When a rule amendment or version question appears, counsel should identify the governing effective-date text and apply it explicitly to pending-case posture.
 
-Example Rule 87 request: mandate disclosure of agent-assisted drafting for designated filing categories and preserve drafting artifacts for targeted review.
+Example Rule 87 request: mandate disclosure of agent-assisted drafting for designated filing categories and preserve drafting evidence for targeted review.
 
 ## Part X: Local limit policy as daily practice controls
 
@@ -408,7 +408,7 @@ Example workflow: import file into case record, produce file in discovery with t
 
 For confidential material, integrate [Protective orders](protectiveorders.md) with [Rule 26](ARCP.md#rule-26-duty-to-disclose-general-provisions-governing-discovery) discovery scope and [Rule 87](ARCP.md#rule-87-agent-assisted-litigation-orders) control language.
 
-Example protective-order term: allow counsel-only access to designated categories, require specific processing environment, and define audit artifacts required for compliance verification.
+Example protective-order term: allow counsel-only access to designated categories, require specific processing environment, and define audit evidence required for compliance verification.
 
 Where provenance is contested, execution evidence can help show that run outputs came from stated execution conditions.
 

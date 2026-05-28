@@ -29,6 +29,10 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 	if err := ValidateRuntimeLimits(cfg.Runtime); err != nil {
 		return Result{}, err
 	}
+	if err := ValidateCouncilBackend(cfg.CouncilBackend); err != nil {
+		return Result{}, err
+	}
+	cfg.CouncilBackend = NormalizeCouncilBackend(cfg.CouncilBackend)
 	if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
 		return Result{}, fmt.Errorf("create out dir: %w", err)
 	}
@@ -65,10 +69,7 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 			return Result{}, err
 		}
 	}
-	fileByID := make(map[string]CaseFile, len(caseFiles))
-	for _, file := range caseFiles {
-		fileByID[file.FileID] = file
-	}
+	evidenceStoreDir := filepath.Join(cfg.OutputDir, "evidence-store")
 	council, err := sampleCouncil(cfg.CouncilPoolPath, cfg.CommonRoot, cfg.Policy.CouncilSize)
 	if err != nil {
 		return Result{}, err
@@ -86,12 +87,17 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 		complaint:         complaint,
 		state:             mapAny(initResp["state"]),
 		caseFiles:         caseFiles,
-		fileByID:          fileByID,
 		submittedEvidence: []SubmittedEvidenceMeta{},
+		evidenceByID:      map[string]EvidenceMeta{},
+		evidenceStoreDir:  evidenceStoreDir,
+		uploadSessions:    map[string]*EvidenceUploadSession{},
 		council:           council,
 		attorneys:         attorneyMap,
 		acpSessions:       map[string]*acpPersistentSession{},
 		workProductDirs:   map[string]string{},
+	}
+	if err := rc.initializeEvidenceRegistry(); err != nil {
+		return Result{}, err
 	}
 	defer func() {
 		if closeErr := rc.closeACPSessions(); closeErr != nil {
@@ -101,6 +107,7 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 	if err := rc.recordEvent("run_initialized", "system", currentPhase(rc.state), map[string]any{
 		"complaint":         complaint,
 		"evidence_standard": cfg.Policy.EvidenceStandard,
+		"council_backend":   cfg.CouncilBackend,
 		"attorneys":         attorneys,
 		"council":           council,
 	}); err != nil {
@@ -122,15 +129,17 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 				Resolution:        currentResolution(rc.state),
 				Complaint:         complaint,
 				EvidenceStandard:  currentEvidenceStandard(rc.state, cfg.Policy),
+				CouncilBackend:    cfg.CouncilBackend,
 				Attorneys:         attorneys,
 				CaseFiles:         caseFileMetas(rc.caseFiles),
 				SubmittedEvidence: rc.submittedEvidence,
+				Evidence:          rc.listVisibleEvidence(),
 				Council:           council,
 				Events:            rc.events,
 				FinalState:        rc.state,
 				FinalReason:       reason,
 			}
-			if err := writeArtifacts(cfg, result, rc); err != nil {
+			if err := writeEvidence(cfg, result, rc); err != nil {
 				return Result{}, err
 			}
 			return result, nil
@@ -167,7 +176,7 @@ func initialState(policy Policy) map[string]any {
 			"rebuttals":          []map[string]any{},
 			"surrebuttals":       []map[string]any{},
 			"closings":           []map[string]any{},
-			"offered_files":      []map[string]any{},
+			"offered_evidence":   []map[string]any{},
 			"technical_reports":  []map[string]any{},
 			"submitted_evidence": []map[string]any{},
 			"deliberation_round": 1,

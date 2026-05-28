@@ -256,7 +256,7 @@ func (rc *runContext) renderCouncilRecord() string {
 		"Rebuttals:\n" + renderFilingList(mapList(caseObj["rebuttals"])),
 		"Surrebuttals:\n" + renderFilingList(mapList(caseObj["surrebuttals"])),
 		"Closings:\n" + renderFilingList(mapList(caseObj["closings"])),
-		"Exhibits:\n" + rc.renderExhibits(mapList(caseObj["offered_files"])),
+		"Exhibits:\n" + rc.renderExhibits(mapList(caseObj["offered_evidence"])),
 		"Technical reports:\n" + renderReports(mapList(caseObj["technical_reports"])),
 	}
 	prior := rc.renderPriorAnswers(mapList(caseObj["council_answers"]), intNumber(caseObj["deliberation_round"]))
@@ -298,12 +298,12 @@ func (rc *runContext) renderExhibitBodies(items []map[string]any) string {
 	}
 	lines := make([]string, 0, len(items))
 	for _, item := range items {
-		fileID := mapString(item["file_id"])
+		evidenceID := mapString(item["evidence_id"])
 		label := mapString(item["label"])
 		if label == "" {
-			label = fileID
+			label = evidenceID
 		}
-		file, ok := rc.fileByID[fileID]
+		file, ok := rc.fileByID[evidenceID]
 		if !ok {
 			lines = append(lines, fmt.Sprintf("[%s] %s\n(unavailable file)", mapString(item["role"]), label))
 			continue
@@ -323,12 +323,12 @@ func (rc *runContext) renderExhibitIndex(items []map[string]any) string {
 	}
 	lines := make([]string, 0, len(items))
 	for _, item := range items {
-		fileID := mapString(item["file_id"])
+		evidenceID := mapString(item["evidence_id"])
 		label := mapString(item["label"])
 		phase := mapString(item["phase"])
 		role := mapString(item["role"])
-		name := fileID
-		if file, ok := rc.fileByID[fileID]; ok && strings.TrimSpace(file.Name) != "" {
+		name := evidenceID
+		if file, ok := rc.fileByID[evidenceID]; ok && strings.TrimSpace(file.Name) != "" {
 			name = file.Name
 		}
 		if label == "" {

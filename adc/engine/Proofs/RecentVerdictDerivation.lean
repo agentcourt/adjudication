@@ -194,7 +194,7 @@ theorem deriveVerdictFromJurorVotes_plaintiff_majority_uses_plaintiff_mean :
 /- 
 The proof checks the damage field by its bit pattern.
 
-That avoids a proof artifact from Lean's `Float` representation while keeping
+That avoids a proof evidence from Lean's `Float` representation while keeping
 the substantive claim exact: the derived amount is `100.0`, the mean of the
 four plaintiff-side damages.
 -/

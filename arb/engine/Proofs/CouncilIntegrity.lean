@@ -219,7 +219,7 @@ the council roster, the stored votes, or the round counter.
 -/
 theorem appendSupplementalMaterials_preserves_councilVoteIntegrity
     (c : ArbitrationCase)
-    (offered : List OfferedFile)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport)
     (hIntegrity : councilVoteIntegrity c) :
     councilVoteIntegrity (appendSupplementalMaterials c offered reports) := by

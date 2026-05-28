@@ -1,8 +1,8 @@
 # Council Constitution
 
-`arb` constitutes its deciding body during `aar case`.  The procedure uses a council, which is the term the code and the run artifacts use throughout.  Council constitution begins after the complaint has been parsed and the case policy has been loaded, and it finishes before the Lean engine accepts the case and opens the first attorney turn.
+`arb` constitutes its deciding body during `aar case`.  The procedure uses a council, which is the term the code and the run evidence use throughout.  Council constitution begins after the complaint has been parsed and the case policy has been loaded, and it finishes before the Lean engine accepts the case and opens the first attorney turn.
 
-The runtime draws council members from a pool file, converts the draw into Lean input, and then asks the Lean engine to initialize the case with that exact list.  The engine performs a second set of checks on the incoming council and rewrites each member into a seated state before the case becomes active.  Once initialization succeeds, the constituted council is recorded immediately in the event stream and later in the final artifacts.
+The runtime draws council members from a pool file, converts the draw into Lean input, and then asks the Lean engine to initialize the case with that exact list.  The engine performs a second set of checks on the incoming council and rewrites each member into a seated state before the case becomes active.  Once initialization succeeds, the constituted council is recorded immediately in the event stream and later in the final evidence.
 
 | Stage | Code path | Effect |
 |---|---|---|
@@ -10,7 +10,7 @@ The runtime draws council members from a pool file, converts the draw into Lean 
 | Pool loading | [persona loader](../../common/persona/persona.go) | Reads the pool file, validates model ids, resolves persona files, and loads persona text. |
 | Sampling | [runner helpers](../runtime/runner/helpers.go) | Draws `council_size` records without replacement and assigns seat ids in draw order. |
 | Engine initialization | [Lean engine](../engine/Main.lean) | Requires exact council length, requires unique member ids, rewrites all members to `seated`, and opens the case. |
-| Recording | [main runner](../runtime/runner/run.go) and [renderer](../runtime/runner/render.go) | Writes the constituted council into the initialization event and the final run artifacts. |
+| Recording | [main runner](../runtime/runner/run.go) and [renderer](../runtime/runner/render.go) | Writes the constituted council into the initialization event and the final run evidence. |
 | Deliberation order | [Lean engine](../engine/Main.lean) | Selects the first seated member who has not yet voted in the current round. |
 
 ## Entry Point
@@ -45,11 +45,13 @@ That second initialization step matters because it fixes the authoritative counc
 
 The constituted council is recorded as soon as initialization succeeds.  [The main runner](../runtime/runner/run.go) appends a `run_initialized` event that includes the complaint, the evidence standard, the attorney model configuration, and the full council list.  That event is the first durable record of which members were seated in that run.
 
-The same council list appears again in the completion artifacts written by [the renderer](../runtime/runner/render.go).  `run.json` carries the council in the top-level `council` field, and `council.json` writes the same list on its own.  Those artifacts preserve the constituted body exactly as it existed at initialization, which means the council metadata is not reconstructed later from the vote log.
+The same council list appears again in the completion evidence written by [the renderer](../runtime/runner/render.go).  `run.json` carries the council in the top-level `council` field, and `council.json` writes the same list on its own.  Those evidence preserve the constituted body exactly as it existed at initialization, which means the council metadata is not reconstructed later from the vote log.
 
 ## Vote Order
 
 When the case reaches deliberation, the Lean engine chooses the next voting member from the initialized `council_members` list.  [The selection function](../engine/Main.lean) filters that list to members whose status remains `seated` and then chooses the first seated member who has not yet voted in the current round.  Because the underlying list order is the original sampling order, the first round calls members in the sampled seat order: `C1`, then `C2`, then `C3`, and so on.
+
+The default council backend calls the selected model through the runtime xproxy client and gives it a rendered record plus one function, `submit_council_vote`. With `--council-backend pi`, the runtime instead runs each voting member as a Pi ACP juror agent. The Pi juror path preserves the same Lean vote transition, but gives the juror read-only evidence tools during deliberation: list, stat, bounded byte-range read, and materialization into the managed juror workspace. The juror does not receive upload or evidence-submission tools, and the procedure does not authorize independent web investigation. The Pi backend rejects council models that request web-search tools.
 
 The procedure now waits for all seated members to vote in a round before resolving that round.  [The deliberation continuation rule](../engine/Main.lean) compares the current-round vote count to the number of seated members, and only then resolves to `demonstrated`, `not_demonstrated`, or `no_majority`, or advances to the next round.  The strict-majority policy check established earlier keeps the two substantive outcomes mutually exclusive within a valid policy.
 

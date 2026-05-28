@@ -3,6 +3,7 @@ package openclawattorney
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net"
 	"os"
@@ -59,7 +60,7 @@ func TestServerFilesDecisionThroughAARClientMethod(t *testing.T) {
 	fixed := `{"kind":"tool","tool_name":"record_opening_statement","payload":{"text":"Opening statement."}}`
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- Run(ctx, serverConn, nil, Config{FixedDecision: fixed, CommandTimeout: time.Second, IncludeCaseView: true})
+		errCh <- Run(ctx, serverConn, nil, Config{FixedDecision: fixed, CommandTimeout: time.Second, IncludeCaseView: true, IncludeTextFiles: true})
 	}()
 
 	reader := bufio.NewReader(clientConn)
@@ -111,7 +112,9 @@ func TestServerFilesDecisionThroughAARClientMethod(t *testing.T) {
 		"prompt":    []any{map[string]any{"type": "text", "text": "File an opening."}},
 	})
 
+	content := []byte("Evidence text.")
 	var submitted map[string]any
+	var readCalls int
 	promptDone := false
 	for submitted == nil || !promptDone {
 		env := readEnvelope()
@@ -119,14 +122,23 @@ func TestServerFilesDecisionThroughAARClientMethod(t *testing.T) {
 			switch method {
 			case "_aar/get_case":
 				writeResponse(env["id"], map[string]any{"case": map[string]any{"proposition": "P"}})
-			case "_aar/list_case_files":
-				writeResponse(env["id"], map[string]any{"files": []any{map[string]any{"file_id": "f1", "name": "evidence.txt", "text_readable": true}}})
-			case "_aar/read_case_text_file":
+			case "_aar/list_evidence":
+				writeResponse(env["id"], map[string]any{"evidence": []any{map[string]any{"evidence_id": "f1", "title": "evidence.txt", "text_readable": true, "size_bytes": len(content)}}})
+			case "_aar/stat_evidence":
+				writeResponse(env["id"], map[string]any{"evidence": map[string]any{"evidence_id": "f1"}, "limits": map[string]any{"max_read_bytes": 5, "remaining_read_bytes_for_opportunity": 20, "remaining_reads_for_opportunity": 4}})
+			case "_aar/read_evidence_range":
 				params, _ := env["params"].(map[string]any)
-				if params["file_id"] != "f1" {
-					t.Fatalf("read file params = %#v", params)
+				offset := intValue(params["offset"])
+				length := intValue(params["length"])
+				if params["evidence_id"] != "f1" || length > 5 || offset < 0 || offset >= len(content) {
+					t.Fatalf("read evidence params = %#v", params)
 				}
-				writeResponse(env["id"], map[string]any{"file_id": "f1", "text": "Evidence text."})
+				end := offset + length
+				if end > len(content) {
+					end = len(content)
+				}
+				readCalls++
+				writeResponse(env["id"], map[string]any{"evidence_id": "f1", "offset": offset, "length": end - offset, "content_base64": base64.StdEncoding.EncodeToString(content[offset:end]), "remaining_read_bytes_for_opportunity": 20 - end})
 			case "_aar/submit_decision":
 				params, _ := env["params"].(map[string]any)
 				submitted = params
@@ -145,6 +157,9 @@ func TestServerFilesDecisionThroughAARClientMethod(t *testing.T) {
 	}
 	if submitted["kind"] != "tool" || submitted["tool_name"] != "record_opening_statement" {
 		t.Fatalf("submitted decision = %#v", submitted)
+	}
+	if readCalls != 3 {
+		t.Fatalf("read calls = %d, want 3", readCalls)
 	}
 
 	_ = clientConn.Close()
@@ -347,7 +362,7 @@ func TestServerSubmitsEvidenceBundleBeforeDecision(t *testing.T) {
 				if _, exists := params["offer_label"]; exists {
 					t.Fatalf("submit_evidence params leaked offer_label: %#v", params)
 				}
-				writeResponse(env["id"], map[string]any{"file_id": "submitted-evidence-01-plaintiff-abc.txt"})
+				writeResponse(env["id"], map[string]any{"evidence_id": "submitted-evidence-01-plaintiff-abc.txt"})
 			case "_aar/submit_decision":
 				calls = append(calls, "submit_decision")
 				params, _ := env["params"].(map[string]any)
@@ -375,12 +390,12 @@ func TestServerSubmitsEvidenceBundleBeforeDecision(t *testing.T) {
 		t.Fatalf("submitted evidence = %#v", submittedEvidence)
 	}
 	payload, _ := submittedDecision["payload"].(map[string]any)
-	offered, _ := payload["offered_files"].([]any)
+	offered, _ := payload["offered_evidence"].([]any)
 	if len(offered) != 1 {
-		t.Fatalf("offered_files = %#v", payload["offered_files"])
+		t.Fatalf("offered_evidence = %#v", payload["offered_evidence"])
 	}
 	first, _ := offered[0].(map[string]any)
-	if first["file_id"] != "submitted-evidence-01-plaintiff-abc.txt" || first["label"] != "PX-new" {
+	if first["evidence_id"] != "submitted-evidence-01-plaintiff-abc.txt" || first["label"] != "PX-new" {
 		t.Fatalf("offered file = %#v", first)
 	}
 

@@ -24,7 +24,7 @@ func RunACPRole(args []string, stdout io.Writer, stderr io.Writer) error {
 	scenarioPath := fs.String("scenario", "", "Path to scenario JSON")
 	roleName := fs.String("role", "", "Role to delegate to the external ACP agent")
 	command := fs.String("command", "", "ACP server command")
-	outputPath := fs.String("output", "out/adc-role-run.json", "Run artifact output path")
+	outputPath := fs.String("output", "out/adc-role-run.json", "Run evidence output path")
 	eventsPath := fs.String("events", "out/adc-role-actions.ndjson", "Event log output path")
 	dbPath := fs.String("db", "out/adc-role.db", "SQLite path")
 	runID := fs.String("run-id", "", "Run ID override")

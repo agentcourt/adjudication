@@ -84,6 +84,60 @@ func TestResolveAttorneyInstructionsPathRejectsMissingFile(t *testing.T) {
 	}
 }
 
+func TestResolvePromptDirUsesExplicitDirectory(t *testing.T) {
+	dir := t.TempDir()
+	got, err := resolvePromptDir(dir)
+	if err != nil {
+		t.Fatalf("resolvePromptDir returned error: %v", err)
+	}
+	want, err := filepath.Abs(dir)
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
+	if got != want {
+		t.Fatalf("resolvePromptDir = %q, want %q", got, want)
+	}
+}
+
+func TestResolvePromptDirRejectsFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "prompt.md")
+	if err := os.WriteFile(path, []byte("prompt"), 0o644); err != nil {
+		t.Fatalf("write prompt: %v", err)
+	}
+	_, err := resolvePromptDir(path)
+	if err == nil || !strings.Contains(err.Error(), "must be a directory") {
+		t.Fatalf("resolvePromptDir error = %v, want directory error", err)
+	}
+}
+
+func TestResolvePromptFileUsesExplicitFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "prompt.md")
+	if err := os.WriteFile(path, []byte("prompt"), 0o644); err != nil {
+		t.Fatalf("write prompt: %v", err)
+	}
+	got, err := resolvePromptFile("test prompt", path)
+	if err != nil {
+		t.Fatalf("resolvePromptFile returned error: %v", err)
+	}
+	want, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
+	if got != want {
+		t.Fatalf("resolvePromptFile = %q, want %q", got, want)
+	}
+}
+
+func TestResolvePromptFileRejectsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	_, err := resolvePromptFile("test prompt", dir)
+	if err == nil || !strings.Contains(err.Error(), "must be a file") {
+		t.Fatalf("resolvePromptFile error = %v, want file error", err)
+	}
+}
+
 func TestFinalVoteCountsUsesFinalRound(t *testing.T) {
 	state := map[string]any{
 		"case": map[string]any{
@@ -258,6 +312,38 @@ func TestRunCaseRejectsPlaintiffModelWithACPEndpoint(t *testing.T) {
 	}
 	if !strings.Contains(summary.Error, "remote ACP attorney owns model selection") {
 		t.Fatalf("summary error = %q, want endpoint model-selection message", summary.Error)
+	}
+}
+
+func TestRunCaseRejectsInvalidCouncilBackend(t *testing.T) {
+	dir := t.TempDir()
+	complaintPath := filepath.Join(dir, "complaint.md")
+	if err := os.WriteFile(complaintPath, []byte("# Proposition\n\nP\n"), 0o644); err != nil {
+		t.Fatalf("write complaint: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := RunCase([]string{
+		"--complaint", complaintPath,
+		"--out-dir", filepath.Join(dir, "out"),
+		"--council-backend", "browser",
+	}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("RunCase returned nil error, want failure")
+	}
+	if !IsReportedError(err) {
+		t.Fatalf("RunCase error = %T, want reported error", err)
+	}
+	var summary caseRunSummary
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &summary); decodeErr != nil {
+		t.Fatalf("stdout is not JSON: %v\n%s", decodeErr, stdout.String())
+	}
+	if summary.Status != "error" {
+		t.Fatalf("summary status = %q, want error", summary.Status)
+	}
+	if !strings.Contains(summary.Error, "council backend must be direct or pi") {
+		t.Fatalf("summary error = %q, want invalid council backend message", summary.Error)
 	}
 }
 

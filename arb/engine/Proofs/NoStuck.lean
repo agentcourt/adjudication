@@ -769,21 +769,21 @@ Adding exhibits or technical reports does not change council data.
 -/
 theorem appendSupplementalMaterials_preserves_council_votes
     (c : ArbitrationCase)
-    (offered : List OfferedFile)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     (appendSupplementalMaterials c offered reports).council_votes = c.council_votes := by
   simp [appendSupplementalMaterials]
 
 theorem appendSupplementalMaterials_preserves_deliberation_round
     (c : ArbitrationCase)
-    (offered : List OfferedFile)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     (appendSupplementalMaterials c offered reports).deliberation_round = c.deliberation_round := by
   simp [appendSupplementalMaterials]
 
 theorem appendSupplementalMaterials_preserves_council_members
     (c : ArbitrationCase)
-    (offered : List OfferedFile)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     (appendSupplementalMaterials c offered reports).council_members = c.council_members := by
   simp [appendSupplementalMaterials]

@@ -1,6 +1,6 @@
 # Updating `analysis/`
 
-`analysis/` holds Mermaid source files and paired Markdown explanations.  The `.mmd` files are the source of truth.  Rendered PNGs are derived local artifacts and are not checked into this repository.
+`analysis/` holds Mermaid source files and paired Markdown explanations.  The `.mmd` files are the source of truth.  Rendered PNGs are derived local evidence and are not checked into this repository.
 
 ## Contents
 
@@ -9,7 +9,7 @@
 | `lean-simple-flow.mmd` | `lean-simple-flow.png` | minimal Lean request loop: initialize, role view, next opportunity, apply decision, step |
 | `lean-complete-flow.mmd` | `lean-complete-flow.png` | detailed Lean control flow: request routing, filing, pretrial, trial, post-judgment, and guards |
 | `formal-pipeline.mmd` | `formal-pipeline.png` | complaint-or-scenario entry path into the Go runner and Lean loop |
-| `demo-lifecycle.mmd` | `demo-lifecycle.png` | end-to-end demo lifecycle: complaint staging, memos, scenario, ACP or local turn execution, artifacts |
+| `demo-lifecycle.mmd` | `demo-lifecycle.png` | end-to-end demo lifecycle: complaint staging, memos, scenario, ACP or local turn execution, evidence |
 | `role-view-enforcement.mmd` | `role-view-enforcement.png` | role visibility and decision validation loop for local or ACP agents |
 | `state-phase-transitions.mmd` | `state-phase-transitions.png` | allowed case-status and trial-phase transitions, plus Rule 56 and bench-only notes |
 

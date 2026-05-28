@@ -129,7 +129,7 @@ theorem remainingDeliberationSteps_addFiling
 
 theorem remainingDeliberationSteps_appendSupplementalMaterials
     (s : ArbitrationState)
-    (offered : List OfferedFile)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     remainingDeliberationSteps
         (stateWithCase s (appendSupplementalMaterials s.case offered reports)) =
@@ -200,7 +200,7 @@ theorem addFiling_preserves_submitted_evidence
 
 theorem appendSupplementalMaterials_preserves_submitted_evidence
     (c : ArbitrationCase)
-    (offered : List OfferedFile)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     (appendSupplementalMaterials c offered reports).submitted_evidence = c.submitted_evidence := by
   simp [appendSupplementalMaterials]
@@ -216,7 +216,7 @@ theorem remainingSubmittedEvidenceSteps_addFiling
 theorem remainingSubmittedEvidenceSteps_appendSupplementalMaterials_addFiling
     (s : ArbitrationState)
     (phase role text : String)
-    (offered : List OfferedFile)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     remainingSubmittedEvidenceSteps
         (stateWithCase s (appendSupplementalMaterials (addFiling s.case phase role text) offered reports)) =
@@ -1009,8 +1009,8 @@ theorem submitEvidence_budget_result
           requireRole actorRole expectedRole
           let parsedEvidence ← parseSubmittedEvidence payload s.case.phase expectedRole
           let evidence := { parsedEvidence with role := expectedRole }
-          if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-            throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
+          if s.case.submitted_evidence.any (fun item => item.evidence_id = evidence.evidence_id) then
+            throw s!"duplicate submitted evidence_id: {evidence.evidence_id}"
           else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
             throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
           else
@@ -1039,8 +1039,8 @@ theorem submitEvidence_budget_result
             rw [hParse] at hCore
             let evidence : SubmittedEvidence := { parsedEvidence with role := expectedRole }
             change
-              (if ∃ x, x ∈ s.case.submitted_evidence ∧ x.file_id = evidence.file_id then
-                throw (toString "duplicate submitted evidence file_id: " ++ toString evidence.file_id)
+              (if ∃ x, x ∈ s.case.submitted_evidence ∧ x.evidence_id = evidence.evidence_id then
+                throw (toString "duplicate submitted evidence_id: " ++ toString evidence.evidence_id)
               else if s.policy.max_submitted_evidence_bytes < evidence.size_bytes then
                 throw (toString "submitted evidence exceeds byte limit of " ++
                   toString s.policy.max_submitted_evidence_bytes)
@@ -1049,7 +1049,7 @@ theorem submitEvidence_budget_result
                   requireCountWithinLimit "submitted_evidence for this side"
                     (submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1)
                     s.policy.max_submitted_evidence_per_side) = .ok t at hCore
-            by_cases hDup : ∃ x, x ∈ s.case.submitted_evidence ∧ x.file_id = evidence.file_id
+            by_cases hDup : ∃ x, x ∈ s.case.submitted_evidence ∧ x.evidence_id = evidence.evidence_id
             · simp [hDup] at hCore
             · simp [hDup] at hCore
               by_cases hSize : s.policy.max_submitted_evidence_bytes < evidence.size_bytes
@@ -1079,8 +1079,8 @@ theorem submitEvidence_budget_result
           requireRole actorRole (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
           let parsedEvidence ← parseSubmittedEvidence payload s.case.phase (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
           let evidence := { parsedEvidence with role := (if s.case.arguments.isEmpty then "plaintiff" else "defendant") }
-          if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-            throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
+          if s.case.submitted_evidence.any (fun item => item.evidence_id = evidence.evidence_id) then
+            throw s!"duplicate submitted evidence_id: {evidence.evidence_id}"
           else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
             throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
           else
@@ -1098,8 +1098,8 @@ theorem submitEvidence_budget_result
                 requireRole actorRole "plaintiff"
                 let parsedEvidence ← parseSubmittedEvidence payload s.case.phase "plaintiff"
                 let evidence := { parsedEvidence with role := "plaintiff" }
-                if s.case.submitted_evidence.any (fun item => item.file_id = evidence.file_id) then
-                  throw s!"duplicate submitted evidence file_id: {evidence.file_id}"
+                if s.case.submitted_evidence.any (fun item => item.evidence_id = evidence.evidence_id) then
+                  throw s!"duplicate submitted evidence_id: {evidence.evidence_id}"
                 else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
                   throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
                 else

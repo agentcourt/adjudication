@@ -8,7 +8,7 @@ This note describes how to run `arb` with OpenClaw agents as plaintiff and defen
 
 There are two pieces:
 
-1. `.bin/aar-openclaw-attorney` is a stdio ACP adapter. It receives AAR `session/prompt` requests, asks AAR for the visible case through `_aar/get_case`, loads text-readable case files through `_aar/list_case_files` and `_aar/read_case_text_file`, asks an OpenClaw agent for one filing JSON, and submits that filing through `_aar/submit_decision`.
+1. `.bin/aar-openclaw-attorney` is a stdio ACP adapter. It receives AAR `session/prompt` requests, asks AAR for the visible case through `_aar/get_case`, inspects visible evidence through the AAR evidence methods, asks an OpenClaw agent for one filing JSON, and submits that filing through `_aar/submit_decision`.
 2. `tools/openclaw-acp-tcp-bridge.js` exposes that stdio adapter as a TCP ACP endpoint. `aar case` connects to this endpoint with `--plaintiff-acp-endpoint` and `--defendant-acp-endpoint`.
 
 The bridge starts a new `.bin/aar-openclaw-attorney` process for each ACP connection. One bridge process can serve both sides of a run.
@@ -97,7 +97,7 @@ Terminal 1, start the bridge with an open-record instruction:
 cd arb
 export AAR_OPENCLAW_AGENT_ID=aar-lawyer
 export AAR_OPENCLAW_ATTORNEY_TIMEOUT_SECONDS=1200
-export AAR_OPENCLAW_AGENT_EXTRA_PROMPT='This is an open-record arbitration. Use available public search, web fetch, browser, transcript, or equivalent tools when they can materially improve the filing. Prefer primary sources over commentary. Preserve URLs, direct excerpts, and uncertainty. If external source material matters, submit the source content and provenance through aar_submit_evidence and cite the returned file_id in offered_files. Use technical_reports for attorney analysis or synthesized work product.'
+export AAR_OPENCLAW_AGENT_EXTRA_PROMPT='This is an open-record arbitration. Use available public search, web fetch, browser, transcript, or equivalent tools when they can materially improve the filing. Prefer primary sources over commentary. Preserve URLs, direct excerpts, and uncertainty. If external source material matters, submit the source content and provenance through aar_submit_evidence and cite the returned evidence_id in offered_evidence. Use technical_reports for attorney analysis or synthesized work product.'
 
 tools/openclaw-acp-tcp-bridge.js --host 127.0.0.1 --port 19702
 ```
@@ -155,13 +155,25 @@ The OpenClaw adapter accepts either an ordinary `aar_submit_decision` JSON objec
     "tool_name": "submit_argument",
     "payload": {
       "text": "Argument text that cites DX-1.",
-      "offered_files": []
+      "offered_evidence": []
     }
   }
 }
 ```
 
-The adapter submits each evidence item through `_aar/submit_evidence` before the merits filing. If the submission succeeds, AAR stores the bytes under `submitted-evidence/`, hashes them with SHA-256, records provenance metadata, adds the new file to the visible case-file set, and returns a `file_id`. The adapter cites accepted evidence in `offered_files` for `submit_argument` and `submit_rebuttal` filings unless `offer_as_exhibit` is false.
+The adapter submits each evidence item through `_aar/submit_evidence` before the merits filing. If the submission succeeds, AAR stores the bytes under `submitted-evidence/`, hashes them with SHA-256, records provenance metadata, registers immutable evidence, and returns `evidence_id`. The adapter cites accepted evidence in `offered_evidence` for `submit_argument` and `submit_rebuttal` filings unless `offer_as_exhibit` is false.
+
+Remote attorneys can also inspect and transfer exact bytes through the evidence API exposed by AAR during arguments and rebuttals:
+
+- `aar_list_evidence`
+- `aar_stat_evidence`
+- `aar_read_evidence_range`
+- `aar_materialize_evidence`
+- `aar_begin_evidence_upload`
+- `aar_write_evidence_chunk`
+- `aar_commit_evidence_upload`
+
+Use chunked upload when source evidence is too large or inappropriate for single-request `aar_submit_evidence`. Uploads are not evidence until `aar_commit_evidence_upload` verifies size and hash, the Lean engine accepts the `submit_evidence` action, and AAR registers the bytes in the evidence store. See [`evidence-handling.md`](evidence-handling.md) for the evidence model, limits, and custody rules.
 
 Evidence submissions are not allowed in closing statements. Closing statements are record-only and may contain only closing text.
 
@@ -172,6 +184,8 @@ A completed run should contain:
 ```text
 run.json
 state.json
+evidence-manifest.json
+evidence-store/
 digest.md
 council.json
 events.ndjson
@@ -188,7 +202,7 @@ grep -n "Resolution:" "$out_dir/digest.md"
 grep -n "Submitted Evidence\|technical report\|technical_reports\|http" "$out_dir/digest.md" | head -40
 ```
 
-For an open-record run, inspect whether the attorneys obtained material public evidence, preserved provenance, and distinguished source evidence from attorney work product. Source material submitted with `aar_submit_evidence` is copied into `submitted-evidence/`, recorded in `state.json`, and becomes a visible case file that later filings can cite in `offered_files`. If attorneys instead rely on unsupported claims in prose or technical reports, backfill the case directory before using later closed-record runs as reproducibility evidence.
+For an open-record run, inspect whether the attorneys obtained material public evidence, preserved provenance, and distinguished source evidence from attorney work product. Source material submitted with `aar_submit_evidence` or `aar_commit_evidence_upload` is copied into `submitted-evidence/`, recorded in `state.json`, registered in `evidence-manifest.json`, and becomes visible evidence that later filings can cite in `offered_evidence`. If attorneys instead rely on unsupported claims in prose or technical reports, backfill the case directory before using later closed-record runs as reproducibility evidence.
 
 ## Current limitations
 
