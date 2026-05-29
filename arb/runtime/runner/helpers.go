@@ -201,6 +201,7 @@ func sampleCouncil(path string, baseDir string, count int) ([]CouncilSeat, error
 			MemberID:    fmt.Sprintf("C%d", i+1),
 			Model:       spec.Model,
 			PersonaFile: spec.File,
+			RequestSpec: spec.RequestSpec,
 			PersonaText: spec.Text,
 		})
 	}

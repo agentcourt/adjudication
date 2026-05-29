@@ -3,6 +3,7 @@ package runner
 import (
 	"adjudication/arb/runtime/lean"
 	"adjudication/arb/runtime/spec"
+	"adjudication/common/modelrequest"
 )
 
 type Policy struct {
@@ -179,10 +180,11 @@ type EvidenceMeta struct {
 }
 
 type CouncilSeat struct {
-	MemberID    string `json:"member_id"`
-	Model       string `json:"model"`
-	PersonaFile string `json:"persona_file"`
-	PersonaText string `json:"-"`
+	MemberID    string             `json:"member_id"`
+	Model       string             `json:"model"`
+	PersonaFile string             `json:"persona_file"`
+	RequestSpec *modelrequest.Spec `json:"request_spec,omitempty"`
+	PersonaText string             `json:"-"`
 }
 
 type Opportunity struct {

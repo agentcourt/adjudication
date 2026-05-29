@@ -73,7 +73,7 @@ func TestLoadRecordsFile(t *testing.T) {
 		"# comment",
 		"",
 		"openrouter://openai/gpt-5,personas/a.txt",
-		"openrouter://openai/gpt-5-mini,personas/b.txt",
+		`{"openrouter_model_id":"deepseek/deepseek-v4-flash","endpoint_tag":"deepinfra/fp4","quantization":"fp4","persona":"personas/b.txt"}`,
 		"",
 	}, "\n")
 	if err := os.WriteFile(recordsPath, []byte(content), 0o644); err != nil {
@@ -89,6 +89,19 @@ func TestLoadRecordsFile(t *testing.T) {
 	}
 	if specs[0].File != "personas/a.txt" || specs[1].File != "personas/b.txt" {
 		t.Fatalf("LoadRecordsFile files = %q, %q", specs[0].File, specs[1].File)
+	}
+	if specs[0].RequestSpec != nil {
+		t.Fatalf("legacy CSV RequestSpec = %#v, want nil", specs[0].RequestSpec)
+	}
+	if specs[1].RequestSpec == nil {
+		t.Fatalf("JSON record RequestSpec = nil")
+	}
+	if specs[1].Model != "openrouter://deepseek/deepseek-v4-flash" {
+		t.Fatalf("JSON record model = %q", specs[1].Model)
+	}
+	provider := specs[1].RequestSpec.ProviderBody()
+	if provider["only"].([]string)[0] != "deepinfra/fp4" {
+		t.Fatalf("JSON record provider = %#v", provider)
 	}
 }
 
