@@ -56,15 +56,7 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client *ope
 	}
 	maxOutputTokens := rc.cfg.Runtime.CouncilMaxOutputTokens
 	for invalidAttempts < rc.cfg.Runtime.InvalidAttemptLimit {
-		resp, err := client.CreateResponseWithMaxOutputTokens(
-			ctx,
-			seat.Model,
-			inputItems,
-			tools,
-			prevID,
-			nil,
-			&maxOutputTokens,
-		)
+		resp, err := rc.createCouncilResponse(ctx, client, seat, inputItems, tools, prevID, maxOutputTokens)
 		if err != nil {
 			if isFunctionArgumentParseError(err) {
 				recordInvalidAttempt(err.Error())
@@ -126,13 +118,53 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client *ope
 			continue
 		}
 		rc.state = mapAny(stepResp["state"])
-		return rc.recordEvent("council_vote", "council", opportunity.Phase, map[string]any{
+		eventPayload := map[string]any{
 			"member_id": memberID,
 			"model":     seat.Model,
 			"payload":   payload,
-		})
+		}
+		if resp.ResponseID != "" {
+			eventPayload["response_id"] = resp.ResponseID
+		}
+		if seat.RequestSpec != nil {
+			eventPayload["request_spec"] = seat.RequestSpec
+		}
+		if resp.OpenRouterMetadata != nil {
+			eventPayload["openrouter_metadata"] = resp.OpenRouterMetadata
+		}
+		if resp.OpenRouterGeneration != nil {
+			eventPayload["openrouter_generation"] = resp.OpenRouterGeneration
+		}
+		if resp.OpenRouterGenerationError != "" {
+			eventPayload["openrouter_generation_error"] = resp.OpenRouterGenerationError
+		}
+		return rc.recordEvent("council_vote", "council", opportunity.Phase, eventPayload)
 	}
 	return formatInvalidAttemptLimitError(fmt.Sprintf("council member %s", memberID), invalidAttemptReasons)
+}
+
+func (rc *runContext) createCouncilResponse(
+	ctx context.Context,
+	client *openaiapi.Client,
+	seat CouncilSeat,
+	inputItems []map[string]any,
+	tools []map[string]any,
+	prevID string,
+	defaultMaxOutputTokens int64,
+) (openaiapi.Response, error) {
+	if seat.RequestSpec != nil {
+		spec := seat.RequestSpec.WithFallbackMaxOutputTokens(defaultMaxOutputTokens)
+		return client.CreateResponseWithRequestSpec(ctx, spec, inputItems, tools, prevID)
+	}
+	return client.CreateResponseWithMaxOutputTokens(
+		ctx,
+		seat.Model,
+		inputItems,
+		tools,
+		prevID,
+		nil,
+		&defaultMaxOutputTokens,
+	)
 }
 
 func (rc *runContext) removeTimedOutCouncilMember(opportunity Opportunity, seat CouncilSeat, cause error) error {

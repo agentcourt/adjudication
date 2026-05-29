@@ -258,6 +258,9 @@ func (h *xproxyHandler) forwardOpenAIResponses(w http.ResponseWriter, r *http.Re
 	if value := strings.TrimSpace(r.Header.Get("x-title")); value != "" {
 		upReq.Header.Set("x-title", value)
 	}
+	if value := strings.TrimSpace(r.Header.Get("x-openrouter-experimental-metadata")); value != "" {
+		upReq.Header.Set("x-openrouter-experimental-metadata", value)
+	}
 	resp, err := h.client.Do(upReq)
 	if err != nil {
 		logf("xproxy upstream_connect_error req_id=%s error=%v", reqID, err)

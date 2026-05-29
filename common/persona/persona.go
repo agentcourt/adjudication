@@ -8,18 +8,23 @@ import (
 	"path/filepath"
 	"strings"
 
+	"adjudication/common/modelrequest"
 	"adjudication/common/xproxy"
 )
 
 type Spec struct {
-	Model    string
-	File     string
-	Text     string
-	FilePath string
+	Model       string
+	File        string
+	Text        string
+	FilePath    string
+	RequestSpec *modelrequest.Spec
 }
 
 func ParseRecord(record string, baseDir string) (Spec, error) {
 	line := strings.TrimSpace(record)
+	if strings.HasPrefix(line, "{") {
+		return parseJSONRecord(line, baseDir)
+	}
 	model, fileRef, ok := strings.Cut(line, ",")
 	if !ok {
 		return Spec{}, fmt.Errorf("invalid persona record: %s", line)
@@ -32,6 +37,22 @@ func ParseRecord(record string, baseDir string) (Spec, error) {
 	if _, err := xproxy.ParseXProxyModel(model); err != nil {
 		return Spec{}, fmt.Errorf("invalid persona model %q: %w", model, err)
 	}
+	return loadSpecPersona(model, fileRef, baseDir, nil)
+}
+
+func parseJSONRecord(line string, baseDir string) (Spec, error) {
+	requestSpec, err := modelrequest.ParseJSON([]byte(line))
+	if err != nil {
+		return Spec{}, fmt.Errorf("invalid persona JSON record: %w", err)
+	}
+	fileRef := strings.TrimSpace(requestSpec.Persona)
+	if fileRef == "" {
+		return Spec{}, fmt.Errorf("invalid persona JSON record: persona is required")
+	}
+	return loadSpecPersona(requestSpec.RuntimeModel(), fileRef, baseDir, &requestSpec)
+}
+
+func loadSpecPersona(model string, fileRef string, baseDir string, requestSpec *modelrequest.Spec) (Spec, error) {
 	filePath := resolvePersonaFilePath(fileRef, baseDir)
 	raw, err := os.ReadFile(filePath)
 	if err != nil {
@@ -42,10 +63,11 @@ func ParseRecord(record string, baseDir string) (Spec, error) {
 		return Spec{}, fmt.Errorf("empty persona text: %s", fileRef)
 	}
 	return Spec{
-		Model:    model,
-		File:     fileRef,
-		Text:     text,
-		FilePath: filePath,
+		Model:       model,
+		File:        fileRef,
+		Text:        text,
+		FilePath:    filePath,
+		RequestSpec: requestSpec,
 	}, nil
 }
 
