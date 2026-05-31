@@ -10,7 +10,7 @@ build:
 	cd engine && lake build aarengine
 	install -m 755 engine/.lake/build/bin/aarengine $(BIN_DIR)/aarengine
 	cd runtime && $(GO_ENV) go build -o ../$(BIN_DIR)/aar ./cmd/aar
-	cd runtime && $(GO_ENV) go build -o ../$(BIN_DIR)/aar-openclaw-attorney ./cmd/aar-openclaw-attorney
+	$(GO_ENV) go build -o $(BIN_DIR)/aar-openclaw-attorney ./tools/aar-openclaw-attorney
 
 test:
 	cd runtime && $(GO_ENV) go test ./...

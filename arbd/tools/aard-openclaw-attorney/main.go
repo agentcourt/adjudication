@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"adjudication/arbd/runtime/openclawattorney"
+	"adjudication/arbd/tools/aard-openclaw-attorney/internal/openclawattorney"
 )
 
 type stdio struct{}

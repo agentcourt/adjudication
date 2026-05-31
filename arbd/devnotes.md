@@ -4,13 +4,13 @@
 
 ### OpenClaw degree attorney adapter
 
-Reference: [OpenClaw Degree Attorneys](docs/openclaw-attorneys.md), [OpenClaw adapter](runtime/openclawattorney/server.go), [TCP bridge](tools/openclaw-acp-tcp-bridge.js)
+Reference: [OpenClaw Degree Attorneys](docs/openclaw-attorneys.md), [OpenClaw adapter](tools/aard-openclaw-attorney/internal/openclawattorney/server.go), [TCP bridge](tools/openclaw-acp-tcp-bridge.js)
 
 `arbd` now has an OpenClaw-backed attorney adapter matching the current `arb` transport pattern.  The adapter speaks stdio ACP to AARD, obtains one filing JSON from either an OpenClaw command or `openclaw agent`, and submits the result through the existing `_aar/*` host methods.  The TCP bridge starts a fresh `aard-openclaw-attorney` process for each connection so `aard case` can use `--plaintiff-acp-endpoint` and `--defendant-acp-endpoint`.
 
 The adapter prompt is degree-specific.  It presents the AARD attorney prompt, visible case view, and readable case files, and it tells the lawyer to advocate a concrete score or bounded range when that fits the phase.  Structured evidence bundles are supported, so open-record degree runs can submit source evidence before filing the merits decision.
 
-- [x] Add `runtime/openclawattorney`.
+- [x] Add `tools/aard-openclaw-attorney/internal/openclawattorney`.
 - [x] Add `.bin/aard-openclaw-attorney` build target.
 - [x] Add `tools/openclaw-acp-tcp-bridge.js`.
 - [x] Document closed-record and open-record endpoint runs.

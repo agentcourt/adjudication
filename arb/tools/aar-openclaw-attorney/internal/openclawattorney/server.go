@@ -43,6 +43,7 @@ type Server struct {
 	mu      sync.Mutex
 	pending map[int64]chan rpcResponse
 	closed  bool
+	errc    chan error
 }
 
 type rpcRequest struct {
@@ -130,6 +131,7 @@ func Run(ctx context.Context, rw io.ReadWriter, stderr io.Writer, cfg Config) er
 		stderr:  stderr,
 		cfg:     cfg,
 		pending: map[int64]chan rpcResponse{},
+		errc:    make(chan error, 1),
 	}
 	return s.serve(ctx)
 }
@@ -137,24 +139,42 @@ func Run(ctx context.Context, rw io.ReadWriter, stderr io.Writer, cfg Config) er
 func (s *Server) serve(ctx context.Context) error {
 	scanner := bufio.NewScanner(s.rw)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
-	for scanner.Scan() {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
+	scanErr := make(chan error, 1)
+	go func() {
+		for scanner.Scan() {
+			select {
+			case <-ctx.Done():
+				scanErr <- ctx.Err()
+				return
+			default:
+			}
+			line := bytes.TrimSpace(scanner.Bytes())
+			if len(line) == 0 {
+				continue
+			}
+			if err := s.handleLine(ctx, append([]byte(nil), line...)); err != nil {
+				scanErr <- err
+				return
+			}
 		}
-		line := bytes.TrimSpace(scanner.Bytes())
-		if len(line) == 0 {
-			continue
-		}
-		if err := s.handleLine(ctx, append([]byte(nil), line...)); err != nil {
-			return err
-		}
+		scanErr <- scanner.Err()
+	}()
+	var err error
+	select {
+	case err = <-scanErr:
+	case err = <-s.errc:
+	case <-ctx.Done():
+		err = ctx.Err()
 	}
-	if err := scanner.Err(); err != nil {
-		return err
+	if closer, ok := s.rw.(io.Closer); ok {
+		err = errors.Join(err, closer.Close())
 	}
-	return nil
+	pendingErr := err
+	if pendingErr == nil {
+		pendingErr = io.EOF
+	}
+	s.closePending(pendingErr)
+	return err
 }
 
 func (s *Server) handleLine(ctx context.Context, line []byte) error {
@@ -204,21 +224,25 @@ func (s *Server) handleLine(ctx context.Context, line []byte) error {
 func (s *Server) handleRequest(ctx context.Context, id int64, method string, params map[string]any) {
 	result, err := s.dispatchRequest(ctx, method, params)
 	if err != nil {
-		_ = s.writeJSON(map[string]any{
+		if err := s.writeJSON(map[string]any{
 			"jsonrpc": "2.0",
 			"id":      id,
 			"error": map[string]any{
 				"code":    -32000,
 				"message": err.Error(),
 			},
-		})
+		}); err != nil {
+			s.fail(fmt.Errorf("write acp error response: %w", err))
+		}
 		return
 	}
-	_ = s.writeJSON(map[string]any{
+	if err := s.writeJSON(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      id,
 		"result":  result,
-	})
+	}); err != nil {
+		s.fail(fmt.Errorf("write acp response: %w", err))
+	}
 }
 
 func (s *Server) dispatchRequest(ctx context.Context, method string, params map[string]any) (map[string]any, error) {
@@ -640,14 +664,44 @@ func (s *Server) removePending(id int64) {
 	delete(s.pending, id)
 }
 
+func (s *Server) fail(err error) {
+	if err == nil {
+		return
+	}
+	s.closePending(err)
+	select {
+	case s.errc <- err:
+	default:
+	}
+}
+
+func (s *Server) closePending(err error) {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return
+	}
+	s.closed = true
+	pending := s.pending
+	s.pending = map[int64]chan rpcResponse{}
+	s.mu.Unlock()
+	if err == nil {
+		return
+	}
+	resp := rpcResponse{Error: &rpcError{Code: -32000, Message: err.Error()}}
+	for _, ch := range pending {
+		ch <- resp
+	}
+}
+
 func (s *Server) writeJSON(v any) error {
-	wire, err := json.Marshal(v)
+	payload, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err = s.rw.Write(append(wire, '\n'))
+	_, err = s.rw.Write(append(payload, '\n'))
 	return err
 }
 
