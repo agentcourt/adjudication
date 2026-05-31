@@ -59,6 +59,7 @@ Market:
 - lastTradePrice at capture: 0.999
 - bestBid/bestAsk at capture: 0.998 / 0.999
 - resolvedBy: 0x65070BE91477460D8A7AeEb94ef92fe056C2f2A7
+- submitted_by: 0x91430CaD2d3975766499717fA0D66A78D814E5c5
 
 ## Notes for arbitration
 
