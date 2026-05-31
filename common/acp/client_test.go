@@ -43,7 +43,7 @@ func TestTCPEndpointRoundTrip(t *testing.T) {
 		defer conn.Close()
 
 		reader := bufio.NewReader(conn)
-		for i := 0; i < 2; i++ {
+		for i := 0; i < 3; i++ {
 			line, err := reader.ReadBytes('\n')
 			if err != nil {
 				serverDone <- err
@@ -56,6 +56,7 @@ func TestTCPEndpointRoundTrip(t *testing.T) {
 			}
 			id, _ := req["id"].(float64)
 			method, _ := req["method"].(string)
+			params, _ := req["params"].(map[string]any)
 			var result any
 			switch method {
 			case "initialize":
@@ -69,6 +70,14 @@ func TestTCPEndpointRoundTrip(t *testing.T) {
 				}
 			case "session/new":
 				result = map[string]any{"sessionId": "session-1"}
+			case "session/prompt":
+				meta, _ := params["_meta"].(map[string]any)
+				agentcourt, _ := meta["agentcourt"].(map[string]any)
+				if got := agentcourt["turn"]; got != "argument" {
+					serverDone <- fmt.Errorf("prompt _meta.agentcourt.turn = %#v, want argument", got)
+					return
+				}
+				result = map[string]any{"stopReason": "end_turn"}
 			default:
 				serverDone <- fmt.Errorf("unexpected method %q", method)
 				return
@@ -110,6 +119,18 @@ func TestTCPEndpointRoundTrip(t *testing.T) {
 	}
 	if sessionResp.SessionID != "session-1" {
 		t.Fatalf("NewSession session id = %q, want session-1", sessionResp.SessionID)
+	}
+
+	promptResp, err := client.Prompt(context.Background(), PromptRequest{
+		SessionID: "session-1",
+		Prompt:    []TextBlock{{Type: "text", Text: "argue"}},
+		Meta:      map[string]any{"agentcourt": map[string]any{"turn": "argument"}},
+	})
+	if err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	if promptResp.StopReason != "end_turn" {
+		t.Fatalf("Prompt stop reason = %q, want end_turn", promptResp.StopReason)
 	}
 
 	if err := <-serverDone; err != nil {

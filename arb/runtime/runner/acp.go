@@ -456,6 +456,7 @@ func (rc *runContext) executeAttorneyOpportunity(ctx context.Context, _ any, opp
 	if _, err := client.Prompt(ctx, acp.PromptRequest{
 		SessionID: sessionResp.SessionID,
 		Prompt:    []acp.TextBlock{{Type: "text", Text: prompt}},
+		Meta:      attorneyPromptMeta(opportunity, session.workspaceDir != ""),
 	}); err != nil {
 		mu.Lock()
 		defer mu.Unlock()
@@ -734,7 +735,7 @@ func acpClientToolSpecs(includeWorkspaceWriter bool) []map[string]any {
 	if includeWorkspaceWriter {
 		specs = append(specs, materializeEvidenceToolSpec())
 	}
-	specs = append(specs, beginEvidenceUploadToolSpec(), writeEvidenceChunkToolSpec(), commitEvidenceUploadToolSpec(), submitEvidenceToolSpec(), submitDecisionToolSpec())
+	specs = append(specs, beginEvidenceUploadToolSpec(), writeEvidenceChunkToolSpec(), commitEvidenceUploadToolSpec(), submitEvidenceToolSpec(), submitDecisionToolSpec(nil))
 	return specs
 }
 
@@ -876,7 +877,7 @@ func submitEvidenceToolSpec() map[string]any {
 	}
 }
 
-func submitDecisionToolSpec() map[string]any {
+func submitDecisionToolSpec(allowedTools []string) map[string]any {
 	return map[string]any{
 		"method":      acpCustomMethod("submit_decision"),
 		"toolName":    "aar_submit_decision",
@@ -887,14 +888,7 @@ func submitDecisionToolSpec() map[string]any {
 				"kind": map[string]any{"type": "string", "enum": []string{"tool", "pass"}},
 				"tool_name": map[string]any{
 					"type": "string",
-					"enum": []string{
-						"record_opening_statement",
-						"submit_argument",
-						"submit_rebuttal",
-						"submit_surrebuttal",
-						"deliver_closing_statement",
-						"pass_phase_opportunity",
-					},
+					"enum": decisionToolEnum(allowedTools),
 				},
 				"payload": attorneyPayloadSchema(),
 			},
@@ -902,6 +896,31 @@ func submitDecisionToolSpec() map[string]any {
 			"additionalProperties": false,
 		},
 	}
+}
+
+func decisionToolEnum(allowedTools []string) []string {
+	fallback := []string{
+		"record_opening_statement",
+		"submit_argument",
+		"submit_rebuttal",
+		"submit_surrebuttal",
+		"deliver_closing_statement",
+		"pass_phase_opportunity",
+	}
+	if len(allowedTools) == 0 {
+		return fallback
+	}
+	out := make([]string, 0, len(allowedTools))
+	for _, tool := range allowedTools {
+		tool = strings.TrimSpace(tool)
+		if tool != "" && !slices.Contains(out, tool) {
+			out = append(out, tool)
+		}
+	}
+	if len(out) == 0 {
+		return fallback
+	}
+	return out
 }
 
 func attorneyPayloadSchema() map[string]any {
@@ -974,8 +993,16 @@ func acpToolSpecs(opportunity Opportunity, includeWorkspaceWriter bool) []map[st
 		}
 		specs = append(specs, beginEvidenceUploadToolSpec(), writeEvidenceChunkToolSpec(), commitEvidenceUploadToolSpec(), submitEvidenceToolSpec())
 	}
-	specs = append(specs, submitDecisionToolSpec())
+	specs = append(specs, submitDecisionToolSpec(opportunity.AllowedTools))
 	return specs
+}
+
+func attorneyPromptMeta(opportunity Opportunity, includeWorkspaceWriter bool) map[string]any {
+	return map[string]any{
+		"agentcourt": map[string]any{
+			"clientTools": acpToolSpecs(opportunity, includeWorkspaceWriter),
+		},
+	}
 }
 
 func evidenceAccessAllowed(opportunity Opportunity) bool {

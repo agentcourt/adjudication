@@ -41,6 +41,35 @@ func TestACPToolSpecsExposeEvidenceOnlyInArgumentPhases(t *testing.T) {
 	}
 }
 
+func TestAttorneyPromptMetaUsesOpportunityToolSpecs(t *testing.T) {
+	openingSpecs := listOfMaps(mapAny(attorneyPromptMeta(Opportunity{Phase: "openings", AllowedTools: []string{"record_opening_statement"}}, true)["agentcourt"])["clientTools"])
+	openingTools := toolNames(openingSpecs)
+	for _, forbidden := range []string{"aar_list_evidence", "aar_read_evidence_range", "aar_submit_evidence"} {
+		if slices.Contains(openingTools, forbidden) {
+			t.Fatalf("opening metadata exposed %s: %#v", forbidden, openingTools)
+		}
+	}
+	if !slices.Contains(openingTools, "aar_submit_decision") {
+		t.Fatalf("opening metadata missing aar_submit_decision: %#v", openingTools)
+	}
+	openingEnum := submitDecisionEnum(openingSpecs)
+	if len(openingEnum) != 1 || openingEnum[0] != "record_opening_statement" {
+		t.Fatalf("opening submit_decision enum = %#v, want record_opening_statement only", openingEnum)
+	}
+
+	argumentSpecs := listOfMaps(mapAny(attorneyPromptMeta(Opportunity{Phase: "arguments", AllowedTools: []string{"submit_argument"}}, true)["agentcourt"])["clientTools"])
+	argumentTools := toolNames(argumentSpecs)
+	for _, want := range []string{"aar_get_case", "aar_read_evidence_range", "aar_submit_evidence", "aar_submit_decision"} {
+		if !slices.Contains(argumentTools, want) {
+			t.Fatalf("argument metadata missing %s: %#v", want, argumentTools)
+		}
+	}
+	argumentEnum := submitDecisionEnum(argumentSpecs)
+	if len(argumentEnum) != 1 || argumentEnum[0] != "submit_argument" {
+		t.Fatalf("argument submit_decision enum = %#v, want submit_argument only", argumentEnum)
+	}
+}
+
 func TestAttorneyPromptRequiresSubmittedEvidenceForNewSources(t *testing.T) {
 	origPromptBaseDir := promptBaseDir
 	promptBaseDir = filepath.Join("..", "..", "prompts")
@@ -202,4 +231,15 @@ func toolNames(specs []map[string]any) []string {
 		out = append(out, mapString(spec["toolName"]))
 	}
 	return out
+}
+
+func submitDecisionEnum(specs []map[string]any) []string {
+	for _, spec := range specs {
+		if mapString(spec["toolName"]) != "aar_submit_decision" {
+			continue
+		}
+		enum, _ := mapAny(mapAny(mapAny(spec["parameters"])["properties"])["tool_name"])["enum"].([]string)
+		return enum
+	}
+	return nil
 }
