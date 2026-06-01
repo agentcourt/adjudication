@@ -32,7 +32,7 @@ One part remains open.  The proof-friendly policy shape is now in place, but the
 | Procedure | `max_report_summary_bytes` | Maximum summary size for one report | policy | Lean and Go |
 | Procedure | `max_submitted_evidence_per_side` | Maximum source-evidence items submitted by one side across the case | policy | Lean and Go |
 | Procedure | `max_submitted_evidence_bytes` | Maximum bytes for one admitted submitted-evidence item | policy | Lean and Go |
-| Runtime/protocol | `max_direct_submitted_evidence_bytes` | Maximum bytes accepted through one JSON/base64 `aar_submit_evidence` call | policy | Go |
+| Runtime/protocol | `max_direct_submitted_evidence_bytes` | Maximum bytes accepted through one JSON/base64 `submit_evidence` call | policy | Go |
 | Runtime/protocol | `max_evidence_upload_bytes` | Maximum bytes accepted through one chunked evidence upload | policy | Go, bounded by `max_submitted_evidence_bytes` |
 | Runtime/protocol | `max_evidence_chunk_bytes` | Maximum bytes accepted in one uploaded evidence chunk | policy | Go |
 | Runtime/protocol | `max_evidence_read_bytes` | Maximum bytes returned by one evidence range read | policy | Go |
@@ -40,7 +40,7 @@ One part remains open.  The proof-friendly policy shape is now in place, but the
 | Runtime/protocol | `max_evidence_read_bytes_per_opportunity` | Maximum total evidence bytes returned in one attorney opportunity | policy | Go |
 | Complaint | `proposition` | The disputed proposition | complaint | complaint parser |
 | Runtime | `council_llm_timeout_seconds` | Timeout for council turns | runner config | Go |
-| Runtime | `attorney_acp_timeout_seconds` | Timeout for attorney ACP turns | runner config | Go |
+| Runtime | `lawyer_turn_timeout_seconds` | Timeout for lawyer turns | runner config | Go |
 | Runtime | `max_response_bytes` | Maximum raw model response size accepted from a turn | runner config | Go |
 | Runtime | `invalid_attempt_limit` | Maximum invalid attempts before a turn fails | runner config | Go |
 
@@ -80,7 +80,7 @@ The policy file should contain only procedural parameters.  Complaint content st
 4. Change Lean deliberation resolution to use `required_votes_for_decision` instead of a computed simple majority.
 5. Add Go-side startup validation for the policy file and reject impossible values before case initialization.
 6. Add Go-side byte checks for exhibits and technical reports before attorney submissions reach the engine.
-7. Add runtime-config fields for `council_llm_timeout_seconds`, `attorney_acp_timeout_seconds`, `max_response_bytes`, and `invalid_attempt_limit`, then thread them through the runner without storing them in legal state.
+7. Add runtime-config fields for `council_llm_timeout_seconds`, `lawyer_turn_timeout_seconds`, `max_response_bytes`, and `invalid_attempt_limit`, then thread them through the runner without storing them in legal state.
 8. Add boundary tests for every new limit and every rejection path, then add basic Lean theorems over the symmetric caps.
 
 ## Defaults

@@ -306,9 +306,6 @@ func (rc *runContext) ensureCouncilACPSession(ctx context.Context, seat CouncilS
 	}
 	command := strings.TrimSpace(rc.cfg.CouncilACPCommand)
 	if command == "" {
-		command = strings.TrimSpace(rc.cfg.ACPCommand)
-	}
-	if command == "" {
 		return nil, fmt.Errorf("council ACP command is required")
 	}
 	model := strings.TrimSpace(seat.Model)

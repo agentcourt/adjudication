@@ -1,21 +1,26 @@
 # Development Notes
 
-## 2026-05-31
+## 2026-06-01
 
-### OpenClaw MCP client-tool bridge
+### Lawyer API
 
-Reference: [OpenClaw ACP MCP Bridge](../common/docs/openclaw-acp-mcp-bridge.md), [OpenClaw attorney notes](docs/openclaw-attorneys.md)
+Reference: [Lawyer HTTP API](../lawyerapi.md)
 
-The current OpenClaw path now uses per-prompt ACP metadata instead of a process-startup environment variable for lawyer client tools.  `attorneyPromptMeta` sends the opportunity tool specs as `_meta.clientTools`, so an ACP server can see the exact tool set for the current opening, argument, rebuttal, surrebuttal, or closing.  The old `PI_ACP_CLIENT_TOOLS` path remains for the Pi wrapper because it still registers extension tools at process startup.
+The lawyer side now uses one HTTP API owned by `aar case`.  The runner starts `/lawyerapi/v1`, publishes one active turn at a time, and blocks until the active lawyer submits a valid `submit_decision` call, exhausts attempts, or reaches the turn deadline.  Plaintiff and defendant integrations now sit outside the runtime and can use curl, a CLI, an MCP server, an ACP service, or any other front end that speaks this API.
 
-The shared `common/tools/acp-mcp-bridge.mjs` tool is now a direct service.  It accepts AAR prompts over TCP ACP, exposes the active prompt's tools over HTTP MCP, and runs `openclaw agent` against one OpenClaw lawyer session for the bridge process.  The bridge maps only ACP tool specs and MCP calls, leaving AAR filing semantics in the existing ACP client methods.
+The old lawyer ACP and OpenClaw bridge path has been removed from the AAR runtime.  Council PI support still uses ACP because that is a separate read-only juror backend.  Shared evidence validation, filing validation, and prompt construction remain in the runner and are called by the HTTP API.
 
-- [x] Send lawyer client tools in `_meta.clientTools`.
-- [x] Add a direct TCP ACP to HTTP MCP bridge under `common/tools`.
-- [x] Remove the OpenClaw bridge's stdio MCP mode and generic stdio TCP wrapper.
-- [x] Add Node tests for the direct bridge and the stock OpenClaw container MCP SDK path.
-- [x] Preserve one OpenClaw lawyer session per bridge process while updating the MCP tool list per opportunity.
-- [x] Document the stock OpenClaw HTTP MCP configuration path.
+The Lawyer API now treats `opportunity_id` as a per-turn guard on plaintiff and defendant `POST /do` calls.  A lawyer receives the current value from `GET /get` in `turn.opportunity_id` and must send it back with every lawyer tool call for that turn.  Missing or stale values fail before tool execution and do not consume the turn's invalid-attempt budget.
+
+The lawyer prompt templates now match that API.  They distinguish HTTP tools from legal acts submitted through `submit_decision`, state the current opportunity id, and remove old local-agent wording.  The evidence-rich prompt set received the same structure so `--prompt-dir prompts/evidence-rich-30m` remains aligned with the default templates.
+
+- [x] Add the HTTP Lawyer API server to `aar case`.
+- [x] Replace lawyer ACP execution with turn blocking on HTTP tool calls.
+- [x] Remove lawyer model, lawyer ACP command, lawyer ACP endpoint, and bridge CLI flags.
+- [x] Delete the OpenClaw lawyer adapter and ACP/MCP bridge files.
+- [x] Update prompt text to use HTTP tool names.
+- [x] Require active opportunity ids on lawyer tool calls.
+- [x] Clean up default and evidence-rich lawyer prompt templates.
 
 ## 2026-04-01
 
@@ -179,49 +184,9 @@ The ACP-side validation errors now carry the attempted count and the remaining
 side capacity.  That keeps the model close to the actual engine rule and avoids
 wasting retries on blind correction attempts.
 
-### Configurable attorney model and capability-aware prompts
+### Retired lawyer model and ACP configuration
 
-`aar case` now accepts `--attorney-model`.  The value is an explicit xproxy
-model id such as `openai://gpt-5` or `openai://gpt-5?tools=search`.  The
-runner validates that model id up front, stages it into the temporary PI home,
-and records the effective attorney model and search flag in the run metadata.
-
-The attorney prompts no longer hardcode web-search availability.  They render
-one capability section from the configured model and one phase-specific
-investigation section that changes when native search is unavailable.  That
-keeps one prompt family while making the runtime state explicit.  It also
-removes the earlier mismatch where the prompt told counsel to use native search
-even when the configured model lacked it.
-
-The `arb` Makefile now chooses attorney models explicitly by example.  `demo`,
-`ex2`, and `ex3` use `openai://gpt-5` without native search.  `ex4` keeps
-`openai://gpt-5?tools=search`, because that example depends on public-source
-investigation.
-
-### Per-role ACP configuration and remote endpoints
-
-ACP still centers on stdio.  The ACP transport page says the protocol defines
-stdio today and lists streamable HTTP as draft work in progress.  It also
-permits custom transports.  The current `pi-acp` adapter in this repository
-documents only JSON-RPC 2.0 over stdio.  Those sources matter here:
-
-- ACP transports: https://agentclientprotocol.com/protocol/transports
-- ACP introduction: https://agentclientprotocol.com/get-started/introduction
-- `pi-acp` README: ../common/submodules/pi-acp/README.md
-- `pi-acp` engineering notes: ../common/submodules/pi-acp/AGENTS.md
-- GitHub Copilot CLI ACP server reference, which documents a TCP mode as a custom remote transport: https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server
-
-`arb` now resolves attorney configuration per role.  The global
-`--attorney-model` and `--acp-command` flags remain the defaults.  The CLI also
-accepts plaintiff and defendant overrides for model, ACP command, ACP endpoint,
-and ACP session cwd.  That allows one side to stay on the local wrapper while
-the other side points at a different ACP server.
-
-The remote path uses a custom TCP transport.  The client opens a persistent TCP
-connection and exchanges newline-delimited ACP JSON-RPC messages over that
-stream.  This is a deliberate custom transport, not an implementation of the
-draft streamable-HTTP work.  The runner records the resolved attorney
-configuration for each side in `run.json` and in the `run_initialized` event.
+This section records removed work.  Older revisions allowed `aar case` to configure lawyer models, local lawyer ACP commands, and remote lawyer ACP endpoints.  The `lawyerapi` branch removes that path and leaves lawyer model selection to clients outside the runtime.
 
 The runner still depends on `_aar/*` client methods for case access and filing.
 `pi-acp` learns those methods from environment staging in the local wrapper

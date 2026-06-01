@@ -1,114 +1,70 @@
-# OpenClaw Lawyers For `arb/examples/ex1`
+# Curl Lawyers For `arb/examples/ex1`
 
-## Current Direct-Service Path
+## Current Path
 
-The current OpenClaw lawyer path uses `common/tools/acp-mcp-bridge.mjs` as one direct service per role.  AAR connects to each service over TCP ACP.  OpenClaw connects back to the same service over HTTP MCP using a `streamable-http` MCP server entry in the role's OpenClaw config.
+`aar case` now starts the HTTP Lawyer API and waits for plaintiff and defendant tool calls.  No lawyer model, lawyer ACP service, MCP bridge, or adapter runs inside the AAR runtime.  For this test, curl acted as both lawyers and as the observer.
 
-Use separate OpenClaw config directories for plaintiff and defendant.  Each config stores a different `agentcourt` MCP URL and token, so each lawyer role reaches the MCP endpoint for its own bridge process.
-
-## Live Result
-
-I ran the direct-service path on 2026-05-31.  The run used `ghcr.io/openclaw/openclaw:latest`, copied the known-good OpenClaw role settings into fresh plaintiff and defendant config directories, replaced the `agentcourt` MCP entries with HTTP `streamable-http` URLs, and ran AAR against two TCP ACP endpoints.
-
-The case completed successfully:
+The live run on 2026-06-01 used `arb/examples/ex1/complaint.md`, a temporary one-member council policy, and the Lawyer API at `http://127.0.0.1:19771/lawyerapi/v1`.  The script sourced `~/keys.txt`, started `aar case`, polled `GET /get` for plaintiff and defendant, called observer `get_turn` during each lawyer turn, and submitted every lawyer filing with `POST /do`.  For each lawyer filing, it copied `turn.opportunity_id` from the ready `GET` response into the POST body.  The case completed:
 
 ```json
-{"status":"ok","result":"demonstrated","votes_for":4,"votes_against":1,"run_id":"ex1-openclaw-direct-20260531T202853Z","out_dir":"out/ex1-openclaw-direct-20260531T202853Z"}
+{"status":"ok","result":"demonstrated","votes_for":1,"votes_against":0,"run_id":"run-1780325088602460322","out_dir":"out/ex1-lawyerapi-curl-20260601-094448"}
 ```
 
-The output packet is under `arb/out/ex1-openclaw-direct-20260531T202853Z`.  `digest.md` records `Resolution: demonstrated`.  `events.ndjson` contains eight `attorney_action` events, five `evidence_read` events, five `council_vote` events, and one `run_initialized` event.
+## Commands
 
-The plaintiff and defendant OpenClaw trajectories each used one session file for four lawyer turns.  Each trajectory recorded four `session.started` entries and four `toolMetas` entries, with the expected MCP tools present: `agentcourt__aar_get_case`, `agentcourt__aar_submit_decision`, and `agentcourt__aar_submit_evidence`.
-
-```bash
-export ADJUDICATION_REPO="$(git rev-parse --show-toplevel)"
-export OPENCLAW_IMAGE="${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}"
-
-export PLAINTIFF_OPENCLAW_DIR="${PLAINTIFF_OPENCLAW_DIR:-$HOME/.openclaw-agentcourt-plaintiff}"
-export DEFENDANT_OPENCLAW_DIR="${DEFENDANT_OPENCLAW_DIR:-$HOME/.openclaw-agentcourt-defendant}"
-mkdir -p "$PLAINTIFF_OPENCLAW_DIR" "$DEFENDANT_OPENCLAW_DIR"
-
-export PLAINTIFF_ACP_PORT=19711
-export PLAINTIFF_MCP_PORT=19712
-export DEFENDANT_ACP_PORT=19713
-export DEFENDANT_MCP_PORT=19714
-export PLAINTIFF_MCP_TOKEN=agentcourt-plaintiff
-export DEFENDANT_MCP_TOKEN=agentcourt-defendant
-```
-
-Configure plaintiff OpenClaw MCP:
+The run used this shape.  The policy file only reduced council size so the live test would finish quickly; it did not change lawyer API behavior.  Each lawyer action below is a curl call to `POST /do`.
 
 ```bash
-export PLAINTIFF_MCP_JSON='{"url":"http://127.0.0.1:19712/mcp","transport":"streamable-http","headers":{"authorization":"Bearer agentcourt-plaintiff"}}'
+cd arb
+source ~/keys.txt
 
-docker run --rm -i \
-  --network host \
-  -v "$PLAINTIFF_OPENCLAW_DIR:/openclaw:rw" \
-  -e OPENCLAW_HOME=/openclaw \
-  -e OPENCLAW_CONFIG_PATH=/openclaw/openclaw.json \
-  "$OPENCLAW_IMAGE" \
-  openclaw mcp set agentcourt "$PLAINTIFF_MCP_JSON"
-```
-
-Configure defendant OpenClaw MCP:
-
-```bash
-export DEFENDANT_MCP_JSON='{"url":"http://127.0.0.1:19714/mcp","transport":"streamable-http","headers":{"authorization":"Bearer agentcourt-defendant"}}'
-
-docker run --rm -i \
-  --network host \
-  -v "$DEFENDANT_OPENCLAW_DIR:/openclaw:rw" \
-  -e OPENCLAW_HOME=/openclaw \
-  -e OPENCLAW_CONFIG_PATH=/openclaw/openclaw.json \
-  "$OPENCLAW_IMAGE" \
-  openclaw mcp set agentcourt "$DEFENDANT_MCP_JSON"
-```
-
-Start the plaintiff bridge:
-
-```bash
-AGENTCOURT_OPENCLAW_COMMAND=docker \
-AGENTCOURT_OPENCLAW_BASE_ARGS_JSON="[\"run\",\"--rm\",\"-i\",\"--network\",\"host\",\"-v\",\"$PLAINTIFF_OPENCLAW_DIR:/openclaw:rw\",\"-e\",\"OPENCLAW_HOME=/openclaw\",\"-e\",\"OPENCLAW_CONFIG_PATH=/openclaw/openclaw.json\",\"-e\",\"OPENAI_API_KEY\",\"$OPENCLAW_IMAGE\",\"openclaw\"]" \
-AGENTCOURT_OPENCLAW_LOCAL=1 \
-AGENTCOURT_OPENCLAW_AGENT_ID=agentcourt-plaintiff \
-AGENTCOURT_OPENCLAW_SESSION_ID=agentcourt-plaintiff-ex1 \
-AGENTCOURT_MCP_TOKEN="$PLAINTIFF_MCP_TOKEN" \
-"$ADJUDICATION_REPO/common/tools/acp-mcp-bridge.mjs" \
-  --acp-port "$PLAINTIFF_ACP_PORT" \
-  --mcp-port "$PLAINTIFF_MCP_PORT"
-```
-
-Start the defendant bridge:
-
-```bash
-AGENTCOURT_OPENCLAW_COMMAND=docker \
-AGENTCOURT_OPENCLAW_BASE_ARGS_JSON="[\"run\",\"--rm\",\"-i\",\"--network\",\"host\",\"-v\",\"$DEFENDANT_OPENCLAW_DIR:/openclaw:rw\",\"-e\",\"OPENCLAW_HOME=/openclaw\",\"-e\",\"OPENCLAW_CONFIG_PATH=/openclaw/openclaw.json\",\"-e\",\"OPENAI_API_KEY\",\"$OPENCLAW_IMAGE\",\"openclaw\"]" \
-AGENTCOURT_OPENCLAW_LOCAL=1 \
-AGENTCOURT_OPENCLAW_AGENT_ID=agentcourt-defendant \
-AGENTCOURT_OPENCLAW_SESSION_ID=agentcourt-defendant-ex1 \
-AGENTCOURT_MCP_TOKEN="$DEFENDANT_MCP_TOKEN" \
-"$ADJUDICATION_REPO/common/tools/acp-mcp-bridge.mjs" \
-  --acp-port "$DEFENDANT_ACP_PORT" \
-  --mcp-port "$DEFENDANT_MCP_PORT"
-```
-
-Run `ex1` from `arb`:
-
-```bash
-cd "$ADJUDICATION_REPO/arb"
-make build
+BASE=http://127.0.0.1:19771/lawyerapi/v1
+OUT=out/ex1-lawyerapi-curl-$(date +%Y%m%d-%H%M%S)
+mkdir -p "$OUT"
 
 .bin/aar case \
   --complaint examples/ex1/complaint.md \
-  --out-dir out/ex1-openclaw-direct \
-  --plaintiff-acp-endpoint tcp://127.0.0.1:19711 \
-  --defendant-acp-endpoint tcp://127.0.0.1:19713 \
-  --acp-timeout-seconds 900 \
-  --run-id ex1-openclaw-direct
+  --out-dir "$OUT" \
+  --policy /tmp/ex1-lawyerapi-policy.json \
+  --lawyerapi-addr 127.0.0.1:19771 \
+  --lawyer-timeout-seconds 240 \
+  --invalid-attempt-limit 3
 ```
 
-## Prior Result
+A lawyer checks whether it is ready:
 
-The earlier successful run used the stock OpenClaw Docker image and completed with `{"status":"ok","result":"demonstrated","votes_for":4,"votes_against":1,"run_id":"ex1-openclaw-stable-session","out_dir":"out/ex1-openclaw-stable-session-20260531T194414Z"}`.  That output remains under `arb/out/ex1-openclaw-stable-session-20260531T194414Z`.
+```bash
+curl -sS "$BASE/get?case_id=arb-1&role_id=plaintiff"
+```
 
-That earlier run used the old two-process MCP bridge and a separate TCP wrapper.  The direct-service bridge replaces that path.  The retained evidence from the prior run is useful as a case-output reference, but the command sequence above is the current path.
+The observer checks the active turn:
+
+```bash
+curl -sS -X POST "$BASE/do" \
+  -H 'content-type: application/json' \
+  --data '{"case_id":"arb-1","role_id":"observer","tool":"get_turn","arguments":{}}'
+```
+
+A lawyer files an opening:
+
+```bash
+curl -sS -X POST "$BASE/do" \
+  -H 'content-type: application/json' \
+  --data '{
+    "case_id": "arb-1",
+    "role_id": "plaintiff",
+    "opportunity_id": "openings:plaintiff",
+    "tool": "submit_decision",
+    "arguments": {
+      "kind": "tool",
+      "tool_name": "record_opening_statement",
+      "payload": {
+        "text": "Plaintiff opening.",
+        "offered_evidence": [],
+        "technical_reports": []
+      }
+    }
+  }'
+```
+
+During arguments and rebuttals, the script also called `get_case` and `list_evidence` before filing.  The accepted lawyer filings produced eight successful `submit_decision` responses.  The observer responses recorded the active role, phase, deadline, and attempts for each lawyer turn.

@@ -46,23 +46,14 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	commonRoot := fs.String("common-root", defaultCommonRoot(), "Path to the sibling shared common directory")
 	legacyCommonRoot := fs.String("agentcourt-root", "", "Deprecated alias for --common-root")
 	councilPool := fs.String("council-pool", "", "Council model/persona pool file. Default: <common-root>/data/personas/pool.csv")
-	attorneyModel := fs.String("attorney-model", runner.DefaultAttorneyModel, "Local Pi/xproxy attorney model id, such as openai://gpt-5 or openai://gpt-5?tools=search")
-	plaintiffAttorneyModel := fs.String("plaintiff-attorney-model", "", "Plaintiff local Pi/xproxy attorney model override")
-	defendantAttorneyModel := fs.String("defendant-attorney-model", "", "Defendant local Pi/xproxy attorney model override")
-	acpCommand := fs.String("acp-command", "", "ACP command. Default: <common-root>/pi-container/acp-podman.sh")
-	plaintiffACPCommand := fs.String("plaintiff-acp-command", "", "Plaintiff ACP command override")
-	defendantACPCommand := fs.String("defendant-acp-command", "", "Defendant ACP command override")
-	plaintiffACPEndpoint := fs.String("plaintiff-acp-endpoint", "", "Plaintiff ACP endpoint override. Supported transport: tcp://host:port")
-	defendantACPEndpoint := fs.String("defendant-acp-endpoint", "", "Defendant ACP endpoint override. Supported transport: tcp://host:port")
-	plaintiffACPSessionCwd := fs.String("plaintiff-acp-session-cwd", "", "Plaintiff ACP session cwd override")
-	defendantACPSessionCwd := fs.String("defendant-acp-session-cwd", "", "Defendant ACP session cwd override")
+	lawyerAPIAddr := fs.String("lawyerapi-addr", "127.0.0.1:0", "Lawyer API listen address")
 	councilBackend := fs.String("council-backend", "direct", "Council backend: direct or pi. pi runs jurors as read-only Pi ACP agents")
-	councilACPCommand := fs.String("council-acp-command", "", "Council ACP command override for --council-backend=pi. Default: --acp-command")
+	councilACPCommand := fs.String("council-acp-command", "", "Council ACP command override for --council-backend=pi. Default: <common-root>/pi-container/acp-podman.sh")
 	councilACPSessionCwd := fs.String("council-acp-session-cwd", "", "Council ACP session cwd override for --council-backend=pi")
 	xproxyConfig := fs.String("xproxy-config", "", "xproxy config path. Default: <common-root>/etc/xproxy.json")
 	xproxyPort := fs.Int("xproxy-port", 18459, "xproxy port")
 	timeoutSeconds := fs.Int("timeout-seconds", 0, "Override runtime council LLM timeout in seconds")
-	acpTimeoutSeconds := fs.Int("acp-timeout-seconds", 0, "Override runtime attorney ACP timeout in seconds")
+	lawyerTimeoutSeconds := fs.Int("lawyer-timeout-seconds", 0, "Override runtime lawyer turn timeout in seconds")
 	maxResponseBytes := fs.Int("max-response-bytes", 0, "Override runtime max parsed response bytes")
 	invalidAttemptLimit := fs.Int("invalid-attempt-limit", 0, "Override runtime invalid-attempt limit")
 	enginePath := fs.String("engine", defaultEnginePath(), "Lean engine binary")
@@ -133,8 +124,8 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	if *timeoutSeconds > 0 {
 		runtimeLimits.CouncilLLMTimeoutSeconds = *timeoutSeconds
 	}
-	if *acpTimeoutSeconds > 0 {
-		runtimeLimits.AttorneyACPTimeoutSeconds = *acpTimeoutSeconds
+	if *lawyerTimeoutSeconds > 0 {
+		runtimeLimits.LawyerTurnTimeoutSeconds = *lawyerTimeoutSeconds
 	}
 	if *maxResponseBytes > 0 {
 		runtimeLimits.MaxResponseBytes = *maxResponseBytes
@@ -148,32 +139,6 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err := runner.ValidateCouncilBackend(*councilBackend); err != nil {
 		return reportCaseError(stdout, err)
 	}
-	effectiveAttorneyModel := strings.TrimSpace(*attorneyModel)
-	if _, err := runner.ParseAttorneyModelForCLI(effectiveAttorneyModel); err != nil {
-		return reportCaseError(stdout, err)
-	}
-	if strings.TrimSpace(*plaintiffAttorneyModel) != "" && strings.TrimSpace(*plaintiffACPEndpoint) != "" {
-		return reportCaseError(stdout, fmt.Errorf("plaintiff attorney model cannot be set with --plaintiff-acp-endpoint; the remote ACP attorney owns model selection"))
-	}
-	if strings.TrimSpace(*defendantAttorneyModel) != "" && strings.TrimSpace(*defendantACPEndpoint) != "" {
-		return reportCaseError(stdout, fmt.Errorf("defendant attorney model cannot be set with --defendant-acp-endpoint; the remote ACP attorney owns model selection"))
-	}
-	if strings.TrimSpace(*plaintiffAttorneyModel) != "" {
-		if _, err := runner.ParseAttorneyModelForCLI(strings.TrimSpace(*plaintiffAttorneyModel)); err != nil {
-			return reportCaseError(stdout, err)
-		}
-	}
-	if strings.TrimSpace(*defendantAttorneyModel) != "" {
-		if _, err := runner.ParseAttorneyModelForCLI(strings.TrimSpace(*defendantAttorneyModel)); err != nil {
-			return reportCaseError(stdout, err)
-		}
-	}
-	if strings.TrimSpace(*plaintiffACPCommand) != "" && strings.TrimSpace(*plaintiffACPEndpoint) != "" {
-		return reportCaseError(stdout, fmt.Errorf("plaintiff ACP config cannot set both --plaintiff-acp-command and --plaintiff-acp-endpoint"))
-	}
-	if strings.TrimSpace(*defendantACPCommand) != "" && strings.TrimSpace(*defendantACPEndpoint) != "" {
-		return reportCaseError(stdout, fmt.Errorf("defendant ACP config cannot set both --defendant-acp-command and --defendant-acp-endpoint"))
-	}
 	councilPoolPath := strings.TrimSpace(*councilPool)
 	if councilPoolPath == "" {
 		councilPoolPath = filepath.Join(commonRootResolved, "data", "personas", "pool.csv")
@@ -182,9 +147,9 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	if xproxyConfigPath == "" {
 		xproxyConfigPath = filepath.Join(commonRootResolved, "etc", "xproxy.json")
 	}
-	acpCommandPath := strings.TrimSpace(*acpCommand)
-	if acpCommandPath == "" {
-		acpCommandPath = filepath.Join(commonRootResolved, "pi-container", "acp-podman.sh")
+	councilACPCommandPath := strings.TrimSpace(*councilACPCommand)
+	if runner.NormalizeCouncilBackend(*councilBackend) == "pi" && councilACPCommandPath == "" {
+		councilACPCommandPath = filepath.Join(commonRootResolved, "pi-container", "acp-podman.sh")
 	}
 	effectiveRunID := strings.TrimSpace(*runID)
 	if effectiveRunID == "" {
@@ -201,33 +166,20 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		OutputDir:                  *outDir,
 		CommonRoot:                 commonRootResolved,
 		CouncilPoolPath:            councilPoolPath,
-		AttorneyModel:              effectiveAttorneyModel,
 		AttorneyInstructionsPath:   resolvedAttorneyInstructionsPath,
 		PromptDir:                  resolvedPromptDir,
 		AttorneyCommonPromptPath:   resolvedAttorneyCommonPrompt,
 		AttorneyArgumentPromptPath: resolvedAttorneyArgumentPrompt,
 		AttorneyRebuttalPromptPath: resolvedAttorneyRebuttalPrompt,
-		PlaintiffAttorney: runner.AttorneyRoleConfig{
-			Model:       strings.TrimSpace(*plaintiffAttorneyModel),
-			ACPCommand:  strings.TrimSpace(*plaintiffACPCommand),
-			ACPEndpoint: strings.TrimSpace(*plaintiffACPEndpoint),
-			SessionCwd:  strings.TrimSpace(*plaintiffACPSessionCwd),
-		},
-		DefendantAttorney: runner.AttorneyRoleConfig{
-			Model:       strings.TrimSpace(*defendantAttorneyModel),
-			ACPCommand:  strings.TrimSpace(*defendantACPCommand),
-			ACPEndpoint: strings.TrimSpace(*defendantACPEndpoint),
-			SessionCwd:  strings.TrimSpace(*defendantACPSessionCwd),
-		},
-		Policy:               policy,
-		Runtime:              runtimeLimits,
-		XProxyConfigPath:     xproxyConfigPath,
-		XProxyPort:           *xproxyPort,
-		ACPCommand:           acpCommandPath,
-		CouncilBackend:       runner.NormalizeCouncilBackend(*councilBackend),
-		CouncilACPCommand:    strings.TrimSpace(*councilACPCommand),
-		CouncilACPSessionCwd: strings.TrimSpace(*councilACPSessionCwd),
-		Engine:               lean.New([]string{*enginePath}),
+		LawyerAPIAddr:              strings.TrimSpace(*lawyerAPIAddr),
+		Policy:                     policy,
+		Runtime:                    runtimeLimits,
+		XProxyConfigPath:           xproxyConfigPath,
+		XProxyPort:                 *xproxyPort,
+		CouncilBackend:             runner.NormalizeCouncilBackend(*councilBackend),
+		CouncilACPCommand:          councilACPCommandPath,
+		CouncilACPSessionCwd:       strings.TrimSpace(*councilACPSessionCwd),
+		Engine:                     lean.New([]string{*enginePath}),
 	}
 	result, err := runner.Run(context.Background(), cfg, complaint)
 	if err != nil {

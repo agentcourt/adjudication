@@ -34,28 +34,16 @@ type Policy struct {
 }
 
 type RuntimeLimits struct {
-	CouncilLLMTimeoutSeconds  int   `json:"council_llm_timeout_seconds"`
-	AttorneyACPTimeoutSeconds int   `json:"attorney_acp_timeout_seconds"`
-	MaxResponseBytes          int   `json:"max_response_bytes"`
-	InvalidAttemptLimit       int   `json:"invalid_attempt_limit"`
-	CouncilMaxOutputTokens    int64 `json:"council_max_output_tokens"`
-}
-
-type AttorneyRoleConfig struct {
-	Model       string
-	ACPCommand  string
-	ACPEndpoint string
-	SessionCwd  string
+	CouncilLLMTimeoutSeconds int   `json:"council_llm_timeout_seconds"`
+	LawyerTurnTimeoutSeconds int   `json:"lawyer_turn_timeout_seconds"`
+	MaxResponseBytes         int   `json:"max_response_bytes"`
+	InvalidAttemptLimit      int   `json:"invalid_attempt_limit"`
+	CouncilMaxOutputTokens   int64 `json:"council_max_output_tokens"`
 }
 
 type AttorneyRunInfo struct {
-	Role          string `json:"role"`
-	Model         string `json:"model,omitempty"`
-	SearchEnabled *bool  `json:"search_enabled,omitempty"`
-	ACPTransport  string `json:"acp_transport"`
-	ACPCommand    string `json:"acp_command,omitempty"`
-	ACPEndpoint   string `json:"acp_endpoint,omitempty"`
-	SessionCwd    string `json:"-"`
+	Role      string `json:"role"`
+	Interface string `json:"interface"`
 }
 
 type Config struct {
@@ -65,19 +53,16 @@ type Config struct {
 	OutputDir                  string
 	CommonRoot                 string
 	CouncilPoolPath            string
-	AttorneyModel              string
 	AttorneyInstructionsPath   string
 	PromptDir                  string
 	AttorneyCommonPromptPath   string
 	AttorneyArgumentPromptPath string
 	AttorneyRebuttalPromptPath string
-	PlaintiffAttorney          AttorneyRoleConfig
-	DefendantAttorney          AttorneyRoleConfig
+	LawyerAPIAddr              string
 	Policy                     Policy
 	Runtime                    RuntimeLimits
 	XProxyConfigPath           string
 	XProxyPort                 int
-	ACPCommand                 string
 	ACPArgs                    []string
 	ACPEnv                     []string
 	CouncilBackend             string
@@ -219,6 +204,7 @@ type runContext struct {
 	council           []CouncilSeat
 	attorneys         map[string]AttorneyRunInfo
 	acpSessions       map[string]*acpPersistentSession
+	lawyerAPI         *lawyerAPIServer
 	workProductDirs   map[string]string
 	events            []Event
 	turn              int

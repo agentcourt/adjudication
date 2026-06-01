@@ -922,141 +922,55 @@ func TestBuildAttorneyPromptStatesCouncilForum(t *testing.T) {
 	if !strings.Contains(prompt, "Target length for the first submission: 3750 characters or less.") {
 		t.Fatalf("prompt did not state the opening target length:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "Native web search through the model is available.") {
-		t.Fatalf("prompt did not state search availability:\n%s", prompt)
+	if !strings.Contains(prompt, "Use the Lawyer API as role plaintiff.") {
+		t.Fatalf("prompt did not state the Lawyer API role:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Opportunity id: openings:plaintiff") || !strings.Contains(prompt, `opportunity_id: "openings:plaintiff"`) {
+		t.Fatalf("prompt did not state the current opportunity id:\n%s", prompt)
 	}
 	if strings.Contains(prompt, "Visible case files:") {
 		t.Fatalf("opening prompt should not list visible case files:\n%s", prompt)
 	}
 }
 
-func TestBuildAttorneyPromptStatesWhenSearchIsUnavailable(t *testing.T) {
-	origPromptBaseDir := promptBaseDir
-	promptBaseDir = filepath.Join("..", "..", "prompts")
-	defer func() { promptBaseDir = origPromptBaseDir }()
-	rc := &runContext{
-		cfg: Config{
-			Policy:        DefaultPolicy(),
-			AttorneyModel: "openai://gpt-5",
-		},
-		complaint: spec.Complaint{
-			Proposition: "P",
-		},
-		state: map[string]any{
-			"policy": map[string]any{
-				"evidence_standard": "preponderance",
-			},
-			"case": map[string]any{
-				"phase":             "openings",
-				"openings":          []map[string]any{},
-				"arguments":         []map[string]any{},
-				"rebuttals":         []map[string]any{},
-				"surrebuttals":      []map[string]any{},
-				"closings":          []map[string]any{},
-				"offered_evidence":  []map[string]any{},
-				"technical_reports": []map[string]any{},
-			},
-		},
-	}
-	prompt, err := rc.buildAttorneyPrompt(Opportunity{
-		ID:           "openings:plaintiff",
-		Role:         "plaintiff",
-		Phase:        "openings",
-		Objective:    "plaintiff opening statement",
-		AllowedTools: []string{"record_opening_statement"},
-	})
-	if err != nil {
-		t.Fatalf("buildAttorneyPrompt returned error: %v", err)
-	}
-	if !strings.Contains(prompt, "Native web search through the model is not available.") {
-		t.Fatalf("prompt did not state search unavailability:\n%s", prompt)
-	}
-}
-
-func TestBuildAttorneyPromptIncludesWorkProductGuidance(t *testing.T) {
-	origPromptBaseDir := promptBaseDir
-	promptBaseDir = filepath.Join("..", "..", "prompts")
-	defer func() { promptBaseDir = origPromptBaseDir }()
-	rc := &runContext{
-		cfg: Config{
-			Policy:     DefaultPolicy(),
-			ACPCommand: "/tmp/acp-podman.sh",
-		},
-		complaint: spec.Complaint{
-			Proposition: "P",
-		},
-		state: map[string]any{
-			"policy": map[string]any{
-				"evidence_standard": "preponderance",
-			},
-			"case": map[string]any{
-				"phase":             "arguments",
-				"openings":          []map[string]any{},
-				"arguments":         []map[string]any{},
-				"rebuttals":         []map[string]any{},
-				"surrebuttals":      []map[string]any{},
-				"closings":          []map[string]any{},
-				"offered_evidence":  []map[string]any{},
-				"technical_reports": []map[string]any{},
-			},
-		},
-	}
-	prompt, err := rc.buildAttorneyPrompt(Opportunity{
-		ID:           "arguments:plaintiff",
-		Role:         "plaintiff",
-		Phase:        "arguments",
-		Objective:    "plaintiff merits argument",
-		AllowedTools: []string{"submit_argument"},
-	})
-	if err != nil {
-		t.Fatalf("buildAttorneyPrompt returned error: %v", err)
-	}
-	if !strings.Contains(prompt, "Private work product: Use `/home/user/work-product/` for internal notes, timelines, source leads, adverse facts, unresolved questions, and draft analyses.") {
-		t.Fatalf("prompt did not include work-product guidance:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "This directory is not part of the record unless you later turn material from it into an exhibit or technical report.") {
-		t.Fatalf("prompt did not distinguish work product from the record:\n%s", prompt)
-	}
-}
-
-func TestACPToolSpecsArePhaseSpecific(t *testing.T) {
-	openingSpecs := acpToolSpecs(Opportunity{Phase: "openings"}, true)
+func TestLawyerToolSpecsArePhaseSpecific(t *testing.T) {
+	openingSpecs := lawyerToolSpecs(Opportunity{Phase: "openings", AllowedTools: []string{"record_opening_statement"}})
 	openingTools := make([]string, 0, len(openingSpecs))
 	for _, spec := range openingSpecs {
-		openingTools = append(openingTools, mapString(spec["toolName"]))
+		openingTools = append(openingTools, mapString(spec["name"]))
 	}
-	if slices.Contains(openingTools, "aar_list_evidence") || slices.Contains(openingTools, "aar_read_evidence_range") || slices.Contains(openingTools, "aar_begin_evidence_upload") {
+	if slices.Contains(openingTools, "list_evidence") || slices.Contains(openingTools, "read_evidence_range") || slices.Contains(openingTools, "begin_evidence_upload") {
 		t.Fatalf("opening tools exposed evidence access: %#v", openingTools)
 	}
-	argumentSpecs := acpToolSpecs(Opportunity{Phase: "arguments"}, true)
+	argumentSpecs := lawyerToolSpecs(Opportunity{Phase: "arguments", AllowedTools: []string{"submit_argument"}})
 	argumentTools := make([]string, 0, len(argumentSpecs))
 	for _, spec := range argumentSpecs {
-		argumentTools = append(argumentTools, mapString(spec["toolName"]))
+		argumentTools = append(argumentTools, mapString(spec["name"]))
 	}
-	if !slices.Contains(argumentTools, "aar_list_evidence") || !slices.Contains(argumentTools, "aar_stat_evidence") || !slices.Contains(argumentTools, "aar_read_evidence_range") || !slices.Contains(argumentTools, "aar_materialize_evidence") || !slices.Contains(argumentTools, "aar_begin_evidence_upload") || !slices.Contains(argumentTools, "aar_write_evidence_chunk") || !slices.Contains(argumentTools, "aar_commit_evidence_upload") || !slices.Contains(argumentTools, "aar_submit_evidence") {
+	if !slices.Contains(argumentTools, "list_evidence") || !slices.Contains(argumentTools, "stat_evidence") || !slices.Contains(argumentTools, "read_evidence_range") || !slices.Contains(argumentTools, "begin_evidence_upload") || !slices.Contains(argumentTools, "write_evidence_chunk") || !slices.Contains(argumentTools, "commit_evidence_upload") || !slices.Contains(argumentTools, "submit_evidence") {
 		t.Fatalf("argument tools did not expose evidence access: %#v", argumentTools)
 	}
-	rebuttalSpecs := acpToolSpecs(Opportunity{Phase: "rebuttals"}, true)
+	rebuttalSpecs := lawyerToolSpecs(Opportunity{Phase: "rebuttals", AllowedTools: []string{"submit_rebuttal"}})
 	rebuttalTools := make([]string, 0, len(rebuttalSpecs))
 	for _, spec := range rebuttalSpecs {
-		rebuttalTools = append(rebuttalTools, mapString(spec["toolName"]))
+		rebuttalTools = append(rebuttalTools, mapString(spec["name"]))
 	}
-	if !slices.Contains(rebuttalTools, "aar_list_evidence") || !slices.Contains(rebuttalTools, "aar_stat_evidence") || !slices.Contains(rebuttalTools, "aar_read_evidence_range") || !slices.Contains(rebuttalTools, "aar_materialize_evidence") || !slices.Contains(rebuttalTools, "aar_begin_evidence_upload") || !slices.Contains(rebuttalTools, "aar_write_evidence_chunk") || !slices.Contains(rebuttalTools, "aar_commit_evidence_upload") || !slices.Contains(rebuttalTools, "aar_submit_evidence") {
+	if !slices.Contains(rebuttalTools, "list_evidence") || !slices.Contains(rebuttalTools, "stat_evidence") || !slices.Contains(rebuttalTools, "read_evidence_range") || !slices.Contains(rebuttalTools, "begin_evidence_upload") || !slices.Contains(rebuttalTools, "write_evidence_chunk") || !slices.Contains(rebuttalTools, "commit_evidence_upload") || !slices.Contains(rebuttalTools, "submit_evidence") {
 		t.Fatalf("rebuttal tools did not expose evidence access: %#v", rebuttalTools)
 	}
 	var submitSpec map[string]any
 	for _, spec := range argumentSpecs {
-		if mapString(spec["toolName"]) == "aar_submit_decision" {
+		if mapString(spec["name"]) == "submit_decision" {
 			submitSpec = spec
 			break
 		}
 	}
 	if submitSpec == nil {
-		t.Fatalf("missing aar_submit_decision spec")
+		t.Fatalf("missing submit_decision spec")
 	}
-	properties := mapAny(mapAny(submitSpec["parameters"])["properties"])
+	properties := mapAny(mapAny(submitSpec["input_schema"])["properties"])
 	if _, ok := properties["reason"]; ok {
-		t.Fatalf("aar_submit_decision should not advertise a reason field: %#v", properties)
+		t.Fatalf("submit_decision should not advertise a reason field: %#v", properties)
 	}
 	payload := mapAny(properties["payload"])
 	if mapString(payload["type"]) != "object" {
@@ -1085,47 +999,25 @@ func TestACPToolSpecsArePhaseSpecific(t *testing.T) {
 	if _, ok := reportItemProps["summary"]; !ok {
 		t.Fatalf("technical_reports items missing summary: %#v", reportItemProps)
 	}
-}
-
-func TestAttorneyPromptMetaUsesOpportunityToolSpecs(t *testing.T) {
-	openingMeta := attorneyPromptMeta(Opportunity{Phase: "openings", AllowedTools: []string{"record_opening_statement"}}, true)
-	openingTools := make([]string, 0)
-	var openingSubmitSpec map[string]any
-	for _, spec := range listOfMaps(openingMeta["clientTools"]) {
-		openingTools = append(openingTools, mapString(spec["toolName"]))
-		if mapString(spec["toolName"]) == "aar_submit_decision" {
-			openingSubmitSpec = spec
-		}
-	}
-	if !slices.Contains(openingTools, "aar_submit_decision") {
-		t.Fatalf("opening metadata missing aar_submit_decision: %#v", openingTools)
-	}
-	if slices.Contains(openingTools, "aar_submit_evidence") || slices.Contains(openingTools, "aar_read_evidence_range") {
-		t.Fatalf("opening metadata exposed evidence tools: %#v", openingTools)
-	}
-	openingEnum, _ := mapAny(mapAny(mapAny(openingSubmitSpec["parameters"])["properties"])["tool_name"])["enum"].([]string)
+	openingSubmitSpec := findHTTPToolSpec(openingSpecs, "submit_decision")
+	openingEnum, _ := mapAny(mapAny(openingSubmitSpec["input_schema"])["properties"])["tool_name"].(map[string]any)["enum"].([]string)
 	if len(openingEnum) != 1 || openingEnum[0] != "record_opening_statement" {
 		t.Fatalf("opening submit_decision enum = %#v, want record_opening_statement only", openingEnum)
 	}
-
-	argumentMeta := attorneyPromptMeta(Opportunity{Phase: "arguments", AllowedTools: []string{"submit_argument"}}, true)
-	argumentTools := make([]string, 0)
-	var argumentSubmitSpec map[string]any
-	for _, spec := range listOfMaps(argumentMeta["clientTools"]) {
-		argumentTools = append(argumentTools, mapString(spec["toolName"]))
-		if mapString(spec["toolName"]) == "aar_submit_decision" {
-			argumentSubmitSpec = spec
-		}
-	}
-	for _, want := range []string{"aar_get_case", "aar_read_evidence_range", "aar_submit_evidence", "aar_submit_decision"} {
-		if !slices.Contains(argumentTools, want) {
-			t.Fatalf("argument metadata missing %s: %#v", want, argumentTools)
-		}
-	}
-	argumentEnum, _ := mapAny(mapAny(mapAny(argumentSubmitSpec["parameters"])["properties"])["tool_name"])["enum"].([]string)
+	argumentSubmitSpec := findHTTPToolSpec(argumentSpecs, "submit_decision")
+	argumentEnum, _ := mapAny(mapAny(argumentSubmitSpec["input_schema"])["properties"])["tool_name"].(map[string]any)["enum"].([]string)
 	if len(argumentEnum) != 1 || argumentEnum[0] != "submit_argument" {
 		t.Fatalf("argument submit_decision enum = %#v, want submit_argument only", argumentEnum)
 	}
+}
+
+func findHTTPToolSpec(specs []map[string]any, name string) map[string]any {
+	for _, spec := range specs {
+		if mapString(spec["name"]) == name {
+			return spec
+		}
+	}
+	return nil
 }
 
 func TestJurorACPToolSpecsAreReadOnly(t *testing.T) {
@@ -1276,13 +1168,13 @@ func TestBuildAttorneyPromptConstrainsArgumentExperiments(t *testing.T) {
 	if !strings.Contains(prompt, "Technical reports: at most 3 in this filing. This side has used 0 of 4 total, with 4 left.") {
 		t.Fatalf("argument prompt did not state report limits:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "submit its content and provenance with aar_submit_evidence") {
+	if !strings.Contains(prompt, "submit its content and provenance with submit_evidence") {
 		t.Fatalf("argument prompt did not require outside source material to enter as submitted evidence:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "materialize the needed evidence into the workspace first") {
-		t.Fatalf("argument prompt did not instruct counsel to materialize exact file bytes:\n%s", prompt)
+	if !strings.Contains(prompt, "Use list_evidence, stat_evidence, and read_evidence_range when exact evidence bytes matter.") {
+		t.Fatalf("argument prompt did not instruct counsel to use evidence read tools:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "Use only visible case evidence_id values in offered_evidence. Submit new source material first with aar_submit_evidence") {
+	if !strings.Contains(prompt, "Use only visible case evidence_id values in offered_evidence. Submit new source material first with submit_evidence") {
 		t.Fatalf("argument prompt did not restrict offered_evidence to visible evidence ids:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "Use technical_reports for attorney analysis or synthesized work product") {
@@ -1296,8 +1188,7 @@ func TestBuildAttorneyPromptConstrainsArgumentExperimentsWithoutSearch(t *testin
 	defer func() { promptBaseDir = origPromptBaseDir }()
 	rc := &runContext{
 		cfg: Config{
-			Policy:        DefaultPolicy(),
-			AttorneyModel: "openai://gpt-5",
+			Policy: DefaultPolicy(),
 		},
 		complaint: spec.Complaint{
 			Proposition: "P",
@@ -1329,8 +1220,8 @@ func TestBuildAttorneyPromptConstrainsArgumentExperimentsWithoutSearch(t *testin
 	if err != nil {
 		t.Fatalf("buildAttorneyPrompt returned error: %v", err)
 	}
-	if !strings.Contains(prompt, "Native web search through the model is not available.") {
-		t.Fatalf("argument prompt did not state search unavailability:\n%s", prompt)
+	if !strings.Contains(prompt, "Use the Lawyer API as role plaintiff.") {
+		t.Fatalf("argument prompt did not state the Lawyer API role:\n%s", prompt)
 	}
 }
 
@@ -1390,13 +1281,13 @@ func TestBuildAttorneyPromptAllowsRebuttalSupplementalMaterials(t *testing.T) {
 	if !strings.Contains(prompt, "\"offered_evidence\"") || !strings.Contains(prompt, "\"technical_reports\"") {
 		t.Fatalf("rebuttal example payload did not show supplemental materials:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "materialize the needed evidence into the workspace first") {
-		t.Fatalf("rebuttal prompt did not instruct counsel to materialize exact file bytes:\n%s", prompt)
+	if !strings.Contains(prompt, "Use list_evidence, stat_evidence, and read_evidence_range when exact evidence bytes matter.") {
+		t.Fatalf("rebuttal prompt did not instruct counsel to use evidence read tools:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "Use offered_evidence only for visible evidence, by evidence_id.") {
 		t.Fatalf("rebuttal prompt did not restrict offered_evidence to visible evidence ids:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "submit its content and provenance with aar_submit_evidence") {
+	if !strings.Contains(prompt, "submit its content and provenance with submit_evidence") {
 		t.Fatalf("rebuttal prompt did not require outside source material to enter as submitted evidence:\n%s", prompt)
 	}
 }
@@ -1407,8 +1298,7 @@ func TestBuildAttorneyPromptConstrainsRebuttalWithoutSearch(t *testing.T) {
 	defer func() { promptBaseDir = origPromptBaseDir }()
 	rc := &runContext{
 		cfg: Config{
-			Policy:        DefaultPolicy(),
-			AttorneyModel: "openai://gpt-5",
+			Policy: DefaultPolicy(),
 		},
 		complaint: spec.Complaint{
 			Proposition: "P",
@@ -1439,8 +1329,8 @@ func TestBuildAttorneyPromptConstrainsRebuttalWithoutSearch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildAttorneyPrompt returned error: %v", err)
 	}
-	if !strings.Contains(prompt, "Native web search through the model is not available.") {
-		t.Fatalf("rebuttal prompt did not state search unavailability:\n%s", prompt)
+	if !strings.Contains(prompt, "Use the Lawyer API as role plaintiff.") {
+		t.Fatalf("rebuttal prompt did not state the Lawyer API role:\n%s", prompt)
 	}
 }
 
@@ -1487,24 +1377,6 @@ func TestBuildCouncilPromptIncludesPersonaAndRecord(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "Call submit_council_vote with vote=demonstrated or vote=not_demonstrated.") {
 		t.Fatalf("prompt did not include council instruction:\n%s", prompt)
-	}
-}
-
-func TestEnsureACPSessionReusesExistingSession(t *testing.T) {
-	t.Parallel()
-
-	existing := &acpPersistentSession{sessionPath: "/tmp/existing"}
-	rc := &runContext{
-		acpSessions: map[string]*acpPersistentSession{
-			"plaintiff": existing,
-		},
-	}
-	session, err := rc.ensureACPSession(context.Background(), "plaintiff")
-	if err != nil {
-		t.Fatalf("ensureACPSession returned error: %v", err)
-	}
-	if session != existing {
-		t.Fatalf("ensureACPSession returned %p, want existing %p", session, existing)
 	}
 }
 

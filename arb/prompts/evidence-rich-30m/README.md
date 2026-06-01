@@ -1,14 +1,13 @@
 # Evidence-rich attorney prompts
 
-Alternative attorney prompts for open-record, fact-intensive arbitrations with longer attorney time limits.
+Alternative attorney prompts for open-record, fact-intensive arbitrations with longer lawyer time limits.
 
 Use with explicit longer limits, for example:
 
 ```bash
-export AAR_OPENCLAW_ATTORNEY_TIMEOUT_SECONDS=1800
 .bin/aar case \
   --prompt-dir prompts/evidence-rich-30m \
-  --acp-timeout-seconds 1800 \
+  --lawyer-timeout-seconds 1800 \
   ...
 ```
 
@@ -26,7 +25,7 @@ A supervised run may provide a private work root containing files such as:
 <private-work-root>/<role>/answers.md
 ```
 
-The attorney instructions treat those files as private work product outside the AAR record. Attorneys may use them to plan, ask the supervisor for suggestions, record search paths, and preserve self-audits. They must not submit, cite, quote at length, offer, or attach those files in the AAR record. Public source material discovered through the private work area must still be submitted through `aar_submit_evidence` before it can support a filing.
+The attorney instructions treat those files as private work product outside the AAR record. Attorneys may use them to plan, ask the supervisor for suggestions, record search paths, and preserve self-audits. They must not submit, cite, quote at length, offer, or attach those files in the AAR record. Public source material discovered through the private work area must still be submitted through `submit_evidence` before it can support a filing.
 
 A supervisor who monitors the queue should answer by question id, keep answers bounded and evidence-oriented, avoid private auth or account material, and remind attorneys to preserve public source artifacts before relying on them.
 

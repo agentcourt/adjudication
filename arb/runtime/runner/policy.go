@@ -39,11 +39,11 @@ func DefaultPolicy() Policy {
 
 func DefaultRuntimeLimits() RuntimeLimits {
 	return RuntimeLimits{
-		CouncilLLMTimeoutSeconds:  240,
-		AttorneyACPTimeoutSeconds: 900,
-		MaxResponseBytes:          128 * 1024,
-		InvalidAttemptLimit:       3,
-		CouncilMaxOutputTokens:    1200,
+		CouncilLLMTimeoutSeconds: 240,
+		LawyerTurnTimeoutSeconds: 900,
+		MaxResponseBytes:         128 * 1024,
+		InvalidAttemptLimit:      3,
+		CouncilMaxOutputTokens:   1200,
 	}
 }
 
@@ -154,8 +154,8 @@ func ValidateRuntimeLimits(limits RuntimeLimits) error {
 	switch {
 	case limits.CouncilLLMTimeoutSeconds <= 0:
 		return fmt.Errorf("runtime.council_llm_timeout_seconds must be positive")
-	case limits.AttorneyACPTimeoutSeconds <= 0:
-		return fmt.Errorf("runtime.attorney_acp_timeout_seconds must be positive")
+	case limits.LawyerTurnTimeoutSeconds <= 0:
+		return fmt.Errorf("runtime.lawyer_turn_timeout_seconds must be positive")
 	case limits.MaxResponseBytes <= 0:
 		return fmt.Errorf("runtime.max_response_bytes must be positive")
 	case limits.InvalidAttemptLimit <= 0:
@@ -179,8 +179,8 @@ func (limits RuntimeLimits) CouncilRequestTimeout() time.Duration {
 	return 90 * time.Second
 }
 
-func (limits RuntimeLimits) AttorneyACPTimeout() time.Duration {
-	return time.Duration(limits.AttorneyACPTimeoutSeconds) * time.Second
+func (limits RuntimeLimits) LawyerTurnTimeout() time.Duration {
+	return time.Duration(limits.LawyerTurnTimeoutSeconds) * time.Second
 }
 
 func (policy Policy) StateMap() map[string]any {

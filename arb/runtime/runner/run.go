@@ -99,7 +99,18 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 	if err := rc.initializeEvidenceRegistry(); err != nil {
 		return Result{}, err
 	}
+	lawyerAPI, err := startLawyerAPIServer(rc)
+	if err != nil {
+		return Result{}, err
+	}
+	rc.lawyerAPI = lawyerAPI
+	fmt.Fprintf(os.Stderr, "lawyerapi listening on %s\n", lawyerAPI.baseURL)
 	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if closeErr := rc.lawyerAPI.Close(shutdownCtx); closeErr != nil {
+			err = errors.Join(err, closeErr)
+		}
 		if closeErr := rc.closeACPSessions(); closeErr != nil {
 			err = errors.Join(err, closeErr)
 		}
