@@ -999,9 +999,7 @@ func acpToolSpecs(opportunity Opportunity, includeWorkspaceWriter bool) []map[st
 
 func attorneyPromptMeta(opportunity Opportunity, includeWorkspaceWriter bool) map[string]any {
 	return map[string]any{
-		"agentcourt": map[string]any{
-			"clientTools": acpToolSpecs(opportunity, includeWorkspaceWriter),
-		},
+		"clientTools": acpToolSpecs(opportunity, includeWorkspaceWriter),
 	}
 }
 

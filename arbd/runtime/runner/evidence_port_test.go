@@ -42,7 +42,7 @@ func TestACPToolSpecsExposeEvidenceOnlyInArgumentPhases(t *testing.T) {
 }
 
 func TestAttorneyPromptMetaUsesOpportunityToolSpecs(t *testing.T) {
-	openingSpecs := listOfMaps(mapAny(attorneyPromptMeta(Opportunity{Phase: "openings", AllowedTools: []string{"record_opening_statement"}}, true)["agentcourt"])["clientTools"])
+	openingSpecs := listOfMaps(attorneyPromptMeta(Opportunity{Phase: "openings", AllowedTools: []string{"record_opening_statement"}}, true)["clientTools"])
 	openingTools := toolNames(openingSpecs)
 	for _, forbidden := range []string{"aar_list_evidence", "aar_read_evidence_range", "aar_submit_evidence"} {
 		if slices.Contains(openingTools, forbidden) {
@@ -57,7 +57,7 @@ func TestAttorneyPromptMetaUsesOpportunityToolSpecs(t *testing.T) {
 		t.Fatalf("opening submit_decision enum = %#v, want record_opening_statement only", openingEnum)
 	}
 
-	argumentSpecs := listOfMaps(mapAny(attorneyPromptMeta(Opportunity{Phase: "arguments", AllowedTools: []string{"submit_argument"}}, true)["agentcourt"])["clientTools"])
+	argumentSpecs := listOfMaps(attorneyPromptMeta(Opportunity{Phase: "arguments", AllowedTools: []string{"submit_argument"}}, true)["clientTools"])
 	argumentTools := toolNames(argumentSpecs)
 	for _, want := range []string{"aar_get_case", "aar_read_evidence_range", "aar_submit_evidence", "aar_submit_decision"} {
 		if !slices.Contains(argumentTools, want) {

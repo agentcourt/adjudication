@@ -1,5 +1,22 @@
 # Development Notes
 
+## 2026-05-31
+
+### OpenClaw MCP client-tool bridge
+
+Reference: [OpenClaw ACP MCP Bridge](../common/docs/openclaw-acp-mcp-bridge.md), [OpenClaw degree attorney notes](docs/openclaw-attorneys.md)
+
+The current OpenClaw path now uses per-prompt ACP metadata instead of a process-startup environment variable for lawyer client tools.  `attorneyPromptMeta` sends the opportunity tool specs as `_meta.clientTools`, so an ACP server can see the exact tool set for the current opening, argument, rebuttal, surrebuttal, or closing.  The old `PI_ACP_CLIENT_TOOLS` path remains for the Pi wrapper because it still registers extension tools at process startup.
+
+The shared `common/tools/acp-mcp-bridge.mjs` tool is now a direct service.  It accepts AARD prompts over TCP ACP, exposes the active prompt's tools over HTTP MCP, and runs `openclaw agent` against one OpenClaw lawyer session for the bridge process.  The bridge maps only ACP tool specs and MCP calls, leaving AARD filing semantics in the existing ACP client methods.
+
+- [x] Send lawyer client tools in `_meta.clientTools`.
+- [x] Add a direct TCP ACP to HTTP MCP bridge under `common/tools`.
+- [x] Remove the OpenClaw bridge's stdio MCP mode and generic stdio TCP wrapper.
+- [x] Add Node tests for the direct bridge and the stock OpenClaw container MCP SDK path.
+- [x] Preserve one OpenClaw lawyer session per bridge process while updating the MCP tool list per opportunity.
+- [x] Document the stock OpenClaw HTTP MCP configuration path.
+
 ## 2026-05-20
 
 ### OpenClaw degree attorney adapter

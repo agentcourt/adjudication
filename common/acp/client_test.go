@@ -72,9 +72,8 @@ func TestTCPEndpointRoundTrip(t *testing.T) {
 				result = map[string]any{"sessionId": "session-1"}
 			case "session/prompt":
 				meta, _ := params["_meta"].(map[string]any)
-				agentcourt, _ := meta["agentcourt"].(map[string]any)
-				if got := agentcourt["turn"]; got != "argument" {
-					serverDone <- fmt.Errorf("prompt _meta.agentcourt.turn = %#v, want argument", got)
+				if got := meta["turn"]; got != "argument" {
+					serverDone <- fmt.Errorf("prompt _meta.turn = %#v, want argument", got)
 					return
 				}
 				result = map[string]any{"stopReason": "end_turn"}
@@ -124,7 +123,7 @@ func TestTCPEndpointRoundTrip(t *testing.T) {
 	promptResp, err := client.Prompt(context.Background(), PromptRequest{
 		SessionID: "session-1",
 		Prompt:    []TextBlock{{Type: "text", Text: "argue"}},
-		Meta:      map[string]any{"agentcourt": map[string]any{"turn": "argument"}},
+		Meta:      map[string]any{"turn": "argument"},
 	})
 	if err != nil {
 		t.Fatalf("Prompt returned error: %v", err)
