@@ -126,6 +126,9 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client coun
 			continue
 		}
 		rc.state = mapAny(stepResp["state"])
+		if rc.lawyerAPI != nil {
+			rc.lawyerAPI.signalChanged()
+		}
 		eventPayload := map[string]any{
 			"member_id": memberID,
 			"model":     seat.Model,
@@ -204,6 +207,9 @@ func (rc *runContext) removeCouncilMember(opportunity Opportunity, seat CouncilS
 		return fmt.Errorf("remove_council_member rejected: %s", mapString(stepResp["error"]))
 	}
 	rc.state = mapAny(stepResp["state"])
+	if rc.lawyerAPI != nil {
+		rc.lawyerAPI.signalChanged()
+	}
 	return rc.recordEvent("council_member_removed", "system", opportunity.Phase, map[string]any{
 		"member_id": memberID,
 		"model":     seat.Model,

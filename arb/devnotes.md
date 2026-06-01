@@ -14,6 +14,18 @@ The Lawyer API now treats `opportunity_id` as a per-turn guard on plaintiff and 
 
 The lawyer prompt templates now match that API.  They distinguish HTTP tools from legal acts submitted through `submit_decision`, state the current opportunity id, and remove old local-agent wording.  The evidence-rich prompt set received the same structure so `--prompt-dir prompts/evidence-rich-30m` remains aligned with the default templates.
 
+The handbook now gives remote clawyers one procedural and technical reference.  It treats the Lawyer HTTP API as the governing interface and describes MCP as one shared service process with one MCP session per case-role.  The handbook covers phase order, filing rules, evidence custody, turn budgets, observer use, MCP tool mapping, dynamic tool-list behavior, reconnection, and error handling.
+
+`aar-lawyer-mcp` now implements the MCP adapter described in the handbook.  It serves Streamable HTTP at `/mcp`, binds each MCP session from `case_id` and `role_id` query parameters, exposes the current Lawyer API tools through `tools/list`, and forwards `tools/call` requests to `/lawyerapi/v1/do`.  It fetches the live opportunity before every forwarded lawyer tool call, injects the active `opportunity_id`, and returns AAR failures as MCP tool results with structured content.
+
+OpenClaw lawyer onboarding now has a workspace skill at `tools/lawyer-mcp/skills/arb/SKILL.md`.  The skill models the remote-user flow: Joe tells his own OpenClaw to act as plaintiff, defendant, or observer in an AAR case; the claw records the assignment, saves the role-bound MCP server definition, verifies `wait_for_opportunity`, and enters the wait-tool operating loop.  The claw does not need a scheduled Gateway job to discover turns.
+
+The Lawyer HTTP API now has `/lawyerapi/v1/wait`.  It returns the same status shape as `/get`, but it blocks until a role has work, case state changes, or the request timeout expires.  The response includes `wait.version`, so a runner can call the endpoint again with `after_version` and avoid choosing its own sleep interval.
+
+`aar-lawyer-mcp` now exposes `wait_for_opportunity` as an always-available read-only tool.  The adapter maps that tool to `/wait`, caps each call at 30 seconds, and normalizes the result to `state: ready`, `state: waiting`, `state: done`, or `state: error`.  The OpenClaw-facing instructions now tell a clawyer to call `wait_for_opportunity` repeatedly until it receives work, completion, or an error.
+
+`aar-lawyer-mcp` is expected to run as a shared service for many case-role sessions.  Each MCP session stores the binding for `case_id`, `role_id`, and the Lawyer API base URL; it does not own case state.  Idle-session expiry can therefore delete stale MCP session records without changing an arb.  A clawyer that loses a session can initialize a new MCP session with the same URL and recover current status from the Lawyer API.  The adapter now has a default 30-minute idle TTL, a configurable cleanup interval, and `--session-ttl 0` for deployments that want to disable expiry.
+
 - [x] Add the HTTP Lawyer API server to `aar case`.
 - [x] Replace lawyer ACP execution with turn blocking on HTTP tool calls.
 - [x] Remove lawyer model, lawyer ACP command, lawyer ACP endpoint, and bridge CLI flags.
@@ -21,6 +33,11 @@ The lawyer prompt templates now match that API.  They distinguish HTTP tools fro
 - [x] Update prompt text to use HTTP tool names.
 - [x] Require active opportunity ids on lawyer tool calls.
 - [x] Clean up default and evidence-rich lawyer prompt templates.
+- [x] Draft the arbitration handbook for remote clawyers.
+- [x] Add the shared MCP adapter for OpenClaw lawyer sessions.
+- [x] Draft the OpenClaw `arb` skill for self-service clawyer assignment.
+- [x] Add `/wait` and MCP `wait_for_opportunity` for bounded turn waits.
+- [x] Expire idle MCP sessions in the shared adapter.
 
 ## 2026-04-01
 

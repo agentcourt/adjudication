@@ -16,14 +16,24 @@ import (
 
 const lawyerAPIBasePath = "/lawyerapi/v1"
 
+const (
+	defaultLawyerAPIWaitTimeout = 30 * time.Second
+	maxLawyerAPIWaitTimeout     = 5 * time.Minute
+)
+
 type lawyerAPIServer struct {
 	rc      *runContext
 	server  *http.Server
 	ln      net.Listener
 	baseURL string
 
-	mu     sync.Mutex
-	active *lawyerTurn
+	mu      sync.Mutex
+	cond    *sync.Cond
+	version uint64
+	active  *lawyerTurn
+
+	terminal       bool
+	terminalReason string
 }
 
 type lawyerTurn struct {
@@ -62,8 +72,10 @@ func startLawyerAPIServer(rc *runContext) (*lawyerAPIServer, error) {
 		ln:      ln,
 		baseURL: "http://" + listenerHostPort(ln.Addr()) + lawyerAPIBasePath,
 	}
+	api.cond = sync.NewCond(&api.mu)
 	mux := http.NewServeMux()
 	mux.HandleFunc(lawyerAPIBasePath+"/get", api.handleGet)
+	mux.HandleFunc(lawyerAPIBasePath+"/wait", api.handleWait)
 	mux.HandleFunc(lawyerAPIBasePath+"/do", api.handleDo)
 	api.server = &http.Server{Handler: mux}
 	go func() {
@@ -100,6 +112,7 @@ func (api *lawyerAPIServer) startTurn(turn *lawyerTurn) error {
 		return fmt.Errorf("lawyerapi already has an active turn")
 	}
 	api.active = turn
+	api.signalChangedLocked()
 	return nil
 }
 
@@ -108,7 +121,41 @@ func (api *lawyerAPIServer) clearTurn(turn *lawyerTurn) {
 	defer api.mu.Unlock()
 	if api.active == turn {
 		api.active = nil
+		api.signalChangedLocked()
 	}
+}
+
+func (api *lawyerAPIServer) setTerminal(reason string) {
+	if api == nil {
+		return
+	}
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	api.terminal = true
+	api.terminalReason = strings.TrimSpace(reason)
+	api.active = nil
+	api.signalChangedLocked()
+}
+
+func (api *lawyerAPIServer) signalChanged() {
+	if api == nil {
+		return
+	}
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	api.signalChangedLocked()
+}
+
+func (api *lawyerAPIServer) signalChangedLocked() {
+	api.version++
+	api.ensureCondLocked().Broadcast()
+}
+
+func (api *lawyerAPIServer) ensureCondLocked() *sync.Cond {
+	if api.cond == nil {
+		api.cond = sync.NewCond(&api.mu)
+	}
+	return api.cond
 }
 
 func (rc *runContext) executeAttorneyOpportunity(ctx context.Context, _ any, opportunity Opportunity) error {
@@ -161,6 +208,7 @@ func (api *lawyerAPIServer) finishTurnLocked(turn *lawyerTurn, err error) {
 		return
 	}
 	turn.completed = true
+	api.signalChangedLocked()
 	select {
 	case turn.done <- err:
 	default:
@@ -191,14 +239,10 @@ func (api *lawyerAPIServer) handleGet(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	api.mu.Lock()
-	defer api.mu.Unlock()
 	if role == "observer" {
-		response := api.responseBaseLocked(caseID, role)
-		response["status"] = "observing"
-		response["prompt"] = "Observe the arbitration record. Observer tools are read-only."
-		response["tools"] = observerToolSpecs()
-		response["limits"] = observerLimits(api.rc)
+		api.mu.Lock()
+		response := api.statusResponseLocked(caseID, role)
+		api.mu.Unlock()
 		writeLawyerJSON(w, http.StatusOK, response)
 		return
 	}
@@ -211,27 +255,106 @@ func (api *lawyerAPIServer) handleGet(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	response := api.responseBaseLocked(caseID, role)
-	turn := api.active
-	if turn == nil || turn.completed {
-		response["status"] = "waiting"
-		response["prompt"] = ""
-		response["tools"] = []map[string]any{}
-		writeLawyerJSON(w, http.StatusOK, response)
-		return
-	}
-	if turn.opportunity.Role != role {
-		response["status"] = "waiting"
-		response["prompt"] = ""
-		response["tools"] = []map[string]any{}
-		writeLawyerJSON(w, http.StatusOK, response)
-		return
-	}
-	response["status"] = "ready"
-	response["prompt"] = turn.prompt
-	response["tools"] = lawyerToolSpecs(turn.opportunity)
-	response["limits"] = api.lawyerLimitsLocked(turn)
+	api.mu.Lock()
+	response := api.statusResponseLocked(caseID, role)
+	api.mu.Unlock()
 	writeLawyerJSON(w, http.StatusOK, response)
+}
+
+func (api *lawyerAPIServer) handleWait(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeLawyerJSON(w, http.StatusMethodNotAllowed, map[string]any{
+			"ok":    false,
+			"error": apiError("method_not_allowed", "use GET"),
+		})
+		return
+	}
+	role := strings.TrimSpace(r.URL.Query().Get("role_id"))
+	caseID := strings.TrimSpace(r.URL.Query().Get("case_id"))
+	after := strings.TrimSpace(r.URL.Query().Get("after"))
+	afterVersion, hasAfterVersion, err := parseOptionalUintQuery(r.URL.Query().Get("after_version"), "after_version")
+	if err != nil {
+		writeLawyerJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": apiError("bad_after_version", err.Error()),
+		})
+		return
+	}
+	timeout, err := parseLawyerAPIWaitTimeout(r.URL.Query().Get("timeout_ms"))
+	if err != nil {
+		writeLawyerJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": apiError("bad_timeout", err.Error()),
+		})
+		return
+	}
+	if caseID == "" {
+		writeLawyerJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": apiError("missing_case_id", "case_id is required"),
+		})
+		return
+	}
+	if role == "" {
+		writeLawyerJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": apiError("missing_role_id", "role_id is required"),
+		})
+		return
+	}
+	if role != "observer" {
+		if err := validateAttorneyRole(role); err != nil {
+			writeLawyerJSON(w, http.StatusForbidden, map[string]any{
+				"ok":      false,
+				"case_id": caseID,
+				"role_id": role,
+				"error":   apiError("invalid_role", err.Error()),
+			})
+			return
+		}
+	}
+
+	api.mu.Lock()
+	cond := api.ensureCondLocked()
+	baseline := api.version
+	if hasAfterVersion {
+		baseline = afterVersion
+	}
+	deadline := time.Now().Add(timeout)
+	timer := time.AfterFunc(timeout, func() {
+		api.mu.Lock()
+		api.ensureCondLocked().Broadcast()
+		api.mu.Unlock()
+	})
+	defer timer.Stop()
+	if done := r.Context().Done(); done != nil {
+		go func() {
+			<-done
+			api.mu.Lock()
+			api.ensureCondLocked().Broadcast()
+			api.mu.Unlock()
+		}()
+	}
+	for {
+		if r.Context().Err() != nil {
+			api.mu.Unlock()
+			return
+		}
+		if response, reason, ready := api.waitResponseLocked(caseID, role, after, baseline); ready {
+			response["wait"] = api.waitPayloadLocked(reason)
+			api.mu.Unlock()
+			writeLawyerJSON(w, http.StatusOK, response)
+			return
+		}
+		if !time.Now().Before(deadline) {
+			response := api.statusResponseLocked(caseID, role)
+			response["wait"] = api.waitPayloadLocked("timeout")
+			api.mu.Unlock()
+			writeLawyerJSON(w, http.StatusOK, response)
+			return
+		}
+		cond.Wait()
+	}
 }
 
 func (api *lawyerAPIServer) handleDo(w http.ResponseWriter, r *http.Request) {
@@ -486,6 +609,7 @@ func (api *lawyerAPIServer) commitEvidenceUploadLocked(turn *lawyerTurn, args ma
 		return nil, err
 	}
 	api.rc.state = mapAny(stepResp["state"])
+	api.signalChangedLocked()
 	api.rc.caseFiles = append(api.rc.caseFiles, file)
 	api.rc.fileByID[file.EvidenceID] = file
 	api.rc.submittedEvidence = append(api.rc.submittedEvidence, meta)
@@ -522,6 +646,7 @@ func (api *lawyerAPIServer) submitEvidenceLocked(turn *lawyerTurn, args map[stri
 	}
 	meta.EvidenceID = evidence.EvidenceID
 	api.rc.state = mapAny(stepResp["state"])
+	api.signalChangedLocked()
 	api.rc.caseFiles = append(api.rc.caseFiles, file)
 	api.rc.fileByID[file.EvidenceID] = file
 	api.rc.submittedEvidence = append(api.rc.submittedEvidence, meta)
@@ -554,6 +679,7 @@ func (api *lawyerAPIServer) submitDecisionLocked(turn *lawyerTurn, args map[stri
 		return nil, fmt.Errorf("%s", mapString(stepResp["error"]))
 	}
 	api.rc.state = mapAny(stepResp["state"])
+	api.signalChangedLocked()
 	if err := api.rc.recordEventAtTurn(turn.turnNumber, "attorney_action", turn.opportunity.Role, turn.opportunity.Phase, map[string]any{
 		"opportunity_id": turn.opportunity.ID,
 		"action_type":    actionType,
@@ -687,6 +813,65 @@ func (api *lawyerAPIServer) consumeAttemptLocked(turn *lawyerTurn, err error, de
 	return feedback
 }
 
+func (api *lawyerAPIServer) statusResponseLocked(caseID string, roleID string) map[string]any {
+	if api.terminal {
+		response := api.responseBaseLocked(caseID, roleID)
+		response["status"] = "done"
+		response["prompt"] = ""
+		response["tools"] = []map[string]any{}
+		if api.terminalReason != "" {
+			response["final_reason"] = api.terminalReason
+		}
+		return response
+	}
+	if roleID == "observer" {
+		response := api.responseBaseLocked(caseID, roleID)
+		response["status"] = "observing"
+		response["prompt"] = "Observe the arbitration record. Observer tools are read-only."
+		response["tools"] = observerToolSpecs()
+		response["limits"] = observerLimits(api.rc)
+		return response
+	}
+	response := api.responseBaseLocked(caseID, roleID)
+	turn := api.active
+	if turn == nil || turn.completed || turn.opportunity.Role != roleID {
+		response["status"] = "waiting"
+		response["prompt"] = ""
+		response["tools"] = []map[string]any{}
+		return response
+	}
+	response["status"] = "ready"
+	response["prompt"] = turn.prompt
+	response["tools"] = lawyerToolSpecs(turn.opportunity)
+	response["limits"] = api.lawyerLimitsLocked(turn)
+	return response
+}
+
+func (api *lawyerAPIServer) waitResponseLocked(caseID string, roleID string, after string, baseline uint64) (map[string]any, string, bool) {
+	response := api.statusResponseLocked(caseID, roleID)
+	if api.terminal {
+		return response, "done", true
+	}
+	turn := api.active
+	if turn != nil && !turn.completed && turn.opportunity.Role == roleID {
+		if after == "" || turn.opportunity.ID != after {
+			return response, "ready", true
+		}
+	}
+	if api.version != baseline {
+		return response, "changed", true
+	}
+	return response, "", false
+}
+
+func (api *lawyerAPIServer) waitPayloadLocked(reason string) map[string]any {
+	return map[string]any{
+		"reason":        reason,
+		"version":       api.version,
+		"state_version": mapAny(api.rc.state)["state_version"],
+	}
+}
+
 func (api *lawyerAPIServer) responseBaseLocked(caseID string, roleID string) map[string]any {
 	return map[string]any{
 		"ok":      true,
@@ -757,6 +942,37 @@ func (api *lawyerAPIServer) maxRequestBytes() int64 {
 		}
 	}
 	return int64(limit)
+}
+
+func parseLawyerAPIWaitTimeout(value string) (time.Duration, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return defaultLawyerAPIWaitTimeout, nil
+	}
+	ms, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("timeout_ms must be an integer")
+	}
+	if ms <= 0 {
+		return 0, fmt.Errorf("timeout_ms must be positive")
+	}
+	timeout := time.Duration(ms) * time.Millisecond
+	if timeout > maxLawyerAPIWaitTimeout {
+		return 0, fmt.Errorf("timeout_ms must be at most %d", maxLawyerAPIWaitTimeout.Milliseconds())
+	}
+	return timeout, nil
+}
+
+func parseOptionalUintQuery(value string, name string) (uint64, bool, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false, nil
+	}
+	parsed, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return 0, false, fmt.Errorf("%s must be an unsigned integer", name)
+	}
+	return parsed, true, nil
 }
 
 func writeLawyerJSON(w http.ResponseWriter, status int, value map[string]any) {

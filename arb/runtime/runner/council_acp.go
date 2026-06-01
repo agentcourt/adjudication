@@ -250,6 +250,9 @@ func (rc *runContext) executeCouncilACPOpportunity(ctx context.Context, opportun
 			return nil, fmt.Errorf("%s", mapString(stepResp["error"]))
 		}
 		rc.state = mapAny(stepResp["state"])
+		if rc.lawyerAPI != nil {
+			rc.lawyerAPI.signalChanged()
+		}
 		decisionSubmitted = true
 		appendTranscript(map[string]any{"custom_method": acpCustomMethod("submit_council_vote"), "member_id": seat.MemberID, "payload": payload, "step_result": stepResp})
 		if err := rc.recordEventAtTurn(turn, "council_vote", "council", opportunity.Phase, map[string]any{

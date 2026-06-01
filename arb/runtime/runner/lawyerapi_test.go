@@ -92,22 +92,160 @@ func TestObserverDoDoesNotRequireOpportunityID(t *testing.T) {
 	}
 }
 
+func TestLawyerWaitReturnsReadyOpportunity(t *testing.T) {
+	api, _ := testLawyerAPIWithTurn()
+
+	status, got := callLawyerAPIWait(t, api, "case_id=arb-1&role_id=plaintiff&timeout_ms=100")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["status"] != "ready" {
+		t.Fatalf("status field = %#v, want ready", got["status"])
+	}
+	wait, ok := got["wait"].(map[string]any)
+	if !ok {
+		t.Fatalf("wait = %#v, want object", got["wait"])
+	}
+	if wait["reason"] != "ready" {
+		t.Fatalf("wait.reason = %#v, want ready", wait["reason"])
+	}
+	turn, ok := got["turn"].(map[string]any)
+	if !ok {
+		t.Fatalf("turn = %#v, want object", got["turn"])
+	}
+	if turn["opportunity_id"] != "openings:plaintiff" {
+		t.Fatalf("opportunity_id = %#v, want openings:plaintiff", turn["opportunity_id"])
+	}
+}
+
+func TestLawyerWaitBlocksUntilLaterOpportunity(t *testing.T) {
+	api, _ := testLawyerAPIWithTurn()
+	done := make(chan map[string]any, 1)
+	go func() {
+		_, got := callLawyerAPIWait(t, api, "case_id=arb-1&role_id=plaintiff&after=openings:plaintiff&timeout_ms=1000")
+		done <- got
+	}()
+	select {
+	case got := <-done:
+		t.Fatalf("wait returned before a later opportunity: %#v", got)
+	case <-time.After(20 * time.Millisecond):
+	}
+	api.mu.Lock()
+	api.active = testLawyerTurn("arguments:plaintiff", "plaintiff", "arguments")
+	api.signalChangedLocked()
+	api.mu.Unlock()
+	select {
+	case got := <-done:
+		if got["status"] != "ready" {
+			t.Fatalf("status field = %#v, want ready", got["status"])
+		}
+		wait, ok := got["wait"].(map[string]any)
+		if !ok {
+			t.Fatalf("wait = %#v, want object", got["wait"])
+		}
+		if wait["reason"] != "ready" {
+			t.Fatalf("wait.reason = %#v, want ready", wait["reason"])
+		}
+		turn, ok := got["turn"].(map[string]any)
+		if !ok {
+			t.Fatalf("turn = %#v, want object", got["turn"])
+		}
+		if turn["opportunity_id"] != "arguments:plaintiff" {
+			t.Fatalf("opportunity_id = %#v, want arguments:plaintiff", turn["opportunity_id"])
+		}
+	case <-time.After(time.Second):
+		t.Fatal("wait did not return after later opportunity")
+	}
+}
+
+func TestLawyerWaitReturnsOnCaseChange(t *testing.T) {
+	api, _ := testLawyerAPIWithTurn()
+	done := make(chan map[string]any, 1)
+	go func() {
+		_, got := callLawyerAPIWait(t, api, "case_id=arb-1&role_id=plaintiff&after=openings:plaintiff&timeout_ms=1000")
+		done <- got
+	}()
+	select {
+	case got := <-done:
+		t.Fatalf("wait returned before case change: %#v", got)
+	case <-time.After(20 * time.Millisecond):
+	}
+	api.signalChanged()
+	select {
+	case got := <-done:
+		if got["status"] != "ready" {
+			t.Fatalf("status field = %#v, want ready", got["status"])
+		}
+		wait, ok := got["wait"].(map[string]any)
+		if !ok {
+			t.Fatalf("wait = %#v, want object", got["wait"])
+		}
+		if wait["reason"] != "changed" {
+			t.Fatalf("wait.reason = %#v, want changed", wait["reason"])
+		}
+	case <-time.After(time.Second):
+		t.Fatal("wait did not return after case change")
+	}
+}
+
+func TestLawyerWaitReturnsForOlderVersion(t *testing.T) {
+	api, _ := testLawyerAPIWithTurn()
+
+	status, got := callLawyerAPIWait(t, api, "case_id=arb-1&role_id=plaintiff&after=openings:plaintiff&after_version=0&timeout_ms=1000")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	wait, ok := got["wait"].(map[string]any)
+	if !ok {
+		t.Fatalf("wait = %#v, want object", got["wait"])
+	}
+	if wait["reason"] != "changed" {
+		t.Fatalf("wait.reason = %#v, want changed", wait["reason"])
+	}
+}
+
+func TestLawyerWaitReturnsDoneOnTerminalCase(t *testing.T) {
+	api, _ := testLawyerAPIWithTurn()
+	api.setTerminal("demonstrated")
+
+	status, got := callLawyerAPIWait(t, api, "case_id=arb-1&role_id=plaintiff&after=openings:plaintiff&timeout_ms=1000")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["status"] != "done" {
+		t.Fatalf("status field = %#v, want done", got["status"])
+	}
+	if got["final_reason"] != "demonstrated" {
+		t.Fatalf("final_reason = %#v, want demonstrated", got["final_reason"])
+	}
+	wait, ok := got["wait"].(map[string]any)
+	if !ok {
+		t.Fatalf("wait = %#v, want object", got["wait"])
+	}
+	if wait["reason"] != "done" {
+		t.Fatalf("wait.reason = %#v, want done", wait["reason"])
+	}
+}
+
+func TestLawyerWaitTimeout(t *testing.T) {
+	api, _ := testLawyerAPIWithTurn()
+
+	status, got := callLawyerAPIWait(t, api, "case_id=arb-1&role_id=plaintiff&after=openings:plaintiff&timeout_ms=10")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	wait, ok := got["wait"].(map[string]any)
+	if !ok {
+		t.Fatalf("wait = %#v, want object", got["wait"])
+	}
+	if wait["reason"] != "timeout" {
+		t.Fatalf("wait.reason = %#v, want timeout", wait["reason"])
+	}
+}
+
 func testLawyerAPIWithTurn() (*lawyerAPIServer, *lawyerTurn) {
 	policy := DefaultPolicy()
-	turn := &lawyerTurn{
-		opportunity: Opportunity{
-			ID:           "openings:plaintiff",
-			Role:         "plaintiff",
-			Phase:        "openings",
-			AllowedTools: []string{"record_opening_statement"},
-		},
-		turnNumber:        1,
-		deadline:          time.Now().Add(time.Minute),
-		attemptsMax:       3,
-		attemptsRemaining: 3,
-		evidenceBudget:    &evidenceReadBudget{},
-		done:              make(chan error, 1),
-	}
+	turn := testLawyerTurn("openings:plaintiff", "plaintiff", "openings")
 	rc := &runContext{
 		cfg: Config{
 			Policy:  policy,
@@ -117,7 +255,24 @@ func testLawyerAPIWithTurn() (*lawyerAPIServer, *lawyerTurn) {
 		fileByID:       map[string]CaseFile{},
 		uploadSessions: map[string]*EvidenceUploadSession{},
 	}
-	return &lawyerAPIServer{rc: rc, active: turn}, turn
+	return &lawyerAPIServer{rc: rc, active: turn, version: 1}, turn
+}
+
+func testLawyerTurn(id string, role string, phase string) *lawyerTurn {
+	return &lawyerTurn{
+		opportunity: Opportunity{
+			ID:           id,
+			Role:         role,
+			Phase:        phase,
+			AllowedTools: []string{"record_opening_statement"},
+		},
+		turnNumber:        1,
+		deadline:          time.Now().Add(time.Minute),
+		attemptsMax:       3,
+		attemptsRemaining: 3,
+		evidenceBudget:    &evidenceReadBudget{},
+		done:              make(chan error, 1),
+	}
 }
 
 func callLawyerAPIDo(t *testing.T, api *lawyerAPIServer, body map[string]any) (int, map[string]any) {
@@ -130,6 +285,18 @@ func callLawyerAPIDo(t *testing.T, api *lawyerAPIServer, body map[string]any) (i
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	api.handleDo(rec, req)
+	var got map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return rec.Code, got
+}
+
+func callLawyerAPIWait(t *testing.T, api *lawyerAPIServer, query string) (int, map[string]any) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, lawyerAPIBasePath+"/wait?"+query, nil)
+	rec := httptest.NewRecorder()
+	api.handleWait(rec, req)
 	var got map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode response: %v", err)

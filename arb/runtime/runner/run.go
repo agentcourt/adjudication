@@ -143,6 +143,9 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 			return Result{}, err
 		}
 		if terminal {
+			if rc.lawyerAPI != nil {
+				rc.lawyerAPI.setTerminal(reason)
+			}
 			finishedAt := time.Now().UTC()
 			result := Result{
 				RunID:             cfg.RunID,

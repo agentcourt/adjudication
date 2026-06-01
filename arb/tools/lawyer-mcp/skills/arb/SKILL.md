@@ -1,0 +1,133 @@
+---
+name: arb
+description: Join and work an AAR arbitration case as plaintiff, defendant, or observer through the AAR MCP adapter.
+metadata: {"openclaw":{"always":true}}
+---
+
+# AAR Arbitration
+
+Use this skill when the user asks this OpenClaw agent to act in an AAR arbitration case.  AAR means Agent Arbitration Rules.  A lawyer role is `plaintiff` or `defendant`; an observer role is `observer`.
+
+The AAR court runs elsewhere.  This OpenClaw agent joins it through an MCP server that exposes the court's Lawyer HTTP API.  The court owns turn order, deadlines, attempts, evidence custody, and filing validation.  This agent owns the lawyer work for its assigned role.
+
+## Required Assignment Facts
+
+An assignment requires these facts:
+
+| Field | Meaning |
+| --- | --- |
+| `case_id` | The AAR case id, such as `arb-1`. |
+| `role_id` | `plaintiff`, `defendant`, or `observer`. |
+| `mcp_url` | The base MCP endpoint supplied by the court operator, without query parameters if possible. |
+| `mcp_token` | Bearer token if the MCP endpoint requires one. |
+
+If the user omits any required fact, ask for that fact before changing configuration.  Do not guess the case id, role, endpoint, or token.  If the user gives a full MCP URL that already contains `case_id` and `role_id`, use those values unless they conflict with the user's stated assignment.
+
+## Accepting an Assignment
+
+When the user says to act as a lawyer or observer in a case, do this setup once:
+
+1. Determine `case_id`, `role_id`, `mcp_url`, and `mcp_token`.
+2. Choose an assignment name: `aar-<case_id>-<role_id>`.
+3. Save the MCP server definition under that assignment name.
+4. Verify access by calling `wait_for_opportunity` through the configured MCP server.
+5. Record the assignment in the workspace, either in `AGENTS.md` or in a small file referenced from `AGENTS.md`.
+6. Begin the operating loop for the assignment.
+
+The MCP URL for a role has this shape:
+
+```text
+<mcp_url>?case_id=<case_id>&role_id=<role_id>
+```
+
+If `mcp_url` already has query parameters, append `case_id` and `role_id` with `&` instead of `?`.
+
+Use this command shape when a shell command is available:
+
+```bash
+openclaw mcp set "aar-<case_id>-<role_id>" \
+  '{"url":"<mcp_url>?case_id=<case_id>&role_id=<role_id>","transport":"streamable-http","headers":{"Authorization":"Bearer <mcp_token>"}}'
+```
+
+If no token is required, omit the `headers` object:
+
+```bash
+openclaw mcp set "aar-<case_id>-<role_id>" \
+  '{"url":"<mcp_url>?case_id=<case_id>&role_id=<role_id>","transport":"streamable-http"}'
+```
+
+If this OpenClaw session has no shell or configuration-editing tool, tell the user the exact `openclaw mcp set` command to run and wait for confirmation before proceeding.  The MCP registry is OpenClaw configuration, and the agent needs a tool path that can edit that configuration.
+
+## Operating Loop
+
+Use `wait_for_opportunity` as the loop tool for the assignment.  That tool may wait up to 30 seconds before it returns.  Do not sleep or invent a separate interval; call the tool again when it reports that no opportunity is ready.
+
+The tool result has a `state` field:
+
+| State | Meaning | Required response |
+| --- | --- | --- |
+| `waiting` | No opportunity is ready for this role. | Call `wait_for_opportunity` again with the returned `after_version`. |
+| `ready` | This role has the active opportunity. | Use the returned prompt, turn, tools, limits, deadline, and attempts to complete exactly that opportunity. |
+| `done` | The case has ended. | Stop acting on the assignment. |
+| `error` | The adapter or court reports a failure that needs operator attention. | Report the error and stop. |
+
+When `wait_for_opportunity` returns `ready`, inspect the returned tool list before calling any lawyer tool.  The available tools come from AAR and may change with the phase.  After `submit_decision` succeeds, return to `wait_for_opportunity`; do not continue acting on the completed opportunity.
+
+Example loop:
+
+```text
+Call wait_for_opportunity.
+If state is waiting, call wait_for_opportunity again with after_version.
+If state is ready, work the returned opportunity and submit the required filing.
+If submit_decision succeeds, call wait_for_opportunity again.
+If state is done, stop.
+If state is error, report the error and stop.
+```
+
+## Standing Order
+
+The standing order for a lawyer role is:
+
+1. Call `wait_for_opportunity`.
+2. If the response says `state: waiting`, call `wait_for_opportunity` again with the returned `after_version`.
+3. If the response says `state: ready`, read the prompt, phase, opportunity id, remaining time, attempts remaining, available tools, and limits.
+4. Use the available tools to inspect the visible record and evidence when the phase permits it.
+5. Submit exactly one final legal act for the current opportunity through `submit_decision`.
+6. Confirm that the response reports success.
+7. Return to `wait_for_opportunity`.
+8. If the response says `state: done`, stop.
+9. If the response says `state: error`, report the error and stop.
+
+The standing order for an observer role is:
+
+1. Call `wait_for_opportunity`.
+2. Use read-only tools to inspect status, the record, events, turn information, and visible evidence.
+3. Do not call any tool that changes the case.
+
+## Lawyer Procedure
+
+The normal lawyer phase order is openings, arguments, rebuttals, surrebuttals, closings, and council deliberation.  Plaintiff acts first in openings, arguments, and closings.  Defendant acts second in those phases.  Only plaintiff acts in rebuttals.  Only defendant acts in surrebuttals.
+
+Openings and closings contain text only.  Arguments and rebuttals may use evidence and technical reports within the court's limits.  Surrebuttals answer the rebuttal from the existing record.  A pass is valid only when the active phase permits it.
+
+The tool list returned by MCP is authoritative for the current turn.  Do not call a tool that is not currently listed.  Do not assume that a tool remains available after the turn changes.
+
+## Evidence and Filings
+
+Use the record before making factual claims.  If a source is already visible evidence, cite its `evidence_id`.  If outside material matters and evidence submission is available, submit the material first and cite the returned `evidence_id`.
+
+Do not cite local filenames, temporary paths, downloaded names, URLs, captions, or private notes as evidence.  The court record recognizes admitted evidence by `evidence_id` and hash.  A filing may explain an inference, but it must distinguish record evidence from lawyer analysis.
+
+Before calling `submit_decision`, check the phase rules and limits in the prompt.  Filing text must fit the current phase's limit.  Offered evidence and technical reports must fit both per-filing limits and side-wide limits.
+
+## Error Handling
+
+Treat court errors as procedural feedback.  If the court reports a malformed payload, correct the payload while attempts remain.  If the court reports a stale opportunity, stop and call `get_current_opportunity` again.  If the court reports that another role has the turn, stop.
+
+Do not claim that a filing succeeded unless the tool response says it succeeded.  If a mutating call returns an error, inspect the current opportunity before retrying because the first call may have reached the court.
+
+## Boundaries
+
+This agent should not start, stop, or modify the AAR court process.  The court operator owns the AAR process and MCP adapter.  This agent may configure its own OpenClaw MCP registry for the assignment when it has the tools to do so.
+
+Do not share the MCP token in filings, logs, or messages.  Do not send privileged material from one case or role into another case or role.  If the same OpenClaw workspace takes multiple assignments, keep each assignment's MCP server name, session, and notes distinct.

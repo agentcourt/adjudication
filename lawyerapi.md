@@ -11,6 +11,7 @@ The first implementation serves one case from one `aar case` process.  Each requ
 | Method | Path | Meaning |
 | --- | --- | --- |
 | `GET` | `/lawyerapi/v1/get?case_id={case_id}&role_id={role_id}` | Return role status, prompt, tools, limits, and the live turn budget. |
+| `GET` | `/lawyerapi/v1/wait?case_id={case_id}&role_id={role_id}` | Wait for role status or case state to change, then return the same status shape as `GET /get`. |
 | `POST` | `/lawyerapi/v1/do` | Execute one tool call for the role. |
 
 All responses are JSON.  HTTP status codes describe request handling, and the response body uses `ok` to report whether the requested API operation succeeded.  Well-formed tool calls that fail procedural validation usually return HTTP `200` with `ok: false`, because the server understood the request and rejected the attempted action.
@@ -25,7 +26,7 @@ All responses are JSON.  HTTP status codes describe request handling, and the re
 
 Each lawyer opportunity has one deadline and one attempt budget.  The deadline covers the whole turn, including malformed tool calls and corrected retries.  The attempt budget counts rejected mutating tool calls, including invalid `submit_decision` calls.
 
-Every `GET` and `POST` response includes a `turn` field.  When a lawyer turn is active, `turn` contains the current role, phase, opportunity id, deadline, live `remaining_ms`, `attempts_max`, and `attempts_remaining`.  A lawyer copies `turn.opportunity_id` into each `POST /do` request for that turn.  When no lawyer turn is active, `turn` is `null`.
+Every `/get`, `/wait`, and `/do` response includes a `turn` field.  When a lawyer turn is active, `turn` contains the current role, phase, opportunity id, deadline, live `remaining_ms`, `attempts_max`, and `attempts_remaining`.  A lawyer copies `turn.opportunity_id` into each `POST /do` request for that turn.  When no lawyer turn is active, `turn` is `null`.
 
 ## GET
 
@@ -114,6 +115,45 @@ A waiting lawyer response keeps the same envelope and returns no tools:
   "tools": []
 }
 ```
+
+## WAIT
+
+`GET /lawyerapi/v1/wait` requires `case_id` and `role_id`.  It accepts optional `after`, `after_version`, and `timeout_ms` query parameters.  `after` is an opportunity id the caller has already seen.  `after_version` is the `wait.version` returned by an earlier wait response.  `timeout_ms` is capped by the server.
+
+```bash
+curl -sS "$BASE/wait?case_id=arb-1&role_id=plaintiff&after=openings:plaintiff&after_version=12&timeout_ms=30000"
+```
+
+The response uses the same envelope as `GET /get` and adds a `wait` object:
+
+```json
+{
+  "ok": true,
+  "case_id": "arb-1",
+  "role_id": "plaintiff",
+  "status": "waiting",
+  "prompt": "",
+  "turn": {
+    "role_id": "defendant",
+    "phase": "openings",
+    "opportunity_id": "openings:defendant",
+    "turn_number": 2,
+    "deadline": "2026-06-01T15:14:05Z",
+    "remaining_ms": 612341,
+    "attempts_max": 3,
+    "attempts_remaining": 3,
+    "completed": false
+  },
+  "tools": [],
+  "wait": {
+    "reason": "timeout",
+    "version": 14,
+    "state_version": 3
+  }
+}
+```
+
+When `wait.reason` is `timeout`, the caller should call `wait` again with the returned `wait.version` as `after_version`.  When the role has an actionable opportunity, the response has `status: "ready"` and includes prompt, tools, limits, and the active `turn.opportunity_id`.  When the case reaches a terminal result while a wait request is active, the response has `status: "done"` and `final_reason`.  A remote runner can use `wait` to block on AAR state without inventing its own sleep interval.
 
 ## POST
 

@@ -45,12 +45,14 @@ When `--file` is absent, `aar case` scans the complaint directory for initial ev
 
 ## Lawyer API
 
-The Lawyer API lets a plaintiff, defendant, or observer use plain HTTP.  A lawyer calls `GET /lawyerapi/v1/get` with `case_id` and `role_id` to receive the current prompt, available tools, role status, opportunity id, live deadline, attempts left, and limits.  A lawyer copies `turn.opportunity_id` from that response into each `POST /lawyerapi/v1/do` request for the turn.  `POST /do` executes one tool call, including `submit_decision` when the role is ready to file the legal act for the turn.
+The Lawyer API lets a plaintiff, defendant, or observer use plain HTTP.  A lawyer calls `GET /lawyerapi/v1/get` with `case_id` and `role_id` to receive the current prompt, available tools, role status, opportunity id, live deadline, attempts left, and limits.  A remote runner can call `GET /lawyerapi/v1/wait` to block until its role has work or case state changes.  A lawyer copies `turn.opportunity_id` from the ready response into each `POST /lawyerapi/v1/do` request for the turn.  `POST /do` executes one tool call, including `submit_decision` when the role is ready to file the legal act for the turn.
 
 The API roles are `plaintiff`, `defendant`, and `observer`.  The plaintiff and defendant roles can act only during their own turns.  The observer role is read-only and can call `get_turn`, `get_case`, `list_events`, `list_evidence`, `stat_evidence`, and `read_evidence_range`.
 
 ```bash
 curl -sS "$BASE/get?case_id=arb-1&role_id=plaintiff"
+
+curl -sS "$BASE/wait?case_id=arb-1&role_id=plaintiff&timeout_ms=30000"
 
 curl -sS -X POST "$BASE/do" \
   -H 'content-type: application/json' \
