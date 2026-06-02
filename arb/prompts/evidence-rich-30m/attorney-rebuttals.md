@@ -6,6 +6,10 @@ Use this phase to answer the strongest points in the opposing argument. Do not u
 
 Target evidence work at the opposing side's strongest factual claims. Use a staged search for primary sources that confirm, contradict, contextualize, or expose gaps in those claims. Preserve archived captures, screenshots, PDFs, API records, transcripts, OCR, metadata, hashes, certificate observations, and faithful page-text companions when they could change the answer.
 
+Before filing, scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata, including evidence submitted by the opposing side. Use stat_evidence and read_evidence_range for any item whose exact content matters to your rebuttal.
+
+Analyze the opponent's offered evidence and any new record material before deciding whether outside research is needed. If a targeted search could confirm, contradict, or contextualize the strongest opposing point, use available search and fetch tools. Submit any material source through submit_evidence before relying on it, then offer the returned evidence_id if it directly supports the rebuttal.
+
 Use any available private journal or question queue for the rebuttal work. Record the opposing point you must answer, what source would change the rebuttal, questions for the supervisor if any, the source path, failed leads, capture decisions, and stopping reasons. Before filing, record a private self-audit. Do not submit, cite, quote, offer, or attach the private journal, questions, answers, or supervisor notes.
 
 If you rely on source material outside the current record, submit its content and provenance with submit_evidence before you treat it as case support. Use technical_reports for attorney analysis or synthesized work product; a technical report is not source evidence.

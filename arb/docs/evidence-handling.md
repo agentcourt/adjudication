@@ -39,13 +39,14 @@ Initial case materials are registered as `case_packet` evidence. Accepted attorn
 
 ## Lawyer API tools
 
-AAR exposes these tools through the HTTP Lawyer API during arguments and rebuttals:
+AAR exposes read-only evidence tools through the HTTP Lawyer API in every active lawyer phase. Evidence-submission tools are available during arguments, rebuttals, and surrebuttals.
 
 - `get_case` returns the visible arbitration record.
 - `list_evidence` lists visible evidence metadata. It returns metadata only, not bytes.
 - `stat_evidence` returns metadata and remaining limits for one evidence item.
 - `read_evidence_range` returns a bounded byte range as base64. It never mutates the record. Successful reads are logged as `evidence_read` events.
 - `submit_evidence` submits small source evidence in one JSON request using `content` or `content_base64`.
+- `begin_evidence_upload`, `write_evidence_chunk`, and `commit_evidence_upload` submit larger source evidence by chunks.
 - `submit_decision` submits the legal act for the current opportunity.
 
 ## Juror methods
@@ -86,7 +87,7 @@ Evidence read policy:
 - `max_evidence_reads_per_opportunity` caps read count per opportunity.
 - `max_evidence_read_bytes_per_opportunity` caps returned evidence bytes per opportunity.
 
-The runtime rejects invalid policies at startup. Evidence access is enforced server-side by phase; it is allowed only during arguments and rebuttals.
+The runtime rejects invalid policies at startup. Evidence reads are available in every active lawyer phase. Evidence submission is allowed only during arguments, rebuttals, and surrebuttals.
 
 ## Custody invariants
 

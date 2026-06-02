@@ -51,10 +51,10 @@ func validateAttorneyPayload(actionType string, payload map[string]any, fileByID
 			return fmt.Errorf("payload.text is required")
 		}
 		if len(listOfMaps(payload["offered_evidence"])) != 0 {
-			return fmt.Errorf("offered_evidence are allowed only in arguments and rebuttals")
+			return fmt.Errorf("offered_evidence are allowed only in arguments, rebuttals, and surrebuttals")
 		}
 		if len(listOfMaps(payload["technical_reports"])) != 0 {
-			return fmt.Errorf("technical_reports are allowed only in arguments and rebuttals")
+			return fmt.Errorf("technical_reports are allowed only in arguments, rebuttals, and surrebuttals")
 		}
 	case "submit_argument":
 		if mapString(payload["text"]) == "" {
@@ -80,11 +80,11 @@ func validateAttorneyPayload(actionType string, payload map[string]any, fileByID
 		if mapString(payload["text"]) == "" {
 			return fmt.Errorf("payload.text is required")
 		}
-		if len(listOfMaps(payload["offered_evidence"])) != 0 {
-			return fmt.Errorf("offered_evidence are allowed only in arguments and rebuttals")
+		if err := validateOfferedEvidence(payload["offered_evidence"], fileByID, policy); err != nil {
+			return err
 		}
-		if len(listOfMaps(payload["technical_reports"])) != 0 {
-			return fmt.Errorf("technical_reports are allowed only in arguments and rebuttals")
+		if err := validateReports(payload["technical_reports"], policy); err != nil {
+			return err
 		}
 	case "pass_phase_opportunity":
 	default:
@@ -310,8 +310,17 @@ func submittedEvidenceSchema() map[string]any {
 	}
 }
 
-func evidenceAccessAllowed(opportunity Opportunity) bool {
-	return opportunity.Phase == "arguments" || opportunity.Phase == "rebuttals"
+func evidenceReadAllowed(opportunity Opportunity) bool {
+	switch opportunity.Phase {
+	case "openings", "arguments", "rebuttals", "surrebuttals", "closings":
+		return true
+	default:
+		return false
+	}
+}
+
+func evidenceSubmissionAllowed(opportunity Opportunity) bool {
+	return opportunity.Phase == "arguments" || opportunity.Phase == "rebuttals" || opportunity.Phase == "surrebuttals"
 }
 
 func acpCustomMethod(name string) string {
@@ -392,8 +401,8 @@ func (rc *runContext) buildAttorneyPrompt(opportunity Opportunity) (string, erro
 }
 
 func (rc *runContext) prepareSubmittedEvidence(opportunity Opportunity, params map[string]any) (SubmittedEvidenceMeta, []byte, error) {
-	if opportunity.Phase != "arguments" && opportunity.Phase != "rebuttals" {
-		return SubmittedEvidenceMeta{}, nil, fmt.Errorf("submitted evidence is allowed only in arguments and rebuttals")
+	if !evidenceSubmissionAllowed(opportunity) {
+		return SubmittedEvidenceMeta{}, nil, fmt.Errorf("submitted evidence is allowed only in arguments, rebuttals, and surrebuttals")
 	}
 	title := mapString(params["title"])
 	mimeType := mapString(params["mime_type"])
@@ -621,7 +630,7 @@ func (rc *runContext) attorneyLimits(opportunity Opportunity) map[string]any {
 	limits := map[string]any{
 		"text_char_limit": phaseTextCharLimit(rc.cfg.Policy, opportunity.Phase),
 	}
-	if opportunity.Phase == "arguments" || opportunity.Phase == "rebuttals" {
+	if evidenceSubmissionAllowed(opportunity) {
 		limits["max_exhibits_per_filing"] = rc.cfg.Policy.MaxExhibitsPerFiling
 		limits["max_exhibits_per_side"] = rc.cfg.Policy.MaxExhibitsPerSide
 		limits["used_exhibits_for_side"] = usedExhibits
@@ -644,9 +653,6 @@ func (rc *runContext) attorneyLimits(opportunity Opportunity) map[string]any {
 		limits["offered_evidence_rule"] = "Use only visible case evidence_id values in offered_evidence. Submit new evidence first with submit_evidence, then cite the returned evidence_id in offered_evidence."
 		limits["outside_material_rule"] = "Outside source material belongs in submitted evidence when the source content matters, or in technical_reports when only attorney analysis is being offered."
 	}
-	if opportunity.Phase == "surrebuttals" {
-		limits["outside_material_rule"] = "offered_evidence and technical_reports are not allowed in this phase."
-	}
 	return limits
 }
 
@@ -658,7 +664,7 @@ func (rc *runContext) attorneyLimitsSection(opportunity Opportunity) string {
 		lines = append(lines, fmt.Sprintf("Target length for the first submission: %d characters or less.", targetSubmissionCharLimit(limit)))
 	}
 	switch opportunity.Phase {
-	case "arguments", "rebuttals":
+	case "arguments", "rebuttals", "surrebuttals":
 		lines = append(lines,
 			fmt.Sprintf(
 				"Exhibits: at most %d in this filing. This side has used %d of %d total, with %d left.",
@@ -692,8 +698,6 @@ func (rc *runContext) attorneyLimitsSection(opportunity Opportunity) string {
 		lines = append(lines, fmt.Sprintf("Evidence reads: at most %d bytes per read, %d reads per opportunity, and %d bytes total per opportunity.", limits["max_evidence_read_bytes"].(int), limits["max_evidence_reads_per_opportunity"].(int), limits["max_evidence_read_bytes_per_opportunity"].(int)))
 		lines = append(lines, "Use only visible case evidence_id values in offered_evidence. Submit new source material first with submit_evidence, then cite the returned evidence_id in offered_evidence. Use evidence_id and hash for custody checks and exact byte inspection.")
 		lines = append(lines, "Use technical_reports for attorney analysis or synthesized work product, not as a substitute for source evidence when exact source content matters.")
-	case "surrebuttals":
-		lines = append(lines, "offered_evidence and technical_reports are not allowed in this phase.")
 	}
 	return strings.Join(lines, "\n")
 }
@@ -762,7 +766,7 @@ func (rc *runContext) validateAttorneyPayloadAgainstState(opportunity Opportunit
 		}
 	}
 	switch actionType {
-	case "submit_argument", "submit_rebuttal":
+	case "submit_argument", "submit_rebuttal", "submit_surrebuttal":
 		caseObj := mapAny(rc.state["case"])
 		usedExhibits := filingCountForRole(mapList(caseObj["offered_evidence"]), opportunity.Role)
 		attemptedExhibits := len(listOfMaps(payload["offered_evidence"]))

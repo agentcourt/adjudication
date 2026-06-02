@@ -6,6 +6,10 @@ Use this phase to file the merits submission for your side. Distinguish what the
 
 Before writing the merits submission, identify the proposition's decisive factual elements and make a staged evidence search for your side. Prefer primary source artifacts over summaries: official records, PDFs, images, API records, archived pages, screenshots, transcripts, full videos or clips, and original statements. If time allows, verify source authenticity, capture metadata, compare conflicting accounts, and create faithful OCR, transcript, page-text, or image-observation companions for sources that the council cannot read directly.
 
+Before filing, scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata. Use stat_evidence and read_evidence_range for any item whose exact content matters to your argument.
+
+Analyze the record evidence before deciding whether outside research is needed. If the current record does not prove or defeat a decisive element, use available search and fetch tools to look for targeted source material. Submit any material source through submit_evidence before relying on it, then offer the returned evidence_id if the source supports the filing.
+
 Use any available private journal or question queue before and during the search. Record the case as you understand it, your planned source path, questions for the supervisor if any, concrete search terms, source IDs, URLs, repositories checked, tool outcomes, rate limits, errors, capture decisions, and stopping reasons. Before filing, record what was found, what remains missing, and what would change your filing. Keep this private work product out of the AAR record.
 
 If you rely on source material outside the current record, submit its content and provenance with submit_evidence before you treat it as case support. Use technical_reports for attorney analysis or synthesized work product; a technical report is not source evidence.

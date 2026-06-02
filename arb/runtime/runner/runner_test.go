@@ -597,7 +597,7 @@ func TestValidateAttorneyPayloadAllowsSupplementalMaterialsInRebuttal(t *testing
 	}
 }
 
-func TestValidateAttorneyPayloadRejectsSupplementalMaterialsInSurrebuttal(t *testing.T) {
+func TestValidateAttorneyPayloadAllowsSupplementalMaterialsInSurrebuttal(t *testing.T) {
 	policy := DefaultPolicy()
 	fileByID := map[string]CaseFile{
 		"instructions.txt": {EvidenceID: "instructions.txt", SizeBytes: 128},
@@ -611,8 +611,8 @@ func TestValidateAttorneyPayloadRejectsSupplementalMaterialsInSurrebuttal(t *tes
 			map[string]any{"title": "Check", "summary": "Done."},
 		},
 	}
-	if err := validateAttorneyPayload("submit_surrebuttal", surrebuttal, fileByID, policy); err == nil {
-		t.Fatalf("expected surrebuttal technical_reports to be rejected")
+	if err := validateAttorneyPayload("submit_surrebuttal", surrebuttal, fileByID, policy); err != nil {
+		t.Fatalf("expected surrebuttal supplemental materials to be accepted: %v", err)
 	}
 }
 
@@ -907,8 +907,14 @@ func TestBuildAttorneyPromptStatesCouncilForum(t *testing.T) {
 	if !strings.Contains(prompt, "Address the council, not a judge.") {
 		t.Fatalf("prompt did not direct counsel to address the council:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "record contains only the proposition and the standard of evidence") {
-		t.Fatalf("prompt did not state the opening record limit:\n%s", prompt)
+	if !strings.Contains(prompt, "The record may include case-packet files") {
+		t.Fatalf("prompt did not state that openings may inspect case-packet evidence:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Analyze the case-packet evidence available at the opening.") {
+		t.Fatalf("prompt did not instruct counsel to analyze opening evidence:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Do not submit evidence, offer evidence, or file technical reports in this phase.") {
+		t.Fatalf("prompt did not state the opening filing limit:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "Do not invent facts, sources, quotations, files, analyses, or results.") {
 		t.Fatalf("prompt did not forbid fabrication:\n%s", prompt)
@@ -939,8 +945,11 @@ func TestLawyerToolSpecsArePhaseSpecific(t *testing.T) {
 	for _, spec := range openingSpecs {
 		openingTools = append(openingTools, mapString(spec["name"]))
 	}
-	if slices.Contains(openingTools, "list_evidence") || slices.Contains(openingTools, "read_evidence_range") || slices.Contains(openingTools, "begin_evidence_upload") {
-		t.Fatalf("opening tools exposed evidence access: %#v", openingTools)
+	if slices.Contains(openingTools, "begin_evidence_upload") || slices.Contains(openingTools, "write_evidence_chunk") || slices.Contains(openingTools, "commit_evidence_upload") || slices.Contains(openingTools, "submit_evidence") {
+		t.Fatalf("opening tools exposed evidence submission: %#v", openingTools)
+	}
+	if !slices.Contains(openingTools, "list_evidence") || !slices.Contains(openingTools, "stat_evidence") || !slices.Contains(openingTools, "read_evidence_range") {
+		t.Fatalf("opening tools did not expose evidence reads: %#v", openingTools)
 	}
 	argumentSpecs := lawyerToolSpecs(Opportunity{Phase: "arguments", AllowedTools: []string{"submit_argument"}})
 	argumentTools := make([]string, 0, len(argumentSpecs))
@@ -957,6 +966,14 @@ func TestLawyerToolSpecsArePhaseSpecific(t *testing.T) {
 	}
 	if !slices.Contains(rebuttalTools, "list_evidence") || !slices.Contains(rebuttalTools, "stat_evidence") || !slices.Contains(rebuttalTools, "read_evidence_range") || !slices.Contains(rebuttalTools, "begin_evidence_upload") || !slices.Contains(rebuttalTools, "write_evidence_chunk") || !slices.Contains(rebuttalTools, "commit_evidence_upload") || !slices.Contains(rebuttalTools, "submit_evidence") {
 		t.Fatalf("rebuttal tools did not expose evidence access: %#v", rebuttalTools)
+	}
+	surrebuttalSpecs := lawyerToolSpecs(Opportunity{Phase: "surrebuttals", AllowedTools: []string{"submit_surrebuttal", "pass_phase_opportunity"}})
+	surrebuttalTools := make([]string, 0, len(surrebuttalSpecs))
+	for _, spec := range surrebuttalSpecs {
+		surrebuttalTools = append(surrebuttalTools, mapString(spec["name"]))
+	}
+	if !slices.Contains(surrebuttalTools, "list_evidence") || !slices.Contains(surrebuttalTools, "stat_evidence") || !slices.Contains(surrebuttalTools, "read_evidence_range") || !slices.Contains(surrebuttalTools, "begin_evidence_upload") || !slices.Contains(surrebuttalTools, "write_evidence_chunk") || !slices.Contains(surrebuttalTools, "commit_evidence_upload") || !slices.Contains(surrebuttalTools, "submit_evidence") {
+		t.Fatalf("surrebuttal tools did not expose evidence access: %#v", surrebuttalTools)
 	}
 	var submitSpec map[string]any
 	for _, spec := range argumentSpecs {

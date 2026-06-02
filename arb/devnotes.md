@@ -1,5 +1,19 @@
 # Development Notes
 
+## 2026-06-02
+
+### Lawyer Evidence Tools
+
+Reference: [Evidence Handling](docs/evidence-handling.md), [OpenClaw lawyer runbook](running.md)
+
+The Lawyer API now separates read access from evidence submission.  Read-only evidence tools are available in every active lawyer phase, so a remote lawyer can inspect case-packet files before an opening or closing.  Evidence-submission tools remain limited to arguments, rebuttals, and surrebuttals.
+
+Surrebuttals now use the same exhibit and technical-report validation path as arguments and rebuttals.  This keeps surrebuttal narrow as a response phase while allowing the defendant to preserve and cite targeted source material when the plaintiff's rebuttal makes that necessary.  Openings and closings still file text-only legal acts through `submit_decision`.
+
+Lawyer prompts now tell counsel to inspect the current record, scan the evidence list at each opportunity, analyze relevant evidence before advocating from it, and use targeted search when the record leaves a material gap.  The prompts also tell counsel to submit material outside sources through AAR evidence tools before relying on them when evidence submission is available.  Remote clawyers receive case-packet files and later submissions through AAR evidence tools rather than local filesystem access.
+
+The obsolete `tools/aar-openclaw-attorney` adapter was removed.  The supported OpenClaw lawyer path is now the Lawyer HTTP API plus `tools/lawyer-mcp`.
+
 ## 2026-06-01
 
 ### Council API and MCP adapter

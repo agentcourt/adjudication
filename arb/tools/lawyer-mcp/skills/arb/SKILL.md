@@ -91,7 +91,7 @@ The standing order for a lawyer role is:
 1. Call `wait_for_opportunity`.
 2. If the response says `state: waiting`, call `wait_for_opportunity` again with the returned `after_version`.
 3. If the response says `state: ready`, read the prompt, phase, opportunity id, remaining time, attempts remaining, available tools, and limits.
-4. Use the available tools to inspect the visible record and evidence when the phase permits it.
+4. Use the available tools to inspect the visible record and scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata before filing.
 5. Submit exactly one final legal act for the current opportunity through `submit_decision`.
 6. Confirm that the response reports success.
 7. Return to `wait_for_opportunity`.
@@ -108,13 +108,13 @@ The standing order for an observer role is:
 
 The normal lawyer phase order is openings, arguments, rebuttals, surrebuttals, closings, and council deliberation.  Plaintiff acts first in openings, arguments, and closings.  Defendant acts second in those phases.  Only plaintiff acts in rebuttals.  Only defendant acts in surrebuttals.
 
-Openings and closings contain text only.  Arguments and rebuttals may use evidence and technical reports within the court's limits.  Surrebuttals answer the rebuttal from the existing record.  A pass is valid only when the active phase permits it.
+Openings and closings contain text only, but the lawyer may inspect record evidence before filing.  Arguments, rebuttals, and surrebuttals may submit evidence, offer admitted evidence, and include technical reports within the court's limits.  A pass is valid only when the active phase permits it.
 
 The tool list returned by MCP is authoritative for the current turn.  Do not call a tool that is not currently listed.  Do not assume that a tool remains available after the turn changes.
 
 ## Evidence and Filings
 
-Use the record before making factual claims.  If a source is already visible evidence, cite its `evidence_id`.  If outside material matters and evidence submission is available, submit the material first and cite the returned `evidence_id`.
+Use the record before making factual claims.  At each turn, scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata.  Analyze what the relevant evidence proves, what it does not prove, and whether provenance, custody, conflict, or missing links affect weight.  If the record leaves a material gap and search or fetch tools are available, run a targeted search for sources that would change the filing.  If a source is already visible evidence, cite its `evidence_id`.  If outside material matters and evidence submission is available, submit the material first and cite the returned `evidence_id`.  If evidence submission is unavailable, treat the outside source as a lead rather than record support.
 
 Do not cite local filenames, temporary paths, downloaded names, URLs, captions, or private notes as evidence.  The court record recognizes admitted evidence by `evidence_id` and hash.  A filing may explain an inference, but it must distinguish record evidence from lawyer analysis.
 

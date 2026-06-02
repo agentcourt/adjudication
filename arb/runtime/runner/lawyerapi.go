@@ -503,12 +503,12 @@ func (api *lawyerAPIServer) callLawyerToolLocked(turn *lawyerTurn, tool string, 
 		view := api.rc.attorneyView(turn.opportunity)
 		return map[string]any{"case": view}, false, false, nil
 	case "list_evidence":
-		if !evidenceAccessAllowed(turn.opportunity) {
+		if !evidenceReadAllowed(turn.opportunity) {
 			return nil, true, false, fmt.Errorf("evidence access is not allowed in phase %q", turn.opportunity.Phase)
 		}
 		return map[string]any{"evidence": api.rc.listVisibleEvidence()}, false, false, nil
 	case "stat_evidence":
-		if !evidenceAccessAllowed(turn.opportunity) {
+		if !evidenceReadAllowed(turn.opportunity) {
 			return nil, true, false, fmt.Errorf("evidence access is not allowed in phase %q", turn.opportunity.Phase)
 		}
 		evidence, err := api.rc.statEvidence(mapString(args["evidence_id"]))
@@ -517,7 +517,7 @@ func (api *lawyerAPIServer) callLawyerToolLocked(turn *lawyerTurn, tool string, 
 		}
 		return map[string]any{"evidence": evidence, "limits": api.evidenceReadLimitsLocked(turn)}, false, false, nil
 	case "read_evidence_range":
-		if !evidenceAccessAllowed(turn.opportunity) {
+		if !evidenceReadAllowed(turn.opportunity) {
 			return nil, true, false, fmt.Errorf("evidence access is not allowed in phase %q", turn.opportunity.Phase)
 		}
 		offset, err := requiredIntParam(args, "offset")
@@ -544,6 +544,9 @@ func (api *lawyerAPIServer) callLawyerToolLocked(turn *lawyerTurn, tool string, 
 		}
 		return result, false, false, nil
 	case "begin_evidence_upload":
+		if !evidenceSubmissionAllowed(turn.opportunity) {
+			return nil, true, false, fmt.Errorf("evidence submission is not allowed in phase %q", turn.opportunity.Phase)
+		}
 		session, err := api.rc.beginEvidenceUpload(turn.opportunity, args)
 		if err != nil {
 			return nil, true, false, err
@@ -554,6 +557,9 @@ func (api *lawyerAPIServer) callLawyerToolLocked(turn *lawyerTurn, tool string, 
 			"remaining_upload_bytes": session.ExpectedSizeBytes,
 		}, false, false, nil
 	case "write_evidence_chunk":
+		if !evidenceSubmissionAllowed(turn.opportunity) {
+			return nil, true, false, fmt.Errorf("evidence submission is not allowed in phase %q", turn.opportunity.Phase)
+		}
 		offset, err := requiredIntParam(args, "offset")
 		if err != nil {
 			return nil, true, false, err
@@ -570,9 +576,15 @@ func (api *lawyerAPIServer) callLawyerToolLocked(turn *lawyerTurn, tool string, 
 			"remaining_upload_bytes": remainingCapacity(session.ExpectedSizeBytes, session.ReceivedBytes),
 		}, false, false, nil
 	case "commit_evidence_upload":
+		if !evidenceSubmissionAllowed(turn.opportunity) {
+			return nil, true, false, fmt.Errorf("evidence submission is not allowed in phase %q", turn.opportunity.Phase)
+		}
 		result, err := api.commitEvidenceUploadLocked(turn, args)
 		return result, err != nil, false, err
 	case "submit_evidence":
+		if !evidenceSubmissionAllowed(turn.opportunity) {
+			return nil, true, false, fmt.Errorf("evidence submission is not allowed in phase %q", turn.opportunity.Phase)
+		}
 		result, err := api.submitEvidenceLocked(turn, args)
 		return result, err != nil, false, err
 	case "submit_decision":
@@ -916,7 +928,7 @@ func (api *lawyerAPIServer) lawyerLimitsLocked(turn *lawyerTurn) map[string]any 
 	limits["max_response_bytes"] = api.rc.cfg.Runtime.MaxResponseBytes
 	limits["attempts_max"] = turn.attemptsMax
 	limits["attempts_remaining"] = turn.attemptsRemaining
-	if evidenceAccessAllowed(turn.opportunity) {
+	if evidenceReadAllowed(turn.opportunity) {
 		limits["remaining_evidence_reads_for_opportunity"] = remainingCapacity(api.rc.cfg.Policy.MaxEvidenceReadsPerOpportunity, turn.evidenceBudget.reads)
 		limits["remaining_evidence_read_bytes_for_opportunity"] = remainingCapacity(api.rc.cfg.Policy.MaxEvidenceReadBytesPerOpportunity, turn.evidenceBudget.bytes)
 	}
@@ -1022,11 +1034,15 @@ func optionalIntParam(params map[string]any, key string, fallback int) (int, err
 
 func lawyerToolSpecs(opportunity Opportunity) []map[string]any {
 	specs := []map[string]any{httpToolSpec("get_case", "Return the current visible arbitration record.", emptyObjectSchema(), true)}
-	if evidenceAccessAllowed(opportunity) {
+	if evidenceReadAllowed(opportunity) {
 		specs = append(specs,
 			httpToolSpec("list_evidence", "List visible immutable record evidence.", emptyObjectSchema(), true),
 			httpToolSpec("stat_evidence", "Return metadata and read limits for one visible evidence item.", evidenceIDSchema(), true),
 			httpToolSpec("read_evidence_range", "Read a bounded byte range from one visible evidence item as base64.", readEvidenceRangeSchema(), true),
+		)
+	}
+	if evidenceSubmissionAllowed(opportunity) {
+		specs = append(specs,
 			httpToolSpec("begin_evidence_upload", "Begin a chunked evidence upload.", beginEvidenceUploadSchema(), false),
 			httpToolSpec("write_evidence_chunk", "Write one base64 chunk into an upload session.", writeEvidenceChunkSchema(), false),
 			httpToolSpec("commit_evidence_upload", "Verify and admit a completed evidence upload.", commitEvidenceUploadSchema(), false),

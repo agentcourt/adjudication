@@ -405,8 +405,8 @@ func randomUploadID() (string, error) {
 }
 
 func (rc *runContext) beginEvidenceUpload(opportunity Opportunity, params map[string]any) (*EvidenceUploadSession, error) {
-	if opportunity.Phase != "arguments" && opportunity.Phase != "rebuttals" {
-		return nil, fmt.Errorf("evidence upload is allowed only in arguments and rebuttals")
+	if !evidenceSubmissionAllowed(opportunity) {
+		return nil, fmt.Errorf("evidence upload is allowed only in arguments, rebuttals, and surrebuttals")
 	}
 	title := mapString(params["title"])
 	mimeType := mapString(params["mime_type"])

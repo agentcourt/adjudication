@@ -25,13 +25,13 @@ func TestMCPListsDynamicToolsForBoundCaseRole(t *testing.T) {
 		"method":  "tools/list",
 	})
 	tools := resultTools(t, got)
-	for _, want := range []string{"get_current_opportunity", "wait_for_opportunity", "get_case", "submit_decision"} {
+	for _, want := range []string{"get_current_opportunity", "wait_for_opportunity", "get_case", "list_evidence", "stat_evidence", "read_evidence_range", "submit_decision"} {
 		if !hasTool(tools, want) {
 			t.Fatalf("tools/list missing %s: %#v", want, tools)
 		}
 	}
-	if hasTool(tools, "list_evidence") {
-		t.Fatalf("opening tools exposed list_evidence: %#v", tools)
+	if hasTool(tools, "submit_evidence") {
+		t.Fatalf("opening tools exposed evidence submission: %#v", tools)
 	}
 
 	fake.setPhase("arguments", []map[string]any{
@@ -546,10 +546,16 @@ type fakeLawyerAPI struct {
 
 func newFakeLawyerAPI(t *testing.T) *fakeLawyerAPI {
 	f := &fakeLawyerAPI{
-		t:       t,
-		phase:   "openings",
-		status:  "ready",
-		tools:   []map[string]any{lawyerTool("get_case"), lawyerTool("submit_decision")},
+		t:      t,
+		phase:  "openings",
+		status: "ready",
+		tools: []map[string]any{
+			lawyerTool("get_case"),
+			lawyerTool("list_evidence"),
+			lawyerTool("stat_evidence"),
+			lawyerTool("read_evidence_range"),
+			lawyerTool("submit_decision"),
+		},
 		version: 2,
 	}
 	f.server = httptest.NewServer(http.HandlerFunc(f.handle))

@@ -23,11 +23,11 @@ Because the structure is this narrow, each phase has a clear job.  Openings fram
 | `closings` | claimant, then respondent | final application of the full record to the proposition |
 | `deliberation` | council members | individual votes and rationales |
 
-This table is stricter than it may look.  In the current implementation, `arguments` remains the main record-building phase.  Rebuttal may also add exhibits and technical reports, but only for the claimant and only as a response to the respondent’s argument.  Surrebuttal remains text-only.
+This table is stricter than it may look.  In the current implementation, `arguments` remains the main record-building phase.  Rebuttal and surrebuttal may also add targeted exhibits and technical reports, but only as responses to the preceding filing.
 
 ## Openings
 
-Openings should be short, clear, and disciplined.  At that point the record contains only the proposition and the governing standard of evidence.  A good opening therefore states the factual theory at a high level, explains what the advocate expects the record to show, and tells the council why those expected facts matter under the burden of proof.
+Openings should be short, clear, and disciplined.  At that point the record may already include case-packet evidence, but the lawyer may not submit new evidence, offer evidence, or file technical reports.  A good opening therefore states the factual theory at a high level, identifies the proof that should matter, and tells the council why those expected facts matter under the burden of proof.
 
 This phase is not the place for technical experiments, exhibit offers, or detailed quotations from unseen files.  A strong opening names the dispute cleanly and gives the council a structure for reading the record that will come later.  If the opening overstates facts that are not yet in the record, the side loses credibility for no gain.
 
@@ -39,11 +39,11 @@ The best approach is selective, not exhaustive.  Offer only the files that matte
 
 A good argument ties each offered file to a specific inferential step.  One document may establish the statement at issue, another may show reliance or consequences, and a technical report may confirm authenticity or expose a break in the other side’s account.  If a technical check fails, report the failure directly and explain what follows from that failure.  The council is better served by a precise failed check than by a vague claim that the material is suspicious.
 
-The arguments phase still determines most later flexibility.  Rebuttal may add targeted exhibits or reports in answer to the respondent’s case, but that is a narrow second chance, not a second full record-building window.  Surrebuttal cannot add exhibits or reports.  The right working question remains whether the council will need the item to decide the proposition at all.  If the answer is yes, counsel should usually introduce it in arguments.
+The arguments phase still determines most later flexibility.  Rebuttal and surrebuttal may add targeted exhibits or reports in answer to the opposing filing, but each is a narrow response window, not a second full record-building window.  The right working question remains whether the council will need the item to decide the proposition at all.  If the answer is yes, counsel should usually introduce it in arguments.
 
 ## Rebuttal, surrebuttal, and closings
 
-Rebuttal and surrebuttal are narrow response phases.  They exist to answer the other side’s theory.  A good rebuttal identifies one or two decisive failures in the respondent’s argument, then shows why those failures matter under the standard of evidence.  If the claimant needs one additional document or one targeted technical report to answer the respondent directly, rebuttal can now carry that material.  Surrebuttal does not have the same record-building authority.
+Rebuttal and surrebuttal are narrow response phases.  They exist to answer the other side’s theory.  A good rebuttal identifies one or two decisive failures in the respondent’s argument, then shows why those failures matter under the standard of evidence.  If a side needs one additional document or one targeted technical report to answer the preceding filing directly, rebuttal or surrebuttal can carry that material.
 
 These phases should not repeat the full merits presentation.  Rebuttal may sharpen the record, but it should do so only in direct response to the respondent’s case.  What remains is argument about how the council should read the record, what inferences are justified, and which gaps matter.  If a side has nothing useful to add, it should pass and preserve focus for the closing.
 
