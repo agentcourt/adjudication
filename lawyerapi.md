@@ -12,6 +12,7 @@ The first implementation serves one case from one `aar case` process.  Each requ
 | --- | --- | --- |
 | `GET` | `/lawyerapi/v1/get?case_id={case_id}&role_id={role_id}` | Return role status, prompt, tools, limits, and the live turn budget. |
 | `GET` | `/lawyerapi/v1/wait?case_id={case_id}&role_id={role_id}` | Wait for role status or case state to change, then return the same status shape as `GET /get`. |
+| `GET` | `/lawyerapi/v1/status?case_id={case_id}&role_id={role_id}` | Return current phase, active turn, role status, and compact case counts. |
 | `GET` | `/lawyerapi/v1/result?case_id={case_id}&role_id={role_id}` | Return final case results, including council votes and rationales, or report that the case is pending. |
 | `POST` | `/lawyerapi/v1/do` | Execute one tool call for the role. |
 
@@ -19,7 +20,7 @@ All responses are JSON.  HTTP status codes describe request handling, and the re
 
 ## Roles
 
-`plaintiff` and `defendant` are lawyer roles.  When the procedure is waiting for one of those roles, `GET` returns `status: "ready"`, the current prompt, the available tools, and live turn information.  When the procedure is waiting for another role or for the council, `GET` returns `status: "waiting"` with no lawyer tools.
+`plaintiff` and `defendant` are lawyer roles.  When the procedure is waiting for one of those roles, `GET` returns `status: "ready"`, the current prompt, the available tools, and live turn information.  When the procedure is waiting for another role or for the council, `GET` returns `status: "waiting"` with `case_status` as the only advertised lawyer tool.
 
 `observer` is read-only.  It can inspect the case, current turn, events, and evidence.  It cannot submit decisions, submit evidence, upload evidence, vote, or alter any deadline.
 
@@ -27,7 +28,7 @@ All responses are JSON.  HTTP status codes describe request handling, and the re
 
 Each lawyer opportunity has one deadline and one attempt budget.  The deadline covers the whole turn, including malformed tool calls and corrected retries.  The attempt budget counts rejected mutating tool calls, including invalid `submit_decision` calls.
 
-Every `/get`, `/wait`, and `/do` response includes a `turn` field.  When a lawyer turn is active, `turn` contains the current role, phase, opportunity id, deadline, live `remaining_ms`, `attempts_max`, and `attempts_remaining`.  A lawyer copies `turn.opportunity_id` into each `POST /do` request for that turn.  When no lawyer turn is active, `turn` is `null`.
+Every Lawyer API response includes a `turn` field.  When a lawyer turn is active, `turn` contains the current role, phase, opportunity id, deadline, live `remaining_ms`, `attempts_max`, and `attempts_remaining`.  A lawyer copies `turn.opportunity_id` into each active-turn `POST /do` request for that turn.  When no lawyer turn is active, `turn` is `null`.
 
 ## GET
 
@@ -58,6 +59,16 @@ A ready lawyer response has this shape:
     "completed": false
   },
   "tools": [
+    {
+      "name": "case_status",
+      "description": "Return the current case phase, active turn, role status, and case counts.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "read_only": true
+    },
     {
       "name": "get_case",
       "description": "Return the current visible arbitration record.",
@@ -106,7 +117,7 @@ A ready lawyer response has this shape:
 }
 ```
 
-A waiting lawyer response keeps the same envelope and returns no tools:
+A waiting lawyer response keeps the same envelope and only advertises `case_status`:
 
 ```json
 {
@@ -126,7 +137,18 @@ A waiting lawyer response keeps the same envelope and returns no tools:
     "attempts_remaining": 3,
     "completed": false
   },
-  "tools": []
+  "tools": [
+    {
+      "name": "case_status",
+      "description": "Return the current case phase, active turn, role status, and case counts.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "read_only": true
+    }
+  ]
 }
 ```
 
@@ -158,7 +180,18 @@ The response uses the same envelope as `GET /get` and adds a `wait` object:
     "attempts_remaining": 3,
     "completed": false
   },
-  "tools": [],
+  "tools": [
+    {
+      "name": "case_status",
+      "description": "Return the current case phase, active turn, role status, and case counts.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "read_only": true
+    }
+  ],
   "wait": {
     "reason": "timeout",
     "version": 14,
@@ -168,6 +201,52 @@ The response uses the same envelope as `GET /get` and adds a `wait` object:
 ```
 
 When `wait.reason` is `timeout`, the caller should call `wait` again with the returned `wait.version` as `after_version`.  When the role has an actionable opportunity, the response has `status: "ready"` and includes prompt, tools, limits, and the active `turn.opportunity_id`.  When the case reaches a terminal result while a wait request is active, the response has `status: "done"` and `final_reason`.  A remote runner can use `wait` to block on AAR state without inventing its own sleep interval.
+
+## STATUS
+
+`GET /lawyerapi/v1/status` requires `case_id` and `role_id`.  It returns the current case phase, case status, active turn, current opportunity details when a lawyer turn is active, and compact counts for evidence, filings, events, and council votes.  The same data is available through the read-only `case_status` tool.
+
+```bash
+curl -sS "$BASE/status?case_id=arb-1&role_id=plaintiff"
+```
+
+A response has this shape:
+
+```json
+{
+  "ok": true,
+  "case_id": "arb-1",
+  "role_id": "plaintiff",
+  "status": "waiting",
+  "phase": "arguments",
+  "case_status": "open",
+  "resolution": "",
+  "deliberation_round": 1,
+  "state_version": 8,
+  "turn": {
+    "role_id": "defendant",
+    "phase": "arguments",
+    "opportunity_id": "arguments:defendant",
+    "remaining_ms": 712000,
+    "attempts_remaining": 3
+  },
+  "current_opportunity": {
+    "opportunity_id": "arguments:defendant",
+    "role_id": "defendant",
+    "phase": "arguments",
+    "allowed_operations": ["submit_argument"]
+  },
+  "counts": {
+    "events": 12,
+    "visible_evidence": 4,
+    "submitted_evidence": 1,
+    "offered_evidence": 2,
+    "technical_reports": 0,
+    "council_votes": 0
+  },
+  "message": "This role has no active opportunity."
+}
+```
 
 ## RESULT
 
@@ -314,6 +393,7 @@ A failed tool call returns `ok: false` and an error object.  Rejected mutating c
 
 | Tool | Phases | Mutates | Meaning |
 | --- | --- | --- | --- |
+| `case_status` | all lawyer phases | no | Return phase, role status, active turn, current opportunity, and compact case counts. |
 | `get_case` | all lawyer phases | no | Return the visible case record and limits for the role. |
 | `send_work_notes` | all lawyer phases | off-record log only | Append private work notes to `work-notes.ndjson`. |
 | `list_evidence` | all lawyer phases | no | List visible evidence metadata. |
@@ -333,6 +413,7 @@ A failed tool call returns `ok: false` and an error object.  Rejected mutating c
 
 | Tool | Meaning |
 | --- | --- |
+| `case_status` | Return phase, role status, active turn, current opportunity, and compact case counts. |
 | `get_case` | Return the current arbitration record. |
 | `get_turn` | Return the active turn role, phase, deadline, remaining time, and attempts. |
 | `list_events` | Return recorded case events, with optional `offset` and `limit`. |

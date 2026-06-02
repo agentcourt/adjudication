@@ -77,6 +77,7 @@ func startLawyerAPIServer(rc *runContext) (*lawyerAPIServer, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(lawyerAPIBasePath+"/get", api.handleGet)
 	mux.HandleFunc(lawyerAPIBasePath+"/wait", api.handleWait)
+	mux.HandleFunc(lawyerAPIBasePath+"/status", api.handleStatus)
 	mux.HandleFunc(lawyerAPIBasePath+"/result", api.handleResult)
 	mux.HandleFunc(lawyerAPIBasePath+"/do", api.handleDo)
 	api.server = &http.Server{Handler: mux}
@@ -359,6 +360,48 @@ func (api *lawyerAPIServer) handleWait(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (api *lawyerAPIServer) handleStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeLawyerJSON(w, http.StatusMethodNotAllowed, map[string]any{
+			"ok":    false,
+			"error": apiError("method_not_allowed", "use GET"),
+		})
+		return
+	}
+	role := strings.TrimSpace(r.URL.Query().Get("role_id"))
+	caseID := strings.TrimSpace(r.URL.Query().Get("case_id"))
+	if caseID == "" {
+		writeLawyerJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": apiError("missing_case_id", "case_id is required"),
+		})
+		return
+	}
+	if role == "" {
+		writeLawyerJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":      false,
+			"case_id": caseID,
+			"error":   apiError("missing_role_id", "role_id is required"),
+		})
+		return
+	}
+	if role != "observer" {
+		if err := validateAttorneyRole(role); err != nil {
+			writeLawyerJSON(w, http.StatusForbidden, map[string]any{
+				"ok":      false,
+				"case_id": caseID,
+				"role_id": role,
+				"error":   apiError("invalid_role", err.Error()),
+			})
+			return
+		}
+	}
+	api.mu.Lock()
+	response := api.caseStatusResponseLocked(caseID, role)
+	api.mu.Unlock()
+	writeLawyerJSON(w, http.StatusOK, response)
+}
+
 func (api *lawyerAPIServer) handleResult(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeLawyerJSON(w, http.StatusMethodNotAllowed, map[string]any{
@@ -472,6 +515,13 @@ func (api *lawyerAPIServer) handleLawyerDo(w http.ResponseWriter, req lawyerDoRe
 	}
 	api.mu.Lock()
 	defer api.mu.Unlock()
+	if req.Tool == "case_status" {
+		response := api.responseBaseLocked(req.CaseID, req.RoleID)
+		response["ok"] = true
+		response["result"] = api.caseStatusPayloadLocked(req.RoleID)
+		writeLawyerJSON(w, http.StatusOK, response)
+		return
+	}
 	turn := api.active
 	if turn == nil || turn.completed {
 		response := api.responseBaseLocked(req.CaseID, req.RoleID)
@@ -544,6 +594,8 @@ func (api *lawyerAPIServer) handleObserverDo(w http.ResponseWriter, req lawyerDo
 
 func (api *lawyerAPIServer) callLawyerToolLocked(turn *lawyerTurn, tool string, args map[string]any, callID string) (map[string]any, bool, bool, error) {
 	switch tool {
+	case "case_status":
+		return api.caseStatusPayloadLocked(turn.opportunity.Role), false, false, nil
 	case "get_case":
 		view := api.rc.attorneyView(turn.opportunity)
 		return map[string]any{"case": view}, false, false, nil
@@ -785,6 +837,8 @@ func (api *lawyerAPIServer) recordSubmittedEvidenceEventLocked(turn *lawyerTurn,
 
 func (api *lawyerAPIServer) callObserverToolLocked(tool string, args map[string]any) (map[string]any, error) {
 	switch tool {
+	case "case_status":
+		return api.caseStatusPayloadLocked("observer"), nil
 	case "get_case":
 		return map[string]any{"case": api.observerViewLocked()}, nil
 	case "get_turn":
@@ -858,6 +912,105 @@ func (api *lawyerAPIServer) observerViewLocked() map[string]any {
 		"turn":   api.turnPayloadLocked(api.active),
 		"events": len(api.rc.events),
 		"policy": api.rc.cfg.Policy.StateMap(),
+	}
+}
+
+func (api *lawyerAPIServer) caseStatusResponseLocked(caseID string, roleID string) map[string]any {
+	response := api.responseBaseLocked(caseID, roleID)
+	for key, value := range api.caseStatusPayloadLocked(roleID) {
+		response[key] = value
+	}
+	return response
+}
+
+func (api *lawyerAPIServer) caseStatusPayloadLocked(roleID string) map[string]any {
+	caseObj := mapAny(api.rc.state["case"])
+	phase := currentPhase(api.rc.state)
+	caseStatus := mapString(caseObj["status"])
+	resolution := currentResolution(api.rc.state)
+	roleStatus := api.caseRoleStatusLocked(roleID, caseObj)
+	payload := map[string]any{
+		"status":              roleStatus,
+		"phase":               phase,
+		"case_status":         caseStatus,
+		"resolution":          resolution,
+		"deliberation_round":  intNumber(caseObj["deliberation_round"]),
+		"state_version":       mapAny(api.rc.state)["state_version"],
+		"turn":                api.turnPayloadLocked(api.active),
+		"current_opportunity": api.currentOpportunityPayloadLocked(),
+		"counts":              api.caseStatusCountsLocked(caseObj),
+		"message":             caseStatusMessage(roleStatus),
+	}
+	if api.terminalReason != "" {
+		payload["final_reason"] = api.terminalReason
+	}
+	if roleID == "observer" {
+		payload["limits"] = observerLimits(api.rc)
+	} else if api.active != nil && !api.active.completed && api.active.opportunity.Role == roleID {
+		payload["limits"] = api.lawyerLimitsLocked(api.active)
+	}
+	return payload
+}
+
+func (api *lawyerAPIServer) caseRoleStatusLocked(roleID string, caseObj map[string]any) string {
+	if api.caseIsFinalLocked(caseObj) {
+		return "done"
+	}
+	if roleID == "observer" {
+		return "observing"
+	}
+	if api.active != nil && !api.active.completed && api.active.opportunity.Role == roleID {
+		return "ready"
+	}
+	return "waiting"
+}
+
+func (api *lawyerAPIServer) currentOpportunityPayloadLocked() map[string]any {
+	turn := api.active
+	if turn == nil || turn.completed {
+		return nil
+	}
+	return map[string]any{
+		"opportunity_id":     turn.opportunity.ID,
+		"role_id":            turn.opportunity.Role,
+		"phase":              turn.opportunity.Phase,
+		"objective":          turn.opportunity.Objective,
+		"may_pass":           turn.opportunity.MayPass,
+		"allowed_operations": turn.opportunity.AllowedTools,
+		"remaining_ms":       remainingTurnMilliseconds(turn),
+		"attempts_remaining": turn.attemptsRemaining,
+		"attempts_max":       turn.attemptsMax,
+	}
+}
+
+func (api *lawyerAPIServer) caseStatusCountsLocked(caseObj map[string]any) map[string]any {
+	return map[string]any{
+		"events":             len(api.rc.events),
+		"visible_evidence":   len(api.rc.listVisibleEvidence()),
+		"submitted_evidence": len(mapList(caseObj["submitted_evidence"])),
+		"offered_evidence":   len(mapList(caseObj["offered_evidence"])),
+		"technical_reports":  len(mapList(caseObj["technical_reports"])),
+		"openings":           len(mapList(caseObj["openings"])),
+		"arguments":          len(mapList(caseObj["arguments"])),
+		"rebuttals":          len(mapList(caseObj["rebuttals"])),
+		"surrebuttals":       len(mapList(caseObj["surrebuttals"])),
+		"closings":           len(mapList(caseObj["closings"])),
+		"council_votes":      len(mapList(caseObj["council_votes"])),
+	}
+}
+
+func caseStatusMessage(roleStatus string) string {
+	switch roleStatus {
+	case "ready":
+		return "This role has the active lawyer opportunity."
+	case "waiting":
+		return "This role has no active opportunity."
+	case "observing":
+		return "Observer access is read-only."
+	case "done":
+		return "The case is done."
+	default:
+		return "Case status is available."
 	}
 }
 
@@ -991,7 +1144,7 @@ func (api *lawyerAPIServer) statusResponseLocked(caseID string, roleID string) m
 		response := api.responseBaseLocked(caseID, roleID)
 		response["status"] = "done"
 		response["prompt"] = ""
-		response["tools"] = []map[string]any{}
+		response["tools"] = []map[string]any{caseStatusHTTPToolSpec()}
 		if api.terminalReason != "" {
 			response["final_reason"] = api.terminalReason
 		}
@@ -1010,7 +1163,7 @@ func (api *lawyerAPIServer) statusResponseLocked(caseID string, roleID string) m
 	if turn == nil || turn.completed || turn.opportunity.Role != roleID {
 		response["status"] = "waiting"
 		response["prompt"] = ""
-		response["tools"] = []map[string]any{}
+		response["tools"] = []map[string]any{caseStatusHTTPToolSpec()}
 		return response
 	}
 	response["status"] = "ready"
@@ -1058,21 +1211,28 @@ func (api *lawyerAPIServer) turnPayloadLocked(turn *lawyerTurn) map[string]any {
 	if turn == nil {
 		return nil
 	}
-	remaining := time.Until(turn.deadline).Milliseconds()
-	if remaining < 0 {
-		remaining = 0
-	}
 	return map[string]any{
 		"role_id":            turn.opportunity.Role,
 		"phase":              turn.opportunity.Phase,
 		"opportunity_id":     turn.opportunity.ID,
 		"turn_number":        turn.turnNumber,
 		"deadline":           turn.deadline.UTC().Format(time.RFC3339Nano),
-		"remaining_ms":       remaining,
+		"remaining_ms":       remainingTurnMilliseconds(turn),
 		"attempts_max":       turn.attemptsMax,
 		"attempts_remaining": turn.attemptsRemaining,
 		"completed":          turn.completed,
 	}
+}
+
+func remainingTurnMilliseconds(turn *lawyerTurn) int64 {
+	if turn == nil {
+		return 0
+	}
+	remaining := time.Until(turn.deadline).Milliseconds()
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
 }
 
 func (api *lawyerAPIServer) lawyerLimitsLocked(turn *lawyerTurn) map[string]any {
@@ -1172,6 +1332,7 @@ func optionalIntParam(params map[string]any, key string, fallback int) (int, err
 
 func lawyerToolSpecs(opportunity Opportunity) []map[string]any {
 	specs := []map[string]any{
+		caseStatusHTTPToolSpec(),
 		httpToolSpec("get_case", "Return the current visible arbitration record.", emptyObjectSchema(), true),
 		httpToolSpec("send_work_notes", "Send private work notes for off-record operator analysis. This does not create evidence, a filing, a technical report, or a case event.", workNotesSchema(), false),
 	}
@@ -1196,6 +1357,7 @@ func lawyerToolSpecs(opportunity Opportunity) []map[string]any {
 
 func observerToolSpecs() []map[string]any {
 	return []map[string]any{
+		caseStatusHTTPToolSpec(),
 		httpToolSpec("get_case", "Return the current arbitration record.", emptyObjectSchema(), true),
 		httpToolSpec("get_turn", "Return the current turn role, phase, deadline, and attempts.", emptyObjectSchema(), true),
 		httpToolSpec("list_events", "List recorded case events.", listEventsSchema(), true),
@@ -1203,6 +1365,10 @@ func observerToolSpecs() []map[string]any {
 		httpToolSpec("stat_evidence", "Return metadata for one visible evidence item.", evidenceIDSchema(), true),
 		httpToolSpec("read_evidence_range", "Read a bounded byte range from one visible evidence item as base64.", readEvidenceRangeSchema(), true),
 	}
+}
+
+func caseStatusHTTPToolSpec() map[string]any {
+	return httpToolSpec("case_status", "Return the current case phase, active turn, role status, and case counts.", emptyObjectSchema(), true)
 }
 
 func httpToolSpec(name string, description string, schema map[string]any, readOnly bool) map[string]any {

@@ -144,12 +144,93 @@ func TestLawyerSendWorkNotesWritesOffRecordLog(t *testing.T) {
 	}
 }
 
-func TestLawyerToolSpecsIncludeWorkNotesEveryPhase(t *testing.T) {
+func TestLawyerToolSpecsIncludeStatusAndWorkNotesEveryPhase(t *testing.T) {
 	for _, phase := range []string{"openings", "arguments", "rebuttals", "surrebuttals", "closings"} {
 		tools := lawyerToolSpecs(Opportunity{Phase: phase})
+		if !hasLawyerTool(tools, "case_status") {
+			t.Fatalf("%s tools missing case_status: %#v", phase, tools)
+		}
 		if !hasLawyerTool(tools, "send_work_notes") {
 			t.Fatalf("%s tools missing send_work_notes: %#v", phase, tools)
 		}
+	}
+}
+
+func TestLawyerStatusReportsWaitingRoleAndActiveTurn(t *testing.T) {
+	api, _ := testLawyerAPIWithTurn()
+	caseObj := mapAny(api.rc.state["case"])
+	caseObj["status"] = "open"
+	caseObj["phase"] = "openings"
+	caseObj["deliberation_round"] = 1
+	caseObj["arguments"] = []map[string]any{{"role": "plaintiff"}}
+	api.rc.events = []Event{{Type: "run_initialized"}}
+
+	status, got := callLawyerAPIStatus(t, api, "case_id=arb-1&role_id=defendant")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["status"] != "waiting" {
+		t.Fatalf("status field = %#v, want waiting", got["status"])
+	}
+	if got["phase"] != "openings" || got["case_status"] != "open" {
+		t.Fatalf("case fields = phase %#v status %#v", got["phase"], got["case_status"])
+	}
+	turn, ok := got["turn"].(map[string]any)
+	if !ok {
+		t.Fatalf("turn = %#v, want object", got["turn"])
+	}
+	if turn["role_id"] != "plaintiff" || turn["opportunity_id"] != "openings:plaintiff" {
+		t.Fatalf("turn = %#v", turn)
+	}
+	current, ok := got["current_opportunity"].(map[string]any)
+	if !ok {
+		t.Fatalf("current_opportunity = %#v, want object", got["current_opportunity"])
+	}
+	if current["role_id"] != "plaintiff" {
+		t.Fatalf("current_opportunity = %#v", current)
+	}
+	counts, ok := got["counts"].(map[string]any)
+	if !ok {
+		t.Fatalf("counts = %#v, want object", got["counts"])
+	}
+	if intNumber(counts["events"]) != 1 || intNumber(counts["arguments"]) != 1 {
+		t.Fatalf("counts = %#v", counts)
+	}
+
+	_, toolGot := callLawyerAPIDo(t, api, map[string]any{
+		"case_id":   "arb-1",
+		"role_id":   "defendant",
+		"tool":      "case_status",
+		"arguments": map[string]any{},
+	})
+	if toolGot["ok"] != true {
+		t.Fatalf("case_status tool ok = %#v in %#v", toolGot["ok"], toolGot)
+	}
+	result, ok := toolGot["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("tool result = %#v, want object", toolGot["result"])
+	}
+	if result["status"] != "waiting" {
+		t.Fatalf("tool result status = %#v, want waiting", result["status"])
+	}
+}
+
+func TestLawyerGetWaitingAdvertisesCaseStatus(t *testing.T) {
+	api, _ := testLawyerAPIWithTurn()
+
+	status, got := callLawyerAPIGet(t, api, "case_id=arb-1&role_id=defendant")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["status"] != "waiting" {
+		t.Fatalf("status field = %#v, want waiting", got["status"])
+	}
+	tools := mapList(got["tools"])
+	if !hasLawyerTool(tools, "case_status") {
+		t.Fatalf("waiting tools missing case_status: %#v", tools)
+	}
+	if hasLawyerTool(tools, "submit_decision") {
+		t.Fatalf("waiting tools should not include submit_decision: %#v", tools)
 	}
 }
 
@@ -419,6 +500,30 @@ func callLawyerAPIWait(t *testing.T, api *lawyerAPIServer, query string) (int, m
 	req := httptest.NewRequest(http.MethodGet, lawyerAPIBasePath+"/wait?"+query, nil)
 	rec := httptest.NewRecorder()
 	api.handleWait(rec, req)
+	var got map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return rec.Code, got
+}
+
+func callLawyerAPIGet(t *testing.T, api *lawyerAPIServer, query string) (int, map[string]any) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, lawyerAPIBasePath+"/get?"+query, nil)
+	rec := httptest.NewRecorder()
+	api.handleGet(rec, req)
+	var got map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return rec.Code, got
+}
+
+func callLawyerAPIStatus(t *testing.T, api *lawyerAPIServer, query string) (int, map[string]any) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, lawyerAPIBasePath+"/status?"+query, nil)
+	rec := httptest.NewRecorder()
+	api.handleStatus(rec, req)
 	var got map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode response: %v", err)

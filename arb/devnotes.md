@@ -10,6 +10,12 @@ The Lawyer API now exposes `GET /lawyerapi/v1/result`.  The request uses the sam
 
 The Lawyer MCP adapter exposes the same data through the read-only `get_case_result` tool.  This keeps final-result inspection available to lawyers and observers without adding another polling loop or reading output files from the operator's filesystem.  The adapter does not interpret the vote data; it forwards the case-result JSON returned by AAR.
 
+### Lawyer case status
+
+Reference: [Lawyer HTTP API](../lawyerapi.md), [Lawyer MCP adapter](tools/lawyer-mcp/README.md)
+
+The Lawyer API now exposes `GET /lawyerapi/v1/status` and the read-only `case_status` tool.  The response reports the role's current status, case phase, case status, active turn, current opportunity details, state version, and compact counts for evidence, filings, events, and council votes.  The MCP adapter exposes `case_status` through the stable tool set and calls the status endpoint directly, so a waiting lawyer can inspect case status without an active `opportunity_id`.
+
 ### Lawyer Evidence Tools
 
 Reference: [Evidence Handling](docs/evidence-handling.md), [OpenClaw lawyer runbook](running.md)

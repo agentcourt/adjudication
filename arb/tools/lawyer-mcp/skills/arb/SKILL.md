@@ -90,8 +90,8 @@ The standing order for a lawyer role is:
 
 1. Call `wait_for_opportunity`.
 2. If the response says `state: waiting`, call `wait_for_opportunity` again with the returned `after_version`.
-3. If the response says `state: ready`, read the prompt, phase, opportunity id, remaining time, attempts remaining, available tools, and limits.
-4. Use the available tools to inspect the visible record and scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata before filing.
+3. If the response says `state: ready`, read the prompt, phase, opportunity id, remaining time, attempts remaining, allowed operations, and limits.
+4. Use `case_status` for compact status when useful, then inspect the visible record and scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata before filing.
 5. Keep accumulated private work notes for the turn and call `send_work_notes` before submitting the legal act.
 6. Submit exactly one final legal act for the current opportunity through `submit_decision`.
 7. Confirm that the response reports success.
@@ -102,7 +102,7 @@ The standing order for a lawyer role is:
 The standing order for an observer role is:
 
 1. Call `wait_for_opportunity`.
-2. Use read-only tools to inspect status, the record, events, turn information, and visible evidence.
+2. Use `case_status` and other read-only tools to inspect status, the record, events, turn information, and visible evidence.
 3. Do not call any tool that changes the case.
 
 ## Lawyer Procedure

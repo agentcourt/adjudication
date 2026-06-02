@@ -527,6 +527,7 @@ func stableLawyerToolSpecs(roleID string) []map[string]any {
 	tools := []map[string]any{currentOpportunityToolSpec(), waitForOpportunityToolSpec()}
 	if roleID == "observer" {
 		return append(tools,
+			mcpToolSpec("case_status", "Return the current case phase, active turn, role status, and case counts.", mcpEmptyObjectSchema(), true),
 			mcpToolSpec("get_case", "Return the current arbitration record.", mcpEmptyObjectSchema(), true),
 			mcpToolSpec("get_case_result", "Return final case results, including council votes and rationales. If the case is pending, report pending status.", mcpEmptyObjectSchema(), true),
 			mcpToolSpec("get_turn", "Return the current turn role, phase, deadline, and attempts.", mcpEmptyObjectSchema(), true),
@@ -537,6 +538,7 @@ func stableLawyerToolSpecs(roleID string) []map[string]any {
 		)
 	}
 	return append(tools,
+		mcpToolSpec("case_status", "Return the current case phase, active turn, role status, and case counts.", mcpEmptyObjectSchema(), true),
 		mcpToolSpec("get_case", "Return the current visible arbitration record.", mcpEmptyObjectSchema(), true),
 		mcpToolSpec("get_case_result", "Return final case results, including council votes and rationales. If the case is pending, report pending status.", mcpEmptyObjectSchema(), true),
 		mcpToolSpec("send_work_notes", "Send private work notes for off-record operator analysis. This does not create evidence, a filing, a technical report, or a case event.", mcpWorkNotesSchema(), false),
@@ -835,6 +837,13 @@ func (s *mcpServer) callTool(ctx context.Context, session *mcpSession, params js
 		}
 		return toolResult(result, mapString(result["state"]) == "error"), nil
 	}
+	if call.Name == "case_status" {
+		result, err := s.getCaseStatus(ctx, session)
+		if err != nil {
+			return toolResult(map[string]any{"ok": false, "error": err.Error()}, true), nil
+		}
+		return toolResult(result, false), nil
+	}
 	if call.Name == "get_case_result" {
 		result, err := s.getCaseResult(ctx, session)
 		if err != nil {
@@ -878,6 +887,36 @@ func (s *mcpServer) getCurrent(ctx context.Context, session *mcpSession) (map[st
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("Lawyer API GET returned HTTP %d: %s", resp.StatusCode, compactJSON(value))
+	}
+	return value, nil
+}
+
+func (s *mcpServer) getCaseStatus(ctx context.Context, session *mcpSession) (map[string]any, error) {
+	u, err := url.Parse(session.LawyerAPIBase + "/status")
+	if err != nil {
+		return nil, fmt.Errorf("build Lawyer API status URL: %w", err)
+	}
+	query := u.Query()
+	query.Set("case_id", session.CaseID)
+	query.Set("role_id", session.RoleID)
+	u.RawQuery = query.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("call Lawyer API status: %w", err)
+	}
+	defer resp.Body.Close()
+	value, err := decodeJSONObject(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("decode Lawyer API status response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		value["ok"] = false
+		value["http_status"] = resp.StatusCode
+		value["message"] = fmt.Sprintf("Lawyer API status returned HTTP %d.", resp.StatusCode)
 	}
 	return value, nil
 }

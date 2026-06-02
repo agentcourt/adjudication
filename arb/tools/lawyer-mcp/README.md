@@ -96,9 +96,11 @@ The operating loop is short.  Call `wait_for_opportunity`.  If it returns `state
 
 ## Tool Behavior
 
-Every session exposes `wait_for_opportunity` and `get_current_opportunity`.  `wait_for_opportunity` calls `GET /lawyerapi/v1/wait` for the bound case-role and waits up to 30 seconds.  It returns `state: ready` when the role should act, `state: waiting` when no opportunity is ready, `state: done` when the case has ended, and `state: error` when the clawyer needs operator help.
+Every session exposes `wait_for_opportunity`, `get_current_opportunity`, and `case_status`.  `wait_for_opportunity` calls `GET /lawyerapi/v1/wait` for the bound case-role and waits up to 30 seconds.  It returns `state: ready` when the role should act, `state: waiting` when no opportunity is ready, `state: done` when the case has ended, and `state: error` when the clawyer needs operator help.
 
 `get_current_opportunity` calls `GET /lawyerapi/v1/get` for the bound case-role and returns the prompt, role status, active turn, allowed operations, limits, remaining time, and attempts left.  A waiting role receives waiting status and no active-turn prompt.  Use `get_current_opportunity` for inspection; use `wait_for_opportunity` for the main clawyer loop.
+
+`case_status` calls `GET /lawyerapi/v1/status` for the bound case-role.  It returns the current phase, case status, active turn, current opportunity when a lawyer turn is active, and compact counts for evidence, filings, events, and council votes.  Use it for quick inspection when the clawyer does not need the full record.
 
 `get_case_result` calls `GET /lawyerapi/v1/result` for the bound case-role.  If the case is pending, it returns pending status.  If the case is closed, it returns the resolution, final reason when known, council votes, council vote rationales, and vote counts by round.  The adapter forwards the AAR response without deriving vote explanations from logs or transcripts.
 

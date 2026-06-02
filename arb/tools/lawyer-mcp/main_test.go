@@ -25,7 +25,7 @@ func TestMCPListsStableToolsForBoundCaseRole(t *testing.T) {
 		"method":  "tools/list",
 	})
 	tools := resultTools(t, got)
-	for _, want := range []string{"get_current_opportunity", "wait_for_opportunity", "get_case", "get_case_result", "send_work_notes", "list_evidence", "stat_evidence", "read_evidence_range", "begin_evidence_upload", "write_evidence_chunk", "commit_evidence_upload", "submit_evidence", "submit_decision"} {
+	for _, want := range []string{"get_current_opportunity", "wait_for_opportunity", "case_status", "get_case", "get_case_result", "send_work_notes", "list_evidence", "stat_evidence", "read_evidence_range", "begin_evidence_upload", "write_evidence_chunk", "commit_evidence_upload", "submit_evidence", "submit_decision"} {
 		if !hasTool(tools, want) {
 			t.Fatalf("tools/list missing %s: %#v", want, tools)
 		}
@@ -43,7 +43,7 @@ func TestMCPListsStableToolsForBoundCaseRole(t *testing.T) {
 		"method":  "tools/list",
 	})
 	tools = resultTools(t, got)
-	for _, want := range []string{"get_current_opportunity", "wait_for_opportunity", "get_case", "get_case_result", "send_work_notes", "list_evidence", "stat_evidence", "read_evidence_range", "begin_evidence_upload", "write_evidence_chunk", "commit_evidence_upload", "submit_evidence", "submit_decision"} {
+	for _, want := range []string{"get_current_opportunity", "wait_for_opportunity", "case_status", "get_case", "get_case_result", "send_work_notes", "list_evidence", "stat_evidence", "read_evidence_range", "begin_evidence_upload", "write_evidence_chunk", "commit_evidence_upload", "submit_evidence", "submit_decision"} {
 		if !hasTool(tools, want) {
 			t.Fatalf("argument tools/list missing %s: %#v", want, tools)
 		}
@@ -172,6 +172,45 @@ func TestMCPGetCaseResultForwardsCaseRole(t *testing.T) {
 	}
 }
 
+func TestMCPCaseStatusForwardsCaseRole(t *testing.T) {
+	fake := newFakeLawyerAPI(t)
+	defer fake.server.Close()
+	fake.setWaiting()
+	srv := newTestMCPServer(fake.server.URL + "/lawyerapi/v1")
+	sessionID := initializeMCP(t, srv, "arb-1", "plaintiff")
+
+	got := callMCP(t, srv, sessionID, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      7,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "case_status",
+			"arguments": map[string]any{},
+		},
+	})
+	if errObj := got["error"]; errObj != nil {
+		t.Fatalf("tools/call returned RPC error: %#v", errObj)
+	}
+	result := rpcResult(t, got)
+	if isError, _ := result["isError"].(bool); isError {
+		t.Fatalf("tools/call isError = true: %#v", result)
+	}
+	content := result["structuredContent"].(map[string]any)
+	if status := mapString(content["status"]); status != "waiting" {
+		t.Fatalf("status = %q, want waiting in %#v", status, content)
+	}
+	if roleID := mapString(content["role_id"]); roleID != "plaintiff" {
+		t.Fatalf("role_id = %q, want plaintiff in %#v", roleID, content)
+	}
+	counts, ok := content["counts"].(map[string]any)
+	if !ok {
+		t.Fatalf("counts = %#v, want object", content["counts"])
+	}
+	if mapNumberString(counts["events"]) != "2" {
+		t.Fatalf("counts = %#v", counts)
+	}
+}
+
 func TestMCPWaitingSessionExposesStableTools(t *testing.T) {
 	fake := newFakeLawyerAPI(t)
 	defer fake.server.Close()
@@ -190,6 +229,9 @@ func TestMCPWaitingSessionExposesStableTools(t *testing.T) {
 	}
 	if !hasTool(tools, "wait_for_opportunity") {
 		t.Fatalf("waiting tools missing wait_for_opportunity: %#v", tools)
+	}
+	if !hasTool(tools, "case_status") {
+		t.Fatalf("waiting tools missing case_status: %#v", tools)
 	}
 	if !hasTool(tools, "get_case_result") {
 		t.Fatalf("waiting tools missing get_case_result: %#v", tools)
@@ -430,6 +472,9 @@ func TestMCPObserverToolCallOmitsOpportunityID(t *testing.T) {
 	tools := resultTools(t, got)
 	if !hasTool(tools, "get_turn") {
 		t.Fatalf("observer tools/list missing get_turn: %#v", tools)
+	}
+	if !hasTool(tools, "case_status") {
+		t.Fatalf("observer tools/list missing case_status: %#v", tools)
 	}
 	if !hasTool(tools, "get_case_result") {
 		t.Fatalf("observer tools/list missing get_case_result: %#v", tools)
@@ -784,6 +829,43 @@ func (f *fakeLawyerAPI) handle(w http.ResponseWriter, r *http.Request) {
 			resp["wait"].(map[string]any)["reason"] = "done"
 		}
 		_ = json.NewEncoder(w).Encode(resp)
+	case r.Method == http.MethodGet && r.URL.Path == "/lawyerapi/v1/status":
+		roleID := r.URL.Query().Get("role_id")
+		if r.URL.Query().Get("case_id") != "arb-1" || (roleID != "plaintiff" && roleID != "observer") {
+			w.WriteHeader(http.StatusForbidden)
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": map[string]any{"code": "bad_role"}})
+			return
+		}
+		status := f.status
+		if roleID == "observer" && status != "done" {
+			status = "observing"
+		}
+		turn := map[string]any{
+			"role_id":            "plaintiff",
+			"phase":              f.phase,
+			"opportunity_id":     f.phase + ":plaintiff",
+			"remaining_ms":       120000,
+			"attempts_remaining": 3,
+		}
+		if f.status == "done" {
+			turn = nil
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":          true,
+			"case_id":     "arb-1",
+			"role_id":     roleID,
+			"status":      status,
+			"phase":       f.phase,
+			"case_status": "open",
+			"turn":        turn,
+			"counts": map[string]any{
+				"events":             2,
+				"visible_evidence":   3,
+				"submitted_evidence": 1,
+				"council_votes":      0,
+			},
+			"message": "This role has no active opportunity.",
+		})
 	case r.Method == http.MethodGet && r.URL.Path == "/lawyerapi/v1/result":
 		roleID := r.URL.Query().Get("role_id")
 		if r.URL.Query().Get("case_id") != "arb-1" || (roleID != "plaintiff" && roleID != "observer") {
