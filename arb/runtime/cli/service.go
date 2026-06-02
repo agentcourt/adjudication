@@ -65,6 +65,10 @@ func RunService(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stderr, "aar service listening on http://%s\n", server.ListenAddr())
-	return server.Serve(context.Background())
+	ln, err := server.Listen()
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stderr, "aar service listening on http://%s\n", ln.Addr().String())
+	return server.Serve(context.Background(), ln)
 }

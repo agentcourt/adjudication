@@ -119,7 +119,11 @@ func NewForEndpoint(endpoint string, online bool, timeout time.Duration) (*Clien
 		if apiKey == "" {
 			return nil, fmt.Errorf("OPENAI_API_KEY is required for openai models")
 		}
-		return New(apiKey, "https://api.openai.com/v1", online, timeout)
+		baseURL := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
+		if baseURL == "" {
+			baseURL = "https://api.openai.com/v1"
+		}
+		return New(apiKey, baseURL, online, timeout)
 	case "openrouter":
 		apiKey := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
 		if apiKey == "" {

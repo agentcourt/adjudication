@@ -99,6 +99,19 @@ func TestNewFromEnv(t *testing.T) {
 	}
 }
 
+func TestNewForEndpointUsesOpenAIBaseURL(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "oa-key")
+	t.Setenv("OPENAI_BASE_URL", "https://proxy.local/v1")
+
+	client, err := NewForEndpoint("openai", false, time.Second)
+	if err != nil {
+		t.Fatalf("NewForEndpoint error = %v", err)
+	}
+	if client.baseURL != "https://proxy.local/v1" {
+		t.Fatalf("baseURL = %q, want explicit OPENAI_BASE_URL", client.baseURL)
+	}
+}
+
 func TestConvertInputItemsSupportsMessagesAndToolOutputs(t *testing.T) {
 	t.Parallel()
 

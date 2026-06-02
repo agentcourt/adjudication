@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -129,9 +130,15 @@ func (s *Server) ListenAddr() string {
 	return s.cfg.ListenAddr
 }
 
-func (s *Server) Serve(ctx context.Context) error {
+func (s *Server) Listen() (net.Listener, error) {
+	return net.Listen("tcp", s.cfg.ListenAddr)
+}
+
+func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
+	if ln == nil {
+		return fmt.Errorf("listener is required")
+	}
 	server := &http.Server{
-		Addr:    s.cfg.ListenAddr,
 		Handler: s.Handler(),
 	}
 	go func() {
@@ -140,7 +147,7 @@ func (s *Server) Serve(ctx context.Context) error {
 		defer cancel()
 		_ = server.Shutdown(shutdownCtx)
 	}()
-	err := server.ListenAndServe()
+	err := server.Serve(ln)
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
@@ -388,9 +395,12 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 	s.mu.Unlock()
 	s.persistRecordBestEffort(rec)
 
-	go s.captureStdout(stdout, stdoutFile)
+	stdoutDone := make(chan error, 1)
+	go func() {
+		stdoutDone <- captureStdout(stdout, stdoutFile)
+	}()
 	go s.captureStderr(rec, stderr, stderrFile)
-	go s.waitChild(rec)
+	go s.waitChild(rec, stdoutDone)
 
 	if err := ctx.Err(); err != nil {
 		return CaseRecord{}, err
@@ -401,14 +411,39 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 	return out, nil
 }
 
-func (s *Server) captureStdout(stdout io.Reader, logFile *os.File) {
-	defer logFile.Close()
+func captureStdout(stdout io.Reader, logFile *os.File) error {
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16<<20)
+	var firstErr error
+	closed := false
 	for scanner.Scan() {
 		line := scanner.Text()
-		_, _ = fmt.Fprintln(logFile, line)
+		if firstErr != nil {
+			continue
+		}
+		if _, err := fmt.Fprintln(logFile, line); err != nil {
+			firstErr = fmt.Errorf("write stdout log: %w", err)
+			_ = logFile.Close()
+			closed = true
+		}
 	}
+	if err := scanner.Err(); err != nil {
+		if !closed {
+			_ = logFile.Close()
+			closed = true
+		}
+		if firstErr != nil {
+			return errors.Join(firstErr, fmt.Errorf("read stdout pipe: %w", err))
+		}
+		return fmt.Errorf("read stdout pipe: %w", err)
+	}
+	if closed {
+		return firstErr
+	}
+	if err := logFile.Close(); err != nil {
+		return fmt.Errorf("close stdout log: %w", err)
+	}
+	return firstErr
 }
 
 func (s *Server) captureStderr(rec *CaseRecord, stderr io.Reader, logFile *os.File) {
@@ -432,8 +467,9 @@ func (s *Server) captureStderr(rec *CaseRecord, stderr io.Reader, logFile *os.Fi
 	}
 }
 
-func (s *Server) waitChild(rec *CaseRecord) {
+func (s *Server) waitChild(rec *CaseRecord, stdoutDone <-chan error) {
 	err := rec.cmd.Wait()
+	stdoutErr := <-stdoutDone
 	exitCode := 0
 	if err != nil {
 		exitCode = 1
@@ -447,13 +483,23 @@ func (s *Server) waitChild(rec *CaseRecord) {
 	rec.ExitCode = &exitCode
 	rec.cmd = nil
 	rec.PID = 0
-	stdoutRaw, _ := os.ReadFile(rec.StdoutLog)
-	if summary := parseLastJSON(string(stdoutRaw)); summary != nil {
-		rec.Summary = summary
+	if stdoutErr != nil {
+		rec.Error = stdoutErr.Error()
+	} else {
+		stdoutRaw, readErr := os.ReadFile(rec.StdoutLog)
+		if readErr != nil {
+			rec.Error = fmt.Sprintf("read stdout log: %v", readErr)
+		} else if summary := parseLastJSON(string(stdoutRaw)); summary != nil {
+			rec.Summary = summary
+		}
 	}
 	switch {
 	case rec.canceling:
 		rec.Status = "canceled"
+	case stdoutErr != nil:
+		rec.Status = "failed"
+	case rec.Error != "" && rec.Summary == nil:
+		rec.Status = "failed"
 	case exitCode == 0 && mapString(rec.Summary["status"]) == "failed":
 		rec.Status = "failed"
 		rec.Error = mapString(rec.Summary["error"])
