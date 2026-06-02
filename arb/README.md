@@ -88,7 +88,7 @@ curl -sS -X POST "$BASE/do" \
 | `--council-pool` | Council model and persona pool. Defaults to `../common/data/personas/pool.csv` when `arb/` is the working directory. |
 | `--attorney-instructions` | Standing lawyer instructions file. Defaults to `./attorney-instructions/default.md` when present. |
 | `--lawyerapi-addr` | Lawyer API listen address. Default: `127.0.0.1:0`. |
-| `--lawyer-timeout-seconds` | Lawyer turn timeout override. |
+| `--lawyer-timeout-seconds` | Lawyer turn timeout override. Default: 900 seconds. |
 | `--council-backend` | Council backend. `direct` uses xproxy. `pi` runs jurors as read-only Pi ACP agents. |
 | `--council-acp-command` | ACP command for `--council-backend pi`. Defaults to `<common-root>/pi-container/acp-podman.sh` when PI council is selected. |
 | `--council-acp-session-cwd` | Council ACP working-directory override for `--council-backend pi`. |

@@ -6,7 +6,7 @@ Use this phase to answer the strongest points in the opposing argument. Do not u
 
 Before filing, scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata, including evidence submitted by the opposing side. Use stat_evidence and read_evidence_range for any item whose exact content matters to your rebuttal.
 
-Analyze the opponent's offered evidence and any new record material before deciding whether outside research is needed. If a targeted search could confirm, contradict, or contextualize the strongest opposing point, use available search and fetch tools. Submit any material source through submit_evidence before relying on it, then offer the returned evidence_id if it directly supports the rebuttal.
+Analyze the opponent's offered evidence and any new record material before deciding whether outside research is needed. If a targeted search could confirm, contradict, or contextualize the strongest opposing point, use native web, browser, and local program tools to find and analyze source material. Use OCR, transcript, metadata, hash, signature, archive, and source-chain checks when they fit the opposing evidence. Submit any material source through submit_evidence before relying on it, then offer the returned evidence_id if it directly supports the rebuttal.
 
 If you rely on source material outside the current record, submit its content and provenance with submit_evidence before you treat it as case support. Use technical_reports for attorney analysis or synthesized work product, not as a substitute for preserving source evidence.
 

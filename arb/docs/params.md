@@ -40,7 +40,7 @@ One part remains open.  The proof-friendly policy shape is now in place, but the
 | Runtime/protocol | `max_evidence_read_bytes_per_opportunity` | Maximum total evidence bytes returned in one attorney opportunity | policy | Go |
 | Complaint | `proposition` | The disputed proposition | complaint | complaint parser |
 | Runtime | `council_llm_timeout_seconds` | Timeout for council turns | runner config | Go |
-| Runtime | `lawyer_turn_timeout_seconds` | Timeout for lawyer turns | runner config | Go |
+| Runtime | `lawyer_turn_timeout_seconds` | Timeout for lawyer turns. Default: 900 seconds. | runner config | Go |
 | Runtime | `max_response_bytes` | Maximum raw model response size accepted from a turn | runner config | Go |
 | Runtime | `invalid_attempt_limit` | Maximum invalid attempts before a turn fails | runner config | Go |
 

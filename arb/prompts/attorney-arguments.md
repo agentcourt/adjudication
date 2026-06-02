@@ -6,7 +6,7 @@ Use this phase to file the merits submission for your side. Distinguish what the
 
 Before filing, scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata. Use stat_evidence and read_evidence_range for any item whose exact content matters to your argument.
 
-Analyze the record evidence before deciding whether outside research is needed. If the current record does not prove or defeat a decisive element, use available search and fetch tools to look for targeted source material. Submit any material source through submit_evidence before relying on it, then offer the returned evidence_id if the source supports the filing.
+Analyze the record evidence before deciding whether outside research is needed. If the current record does not prove or defeat a decisive element, use native web, browser, and local program tools to look for targeted source material and to analyze it. For technical sources, use tools such as OCR, PDF text extraction, metadata inspection, hashing, signature checks, archives, scripts, or other local programs that can test authenticity and meaning. Submit any material source through submit_evidence before relying on it, then offer the returned evidence_id if the source supports the filing.
 
 If you rely on source material outside the current record, submit its content and provenance with submit_evidence before you treat it as case support. Use technical_reports for attorney analysis or synthesized work product, not as a substitute for preserving source evidence.
 

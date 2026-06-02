@@ -92,11 +92,12 @@ The standing order for a lawyer role is:
 2. If the response says `state: waiting`, call `wait_for_opportunity` again with the returned `after_version`.
 3. If the response says `state: ready`, read the prompt, phase, opportunity id, remaining time, attempts remaining, available tools, and limits.
 4. Use the available tools to inspect the visible record and scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata before filing.
-5. Submit exactly one final legal act for the current opportunity through `submit_decision`.
-6. Confirm that the response reports success.
-7. Return to `wait_for_opportunity`.
-8. If the response says `state: done`, stop.
-9. If the response says `state: error`, report the error and stop.
+5. Keep accumulated private work notes for the turn and call `send_work_notes` before submitting the legal act.
+6. Submit exactly one final legal act for the current opportunity through `submit_decision`.
+7. Confirm that the response reports success.
+8. Return to `wait_for_opportunity`.
+9. If the response says `state: done`, stop.
+10. If the response says `state: error`, report the error and stop.
 
 The standing order for an observer role is:
 
@@ -114,7 +115,11 @@ The tool list returned by MCP is authoritative for the current turn.  Do not cal
 
 ## Evidence and Filings
 
-Use the record before making factual claims.  At each turn, scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata.  Analyze what the relevant evidence proves, what it does not prove, and whether provenance, custody, conflict, or missing links affect weight.  If the record leaves a material gap and search or fetch tools are available, run a targeted search for sources that would change the filing.  If a source is already visible evidence, cite its `evidence_id`.  If outside material matters and evidence submission is available, submit the material first and cite the returned `evidence_id`.  If evidence submission is unavailable, treat the outside source as a lead rather than record support.
+Use the record before making factual claims.  At each turn, scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata.  Analyze what the relevant evidence proves, what it does not prove, and whether provenance, custody, conflict, or missing links affect weight.
+
+The MCP tool list controls AAR court actions.  It may not list native OpenClaw tools or local programs.  When the record leaves a material gap, use all accessible and available resources that can find or test material evidence: web search, web fetch, browser tools, file tools, shell tools, OCR, PDF tools, image tools, audio tools, video tools, metadata tools, hash tools, signature tools, archive tools, and local analysis tools.  If the environment permits it, install useful programs, write and run scripts or small programs, download source artifacts, use a browser for dynamic pages or visual inspection, and preserve the methods and results in work notes.  Do not use credentials, paid services, private accounts, or privileged sources unless the operator explicitly provides them for this case.  Follow search results to source pages or artifacts before relying on them.  Check adverse sources, conflicting primary material, later corrections, missing context, and source-chain breaks.  If a material source cannot be found or captured, include the search path and remaining gap in the filing or technical reports when the phase allows them.  If a source is already visible evidence, cite its `evidence_id`.  If outside material matters and evidence submission is available, submit the material first and cite the returned `evidence_id`.  If evidence submission is unavailable, treat the outside source as a lead rather than record support.
+
+Keep private work notes for each turn as a working journal: objective, issue breakdown, plan, work log, search log, source URLs or identifiers, tools used, scripts or programs written, packages installed, OCR or extraction steps, browser work, adverse checks, errors, reasoning, draft theory, decisions, and unresolved gaps.  Call `send_work_notes` with the accumulated notes before `submit_decision`.  Work notes are not evidence, filings, technical reports, or legal support, and the court record does not treat them as proof.
 
 Do not cite local filenames, temporary paths, downloaded names, URLs, captions, or private notes as evidence.  The court record recognizes admitted evidence by `evidence_id` and hash.  A filing may explain an inference, but it must distinguish record evidence from lawyer analysis.
 

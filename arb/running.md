@@ -29,6 +29,7 @@ The file-access tools are:
 | Tool | Purpose |
 | --- | --- |
 | `get_case` | Returns the visible arbitration record. |
+| `send_work_notes` | Sends private lawyer work notes to `work-notes.ndjson` for off-record review. |
 | `list_evidence` | Lists visible evidence metadata, including case-packet files and accepted submitted evidence. |
 | `stat_evidence` | Returns metadata and read limits for one visible `evidence_id`. |
 | `read_evidence_range` | Reads a bounded byte range from one visible evidence item as base64. |
@@ -37,7 +38,7 @@ The file-access tools are:
 
 Every lawyer phase exposes read-only evidence tools.  Argument, rebuttal, and surrebuttal opportunities also expose evidence-submission tools.  The tool list returned by `wait_for_opportunity` or `get_current_opportunity` is authoritative for that turn.
 
-The lawyer should cite only AAR `evidence_id` values in `offered_evidence`.  If a lawyer finds a public source with OpenClaw search or fetch tools, the lawyer must submit that source through AAR evidence tools before relying on it as record support.
+The lawyer should cite only AAR `evidence_id` values in `offered_evidence`.  AAR tools govern court evidence and filings, not the lawyer's full investigation toolbox.  If a lawyer finds a public source with native OpenClaw web, browser, file, shell, OCR, PDF, image, audio, video, metadata, hash, signature, archive, or local analysis tools, the lawyer must submit that source through AAR evidence tools before relying on it as record support.
 
 ## Inputs
 
@@ -87,7 +88,7 @@ export OPENAI_API_KEY OPENROUTER_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY
   --out-dir "$OUT/case" \
   --lawyerapi-addr 127.0.0.1:19771 \
   --council-backend direct \
-  --lawyer-timeout-seconds 600 \
+  --lawyer-timeout-seconds 900 \
   >"$OUT/logs/aar.stdout" \
   2>"$OUT/logs/aar.stderr" &
 echo $! >"$OUT/aar.pid"
@@ -124,7 +125,7 @@ You are the plaintiff lawyer for AAR case arb-1. Use MCP server aar-arb-1-plaint
 
 Call wait_for_opportunity first. If it returns state waiting, call wait_for_opportunity again with after_version. If it returns state ready, read the returned prompt, turn, tools, limits, remaining time, attempts remaining, and opportunity id. Complete exactly that opportunity. Use get_case and scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata before filing. Use stat_evidence and read_evidence_range when exact contents matter. Analyze what the relevant evidence proves, what it does not prove, and whether provenance, custody, conflict, or missing links affect weight.
 
-If the existing record leaves a material gap and search or fetch tools are available, run a targeted search for sources that would change the filing. When evidence-submission tools are available, submit source material through AAR before relying on it in a filing. Use AAR evidence_id values for offered evidence. Do not cite a URL, filename, or your own notes as admitted evidence unless AAR has accepted the source and returned an evidence_id.
+The AAR MCP tool list controls court actions, not your full investigation toolbox. Keep private notes throughout the turn as a working journal: objective, issue breakdown, plan, work log, search log, source URLs or identifiers, tools used, scripts or programs written, packages installed, OCR or extraction steps, browser work, adverse checks, errors, reasoning, draft theory, decisions, and unresolved gaps. Call send_work_notes with the accumulated notes before submit_decision. If the existing record leaves a material gap, use all accessible and available resources that can find or test material evidence: native OpenClaw web, browser, file, shell, OCR, PDF, image, audio, video, metadata, hash, signature, archive, and local analysis tools. If the environment permits it, install useful programs, write and run scripts or small programs, download source artifacts, and use a browser for dynamic pages or visual inspection. Follow search results to source pages or artifacts before relying on them. Check adverse sources, conflicting primary material, later corrections, missing context, and source-chain breaks. Do not use credentials, paid services, private accounts, or privileged sources unless the operator explicitly provides them for this case. When evidence-submission tools are available, submit source material through AAR before relying on it in a filing. Use AAR evidence_id values for offered evidence. Do not cite a URL, filename, or your own notes as admitted evidence unless AAR has accepted the source and returned an evidence_id.
 
 Submit the legal act through submit_decision. If submit_decision succeeds, return to wait_for_opportunity for the next plaintiff opportunity.
 
@@ -138,7 +139,7 @@ You are the defendant lawyer for AAR case arb-1. Use MCP server aar-arb-1-defend
 
 Call wait_for_opportunity first. If it returns state waiting, call wait_for_opportunity again with after_version. If it returns state ready, read the returned prompt, turn, tools, limits, remaining time, attempts remaining, and opportunity id. Complete exactly that opportunity. Use get_case and scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata before filing. Use stat_evidence and read_evidence_range when exact contents matter. Analyze what the relevant evidence proves, what it does not prove, and whether provenance, custody, conflict, or missing links affect weight.
 
-If the existing record leaves a material gap and search or fetch tools are available, run a targeted search for sources that would change the filing. When evidence-submission tools are available, submit source material through AAR before relying on it in a filing. Use AAR evidence_id values for offered evidence. Do not cite a URL, filename, or your own notes as admitted evidence unless AAR has accepted the source and returned an evidence_id.
+The AAR MCP tool list controls court actions, not your full investigation toolbox. Keep private notes throughout the turn as a working journal: objective, issue breakdown, plan, work log, search log, source URLs or identifiers, tools used, scripts or programs written, packages installed, OCR or extraction steps, browser work, adverse checks, errors, reasoning, draft theory, decisions, and unresolved gaps. Call send_work_notes with the accumulated notes before submit_decision. If the existing record leaves a material gap, use all accessible and available resources that can find or test material evidence: native OpenClaw web, browser, file, shell, OCR, PDF, image, audio, video, metadata, hash, signature, archive, and local analysis tools. If the environment permits it, install useful programs, write and run scripts or small programs, download source artifacts, and use a browser for dynamic pages or visual inspection. Follow search results to source pages or artifacts before relying on them. Check adverse sources, conflicting primary material, later corrections, missing context, and source-chain breaks. Do not use credentials, paid services, private accounts, or privileged sources unless the operator explicitly provides them for this case. When evidence-submission tools are available, submit source material through AAR before relying on it in a filing. Use AAR evidence_id values for offered evidence. Do not cite a URL, filename, or your own notes as admitted evidence unless AAR has accepted the source and returned an evidence_id.
 
 Submit the legal act through submit_decision. If submit_decision succeeds, return to wait_for_opportunity for the next defendant opportunity.
 
@@ -219,7 +220,7 @@ cat "$OUT/logs/aar.stdout"
 sed -n '1,260p' "$OUT/case/digest.md"
 ```
 
-The expected final artifacts are in `$OUT/case/`.  The files to review first are `digest.md`, `transcript.md`, `events.ndjson`, `evidence-manifest.json`, and `state.json`.  The OpenClaw stdout files contain each agent turn's final response and metadata; the AAR record remains the source for accepted filings and admitted evidence.
+The expected final artifacts are in `$OUT/case/`.  The files to review first are `digest.md`, `transcript.md`, `events.ndjson`, `work-notes.ndjson`, `evidence-manifest.json`, and `state.json`.  The OpenClaw stdout files contain each agent turn's final response and metadata; the AAR record remains the source for accepted filings and admitted evidence.
 
 ## Review Checklist
 

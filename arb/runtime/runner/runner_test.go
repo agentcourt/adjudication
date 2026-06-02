@@ -939,6 +939,109 @@ func TestBuildAttorneyPromptStatesCouncilForum(t *testing.T) {
 	}
 }
 
+func TestBuildAttorneyPromptIncludesWorkGuidanceEveryTurn(t *testing.T) {
+	origPromptBaseDir := promptBaseDir
+	promptBaseDir = filepath.Join("..", "..", "prompts")
+	defer func() { promptBaseDir = origPromptBaseDir }()
+
+	promptDirs := []struct {
+		name string
+		dir  string
+	}{
+		{name: "default"},
+		{name: "evidence-rich", dir: filepath.Join("..", "..", "prompts", "evidence-rich-30m")},
+	}
+	opportunities := []Opportunity{
+		{
+			ID:           "openings:plaintiff",
+			Role:         "plaintiff",
+			Phase:        "openings",
+			Objective:    "plaintiff opening statement",
+			AllowedTools: []string{"record_opening_statement"},
+		},
+		{
+			ID:           "arguments:plaintiff",
+			Role:         "plaintiff",
+			Phase:        "arguments",
+			Objective:    "plaintiff merits argument",
+			AllowedTools: []string{"submit_argument"},
+		},
+		{
+			ID:           "rebuttals:plaintiff",
+			Role:         "plaintiff",
+			Phase:        "rebuttals",
+			Objective:    "plaintiff rebuttal",
+			AllowedTools: []string{"submit_rebuttal", "pass_phase_opportunity"},
+		},
+		{
+			ID:           "surrebuttals:defendant",
+			Role:         "defendant",
+			Phase:        "surrebuttals",
+			Objective:    "defendant surrebuttal",
+			AllowedTools: []string{"submit_surrebuttal", "pass_phase_opportunity"},
+		},
+		{
+			ID:           "closings:plaintiff",
+			Role:         "plaintiff",
+			Phase:        "closings",
+			Objective:    "plaintiff closing statement",
+			AllowedTools: []string{"deliver_closing_statement"},
+		},
+	}
+	required := []string{
+		"Treat the notes as a working journal",
+		"Use send_work_notes to forward accumulated notes",
+		"At the start of each opportunity, check the current record and scan the evidence list",
+		"Analyze the relevant evidence before advocating from it.",
+		"use all accessible and available resources that can find or test material evidence",
+		"install useful programs, write and run scripts or small programs",
+		"use a browser for dynamic pages or visual inspection",
+		"Use list_evidence, stat_evidence, and read_evidence_range when exact evidence bytes matter.",
+	}
+
+	for _, promptDir := range promptDirs {
+		for _, opportunity := range opportunities {
+			t.Run(promptDir.name+"/"+opportunity.ID, func(t *testing.T) {
+				rc := &runContext{
+					cfg: Config{
+						Policy:    DefaultPolicy(),
+						PromptDir: promptDir.dir,
+					},
+					complaint: spec.Complaint{
+						Proposition: "P",
+					},
+					caseFiles: []CaseFile{{EvidenceID: "case-file.txt", Name: "case-file.txt", MimeType: "text/plain", TextReadable: true}},
+					state: map[string]any{
+						"policy": map[string]any{
+							"evidence_standard": "preponderance",
+						},
+						"case": map[string]any{
+							"phase":              opportunity.Phase,
+							"openings":           []map[string]any{},
+							"arguments":          []map[string]any{},
+							"rebuttals":          []map[string]any{},
+							"surrebuttals":       []map[string]any{},
+							"closings":           []map[string]any{},
+							"offered_evidence":   []map[string]any{},
+							"submitted_evidence": []map[string]any{},
+							"technical_reports":  []map[string]any{},
+						},
+					},
+				}
+				prompt, err := rc.buildAttorneyPrompt(opportunity)
+				if err != nil {
+					t.Fatalf("buildAttorneyPrompt returned error: %v", err)
+				}
+				for _, want := range required {
+					if !strings.Contains(prompt, want) {
+						t.Fatalf("prompt missing %q:\n%s", want, prompt)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestLawyerToolSpecsArePhaseSpecific(t *testing.T) {
 	openingSpecs := lawyerToolSpecs(Opportunity{Phase: "openings", AllowedTools: []string{"record_opening_statement"}})
 	openingTools := make([]string, 0, len(openingSpecs))

@@ -110,16 +110,19 @@ The Lawyer API returns the available tools for the current role and phase. The t
 | HTTP Tool | Availability | Purpose |
 | --- | --- | --- |
 | `get_case` | all lawyer phases | Return the visible case record and role limits. |
-| `list_evidence` | arguments, rebuttals | List visible evidence metadata. |
-| `stat_evidence` | arguments, rebuttals | Return metadata and remaining read budget for one evidence item. |
-| `read_evidence_range` | arguments, rebuttals | Read a bounded byte range as base64. |
-| `submit_evidence` | arguments, rebuttals | Submit a direct evidence item with provenance. |
-| `begin_evidence_upload` | arguments, rebuttals | Start a chunked evidence upload. |
-| `write_evidence_chunk` | arguments, rebuttals | Write one base64 chunk into an upload session. |
-| `commit_evidence_upload` | arguments, rebuttals | Verify and admit a completed upload. |
+| `send_work_notes` | all lawyer phases | Send private work notes to the off-record `work-notes.ndjson` log. |
+| `list_evidence` | all lawyer phases | List visible evidence metadata. |
+| `stat_evidence` | all lawyer phases | Return metadata and remaining read budget for one evidence item. |
+| `read_evidence_range` | all lawyer phases | Read a bounded byte range as base64. |
+| `submit_evidence` | arguments, rebuttals, surrebuttals | Submit a direct evidence item with provenance. |
+| `begin_evidence_upload` | arguments, rebuttals, surrebuttals | Start a chunked evidence upload. |
+| `write_evidence_chunk` | arguments, rebuttals, surrebuttals | Write one base64 chunk into an upload session. |
+| `commit_evidence_upload` | arguments, rebuttals, surrebuttals | Verify and admit a completed upload. |
 | `submit_decision` | all lawyer phases | File the legal act for the current opportunity or a permitted pass. |
 
 `submit_decision` wraps the phase legal act. The `tool` field in the HTTP request is `submit_decision`. The `tool_name` field inside `arguments` names the legal act, such as `submit_argument` or `deliver_closing_statement`.
+
+`send_work_notes` takes `{"notes": "..."}`. A lawyer should use it to forward accumulated work notes before filing each turn. These notes should read like a working journal: plans, issue outlines, work logs, search logs, sources checked, source URLs or identifiers, scripts or programs written, packages installed, browser work, extraction and OCR work, adverse checks, errors, analysis, decisions, and unresolved gaps. They are work product for outside analysis, not evidence, filings, technical reports, or legal support.
 
 ```json
 {
@@ -230,11 +233,12 @@ The main MCP service should expose dynamic tools per MCP session. Because each s
 | `wait_for_opportunity` | every session | Wait up to 30 seconds for the bound role to have work or for case status to change. |
 | `get_current_opportunity` | every session | Return status, prompt, active turn, available Lawyer API tool names, limits, remaining time, and attempts. |
 | `get_case` | lawyer phases | Return the visible case record for the bound role. |
-| `list_evidence` | arguments, rebuttals | List visible evidence metadata. |
-| `stat_evidence` | arguments, rebuttals | Return metadata for one evidence item. |
-| `read_evidence_range` | arguments, rebuttals | Read a bounded byte range as base64. |
-| `submit_evidence` | arguments, rebuttals | Submit a direct evidence item with provenance. |
-| `begin_evidence_upload`, `write_evidence_chunk`, `commit_evidence_upload` | arguments, rebuttals | Run chunked upload when evidence is too large for direct submission. |
+| `send_work_notes` | ready lawyer turns | Send private work notes to the off-record run log. |
+| `list_evidence` | all lawyer phases | List visible evidence metadata. |
+| `stat_evidence` | all lawyer phases | Return metadata for one evidence item. |
+| `read_evidence_range` | all lawyer phases | Read a bounded byte range as base64. |
+| `submit_evidence` | arguments, rebuttals, surrebuttals | Submit a direct evidence item with provenance. |
+| `begin_evidence_upload`, `write_evidence_chunk`, `commit_evidence_upload` | arguments, rebuttals, surrebuttals | Run chunked upload when evidence is too large for direct submission. |
 | `submit_decision` | ready lawyer turns | File the phase legal act or a permitted pass. |
 
 MCP supports `tools/list` and a `notifications/tools/list_changed` notification when a server's tools change. `aar-lawyer-mcp` advertises `listChanged: false` and does not open an SSE stream, so clients refresh by calling `tools/list` or `get_current_opportunity`. OpenClaw supports remote MCP servers over `streamable-http`, which is enough for this request/response adapter.

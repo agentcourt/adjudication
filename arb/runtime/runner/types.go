@@ -191,6 +191,16 @@ type Event struct {
 	Payload   map[string]any `json:"payload,omitempty"`
 }
 
+type WorkNote struct {
+	Timestamp     string `json:"timestamp"`
+	Turn          int    `json:"turn"`
+	Role          string `json:"role"`
+	Phase         string `json:"phase"`
+	OpportunityID string `json:"opportunity_id"`
+	CallID        string `json:"call_id,omitempty"`
+	Notes         string `json:"notes"`
+}
+
 type runContext struct {
 	cfg               Config
 	complaint         spec.Complaint

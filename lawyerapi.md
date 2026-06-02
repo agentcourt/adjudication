@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Lawyer API lets an outside process act as a plaintiff lawyer, defendant lawyer, or observer in an arbitration.  AAR owns the case state, turn order, evidence store, filing validation, deadlines, attempts, and event log.  A caller uses HTTP to ask what the role can do, then executes one returned tool at a time.
+The Lawyer API lets an outside process act as a plaintiff lawyer, defendant lawyer, or observer in an arbitration.  AAR owns the case state, turn order, evidence store, filing validation, deadlines, attempts, and event log.  A caller uses HTTP to ask what the role can do, then executes one returned tool at a time.  Lawyers can also send private work notes for operator analysis; those notes are written to `work-notes.ndjson` and do not become part of the case record.
 
 The first implementation serves one case from one `aar case` process.  Each request includes `case_id` and `role_id`; `case_id` is required and returned unchanged, but the server does not use it to select a case yet.  Front ends such as a CLI, MCP server, ACP service, or agent runner should be separate clients built on this API.
 
@@ -66,6 +66,19 @@ A ready lawyer response has this shape:
         "additionalProperties": false
       },
       "read_only": true
+    },
+    {
+      "name": "send_work_notes",
+      "description": "Send private work notes for off-record operator analysis. This does not create evidence, a filing, a technical report, or a case event.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "notes": { "type": "string" }
+        },
+        "required": ["notes"],
+        "additionalProperties": false
+      },
+      "read_only": false
     },
     {
       "name": "submit_decision",
@@ -233,14 +246,17 @@ A failed tool call returns `ok: false` and an error object.  Rejected mutating c
 | Tool | Phases | Mutates | Meaning |
 | --- | --- | --- | --- |
 | `get_case` | all lawyer phases | no | Return the visible case record and limits for the role. |
-| `list_evidence` | arguments, rebuttals | no | List visible evidence metadata. |
-| `stat_evidence` | arguments, rebuttals | no | Return metadata and remaining read budget for one evidence item. |
-| `read_evidence_range` | arguments, rebuttals | no | Return a bounded byte range as base64. |
-| `submit_evidence` | arguments, rebuttals | yes | Submit one direct evidence item with provenance. |
-| `begin_evidence_upload` | arguments, rebuttals | yes | Start a chunked upload. |
-| `write_evidence_chunk` | arguments, rebuttals | yes | Append one base64 chunk to an upload. |
-| `commit_evidence_upload` | arguments, rebuttals | yes | Verify and admit a completed upload. |
+| `send_work_notes` | all lawyer phases | off-record log only | Append private work notes to `work-notes.ndjson`. |
+| `list_evidence` | all lawyer phases | no | List visible evidence metadata. |
+| `stat_evidence` | all lawyer phases | no | Return metadata and remaining read budget for one evidence item. |
+| `read_evidence_range` | all lawyer phases | no | Return a bounded byte range as base64. |
+| `submit_evidence` | arguments, rebuttals, surrebuttals | yes | Submit one direct evidence item with provenance. |
+| `begin_evidence_upload` | arguments, rebuttals, surrebuttals | yes | Start a chunked upload. |
+| `write_evidence_chunk` | arguments, rebuttals, surrebuttals | yes | Append one base64 chunk to an upload. |
+| `commit_evidence_upload` | arguments, rebuttals, surrebuttals | yes | Verify and admit a completed upload. |
 | `submit_decision` | all lawyer phases | yes | Submit the phase legal act or a permitted pass. |
+
+`send_work_notes` takes `{"notes": "..."}`.  The server logs the complete string with timestamp, role, phase, turn number, opportunity id, and optional `call_id`.  Good notes include plans, issue outlines, work logs, search logs, source URLs or identifiers, tools used, scripts or programs written, packages installed, OCR or extraction steps, browser work, adverse checks, errors, reasoning, draft theories, decisions, and unresolved gaps.  The notes do not appear in `events.ndjson`, `state.json`, `transcript.md`, `digest.md`, or the evidence manifest.  The tool does not complete the turn and does not consume invalid-attempt budget.
 
 `submit_decision` wraps the legal act for the current opportunity.  `kind: "tool"` requires `tool_name` to match one of the allowed legal acts in the current turn, such as `record_opening_statement`, `submit_argument`, `submit_rebuttal`, `submit_surrebuttal`, or `deliver_closing_statement`.  `kind: "pass"` is valid only when the current opportunity allows a pass.
 

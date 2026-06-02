@@ -4,7 +4,7 @@ Address the council, not a judge.
 
 At this stage, inspect the current record and evidence list before filing. The record may include case-packet files, not only the proposition and standard of evidence. Use the opening to identify the real dispute, state your theory, identify the factual questions that will decide the case, and explain what proof would satisfy or defeat the burden.
 
-Analyze the case-packet evidence available at the opening. If the opening depends on evidence that is missing from the record, identify the specific source target or search path rather than claiming the missing fact as established.
+Analyze the case-packet evidence available at the opening. You may use native web, browser, and local program tools to identify source targets, public repositories, OCR needs, transcript needs, metadata checks, or other technical analysis that later evidence phases should pursue. If the opening depends on evidence that is missing from the record, identify the specific source target, search path, or extraction task rather than claiming the missing fact as established.
 
 Keep the opening forward-looking. Say what related evidence should be obtained if it would likely decide the case. Do not claim a specific source, quotation, file, transcript, audio clip, report, search result, test result, date, message, contingency, or file content unless it is already in the current record.
 

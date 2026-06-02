@@ -28,6 +28,19 @@ func (rc *runContext) recordEventAtTurn(turn int, eventType string, role string,
 	return appendJSONLine(filepath.Join(rc.cfg.OutputDir, "events.ndjson"), event)
 }
 
+func (rc *runContext) recordWorkNotesAtTurn(turn int, opportunity Opportunity, callID string, notes string) error {
+	note := WorkNote{
+		Timestamp:     time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00"),
+		Turn:          turn,
+		Role:          opportunity.Role,
+		Phase:         opportunity.Phase,
+		OpportunityID: opportunity.ID,
+		CallID:        strings.TrimSpace(callID),
+		Notes:         notes,
+	}
+	return appendJSONLine(filepath.Join(rc.cfg.OutputDir, "work-notes.ndjson"), note)
+}
+
 func writeEvidence(cfg Config, result Result, rc *runContext) error {
 	if err := exportAttorneyWorkProduct(cfg.OutputDir, rc.workProductDirs); err != nil {
 		return err

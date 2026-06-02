@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -89,6 +91,65 @@ func TestObserverDoDoesNotRequireOpportunityID(t *testing.T) {
 	}
 	if turn["opportunity_id"] != "openings:plaintiff" {
 		t.Fatalf("opportunity_id = %#v, want openings:plaintiff", turn["opportunity_id"])
+	}
+}
+
+func TestLawyerSendWorkNotesWritesOffRecordLog(t *testing.T) {
+	api, turn := testLawyerAPIWithTurn()
+	api.rc.cfg.OutputDir = t.TempDir()
+	notes := strings.Repeat("plan source-chain OCR adverse checks\n", 128)
+
+	status, got := callLawyerAPIDo(t, api, map[string]any{
+		"case_id":        "arb-1",
+		"role_id":        "plaintiff",
+		"opportunity_id": "openings:plaintiff",
+		"tool":           "send_work_notes",
+		"call_id":        "notes-1",
+		"arguments": map[string]any{
+			"notes": notes,
+		},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["ok"] != true {
+		t.Fatalf("ok = %#v, want true", got["ok"])
+	}
+	if turn.completed {
+		t.Fatalf("send_work_notes completed the turn")
+	}
+	if turn.attemptsRemaining != turn.attemptsMax {
+		t.Fatalf("attemptsRemaining = %d, want %d", turn.attemptsRemaining, turn.attemptsMax)
+	}
+	if len(api.rc.events) != 0 {
+		t.Fatalf("send_work_notes recorded case events: %#v", api.rc.events)
+	}
+	raw, err := os.ReadFile(api.rc.cfg.OutputDir + "/work-notes.ndjson")
+	if err != nil {
+		t.Fatalf("read work-notes.ndjson: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("work note lines = %d, want 1: %s", len(lines), raw)
+	}
+	var note WorkNote
+	if err := json.Unmarshal([]byte(lines[0]), &note); err != nil {
+		t.Fatalf("decode work note: %v", err)
+	}
+	if note.Notes != notes {
+		t.Fatalf("notes were not preserved exactly")
+	}
+	if note.Role != "plaintiff" || note.Phase != "openings" || note.OpportunityID != "openings:plaintiff" || note.CallID != "notes-1" {
+		t.Fatalf("unexpected note metadata: %#v", note)
+	}
+}
+
+func TestLawyerToolSpecsIncludeWorkNotesEveryPhase(t *testing.T) {
+	for _, phase := range []string{"openings", "arguments", "rebuttals", "surrebuttals", "closings"} {
+		tools := lawyerToolSpecs(Opportunity{Phase: phase})
+		if !hasLawyerTool(tools, "send_work_notes") {
+			t.Fatalf("%s tools missing send_work_notes: %#v", phase, tools)
+		}
 	}
 }
 
@@ -302,6 +363,15 @@ func callLawyerAPIWait(t *testing.T, api *lawyerAPIServer, query string) (int, m
 		t.Fatalf("decode response: %v", err)
 	}
 	return rec.Code, got
+}
+
+func hasLawyerTool(tools []map[string]any, name string) bool {
+	for _, tool := range tools {
+		if mapString(tool["name"]) == name {
+			return true
+		}
+	}
+	return false
 }
 
 func lawyerAPIErrorCode(t *testing.T, got map[string]any) string {

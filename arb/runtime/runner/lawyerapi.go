@@ -366,8 +366,9 @@ func (api *lawyerAPIServer) handleDo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req lawyerDoRequest
-	body := http.MaxBytesReader(w, r.Body, api.maxRequestBytes())
-	if err := json.NewDecoder(body).Decode(&req); err != nil {
+	dec := json.NewDecoder(r.Body)
+	dec.UseNumber()
+	if err := dec.Decode(&req); err != nil {
 		if errors.Is(err, io.EOF) {
 			err = fmt.Errorf("request body is required")
 		}
@@ -465,7 +466,7 @@ func (api *lawyerAPIServer) handleLawyerDo(w http.ResponseWriter, req lawyerDoRe
 		writeLawyerJSON(w, http.StatusOK, response)
 		return
 	}
-	result, countAttempt, decisionAttempt, err := api.callLawyerToolLocked(turn, req.Tool, req.Arguments)
+	result, countAttempt, decisionAttempt, err := api.callLawyerToolLocked(turn, req.Tool, req.Arguments, req.CallID)
 	response := api.responseBaseLocked(req.CaseID, req.RoleID)
 	if err != nil {
 		if countAttempt {
@@ -497,11 +498,23 @@ func (api *lawyerAPIServer) handleObserverDo(w http.ResponseWriter, req lawyerDo
 	writeLawyerJSON(w, http.StatusOK, response)
 }
 
-func (api *lawyerAPIServer) callLawyerToolLocked(turn *lawyerTurn, tool string, args map[string]any) (map[string]any, bool, bool, error) {
+func (api *lawyerAPIServer) callLawyerToolLocked(turn *lawyerTurn, tool string, args map[string]any, callID string) (map[string]any, bool, bool, error) {
 	switch tool {
 	case "get_case":
 		view := api.rc.attorneyView(turn.opportunity)
 		return map[string]any{"case": view}, false, false, nil
+	case "send_work_notes":
+		notes, ok := args["notes"].(string)
+		if !ok {
+			return nil, false, false, fmt.Errorf("arguments.notes is required and must be a string")
+		}
+		if err := api.rc.recordWorkNotesAtTurn(turn.turnNumber, turn.opportunity, callID, notes); err != nil {
+			return nil, false, false, err
+		}
+		return map[string]any{
+			"text":       "Work notes accepted off record.",
+			"byte_count": len([]byte(notes)),
+		}, false, false, nil
 	case "list_evidence":
 		if !evidenceReadAllowed(turn.opportunity) {
 			return nil, true, false, fmt.Errorf("evidence access is not allowed in phase %q", turn.opportunity.Phase)
@@ -951,20 +964,6 @@ func observerLimits(rc *runContext) map[string]any {
 	}
 }
 
-func (api *lawyerAPIServer) maxRequestBytes() int64 {
-	limit := api.rc.cfg.Runtime.MaxResponseBytes
-	for _, candidate := range []int{
-		api.rc.cfg.Policy.MaxDirectSubmittedEvidenceBytes*2 + 1024*1024,
-		api.rc.cfg.Policy.MaxEvidenceChunkBytes*2 + 1024*1024,
-		1024 * 1024,
-	} {
-		if candidate > limit {
-			limit = candidate
-		}
-	}
-	return int64(limit)
-}
-
 func parseLawyerAPIWaitTimeout(value string) (time.Duration, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -1033,7 +1032,10 @@ func optionalIntParam(params map[string]any, key string, fallback int) (int, err
 }
 
 func lawyerToolSpecs(opportunity Opportunity) []map[string]any {
-	specs := []map[string]any{httpToolSpec("get_case", "Return the current visible arbitration record.", emptyObjectSchema(), true)}
+	specs := []map[string]any{
+		httpToolSpec("get_case", "Return the current visible arbitration record.", emptyObjectSchema(), true),
+		httpToolSpec("send_work_notes", "Send private work notes for off-record operator analysis. This does not create evidence, a filing, a technical report, or a case event.", workNotesSchema(), false),
+	}
 	if evidenceReadAllowed(opportunity) {
 		specs = append(specs,
 			httpToolSpec("list_evidence", "List visible immutable record evidence.", emptyObjectSchema(), true),
@@ -1097,6 +1099,20 @@ func readEvidenceRangeSchema() map[string]any {
 			"length":      map[string]any{"type": "integer", "minimum": 1},
 		},
 		"required":             []string{"evidence_id", "offset", "length"},
+		"additionalProperties": false,
+	}
+}
+
+func workNotesSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"notes": map[string]any{
+				"type":        "string",
+				"description": "Accumulated private work notes for this lawyer turn.",
+			},
+		},
+		"required":             []string{"notes"},
 		"additionalProperties": false,
 	}
 }

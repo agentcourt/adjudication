@@ -25,7 +25,7 @@ func TestMCPListsDynamicToolsForBoundCaseRole(t *testing.T) {
 		"method":  "tools/list",
 	})
 	tools := resultTools(t, got)
-	for _, want := range []string{"get_current_opportunity", "wait_for_opportunity", "get_case", "list_evidence", "stat_evidence", "read_evidence_range", "submit_decision"} {
+	for _, want := range []string{"get_current_opportunity", "wait_for_opportunity", "get_case", "send_work_notes", "list_evidence", "stat_evidence", "read_evidence_range", "submit_decision"} {
 		if !hasTool(tools, want) {
 			t.Fatalf("tools/list missing %s: %#v", want, tools)
 		}
@@ -36,6 +36,7 @@ func TestMCPListsDynamicToolsForBoundCaseRole(t *testing.T) {
 
 	fake.setPhase("arguments", []map[string]any{
 		lawyerTool("get_case"),
+		lawyerTool("send_work_notes"),
 		lawyerTool("list_evidence"),
 		lawyerTool("submit_decision"),
 	})
@@ -45,7 +46,7 @@ func TestMCPListsDynamicToolsForBoundCaseRole(t *testing.T) {
 		"method":  "tools/list",
 	})
 	tools = resultTools(t, got)
-	for _, want := range []string{"get_current_opportunity", "wait_for_opportunity", "get_case", "list_evidence", "submit_decision"} {
+	for _, want := range []string{"get_current_opportunity", "wait_for_opportunity", "get_case", "send_work_notes", "list_evidence", "submit_decision"} {
 		if !hasTool(tools, want) {
 			t.Fatalf("argument tools/list missing %s: %#v", want, tools)
 		}
@@ -93,6 +94,43 @@ func TestMCPToolCallInjectsCaseRoleAndOpportunityID(t *testing.T) {
 		if got := mapString(body[field.name]); got != field.want {
 			t.Fatalf("%s = %q, want %q in POST body %#v", field.name, got, field.want, body)
 		}
+	}
+}
+
+func TestMCPForwardsWorkNotesTool(t *testing.T) {
+	fake := newFakeLawyerAPI(t)
+	defer fake.server.Close()
+	srv := newTestMCPServer(fake.server.URL + "/lawyerapi/v1")
+	sessionID := initializeMCP(t, srv, "arb-1", "plaintiff")
+
+	got := callMCP(t, srv, sessionID, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      5,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "send_work_notes",
+			"arguments": map[string]any{
+				"notes": "plan, search ledger, OCR notes",
+			},
+		},
+	})
+	if errObj := got["error"]; errObj != nil {
+		t.Fatalf("tools/call returned RPC error: %#v", errObj)
+	}
+	result := rpcResult(t, got)
+	if isError, _ := result["isError"].(bool); isError {
+		t.Fatalf("tools/call isError = true: %#v", result)
+	}
+	body := fake.lastDoBody(t)
+	if got := mapString(body["tool"]); got != "send_work_notes" {
+		t.Fatalf("tool = %q, want send_work_notes in POST body %#v", got, body)
+	}
+	args, _ := body["arguments"].(map[string]any)
+	if got := mapString(args["notes"]); got != "plan, search ledger, OCR notes" {
+		t.Fatalf("arguments.notes = %q", got)
+	}
+	if got := mapString(body["opportunity_id"]); got != "openings:plaintiff" {
+		t.Fatalf("opportunity_id = %q, want openings:plaintiff", got)
 	}
 }
 
@@ -551,6 +589,7 @@ func newFakeLawyerAPI(t *testing.T) *fakeLawyerAPI {
 		status: "ready",
 		tools: []map[string]any{
 			lawyerTool("get_case"),
+			lawyerTool("send_work_notes"),
 			lawyerTool("list_evidence"),
 			lawyerTool("stat_evidence"),
 			lawyerTool("read_evidence_range"),
@@ -739,6 +778,6 @@ func lawyerTool(name string) map[string]any {
 			"properties":           map[string]any{},
 			"additionalProperties": true,
 		},
-		"read_only": name != "submit_decision" && name != "submit_evidence",
+		"read_only": name != "submit_decision" && name != "submit_evidence" && name != "send_work_notes",
 	}
 }

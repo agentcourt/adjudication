@@ -364,11 +364,10 @@ func (rc *runContext) attorneyCapabilitySection(role string, opportunityID strin
 func (rc *runContext) buildAttorneyPrompt(opportunity Opportunity) (string, error) {
 	view := rc.attorneyView(opportunity)
 	visibleFilesSection := ""
-	workspaceSection := ""
+	workspaceSection := "Use list_evidence, stat_evidence, and read_evidence_range when exact evidence bytes matter. Do not reconstruct byte-sensitive evidence by hand. Use evidence_id plus hash as record identity.\n"
 	workProductSection := ""
-	if opportunity.Phase == "arguments" || opportunity.Phase == "rebuttals" {
+	if opportunity.Phase == "arguments" || opportunity.Phase == "rebuttals" || opportunity.Phase == "surrebuttals" {
 		visibleFilesSection = "Visible evidence:\n" + marshalIndented(rc.listVisibleEvidence()) + "\n"
-		workspaceSection = "Use list_evidence, stat_evidence, and read_evidence_range when exact evidence bytes matter. Do not reconstruct byte-sensitive evidence by hand. Use evidence_id plus hash as record identity.\n"
 	}
 	common, err := rc.cfg.renderPromptFile("attorney-common.md", map[string]string{
 		"ROLE":                       opportunity.Role,
