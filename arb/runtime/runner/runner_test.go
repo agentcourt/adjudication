@@ -1129,6 +1129,21 @@ func TestLawyerToolSpecsArePhaseSpecific(t *testing.T) {
 	if len(argumentEnum) != 1 || argumentEnum[0] != "submit_argument" {
 		t.Fatalf("argument submit_decision enum = %#v, want submit_argument only", argumentEnum)
 	}
+	argumentSpecsWithEvidenceAction := lawyerToolSpecs(Opportunity{Phase: "arguments", AllowedTools: []string{"submit_evidence", "submit_argument"}})
+	if findHTTPToolSpec(argumentSpecsWithEvidenceAction, "submit_evidence") == nil {
+		t.Fatalf("argument tools missing direct submit_evidence")
+	}
+	argumentSubmitSpec = findHTTPToolSpec(argumentSpecsWithEvidenceAction, "submit_decision")
+	argumentEnum, _ = mapAny(mapAny(argumentSubmitSpec["input_schema"])["properties"])["tool_name"].(map[string]any)["enum"].([]string)
+	if len(argumentEnum) != 1 || argumentEnum[0] != "submit_argument" {
+		t.Fatalf("argument submit_decision enum with evidence action = %#v, want submit_argument only", argumentEnum)
+	}
+	evidenceOnlySpecs := lawyerToolSpecs(Opportunity{Phase: "arguments", AllowedTools: []string{"submit_evidence"}})
+	evidenceOnlySubmitSpec := findHTTPToolSpec(evidenceOnlySpecs, "submit_decision")
+	evidenceOnlyEnum, _ := mapAny(mapAny(evidenceOnlySubmitSpec["input_schema"])["properties"])["tool_name"].(map[string]any)["enum"].([]string)
+	if len(evidenceOnlyEnum) != 0 {
+		t.Fatalf("submit_decision enum for evidence-only action = %#v, want empty", evidenceOnlyEnum)
+	}
 }
 
 func findHTTPToolSpec(specs []map[string]any, name string) map[string]any {
@@ -1274,7 +1289,7 @@ func TestBuildAttorneyPromptConstrainsArgumentExperiments(t *testing.T) {
 		Role:         "plaintiff",
 		Phase:        "arguments",
 		Objective:    "plaintiff merits argument",
-		AllowedTools: []string{"submit_argument"},
+		AllowedTools: []string{"submit_evidence", "submit_argument"},
 	})
 	if err != nil {
 		t.Fatalf("buildAttorneyPrompt returned error: %v", err)
@@ -1288,8 +1303,17 @@ func TestBuildAttorneyPromptConstrainsArgumentExperiments(t *testing.T) {
 	if !strings.Contains(prompt, "Technical reports: at most 3 in this filing. This side has used 0 of 4 total, with 4 left.") {
 		t.Fatalf("argument prompt did not state report limits:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "submit its content and provenance with submit_evidence") {
+	if !strings.Contains(prompt, "submit its content and provenance with the direct submit_evidence tool") {
 		t.Fatalf("argument prompt did not require outside source material to enter as submitted evidence:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Do not call submit_decision with tool_name set to submit_evidence") {
+		t.Fatalf("argument prompt did not forbid wrapping submit_evidence in submit_decision:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Final filing actions for submit_decision: submit_argument") {
+		t.Fatalf("argument prompt did not restrict submit_decision to final filing actions:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "Allowed legal acts for submit_decision") {
+		t.Fatalf("argument prompt used obsolete submit_decision wording:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "Use list_evidence, stat_evidence, and read_evidence_range when exact evidence bytes matter.") {
 		t.Fatalf("argument prompt did not instruct counsel to use evidence read tools:\n%s", prompt)
@@ -1407,7 +1431,7 @@ func TestBuildAttorneyPromptAllowsRebuttalSupplementalMaterials(t *testing.T) {
 	if !strings.Contains(prompt, "Use offered_evidence only for visible evidence, by evidence_id.") {
 		t.Fatalf("rebuttal prompt did not restrict offered_evidence to visible evidence ids:\n%s", prompt)
 	}
-	if !strings.Contains(prompt, "submit its content and provenance with submit_evidence") {
+	if !strings.Contains(prompt, "submit its content and provenance with the direct submit_evidence tool") {
 		t.Fatalf("rebuttal prompt did not require outside source material to enter as submitted evidence:\n%s", prompt)
 	}
 }

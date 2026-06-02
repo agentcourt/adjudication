@@ -18,6 +18,8 @@ The Lawyer API now exposes `send_work_notes` in every active lawyer turn.  It wr
 
 The obsolete `tools/aar-openclaw-attorney` adapter was removed.  The supported OpenClaw lawyer path is now the Lawyer HTTP API plus `tools/lawyer-mcp`.
 
+Repeated OpenClaw runs showed plaintiff finding useful sources but attempting to submit them by calling `submit_decision` with `tool_name: submit_evidence`.  Defendant could submit evidence directly in the same service, so the failure was prompt and schema ambiguity rather than a server-wide submission failure.  The lawyer prompts, runbook assignment text, MCP README, and OpenClaw skill now say that evidence admission uses the direct `submit_evidence` tool, or the direct chunked-upload tools, before the final filing.  They also state that `submit_decision` is only for the final legal act and must not wrap `submit_evidence`.  The `submit_decision` schema now filters the engine action list to final filing actions, so `submit_evidence` is no longer advertised as a valid `submit_decision.tool_name`.
+
 ## 2026-06-01
 
 ### Council API and MCP adapter

@@ -6,9 +6,9 @@ Use this phase to file the merits submission for your side. Distinguish what the
 
 Before filing, scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata. Use stat_evidence and read_evidence_range for any item whose exact content matters to your argument.
 
-Analyze the record evidence before deciding whether outside research is needed. If the current record does not prove or defeat a decisive element, use native web, browser, and local program tools to look for targeted source material and to analyze it. For technical sources, use tools such as OCR, PDF text extraction, metadata inspection, hashing, signature checks, archives, scripts, or other local programs that can test authenticity and meaning. Submit any material source through submit_evidence before relying on it, then offer the returned evidence_id if the source supports the filing.
+Analyze the record evidence before deciding whether outside research is needed. If the current record does not prove or defeat a decisive element, use native web, browser, and local program tools to look for targeted source material and to analyze it. For technical sources, use tools such as OCR, PDF text extraction, metadata inspection, hashing, signature checks, archives, scripts, or other local programs that can test authenticity and meaning. Submit any material source through the direct submit_evidence tool before relying on it, then offer the returned evidence_id if the source supports the filing.
 
-If you rely on source material outside the current record, submit its content and provenance with submit_evidence before you treat it as case support. Use technical_reports for attorney analysis or synthesized work product, not as a substitute for preserving source evidence.
+If you rely on source material outside the current record, submit its content and provenance with the direct submit_evidence tool before you treat it as case support. Do not call submit_decision with tool_name set to submit_evidence. Use technical_reports for attorney analysis or synthesized work product, not as a substitute for preserving source evidence.
 
 Use offered_evidence only for visible evidence, by evidence_id. Submit new source material first with submit_evidence, then cite the returned evidence_id in offered_evidence. Do not put downloaded filenames or invented names in offered_evidence.
 
@@ -16,7 +16,7 @@ Use list_evidence, stat_evidence, and read_evidence_range when exact evidence by
 
 Offer exhibits, submitted evidence, and technical reports only in this phase.
 
-If you need to add source material first, call submit_evidence with content and provenance, then cite the returned evidence_id in offered_evidence.
+If you need to add source material first, call the direct submit_evidence tool with content and provenance, then cite the returned evidence_id in offered_evidence.
 
 submit_decision arguments:
 `{"kind":"tool","tool_name":"submit_argument","payload":{"text":"argument text","offered_evidence":[{"evidence_id":"ev_example","label":"PX-1"}],"technical_reports":[{"title":"Cryptographic verification","summary":"Verified OK."}]}}`

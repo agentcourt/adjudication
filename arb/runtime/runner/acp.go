@@ -27,6 +27,12 @@ func attorneyDecision(opportunity Opportunity, params map[string]any, fileByID m
 		}
 	case "tool":
 		toolName := mapString(params["tool_name"])
+		if toolName == "" {
+			return "", nil, fmt.Errorf("submit_decision tool_name is required when kind is tool")
+		}
+		if !submitDecisionTool(toolName) {
+			return "", nil, fmt.Errorf("tool %q must be called directly, not through submit_decision", toolName)
+		}
 		if !slices.Contains(opportunity.AllowedTools, toolName) {
 			return "", nil, fmt.Errorf("tool %q is not allowed in this opportunity", toolName)
 		}
@@ -239,14 +245,20 @@ func decisionToolEnum(allowedTools []string) []string {
 	out := make([]string, 0, len(allowedTools))
 	for _, tool := range allowedTools {
 		tool = strings.TrimSpace(tool)
-		if tool != "" && !slices.Contains(out, tool) {
+		if tool != "" && submitDecisionTool(tool) && !slices.Contains(out, tool) {
 			out = append(out, tool)
 		}
 	}
-	if len(out) == 0 {
-		return fallback
-	}
 	return out
+}
+
+func submitDecisionTool(tool string) bool {
+	switch tool {
+	case "record_opening_statement", "submit_argument", "submit_rebuttal", "submit_surrebuttal", "deliver_closing_statement", "pass_phase_opportunity":
+		return true
+	default:
+		return false
+	}
 }
 
 func attorneyPayloadSchema() map[string]any {
@@ -384,6 +396,7 @@ func (rc *runContext) buildAttorneyPrompt(opportunity Opportunity) (string, erro
 		"WORKSPACE_SECTION":          workspaceSection,
 		"WORK_PRODUCT_SECTION":       workProductSection,
 		"ALLOWED_TOOLS":              strings.Join(opportunity.AllowedTools, ", "),
+		"DECISION_TOOLS":             strings.Join(decisionToolEnum(opportunity.AllowedTools), ", "),
 	})
 	if err != nil {
 		return "", err

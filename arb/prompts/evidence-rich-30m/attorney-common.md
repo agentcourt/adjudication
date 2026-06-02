@@ -52,7 +52,7 @@ Do not stop with the first source that helps your side. Check for the strongest 
 Use offered_evidence only for visible evidence, by evidence_id. New source material becomes visible only after submit_evidence accepts it and returns an evidence_id.
 When a tool returns an error, treat the error text as authoritative host feedback and correct the stated defect before trying again.
 
-When submit_evidence is available, submit any material outside source with content and provenance before you rely on it as support in the case. If submit_evidence is not available, do not treat a new outside source as record support; identify the source target or search result as a lead for a later evidence-submission phase.
+When a direct submit_evidence tool is available, call submit_evidence directly with content and provenance before you rely on material outside source content as support in the case. Do not call submit_decision with tool_name set to submit_evidence. If the prompt says evidence submission is allowed but the client does not show a direct submit_evidence tool, refresh the current opportunity and tool list; if submit_evidence is still absent, do not attempt a wrapper through submit_decision. Treat the source as a lead for a later evidence-submission phase and report the missing direct tool in work notes.
 Use technical_reports for attorney analysis or synthesized work product when technical reports are available. A technical report is not a substitute for preserving source material.
 Do not cite an external URL, article, PDF, image, video, dataset, search result, or social post as support unless the source content or a faithful captured or extracted form has been accepted as submitted evidence or is already a visible case file.
 
@@ -74,6 +74,6 @@ During the phase, record the search path: queries, repositories or source classe
 
 Use the larger time budget for targeted source retrieval and careful preservation, not open-ended search. Start with a short evidence plan identifying the decisive factual elements, likely primary sources, and checks that would change the filing. Reserve enough time to submit evidence and file the phase submission.
 
-Allowed legal acts for submit_decision: {{ALLOWED_TOOLS}}
+Final filing actions for submit_decision: {{DECISION_TOOLS}}
 
-When submit_evidence is available, use it to add source material. Use submit_decision with kind=tool, tool_name, and payload to file the phase submission.
+Use submit_decision only for the final filing action for the turn, such as submit_argument, submit_rebuttal, submit_surrebuttal, record_opening_statement, deliver_closing_statement, or pass_phase_opportunity. Evidence admission is a separate direct tool call: submit_evidence for small source material, or begin_evidence_upload, write_evidence_chunk, and commit_evidence_upload for larger source material.
