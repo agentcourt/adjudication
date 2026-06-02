@@ -6,17 +6,17 @@ This plan tests the behavior specified in [AAR Process And HTTP Specification](a
 
 The main facts under test are the distinction between participant failure and process failure, the HTTP reporting of active and terminal cases, and the preservation of failure facts in artifacts.  Lawyer failure should fail the case and still let `aar case` exit `0`.  Council-member failure should fail that member, preserve the failure in state and events, and let the case continue when the council rules allow it.
 
-## Harness
+## Test Setups
 
-Use two harnesses.  A direct-case harness starts `.bin/aar case`, reads stderr until it finds `caseapi listening on ...`, then appends `/lawyerapi/v1` or `/councilapi/v1` for private role API calls while the child process is active.  A service harness starts `.bin/aar service`, creates a case with `POST /api/v1/cases`, then calls the public service routes and proxied role API routes.
+Use two test setups.  A direct-case test starts `.bin/aar case`, reads stderr until it finds `caseapi listening on ...`, then appends `/lawyerapi/v1` or `/councilapi/v1` for private role API calls while the child process is active.  A service-backed test starts `.bin/aar service`, creates a case with `POST /api/v1/cases`, then calls the public service routes and proxied role API routes.
 
-Both harnesses should write process stdout, stderr, request JSON, response JSON, and output directory paths into a temporary test directory.  Each test should use a unique case id, run id, output directory, and service registry directory.  A failed test should retain that directory and print its path, so the external interaction can be inspected without rerunning the case.
+Both setups should write process stdout, stderr, request JSON, response JSON, and output directory paths into a temporary test directory.  Each test should use a unique case id, run id, output directory, and service registry directory.  A failed test should retain that directory and print its path, so the external interaction can be inspected without rerunning the case.
 
 The fixtures should stay small.  Use one simple complaint, a small policy with short timeouts and a one-attempt budget for failure tests, and a small council pool used only to populate council seats for `councilapi` cases.  The council API tests do not need live model calls because the test client acts as each council member through HTTP.
 
 ## Test Matrix
 
-| ID | Harness | Case | Expected Result |
+| ID | Setup | Case | Expected Result |
 | --- | --- | --- | --- |
 | LF-1 | `aar case` | Lawyer exhausts attempts | Child exits `0`; stdout summary has `status: "failed"` and a matching failure object. |
 | LF-2 | `aar service` | Lawyer exhausts attempts | Service case becomes `failed`; service result and role reads report the same failure. |
@@ -33,7 +33,7 @@ After LF-1 triggers the failure, the test waits for the child process to exit.  
 
 LF-2 repeats the same failure through `aar service`.  The test creates the case through `POST /api/v1/cases`, uses the service `/lawyerapi/v1/wait` and `/lawyerapi/v1/do` routes, and then reads `/api/v1/cases/{case_id}/result`.  The service case record should become `failed`, the service result should report `status: "failed"`, and completed role reads through the service should return the same failure object.
 
-LF-3 covers deadline expiry with the direct-case harness.  Use a short lawyer timeout, wait for an active plaintiff turn, and let the deadline pass without submitting a valid decision.  The direct test should wait for child exit `0`, then inspect the stdout summary, `run.json`, and events for `failure.reason: "deadline_expired"`.  A service-managed deadline test should assert the same failure through `/api/v1/cases/{case_id}/result` and completed role reads, because the private `aar case` role API exits with the child process.
+LF-3 covers deadline expiry with the direct-case test setup.  Use a short lawyer timeout, wait for an active plaintiff turn, and let the deadline pass without submitting a valid decision.  The direct test should wait for child exit `0`, then inspect the stdout summary, `run.json`, and events for `failure.reason: "deadline_expired"`.  A service-managed deadline test should assert the same failure through `/api/v1/cases/{case_id}/result` and completed role reads, because the private `aar case` role API exits with the child process.
 
 ## Council-Member Failure Tests
 

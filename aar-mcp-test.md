@@ -6,15 +6,15 @@ This plan tests the behavior specified in [AAR MCP Specification](aar-mcp-spec.m
 
 The core boundary is the adapter boundary.  `aar-mcp` owns authentication, session binding, session expiry, stable tool lists, wait normalization, opportunity-id injection, and transport logging.  AAR owns case state, role authorization, phase rules, attempt budgets, evidence validation, and final results.
 
-## Harnesses
+## Test Setups
 
-Use three harnesses.  The unit harness should instantiate `mcpServer` with `httptest` and fake AAR HTTP servers.  The process harness should run `.bin/aar-mcp` against fake AAR HTTP servers and communicate over real HTTP.  The service harness should run `aar service`, `aar-mcp`, and a small AAR case, then drive assignments through MCP JSON-RPC.
+Use three test setups.  Unit tests should instantiate `mcpServer` with `httptest` and fake AAR HTTP servers.  Process tests should run `.bin/aar-mcp` against fake AAR HTTP servers and communicate over real HTTP.  Service-backed process tests should run `aar service`, `aar-mcp`, and a small AAR case, then drive assignments through MCP JSON-RPC.
 
 Each test should retain useful logs on failure.  Process tests should keep adapter stdout, adapter stderr, fake AAR request logs, JSON-RPC requests, JSON-RPC responses, and the temporary service output directory.  Service tests should also retain the service registry, child stdout and stderr logs, `run.json`, `events.ndjson`, `work-notes.ndjson`, and MCP logs.
 
 ## Test Matrix
 
-| ID | Harness | Case | Expected Result |
+| ID | Setup | Case | Expected Result |
 | --- | --- | --- | --- |
 | MCP-1 | Unit | Initialize sessions | Valid lawyer, observer, and council sessions receive `Mcp-Session-Id`; invalid bindings return JSON-RPC errors. |
 | MCP-2 | Unit | Authentication and origins | Bearer-token and origin checks accept configured clients and reject unauthorized clients. |

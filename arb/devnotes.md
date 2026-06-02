@@ -702,6 +702,17 @@ case API serves `/health`, `/lawyerapi/v1/...`, and `/councilapi/v1/...` on the
 same private listener when the Council API backend is active.
 
 The subprocess tests also exposed invalid stdout-pipe ordering.  Both the
-service child watcher and the black-box test harness now wait for stdout capture
-to finish before calling `cmd.Wait()`, matching Go's `StdoutPipe` requirements
-and preserving the final JSON summary for service status.
+service child watcher and the black-box process test code now wait for stdout
+capture to finish before calling `cmd.Wait()`, matching Go's `StdoutPipe`
+requirements and preserving the final JSON summary for service status.
+
+### Service-backed MCP process test
+
+Reference: [MCP process test](runtime/cmd/aar/mcp_blackbox_test.go)
+
+The external MCP test now starts `aar service`, starts `aar-mcp`, creates a
+real service-managed case with the Council API backend, and drives plaintiff,
+defendant, observer, and council assignments through MCP JSON-RPC.  The test
+checks tool lists, observer rejection of mutating tools, work-note recording,
+evidence reading, lawyer filings, council votes, service final result data, and
+the case artifacts written under the output directory.
