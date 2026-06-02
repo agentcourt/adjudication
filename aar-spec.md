@@ -8,9 +8,9 @@ The specification covers two entry points.  `aar case` runs one arbitration case
 
 ## Process Model
 
-`aar case` runs one case from start to terminal state.  It accepts command-line flags that identify the complaint, case id, run id, output directory, lawyer API address, council backend, and optional council API address.  During startup it writes the private role API base URL lines to standard error.
+`aar case` runs one case from start to terminal state.  It accepts command-line flags that identify the complaint, case id, run id, output directory, private case API address, and council backend.  During startup it starts one private case API listener that serves health, lawyer, and council role paths.
 
-When the lawyer API starts, `aar case` writes a line with this exact prefix: `lawyerapi listening on `.  The suffix is the base URL for the private Lawyer API, including `/lawyerapi/v1`.  When the case starts with `--council-backend councilapi`, `aar case` also writes a line with this exact prefix: `councilapi listening on `, followed by the base URL for the private Council API, including `/councilapi/v1`.
+When the private case API starts, `aar case` writes a diagnostic line with this exact prefix: `caseapi listening on `.  The suffix is the private base URL, without a role path.  Direct process tests may use that line to call the child role APIs.  `aar service` does not use stderr for URL discovery.
 
 `aar case` writes a JSON summary line to standard output when the case reaches a terminal state.  A normal arbitration result uses `status: "ok"`.  A procedural case failure, such as a lawyer missed deadline or exhausted attempt budget, uses `status: "failed"` and still exits `0`.
 
@@ -18,7 +18,7 @@ A nonzero `aar case` exit status reports process or runtime failure.  Examples i
 
 `aar service` runs until interrupted or until its parent process stops it.  It writes `aar service listening on http://{addr}` to standard error after successful startup.  It requires a registry directory, an output root, and the path to the `aar` binary used for child cases.
 
-`aar service` starts one `aar case` child for each created case.  The service records the child process id, private role API base URLs, stdout and stderr log paths, child exit code, parsed stdout summary, and service-level status.  The service status reflects the child result: active children are `starting` or `running`, normal terminal results are `completed`, procedural case failures are `failed`, and canceled cases are `canceled`.
+`aar service` starts one `aar case` child for each created case.  The service assigns the child's private case API address before startup, records the child process id, private case API base URL, stdout and stderr log paths, child exit code, parsed stdout summary, and service-level status.  After starting the child, the service polls `GET /health` on the assigned private case API base.  A successful health response marks the case `running`; startup timeout marks it `failed`.
 
 ## Common HTTP Rules
 
@@ -34,7 +34,7 @@ If `aar service` starts with a bearer token, every HTTP request to the service m
 
 `POST /api/v1/cases` starts a new case.  The JSON request includes `complaint_path` and may include `case_id`, `run_id`, `case_files`, `policy_path`, `out_dir`, `council_backend`, timeouts, attempt limits, response limits, common root, engine path, council pool path, prompt paths, and attorney instruction paths.  On success, the service returns HTTP `202` with `ok: true` and a `case` record.
 
-The returned case record contains `case_id`, `run_id`, `status`, `complaint_path`, `out_dir`, `council_backend`, timestamps, and service log paths.  While the child starts, `status` is `starting`.  After the child prints the required role API base URLs, the service marks the case `running`.
+The returned case record contains `case_id`, `run_id`, `status`, `complaint_path`, `out_dir`, `caseapi_base`, `council_backend`, timestamps, and service log paths.  While the child starts, `status` is `starting`.  After the child case API answers `GET /health`, the service marks the case `running`.
 
 `GET /api/v1/cases` lists known cases.  It accepts an optional `status` query parameter.  The response body has `ok: true` and a `cases` array sorted by creation time.
 
@@ -104,7 +104,7 @@ The same failure fact should appear in every applicable external report.  For a 
 
 ## Test Obligations
 
-Tests for this specification should start real `aar` processes and communicate over HTTP.  A direct `aar case` test should read standard error until it finds the role API base URL lines, then use those URLs for role API calls.  A service test should start `aar service`, call `POST /api/v1/cases`, and use the service's public endpoints.
+Tests for this specification should start real `aar` processes and communicate over HTTP.  A direct `aar case` test should read standard error until it finds the private case API base URL line, then append the role API path for role calls.  A service test should start `aar service`, call `POST /api/v1/cases`, and use the service's public endpoints.
 
 Tests should use short deadlines and small attempt budgets.  Attempt-exhaustion tests should prefer invalid tool calls over sleeps because they produce faster and more deterministic failures.  Deadline tests should use bounded waits and assert the terminal status after the deadline has actually expired.
 

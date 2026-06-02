@@ -194,7 +194,7 @@ The service should get the current `opportunity_id` from `GET /lawyerapi/v1/get`
 
 MCP tools should return structured content and plain text. The structured content should include the HTTP response body. The text should summarize success, errors, remaining time, and remaining attempts so the model can correct mistakes. Tool-originated procedural failures should be returned as MCP tool results with an error indication visible to the model, not hidden as transport failures.
 
-The implementation in `arb/tools/lawyer-mcp` is `aar-lawyer-mcp`. It implements MCP Streamable HTTP, maps each MCP session to one `case_id` and `role_id`, and forwards tool calls to the Lawyer HTTP API. It serves many sessions from one process, so one bridge can support several case-role pairs. Idle MCP sessions expire by default, and a clawyer can rejoin by initializing a new session with the same MCP URL.
+The implementation in `arb/tools/aar-mcp` is `aar-mcp`. It implements MCP Streamable HTTP, maps each MCP session to one `case_id` and either one lawyer `role_id` or one council `member_id`, and forwards tool calls to the AAR HTTP APIs. It serves many sessions from one process, so one adapter can support several cases, lawyers, observers, and council members. Idle MCP sessions expire by default, and a clawyer or council agent can rejoin by initializing a new session with the same MCP URL.
 
 Build it from `arb/`:
 
@@ -202,27 +202,41 @@ Build it from `arb/`:
 make build
 ```
 
-Start `aar case` with a fixed Lawyer API address when a stable bridge target is useful:
-
-```bash
-.bin/aar case \
-  --complaint work/case/complaint.md \
-  --out-dir out/case \
-  --lawyerapi-addr 127.0.0.1:19771
-```
-
-Start the MCP adapter with the Lawyer API base URL printed by `aar case`:
+For normal service use, start the AAR service and point `aar-mcp` at the service’s public role API routes:
 
 ```bash
 export AAR_MCP_TOKEN='choose-a-token'
 
-.bin/aar-lawyer-mcp \
+.bin/aar service \
+  --listen 127.0.0.1:19770 \
+  --state-dir out/service-state
+
+.bin/aar-mcp \
   --listen 127.0.0.1:19780 \
-  --lawyerapi-base http://127.0.0.1:19771/lawyerapi/v1 \
+  --lawyerapi-base http://127.0.0.1:19770/lawyerapi/v1 \
+  --councilapi-base http://127.0.0.1:19770/councilapi/v1 \
   --bearer-token "$AAR_MCP_TOKEN"
 ```
 
-For several AAR case processes, start one adapter and repeat `--case case_id=lawyerapi_base`. The adapter uses the per-case mapping first and uses `--lawyerapi-base` only as the default. The current `aar case` process serves one case, so multiple active cases still mean multiple `aar case` processes.
+For a direct single-case test, start `aar case` with a fixed private case API address, then point `aar-mcp` at the lawyer and council paths on that same base:
+
+```bash
+export AAR_MCP_TOKEN='choose-a-token'
+
+.bin/aar case \
+  --complaint work/case/complaint.md \
+  --out-dir out/case \
+  --caseapi-addr 127.0.0.1:19771 \
+  --council-backend councilapi
+
+.bin/aar-mcp \
+  --listen 127.0.0.1:19780 \
+  --lawyerapi-base http://127.0.0.1:19771/lawyerapi/v1 \
+  --councilapi-base http://127.0.0.1:19771/councilapi/v1 \
+  --bearer-token "$AAR_MCP_TOKEN"
+```
+
+The direct case path is useful for local tests. The service path is the intended long-running shape because one service owns many child case processes and one `aar-mcp` process can serve MCP sessions for all of them.
 
 ## MCP Tool Sets
 
@@ -241,13 +255,13 @@ The main MCP service should expose dynamic tools per MCP session. Because each s
 | `begin_evidence_upload`, `write_evidence_chunk`, `commit_evidence_upload` | arguments, rebuttals, surrebuttals | Run chunked upload when evidence is too large for direct submission. |
 | `submit_decision` | ready lawyer turns | File the phase legal act or a permitted pass. |
 
-MCP supports `tools/list` and a `notifications/tools/list_changed` notification when a server's tools change. `aar-lawyer-mcp` advertises `listChanged: false` and does not open an SSE stream, so clients refresh by calling `tools/list` or `get_current_opportunity`. OpenClaw supports remote MCP servers over `streamable-http`, which is enough for this request/response adapter.
+MCP supports `tools/list` and a `notifications/tools/list_changed` notification when a server's tools change. `aar-mcp` advertises `listChanged: false` and does not open an SSE stream, so clients refresh by calling `tools/list` or `get_current_opportunity`. OpenClaw supports remote MCP servers over `streamable-http`, which is enough for this request/response adapter.
 
 The service must still enforce phase and turn validity. Some MCP clients may cache tool lists during an agent run, and a tool call can race with a turn change. A stale MCP tool call should fail cleanly through the service and Lawyer HTTP API. The Lawyer HTTP API remains the enforcement layer.
 
 One MCP session per case-role does not mean one operating-system process per case-role. One shared MCP service process should handle many MCP sessions.
 
-Long-running MCP services should expire idle sessions. `aar-lawyer-mcp` uses a 30-minute idle TTL by default, refreshes the session timestamp on valid MCP traffic, and logs deletion with a reason. Expiry does not change AAR case state because `aar case` owns the court record and the MCP session only stores the case-role binding.
+Long-running MCP services should expire idle sessions. `aar-mcp` uses a 30-minute idle TTL by default, refreshes the session timestamp on valid MCP traffic, and logs deletion with a reason. Expiry does not change AAR case state because `aar case` owns the court record and the MCP session only stores the case-role or case-member binding.
 
 ## OpenClaw MCP Configuration
 

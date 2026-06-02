@@ -17,7 +17,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,8 +24,7 @@ import (
 
 const (
 	defaultMaxProxyBodyBytes = 32 << 20
-	defaultPublicRoleWait    = 30 * time.Second
-	maxPublicRoleWait        = 30 * time.Second
+	defaultCaseStartupWait   = 30 * time.Second
 )
 
 type Config struct {
@@ -37,6 +35,7 @@ type Config struct {
 	CommonRoot  string
 	EnginePath  string
 	BearerToken string
+	StartupWait time.Duration
 }
 
 type Server struct {
@@ -76,8 +75,7 @@ type CaseRecord struct {
 	Status         string         `json:"status"`
 	ComplaintPath  string         `json:"complaint_path"`
 	OutputDir      string         `json:"out_dir"`
-	LawyerAPIBase  string         `json:"lawyerapi_base,omitempty"`
-	CouncilAPIBase string         `json:"councilapi_base,omitempty"`
+	CaseAPIBase    string         `json:"caseapi_base,omitempty"`
 	CouncilBackend string         `json:"council_backend"`
 	CreatedAt      string         `json:"created_at"`
 	StartedAt      string         `json:"started_at,omitempty"`
@@ -105,6 +103,9 @@ func New(cfg Config) (*Server, error) {
 	}
 	if strings.TrimSpace(cfg.AARBin) == "" {
 		return nil, fmt.Errorf("aar binary path is required")
+	}
+	if cfg.StartupWait <= 0 {
+		cfg.StartupWait = defaultCaseStartupWait
 	}
 	if err := os.MkdirAll(cfg.RegistryDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create registry dir: %w", err)
@@ -300,17 +301,19 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 	if councilBackend == "" {
 		councilBackend = "direct"
 	}
+	caseAPIAddr, err := chooseLocalCaseAPIAddr()
+	if err != nil {
+		return CaseRecord{}, err
+	}
+	caseAPIBase := "http://" + caseAPIAddr
 	args := []string{
 		"case",
 		"--case-id", caseID,
 		"--run-id", runID,
 		"--complaint", complaintPath,
 		"--out-dir", outDir,
-		"--lawyerapi-addr", "127.0.0.1:0",
+		"--caseapi-addr", caseAPIAddr,
 		"--council-backend", councilBackend,
-	}
-	if councilBackend == "councilapi" {
-		args = append(args, "--councilapi-addr", "127.0.0.1:0")
 	}
 	for _, file := range req.CaseFiles {
 		if strings.TrimSpace(file) != "" {
@@ -369,6 +372,7 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 		Status:         "starting",
 		ComplaintPath:  complaintPath,
 		OutputDir:      outDir,
+		CaseAPIBase:    caseAPIBase,
 		CouncilBackend: councilBackend,
 		CreatedAt:      now,
 		StdoutLog:      stdoutPath,
@@ -401,6 +405,7 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 	}()
 	go s.captureStderr(rec, stderr, stderrFile)
 	go s.waitChild(rec, stdoutDone)
+	go s.pollCaseAPIStartup(rec, s.cfg.StartupWait)
 
 	if err := ctx.Err(); err != nil {
 		return CaseRecord{}, err
@@ -453,23 +458,93 @@ func (s *Server) captureStderr(rec *CaseRecord, stderr io.Reader, logFile *os.Fi
 	for scanner.Scan() {
 		line := scanner.Text()
 		_, _ = fmt.Fprintln(logFile, line)
-		s.mu.Lock()
-		if strings.HasPrefix(line, "lawyerapi listening on ") {
-			rec.LawyerAPIBase = strings.TrimSpace(strings.TrimPrefix(line, "lawyerapi listening on "))
-		}
-		if strings.HasPrefix(line, "councilapi listening on ") {
-			rec.CouncilAPIBase = strings.TrimSpace(strings.TrimPrefix(line, "councilapi listening on "))
-		}
-		s.maybeMarkRunningLocked(rec)
-		s.cond.Broadcast()
-		s.mu.Unlock()
-		s.persistRecordBestEffort(rec)
 	}
 }
 
+func chooseLocalCaseAPIAddr() (string, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", fmt.Errorf("choose caseapi address: %w", err)
+	}
+	addr := ln.Addr().String()
+	if err := ln.Close(); err != nil {
+		return "", fmt.Errorf("close caseapi address probe: %w", err)
+	}
+	return addr, nil
+}
+
+func (s *Server) pollCaseAPIStartup(rec *CaseRecord, timeout time.Duration) {
+	if timeout <= 0 {
+		timeout = defaultCaseStartupWait
+	}
+	deadline := time.Now().Add(timeout)
+	for {
+		if !s.caseStillStarting(rec.CaseID) {
+			return
+		}
+		if s.caseAPIHealthy(rec.CaseAPIBase) {
+			s.markRunning(rec)
+			return
+		}
+		if !time.Now().Before(deadline) {
+			s.markStartupFailed(rec, fmt.Sprintf("case API did not become healthy within %s", timeout))
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func (s *Server) caseStillStarting(caseID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rec := s.cases[caseID]
+	return rec != nil && rec.Status == "starting"
+}
+
+func (s *Server) caseAPIHealthy(base string) bool {
+	u := strings.TrimRight(strings.TrimSpace(base), "/") + "/health"
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return false
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusNoContent
+}
+
+func (s *Server) markRunning(rec *CaseRecord) {
+	s.mu.Lock()
+	if rec.Status != "starting" {
+		s.mu.Unlock()
+		return
+	}
+	rec.Status = "running"
+	s.cond.Broadcast()
+	s.mu.Unlock()
+	s.persistRecordBestEffort(rec)
+}
+
+func (s *Server) markStartupFailed(rec *CaseRecord, message string) {
+	s.mu.Lock()
+	if rec.Status != "starting" {
+		s.mu.Unlock()
+		return
+	}
+	rec.Status = "failed"
+	rec.Error = message
+	s.cond.Broadcast()
+	s.mu.Unlock()
+	s.persistRecordBestEffort(rec)
+}
+
 func (s *Server) waitChild(rec *CaseRecord, stdoutDone <-chan error) {
-	err := rec.cmd.Wait()
 	stdoutErr := <-stdoutDone
+	err := rec.cmd.Wait()
 	exitCode := 0
 	if err != nil {
 		exitCode = 1
@@ -566,17 +641,8 @@ func (s *Server) proxyLawyerGET(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "role_id": roleID, "error": apiError("unknown_case", "unknown case_id")})
 		return
 	}
-	if isActive(rec) && rec.LawyerAPIBase == "" && pathBase(r.URL.Path) == "wait" {
-		timeout, err := publicRoleWaitTimeout(r)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "case_id": caseID, "role_id": roleID, "error": apiError("bad_timeout", err.Error())})
-			return
-		}
-		s.waitForPrivateAPI(r.Context(), caseID, "lawyer", timeout)
-		rec, _ = s.getCasePtr(caseID)
-	}
-	if isActive(rec) && rec.LawyerAPIBase != "" {
-		s.forward(w, r, rec.LawyerAPIBase)
+	if rec.Status == "running" && rec.CaseAPIBase != "" {
+		s.forward(w, r, rec.CaseAPIBase)
 		return
 	}
 	if isActive(rec) {
@@ -602,17 +668,8 @@ func (s *Server) proxyCouncilGET(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "member_id": memberID, "error": apiError("councilapi_unavailable", "case did not start with councilapi backend")})
 		return
 	}
-	if isActive(rec) && rec.CouncilAPIBase == "" && pathBase(r.URL.Path) == "wait" {
-		timeout, err := publicRoleWaitTimeout(r)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "case_id": caseID, "member_id": memberID, "error": apiError("bad_timeout", err.Error())})
-			return
-		}
-		s.waitForPrivateAPI(r.Context(), caseID, "council", timeout)
-		rec, _ = s.getCasePtr(caseID)
-	}
-	if isActive(rec) && rec.CouncilAPIBase != "" {
-		s.forward(w, r, rec.CouncilAPIBase)
+	if rec.Status == "running" && rec.CaseAPIBase != "" {
+		s.forward(w, r, rec.CaseAPIBase)
 		return
 	}
 	if isActive(rec) {
@@ -663,19 +720,17 @@ func (s *Server) proxyDo(w http.ResponseWriter, r *http.Request, kind string) {
 		writeJSON(w, http.StatusGone, map[string]any{"ok": false, "case_id": caseID, "error": apiError("case_not_active", "case has no active runner for mutating requests")})
 		return
 	}
-	base := rec.LawyerAPIBase
 	if kind == "council" {
-		base = rec.CouncilAPIBase
 		if rec.CouncilBackend != "councilapi" {
 			writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("councilapi_unavailable", "case did not start with councilapi backend")})
 			return
 		}
 	}
-	if base == "" {
-		writeJSON(w, http.StatusBadGateway, map[string]any{"ok": false, "case_id": caseID, "error": apiError("private_api_unavailable", "private role API is not available")})
+	if rec.Status != "running" || rec.CaseAPIBase == "" {
+		writeJSON(w, http.StatusBadGateway, map[string]any{"ok": false, "case_id": caseID, "error": apiError("private_api_unavailable", "private case API is not available")})
 		return
 	}
-	s.forwardRaw(w, r, base, raw)
+	s.forwardRaw(w, r, rec.CaseAPIBase, raw)
 }
 
 func (s *Server) forward(w http.ResponseWriter, r *http.Request, base string) {
@@ -726,6 +781,10 @@ func joinBaseAndPath(base string, requestPath string) (*url.URL, error) {
 		return nil, err
 	}
 	basePath := strings.TrimRight(u.Path, "/")
+	if basePath == "" {
+		u.Path = requestPath
+		return u, nil
+	}
 	suffix := strings.TrimPrefix(requestPath, "/lawyerapi/v1")
 	suffix = strings.TrimPrefix(suffix, "/councilapi/v1")
 	u.Path = basePath + suffix
@@ -907,8 +966,8 @@ func (s *Server) handleCaseResult(w http.ResponseWriter, caseID string) {
 		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_case", "unknown case_id")})
 		return
 	}
-	if isActive(rec) && rec.LawyerAPIBase != "" {
-		u := rec.LawyerAPIBase + "/result?case_id=" + url.QueryEscape(caseID) + "&role_id=observer"
+	if rec.Status == "running" && rec.CaseAPIBase != "" {
+		u := strings.TrimRight(rec.CaseAPIBase, "/") + "/lawyerapi/v1/result?case_id=" + url.QueryEscape(caseID) + "&role_id=observer"
 		req, err := http.NewRequest(http.MethodGet, u, nil)
 		if err == nil {
 			resp, err := s.client.Do(req)
@@ -1051,74 +1110,6 @@ func (s *Server) getCasePtr(caseID string) (*CaseRecord, bool) {
 	defer s.mu.Unlock()
 	rec := s.cases[caseID]
 	return rec, rec != nil
-}
-
-func (s *Server) waitForPrivateAPI(ctx context.Context, caseID string, kind string, timeout time.Duration) {
-	if timeout <= 0 {
-		return
-	}
-	deadline := time.Now().Add(timeout)
-	timer := time.AfterFunc(timeout, func() {
-		s.mu.Lock()
-		s.cond.Broadcast()
-		s.mu.Unlock()
-	})
-	defer timer.Stop()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for {
-		rec := s.cases[caseID]
-		if rec == nil || !isActive(rec) || privateAPIReady(rec, kind) {
-			return
-		}
-		if err := ctx.Err(); err != nil {
-			return
-		}
-		if !time.Now().Before(deadline) {
-			return
-		}
-		s.cond.Wait()
-	}
-}
-
-func privateAPIReady(rec *CaseRecord, kind string) bool {
-	switch kind {
-	case "lawyer":
-		return rec.LawyerAPIBase != ""
-	case "council":
-		return rec.CouncilAPIBase != ""
-	default:
-		return false
-	}
-}
-
-func (s *Server) maybeMarkRunningLocked(rec *CaseRecord) {
-	if rec.Status != "starting" {
-		return
-	}
-	if rec.LawyerAPIBase == "" {
-		return
-	}
-	if rec.CouncilBackend == "councilapi" && rec.CouncilAPIBase == "" {
-		return
-	}
-	rec.Status = "running"
-}
-
-func publicRoleWaitTimeout(r *http.Request) (time.Duration, error) {
-	raw := strings.TrimSpace(r.URL.Query().Get("timeout_ms"))
-	if raw == "" {
-		return defaultPublicRoleWait, nil
-	}
-	ms, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || ms <= 0 {
-		return 0, fmt.Errorf("timeout_ms must be a positive integer")
-	}
-	timeout := time.Duration(ms) * time.Millisecond
-	if timeout > maxPublicRoleWait {
-		return 0, fmt.Errorf("timeout_ms must be at most %d", maxPublicRoleWait.Milliseconds())
-	}
-	return timeout, nil
 }
 
 func isActive(rec *CaseRecord) bool {

@@ -59,8 +59,7 @@ type Config struct {
 	AttorneyCommonPromptPath   string
 	AttorneyArgumentPromptPath string
 	AttorneyRebuttalPromptPath string
-	LawyerAPIAddr              string
-	CouncilAPIAddr             string
+	CaseAPIAddr                string
 	Policy                     Policy
 	Runtime                    RuntimeLimits
 	CouncilBackend             string

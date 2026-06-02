@@ -50,8 +50,7 @@ The manager registry records one row per case.  The registry lives in memory for
 | `status` | `starting`, `running`, `completed`, `failed`, or `canceled`. |
 | `complaint_path` | Complaint file path supplied at creation. |
 | `out_dir` | Output directory for the case packet. |
-| `lawyerapi_base` | Private Lawyer API base URL for this runner. |
-| `councilapi_base` | Private Council API base URL when the runner exposes one. |
+| `caseapi_base` | Private case API base URL for this runner. |
 | `created_at` | Creation time in UTC. |
 | `started_at` | Runner start time in UTC. |
 | `finished_at` | Runner finish time in UTC when known. |
@@ -63,7 +62,7 @@ The manager must distinguish process state from case result.  A case can have a 
 
 ### Case Creation
 
-The primary creation endpoint accepts the same inputs as `aar case`, expressed as JSON.  The manager validates file existence, policy paths, requested backend values, and output directory policy before it starts a child process.  It then starts `aar case` with `--lawyerapi-addr 127.0.0.1:0`, `--councilapi-addr 127.0.0.1:0` when the Council API backend is selected, a generated `--run-id`, and a runner-visible case id flag once the runner supports one.
+The primary creation endpoint accepts the same inputs as `aar case`, expressed as JSON.  The manager validates file existence, policy paths, requested backend values, and output directory policy before it starts a child process.  It then chooses one private child API address, starts `aar case` with `--caseapi-addr ADDR`, records `caseapi_base`, and polls `GET /health` on that private base until startup succeeds or times out.
 
 ```http
 POST /api/v1/cases

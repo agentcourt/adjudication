@@ -689,3 +689,19 @@ The `ex1` OpenClaw/Pi run showed repeated C4 MCP sessions because the example
 runner restarted agents and used them to check for work.  That lifecycle was
 wrong.  The example runner now starts each lawyer or council agent once and
 lets `set -e` fail the run when a command fails.
+
+### Private case API startup
+
+Reference: [Service runner](runtime/service/service.go)
+
+The public service no longer reads child API URLs from child stderr.  It chooses
+one local private address before it starts `aar case`, passes that address as
+`--caseapi-addr`, records `caseapi_base`, and polls `GET /health` on that base
+until startup succeeds or the configured startup timeout expires.  The child
+case API serves `/health`, `/lawyerapi/v1/...`, and `/councilapi/v1/...` on the
+same private listener when the Council API backend is active.
+
+The subprocess tests also exposed invalid stdout-pipe ordering.  Both the
+service child watcher and the black-box test harness now wait for stdout capture
+to finish before calling `cmd.Wait()`, matching Go's `StdoutPipe` requirements
+and preserving the final JSON summary for service status.

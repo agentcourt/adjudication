@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,10 +22,7 @@ const (
 )
 
 type councilAPIServer struct {
-	rc      *runContext
-	server  *http.Server
-	ln      net.Listener
-	baseURL string
+	rc *runContext
 
 	mu      sync.Mutex
 	cond    *sync.Cond
@@ -60,39 +56,18 @@ type councilDoRequest struct {
 	CallID        string         `json:"call_id,omitempty"`
 }
 
-func startCouncilAPIServer(rc *runContext) (*councilAPIServer, error) {
-	addr := strings.TrimSpace(rc.cfg.CouncilAPIAddr)
-	if addr == "" {
-		addr = "127.0.0.1:0"
-	}
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return nil, fmt.Errorf("start councilapi listener: %w", err)
-	}
+func newCouncilAPIServer(rc *runContext) *councilAPIServer {
 	api := &councilAPIServer{
-		rc:      rc,
-		ln:      ln,
-		baseURL: "http://" + listenerHostPort(ln.Addr()) + councilAPIBasePath,
+		rc: rc,
 	}
 	api.cond = sync.NewCond(&api.mu)
-	mux := http.NewServeMux()
+	return api
+}
+
+func (api *councilAPIServer) register(mux *http.ServeMux) {
 	mux.HandleFunc(councilAPIBasePath+"/get", api.handleGet)
 	mux.HandleFunc(councilAPIBasePath+"/wait", api.handleWait)
 	mux.HandleFunc(councilAPIBasePath+"/do", api.handleDo)
-	api.server = &http.Server{Handler: mux}
-	go func() {
-		if err := api.server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			_ = rc.recordEvent("councilapi_error", "system", currentPhase(rc.state), map[string]any{"error": err.Error()})
-		}
-	}()
-	return api, nil
-}
-
-func (api *councilAPIServer) Close(ctx context.Context) error {
-	if api == nil || api.server == nil {
-		return nil
-	}
-	return api.server.Shutdown(ctx)
 }
 
 func (api *councilAPIServer) startTurn(turn *councilTurn) error {

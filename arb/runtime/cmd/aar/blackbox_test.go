@@ -39,14 +39,15 @@ func TestBlackBoxLawyerAttemptFailureDirectCase(t *testing.T) {
 		"--policy", fx.policyPath,
 		"--council-pool", fx.councilPoolPath,
 		"--common-root", fx.commonRoot,
-		"--lawyerapi-addr", "127.0.0.1:0",
+		"--caseapi-addr", "127.0.0.1:0",
 		"--invalid-attempt-limit", "1",
 		"--lawyer-timeout-seconds", "30",
 		"--timeout-seconds", "10",
 	)
 	defer proc.kill()
 
-	lawyerBase := proc.waitForStderrPrefix(ctx, t, "lawyerapi listening on ")
+	caseBase := proc.waitForStderrPrefix(ctx, t, "caseapi listening on ")
+	lawyerBase := caseBase + "/lawyerapi/v1"
 	ready := waitLawyerReady(ctx, t, lawyerBase, caseID, "plaintiff")
 	postLawyerTool(ctx, t, lawyerBase, map[string]any{
 		"case_id":        caseID,
@@ -139,14 +140,15 @@ func TestBlackBoxLawyerDeadlineFailureDirectCase(t *testing.T) {
 		"--policy", fx.policyPath,
 		"--council-pool", fx.councilPoolPath,
 		"--common-root", fx.commonRoot,
-		"--lawyerapi-addr", "127.0.0.1:0",
+		"--caseapi-addr", "127.0.0.1:0",
 		"--invalid-attempt-limit", "2",
 		"--lawyer-timeout-seconds", "1",
 		"--timeout-seconds", "10",
 	)
 	defer proc.kill()
 
-	lawyerBase := proc.waitForStderrPrefix(ctx, t, "lawyerapi listening on ")
+	caseBase := proc.waitForStderrPrefix(ctx, t, "caseapi listening on ")
+	lawyerBase := caseBase + "/lawyerapi/v1"
 	waitLawyerReady(ctx, t, lawyerBase, caseID, "plaintiff")
 
 	err := proc.wait()
@@ -391,8 +393,8 @@ func TestBlackBoxRuntimeFailureUsesNonzeroExit(t *testing.T) {
 	}
 	summary := lastJSONLine(t, proc.stdoutString())
 	assertString(t, summary, "status", "error")
-	if strings.Contains(proc.stderrString(), "lawyerapi listening on ") {
-		t.Fatalf("runtime failure unexpectedly started lawyer API\nstderr:\n%s", proc.stderrString())
+	if strings.Contains(proc.stderrString(), "caseapi listening on ") {
+		t.Fatalf("runtime failure unexpectedly started case API\nstderr:\n%s", proc.stderrString())
 	}
 }
 
@@ -604,9 +606,9 @@ func startTestProcess(cmd *exec.Cmd, stdoutLogPath string, stderrLogPath string)
 		close(proc.stderrLines)
 	}()
 	go func() {
-		waitErr := cmd.Wait()
 		stdoutErr := <-proc.stdoutDone
 		stderrErr := <-proc.stderrDone
+		waitErr := cmd.Wait()
 		proc.done <- errors.Join(waitErr, stdoutErr, stderrErr)
 	}()
 	return proc

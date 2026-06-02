@@ -6,8 +6,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestCompletedLawyerReadsReturnDoneFromArtifact(t *testing.T) {
@@ -122,6 +124,78 @@ func TestStartingCouncilWaitReturnsWaiting(t *testing.T) {
 	}
 }
 
+func TestJoinBaseAndPathUsesSingleCaseAPIBase(t *testing.T) {
+	u, err := joinBaseAndPath("http://127.0.0.1:21431", "/lawyerapi/v1/get")
+	if err != nil {
+		t.Fatalf("join lawyer path: %v", err)
+	}
+	if got := u.String(); got != "http://127.0.0.1:21431/lawyerapi/v1/get" {
+		t.Fatalf("lawyer target = %q", got)
+	}
+	u, err = joinBaseAndPath("http://127.0.0.1:21431", "/councilapi/v1/wait")
+	if err != nil {
+		t.Fatalf("join council path: %v", err)
+	}
+	if got := u.String(); got != "http://127.0.0.1:21431/councilapi/v1/wait" {
+		t.Fatalf("council target = %q", got)
+	}
+}
+
+func TestStartupPollMarksRunningFromHealth(t *testing.T) {
+	health := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			t.Fatalf("unexpected health path %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer health.Close()
+	s, rec := testServerWithStartingCase(t)
+	rec.CaseAPIBase = health.URL
+
+	s.pollCaseAPIStartup(rec, time.Second)
+
+	if rec.Status != "running" {
+		t.Fatalf("status = %q, want running", rec.Status)
+	}
+}
+
+func TestStartupPollMarksFailedAfterTimeout(t *testing.T) {
+	health := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer health.Close()
+	s, rec := testServerWithStartingCase(t)
+	rec.CaseAPIBase = health.URL
+
+	s.pollCaseAPIStartup(rec, 20*time.Millisecond)
+
+	if rec.Status != "failed" {
+		t.Fatalf("status = %q, want failed", rec.Status)
+	}
+	if !strings.Contains(rec.Error, "case API did not become healthy") {
+		t.Fatalf("error = %q", rec.Error)
+	}
+}
+
+func TestCaptureStderrDoesNotSetControlState(t *testing.T) {
+	s, rec := testServerWithStartingCase(t)
+	rec.CaseAPIBase = "http://127.0.0.1:21431"
+	logPath := filepath.Join(t.TempDir(), "stderr.log")
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		t.Fatalf("create stderr log: %v", err)
+	}
+
+	s.captureStderr(rec, strings.NewReader("lawyerapi listening on http://127.0.0.1:1/lawyerapi/v1\ncouncilapi listening on http://127.0.0.1:2/councilapi/v1\n"), logFile)
+
+	if rec.CaseAPIBase != "http://127.0.0.1:21431" {
+		t.Fatalf("caseapi base changed to %q", rec.CaseAPIBase)
+	}
+	if rec.Status != "starting" {
+		t.Fatalf("status = %q, want starting", rec.Status)
+	}
+}
+
 func testServerWithCompletedCase(t *testing.T) (*Server, *CaseRecord) {
 	t.Helper()
 	root := t.TempDir()
@@ -232,6 +306,9 @@ func testServerWithFailedCase(t *testing.T) (*Server, *CaseRecord) {
 func testServerWithStartingCase(t *testing.T) (*Server, *CaseRecord) {
 	t.Helper()
 	s := &Server{
+		cfg: Config{
+			RegistryDir: t.TempDir(),
+		},
 		cases:  map[string]*CaseRecord{},
 		client: &http.Client{},
 	}

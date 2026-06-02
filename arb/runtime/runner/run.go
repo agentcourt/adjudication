@@ -89,32 +89,20 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 	if err := rc.initializeEvidenceRegistry(); err != nil {
 		return Result{}, err
 	}
-	lawyerAPI, err := startLawyerAPIServer(rc)
+	caseAPI, err := startCaseAPIServer(rc, cfg.CouncilBackend == councilBackendAPI)
 	if err != nil {
 		return Result{}, err
 	}
-	rc.lawyerAPI = lawyerAPI
-	fmt.Fprintf(os.Stderr, "lawyerapi listening on %s\n", lawyerAPI.baseURL)
+	rc.lawyerAPI = caseAPI.lawyerAPI
+	rc.councilAPI = caseAPI.councilAPI
+	fmt.Fprintf(os.Stderr, "caseapi listening on %s\n", caseAPI.baseURL)
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		if closeErr := rc.lawyerAPI.Close(shutdownCtx); closeErr != nil {
+		if closeErr := caseAPI.Close(shutdownCtx); closeErr != nil {
 			err = errors.Join(err, closeErr)
 		}
-		if rc.councilAPI != nil {
-			if closeErr := rc.councilAPI.Close(shutdownCtx); closeErr != nil {
-				err = errors.Join(err, closeErr)
-			}
-		}
 	}()
-	if cfg.CouncilBackend == councilBackendAPI {
-		councilAPI, err := startCouncilAPIServer(rc)
-		if err != nil {
-			return Result{}, err
-		}
-		rc.councilAPI = councilAPI
-		fmt.Fprintf(os.Stderr, "councilapi listening on %s\n", councilAPI.baseURL)
-	}
 	for _, replacement := range councilReplacements {
 		if err := rc.recordEvent("council_member_replaced", "system", currentPhase(rc.state), map[string]any{
 			"member_id":                    replacement.MemberID,

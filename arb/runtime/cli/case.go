@@ -47,8 +47,7 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	commonRoot := fs.String("common-root", defaultCommonRoot(), "Path to the sibling shared common directory")
 	legacyCommonRoot := fs.String("agentcourt-root", "", "Deprecated alias for --common-root")
 	councilPool := fs.String("council-pool", "", "Council model/persona pool file. Default: <common-root>/data/personas/pool.csv")
-	lawyerAPIAddr := fs.String("lawyerapi-addr", "127.0.0.1:0", "Lawyer API listen address")
-	councilAPIAddr := fs.String("councilapi-addr", "127.0.0.1:0", "Council API listen address when --council-backend=councilapi")
+	caseAPIAddr := fs.String("caseapi-addr", "127.0.0.1:0", "Private case API listen address")
 	councilBackend := fs.String("council-backend", "direct", "Council backend: direct or councilapi")
 	timeoutSeconds := fs.Int("timeout-seconds", 0, "Override runtime council LLM timeout in seconds")
 	lawyerTimeoutSeconds := fs.Int("lawyer-timeout-seconds", 0, "Override runtime lawyer turn timeout in seconds")
@@ -163,11 +162,10 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		AttorneyCommonPromptPath:   resolvedAttorneyCommonPrompt,
 		AttorneyArgumentPromptPath: resolvedAttorneyArgumentPrompt,
 		AttorneyRebuttalPromptPath: resolvedAttorneyRebuttalPrompt,
-		LawyerAPIAddr:              strings.TrimSpace(*lawyerAPIAddr),
+		CaseAPIAddr:                strings.TrimSpace(*caseAPIAddr),
 		Policy:                     policy,
 		Runtime:                    runtimeLimits,
 		CouncilBackend:             runner.NormalizeCouncilBackend(*councilBackend),
-		CouncilAPIAddr:             strings.TrimSpace(*councilAPIAddr),
 		Engine:                     lean.New([]string{*enginePath}),
 	}
 	result, err := runner.Run(context.Background(), cfg, complaint)

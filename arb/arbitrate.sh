@@ -3,7 +3,7 @@
 #
 # Usage:
 #
-#   ./arbitrate.sh [INPUT_DIR] [OUTPUT_DIR] [LAWYERAPI_ADDR]
+#   ./arbitrate.sh [INPUT_DIR] [OUTPUT_DIR] [CASEAPI_ADDR]
 #
 # Arguments:
 #
@@ -13,7 +13,7 @@
 #   OUTPUT_DIR      Directory where the run output should be written.
 #                   Default: out/ex1-demo
 #
-#   LAWYERAPI_ADDR  Address for the HTTP Lawyer API listener.
+#   CASEAPI_ADDR    Address for the private case API listener.
 #                   Default: 127.0.0.1:0
 #
 # If the input directory contains an executable `sign.sh`, this script runs it.
@@ -42,7 +42,7 @@ fi
 
 INPUT_DIR="${1:-examples/ex1}"
 OUTPUT_DIR="${2:-out/ex1-demo}"
-LAWYERAPI_ADDR="${3:-127.0.0.1:0}"
+CASEAPI_ADDR="${3:-127.0.0.1:0}"
 INVALID_ATTEMPT_LIMIT=5
 
 SIGN_SCRIPT="$INPUT_DIR/sign.sh"
@@ -69,5 +69,5 @@ fi
 .bin/aar case \
   --complaint "$COMPLAINT_FILE" \
   --out-dir "$OUTPUT_DIR" \
-  --lawyerapi-addr "$LAWYERAPI_ADDR" \
+  --caseapi-addr "$CASEAPI_ADDR" \
   --invalid-attempt-limit "$INVALID_ATTEMPT_LIMIT"

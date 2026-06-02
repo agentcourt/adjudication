@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"adjudication/arb/runtime/service"
 )
@@ -22,6 +23,7 @@ func RunService(args []string, stdout io.Writer, stderr io.Writer) error {
 	commonRoot := fs.String("common-root", defaultCommonRoot(), "Path to sibling shared common directory")
 	enginePath := fs.String("engine", defaultEnginePath(), "Lean engine binary")
 	bearerToken := fs.String("bearer-token", "", "Optional bearer token required for service requests")
+	startupWait := fs.Duration("case-startup-timeout", 30*time.Second, "Maximum time to wait for a child case API health response")
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: aar service [options]\n\n")
 		fs.PrintDefaults()
@@ -60,6 +62,7 @@ func RunService(args []string, stdout io.Writer, stderr io.Writer) error {
 		CommonRoot:  commonRootResolved,
 		EnginePath:  strings.TrimSpace(*enginePath),
 		BearerToken: strings.TrimSpace(*bearerToken),
+		StartupWait: *startupWait,
 	}
 	server, err := service.New(cfg)
 	if err != nil {

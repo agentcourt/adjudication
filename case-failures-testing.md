@@ -8,7 +8,7 @@ The main facts under test are the distinction between participant failure and pr
 
 ## Harness
 
-Use two harnesses.  A direct-case harness starts `.bin/aar case`, reads stderr until it finds `lawyerapi listening on ...` and, when needed, `councilapi listening on ...`, then calls the private role API URLs while the child process is active.  A service harness starts `.bin/aar service`, creates a case with `POST /api/v1/cases`, then calls the public service routes and proxied role API routes.
+Use two harnesses.  A direct-case harness starts `.bin/aar case`, reads stderr until it finds `caseapi listening on ...`, then appends `/lawyerapi/v1` or `/councilapi/v1` for private role API calls while the child process is active.  A service harness starts `.bin/aar service`, creates a case with `POST /api/v1/cases`, then calls the public service routes and proxied role API routes.
 
 Both harnesses should write process stdout, stderr, request JSON, response JSON, and output directory paths into a temporary test directory.  Each test should use a unique case id, run id, output directory, and service registry directory.  A failed test should retain that directory and print its path, so the external interaction can be inspected without rerunning the case.
 

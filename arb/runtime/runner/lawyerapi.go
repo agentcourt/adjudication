@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -23,10 +22,7 @@ const (
 )
 
 type lawyerAPIServer struct {
-	rc      *runContext
-	server  *http.Server
-	ln      net.Listener
-	baseURL string
+	rc *runContext
 
 	mu      sync.Mutex
 	cond    *sync.Cond
@@ -59,53 +55,20 @@ type lawyerDoRequest struct {
 	CallID        string         `json:"call_id,omitempty"`
 }
 
-func startLawyerAPIServer(rc *runContext) (*lawyerAPIServer, error) {
-	addr := strings.TrimSpace(rc.cfg.LawyerAPIAddr)
-	if addr == "" {
-		addr = "127.0.0.1:0"
-	}
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return nil, fmt.Errorf("start lawyerapi listener: %w", err)
-	}
+func newLawyerAPIServer(rc *runContext) *lawyerAPIServer {
 	api := &lawyerAPIServer{
-		rc:      rc,
-		ln:      ln,
-		baseURL: "http://" + listenerHostPort(ln.Addr()) + lawyerAPIBasePath,
+		rc: rc,
 	}
 	api.cond = sync.NewCond(&api.mu)
-	mux := http.NewServeMux()
+	return api
+}
+
+func (api *lawyerAPIServer) register(mux *http.ServeMux) {
 	mux.HandleFunc(lawyerAPIBasePath+"/get", api.handleGet)
 	mux.HandleFunc(lawyerAPIBasePath+"/wait", api.handleWait)
 	mux.HandleFunc(lawyerAPIBasePath+"/status", api.handleStatus)
 	mux.HandleFunc(lawyerAPIBasePath+"/result", api.handleResult)
 	mux.HandleFunc(lawyerAPIBasePath+"/do", api.handleDo)
-	api.server = &http.Server{Handler: mux}
-	go func() {
-		if err := api.server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			_ = rc.recordEvent("lawyerapi_error", "system", currentPhase(rc.state), map[string]any{"error": err.Error()})
-		}
-	}()
-	return api, nil
-}
-
-func listenerHostPort(addr net.Addr) string {
-	host, port, err := net.SplitHostPort(addr.String())
-	if err != nil {
-		return addr.String()
-	}
-	switch host {
-	case "", "::", "0.0.0.0", "[::]":
-		host = "127.0.0.1"
-	}
-	return net.JoinHostPort(host, port)
-}
-
-func (api *lawyerAPIServer) Close(ctx context.Context) error {
-	if api == nil || api.server == nil {
-		return nil
-	}
-	return api.server.Shutdown(ctx)
 }
 
 func (api *lawyerAPIServer) startTurn(turn *lawyerTurn) error {

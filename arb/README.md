@@ -33,7 +33,7 @@ mkdir -p work/defamation
   --out work/defamation/complaint.md
 ```
 
-`aar case` starts the arbitration, starts the Lawyer API, loads evidence, samples the council, and waits for lawyer actions over HTTP.  The command prints the Lawyer API base URL to stderr in this form: `lawyerapi listening on http://127.0.0.1:PORT/lawyerapi/v1`.  The command prints the final one-line JSON case summary to stdout after the case resolves or fails.
+`aar case` starts the arbitration, starts the private case API, loads evidence, samples the council, and waits for lawyer actions over HTTP.  The command prints the private case API base URL to stderr in this form: `caseapi listening on http://127.0.0.1:PORT`.  The command prints the final one-line JSON case summary to stdout after the case resolves or fails.
 
 ```bash
 .bin/aar case \
@@ -87,7 +87,7 @@ curl -sS -X POST "$BASE/do" \
 | `--evidence-standard` | Override `policy.evidence_standard`. |
 | `--council-pool` | Council model and persona pool. Defaults to `../common/data/personas/pool.csv` when `arb/` is the working directory. |
 | `--attorney-instructions` | Standing lawyer instructions file. Defaults to `./attorney-instructions/default.md` when present. |
-| `--lawyerapi-addr` | Lawyer API listen address. Default: `127.0.0.1:0`. |
+| `--caseapi-addr` | Private case API listen address. Default: `127.0.0.1:0`. |
 | `--lawyer-timeout-seconds` | Lawyer turn timeout override. Default: 900 seconds. |
 | `--council-backend` | Council backend. `direct` calls the selected model provider from the runner. `councilapi` waits for external council members through the Council API. |
 | `--common-root` | Shared `common/` tree used for the council pool and persona files. |
