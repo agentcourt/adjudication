@@ -8,9 +8,9 @@ The main facts under test are the distinction between participant failure and pr
 
 ## Harness
 
-Use two harnesses.  A direct-case harness starts `.bin/aar case`, reads stderr until it finds `lawyerapi listening on ...` and, when needed, `councilapi listening on ...`, then calls the private role API URLs.  A service harness starts `.bin/aar service`, creates a case with `POST /api/v1/cases`, then calls the public service routes and proxied role API routes.
+Use two harnesses.  A direct-case harness starts `.bin/aar case`, reads stderr until it finds `lawyerapi listening on ...` and, when needed, `councilapi listening on ...`, then calls the private role API URLs while the child process is active.  A service harness starts `.bin/aar service`, creates a case with `POST /api/v1/cases`, then calls the public service routes and proxied role API routes.
 
-Both harnesses should write all process stdout, stderr, request JSON, response JSON, and output directory paths into a temporary test directory.  Each test should use a unique case id, run id, output directory, and service registry directory.  A failed test should leave enough files to inspect the exact external interaction without rerunning the case.
+Both harnesses should write process stdout, stderr, request JSON, response JSON, and output directory paths into a temporary test directory.  Each test should use a unique case id, run id, output directory, and service registry directory.  A failed test should retain that directory and print its path, so the external interaction can be inspected without rerunning the case.
 
 The fixtures should stay small.  Use one simple complaint, a small policy with short timeouts and a one-attempt budget for failure tests, and a small council pool used only to populate council seats for `councilapi` cases.  The council API tests do not need live model calls because the test client acts as each council member through HTTP.
 
@@ -20,10 +20,10 @@ The fixtures should stay small.  Use one simple complaint, a small policy with s
 | --- | --- | --- | --- |
 | LF-1 | `aar case` | Lawyer exhausts attempts | Child exits `0`; stdout summary has `status: "failed"` and a matching failure object. |
 | LF-2 | `aar service` | Lawyer exhausts attempts | Service case becomes `failed`; service result and role reads report the same failure. |
-| LF-3 | `aar case` | Lawyer deadline expires | Child exits `0`; stdout summary and role reads report `deadline_expired`. |
+| LF-3 | `aar case` plus `aar service` | Lawyer deadline expires | Direct child exits `0`, and stdout and `run.json` report `deadline_expired`; service-managed completed role reads report the same failure. |
 | CF-1 | `aar service` | Council member exhausts attempts | Member reports `status: "failed"`; the case continues or closes under council rules; child does not fail as a process. |
 | CF-2 | `aar service` | Council member deadline expires | Member reports `status: "failed"` with `deadline_expired`; other members can still act if the case remains active. |
-| RF-1 | `aar case` | Invalid startup input | Child exits nonzero and reports a process/runtime error. |
+| RF-1 | `aar case` | Invalid startup input | Child exits nonzero and writes a stdout summary with `status: "error"`; no role API or case artifacts are expected. |
 
 ## Lawyer Failure Tests
 
@@ -47,7 +47,7 @@ CF-2 uses the same service-managed setup but lets one active council member dead
 
 ## Runtime-Failure Test
 
-RF-1 starts `aar case` with invalid startup input, such as a missing complaint path.  The process should exit nonzero and write a process-level error to stderr.  The test should not expect a role API URL, stdout terminal summary, `run.json`, or participant failure object.
+RF-1 starts `aar case` with invalid startup input, such as a missing complaint path.  The process should exit nonzero and write a compact stdout summary with `status: "error"`.  The test should not expect a role API URL, `run.json`, or participant failure object.
 
 This test protects the boundary between process failure and participant failure.  Lawyer missed deadlines, malformed lawyer calls, council missed deadlines, and malformed council calls should use HTTP responses and terminal case artifacts.  Broken startup configuration should use the process exit code.
 
@@ -59,6 +59,6 @@ The service tests should also inspect the service record and child logs.  The ca
 
 ## Minimum Passing Set
 
-The first implementation should include LF-1, LF-2, CF-1, and RF-1.  Those tests cover the main distinction: lawyer failure fails the case, council-member failure fails the member, service reporting preserves the distinction, and runtime faults still use nonzero process exit.  LF-3 and CF-2 can follow because deadline tests involve timers and need careful bounds.
+The minimum passing set includes LF-1, LF-2, CF-1, and RF-1.  Those tests cover the main distinction: lawyer failure fails the case, council-member failure fails the member, service reporting preserves the distinction, and runtime faults still use nonzero process exit.  LF-3 and CF-2 cover deadline behavior and should remain bounded by observed active turns and returned deadlines.
 
-The test code should prefer invalid-attempt failures for the first pass because they are deterministic and fast.  Deadline tests should use short but realistic limits and should assert failure only after observing the active turn and waiting past its returned deadline.  Network access and live agents are outside this plan.
+The test code should prefer invalid-attempt failures when a failure mode does not require timing, because those cases are deterministic and fast.  Deadline tests should use short but realistic limits and should assert failure only after observing the active turn and waiting past its returned deadline.  Network access and live agents are outside this plan.

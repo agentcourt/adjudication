@@ -64,7 +64,7 @@ The active `turn` object contains the current role, phase, opportunity id, turn 
 
 Invalid mutating lawyer calls that count against the attempt budget reduce `attempts_remaining`.  Before exhaustion, the response has HTTP `200`, `ok: false`, an error object, and updated turn state.  When attempts reach zero, AAR records a procedural opportunity failure and the case becomes `status: "failed"`.
 
-If a lawyer turn deadline expires, AAR records a procedural opportunity failure.  The case becomes `status: "failed"`, and all lawyer roles plus observer reads report the same failure.  `aar case` exits `0` after writing a stdout summary with `status: "failed"`.
+If a lawyer turn deadline expires, AAR records a procedural opportunity failure.  The case becomes `status: "failed"`, and `aar case` exits `0` after writing a stdout summary with `status: "failed"`.  Direct `aar case` clients should read terminal failure from stdout and `run.json` after process exit.  Service-managed cases also expose the same failure through completed lawyer, observer, and result reads because `aar service` remains running and reads the terminal artifacts.
 
 The observer can call read-only tools through `POST /do`, including `case_status`.  The observer must not mutate case state.  The observer result endpoint is the service's source for active-case result reads.
 
@@ -100,7 +100,7 @@ The structured failure object for participant failure has type `opportunity_fail
 
 Lawyer failure reasons include `deadline_expired` and `attempts_exhausted`.  Council-member failure reasons include `deadline_expired`, `attempts_exhausted`, and request-failure reasons produced by the council backend.  The `message` field should name the role or member, opportunity, and reason in plain text.
 
-The same failure fact should be visible through every applicable external surface.  For a lawyer failure, `aar case` stdout, `run.json`, service result, lawyer role status, observer status, and lawyer result should agree.  For a council-member failure, the failed member API, observer status, final state, and event log should agree.
+The same failure fact should appear in every applicable external report.  For a direct lawyer failure, `aar case` stdout and `run.json` should agree.  For a service-managed lawyer failure, service result, completed lawyer role status, observer status, and lawyer result should agree with the child stdout summary and `run.json`.  For a council-member failure, the failed member API, observer status, final state, and event log should agree.
 
 ## Test Obligations
 
@@ -108,6 +108,6 @@ Tests for this specification should start real `aar` processes and communicate o
 
 Tests should use short deadlines and small attempt budgets.  Attempt-exhaustion tests should prefer invalid tool calls over sleeps because they produce faster and more deterministic failures.  Deadline tests should use bounded waits and assert the terminal status after the deadline has actually expired.
 
-Tests should assert exact external facts.  For a lawyer failure, assert process exit `0`, stdout summary `status: "failed"`, service result `status: "failed"`, role responses `status: "failed"`, and a matching structured failure object.  For a council-member failure, assert failed member status, continued or rule-governed case progression, event presence, and absence of process failure.
+Tests should assert exact external facts.  For a direct lawyer failure, assert process exit `0`, stdout summary `status: "failed"`, `run.json`, events, and a matching structured failure object.  For a service-managed lawyer failure, also assert service result `status: "failed"` and completed role responses `status: "failed"`.  For a council-member failure, assert failed member status, continued or rule-governed case progression, event presence, and absence of process failure.
 
 Tests should reserve nonzero process exit assertions for runtime faults.  A participant missing a deadline, submitting malformed calls, exhausting attempts, or failing a council vote request is part of case state.  Those facts belong in HTTP responses, stdout summaries, events, and artifacts.

@@ -14,6 +14,8 @@ Verification status: `make build` passes, and focused Go tests for runner, servi
 
 The process and HTTP black-box tests now cover the external AAR failure boundary.  They start `aar case` and `aar service`, drive lawyer and council roles over HTTP, and assert process exit status, stdout summaries, service case records, result endpoints, `run.json`, and event logs for attempt exhaustion and deadline expiration.  The service startup path now binds its listener before printing the readiness line, and the service waits for stdout capture to finish before classifying a child process from its final JSON summary.
 
+The failure specification now distinguishes direct `aar case` terminal artifacts from completed service-backed role reads.  The black-box tests retain per-test process logs and HTTP exchange logs on failure, and service-managed cases assert child exit code, parsed stdout summary, stdout log path, stderr log path, and final service status.
+
 ### Provider and transport cleanup
 
 Reference: [Council API](../councilapi.md), [OpenClaw service runbook](running.md), [Pi container README](../common/pi-container/README.md)

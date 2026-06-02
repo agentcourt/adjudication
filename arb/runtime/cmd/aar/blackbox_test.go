@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+var blackBoxFixtureDirs sync.Map
+
 func TestBlackBoxLawyerAttemptFailureDirectCase(t *testing.T) {
 	fx := newBlackBoxFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -113,7 +115,7 @@ func TestBlackBoxLawyerAttemptFailureThroughService(t *testing.T) {
 	result := pollResultStatus(ctx, t, svc.baseURL, caseID, "failed")
 	assertFailure(t, mapAny(result["failure"]), "plaintiff", "attempts_exhausted")
 	record := pollCaseRecordStatus(ctx, t, svc.baseURL, caseID, "failed")
-	assertString(t, mapAny(record["case"]), "status", "failed")
+	assertServiceRecord(t, record, "failed", "failed")
 
 	completedRead := getJSON(ctx, t, svc.baseURL+"/lawyerapi/v1/result?case_id="+url.QueryEscape(caseID)+"&role_id=observer")
 	assertString(t, completedRead, "status", "failed")
@@ -190,7 +192,7 @@ func TestBlackBoxLawyerDeadlineFailureThroughService(t *testing.T) {
 	result := pollResultStatus(ctx, t, svc.baseURL, caseID, "failed")
 	assertFailure(t, mapAny(result["failure"]), "plaintiff", "deadline_expired")
 	record := pollCaseRecordStatus(ctx, t, svc.baseURL, caseID, "failed")
-	assertString(t, mapAny(record["case"]), "status", "failed")
+	assertServiceRecord(t, record, "failed", "failed")
 
 	completedRead := getJSON(ctx, t, svc.baseURL+"/lawyerapi/v1/result?case_id="+url.QueryEscape(caseID)+"&role_id=observer")
 	assertString(t, completedRead, "status", "failed")
@@ -270,7 +272,8 @@ func TestBlackBoxCouncilMemberAttemptFailureThroughService(t *testing.T) {
 	result := pollResultStatus(ctx, t, svc.baseURL, caseID, "done")
 	resultObj := mapAny(result["result"])
 	assertString(t, resultObj, "resolution", "demonstrated")
-	pollCaseRecordStatus(ctx, t, svc.baseURL, caseID, "completed")
+	record := pollCaseRecordStatus(ctx, t, svc.baseURL, caseID, "completed")
+	assertServiceRecord(t, record, "completed", "ok")
 
 	run := readJSONFile(t, filepath.Join(outDir, "run.json"))
 	assertString(t, run, "status", "ok")
@@ -350,7 +353,8 @@ func TestBlackBoxCouncilMemberDeadlineFailureThroughService(t *testing.T) {
 	result := pollResultStatus(ctx, t, svc.baseURL, caseID, "done")
 	resultObj := mapAny(result["result"])
 	assertString(t, resultObj, "resolution", "demonstrated")
-	pollCaseRecordStatus(ctx, t, svc.baseURL, caseID, "completed")
+	record := pollCaseRecordStatus(ctx, t, svc.baseURL, caseID, "completed")
+	assertServiceRecord(t, record, "completed", "ok")
 
 	run := readJSONFile(t, filepath.Join(outDir, "run.json"))
 	assertString(t, run, "status", "ok")
@@ -403,6 +407,8 @@ type blackBoxFixture struct {
 	policyPath      string
 	councilPoolPath string
 	provider        *httptest.Server
+	mu              sync.Mutex
+	processSeq      int
 }
 
 func newBlackBoxFixture(t *testing.T) *blackBoxFixture {
@@ -420,7 +426,22 @@ func newBlackBoxFixture(t *testing.T) *blackBoxFixture {
 		t.Skipf("%s is required; run make build in arb first", enginePath)
 	}
 	provider := newFakeResponsesServer(t)
-	dir := t.TempDir()
+	dir, err := os.MkdirTemp("", "aar-blackbox-"+safeTestName(t.Name())+"-")
+	if err != nil {
+		t.Fatalf("create black-box fixture dir: %v", err)
+	}
+	blackBoxFixtureDirs.Store(t.Name(), dir)
+	t.Logf("black-box fixture directory: %s", dir)
+	t.Cleanup(func() {
+		blackBoxFixtureDirs.Delete(t.Name())
+		if t.Failed() {
+			t.Logf("retained black-box fixture directory: %s", dir)
+			return
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			t.Errorf("remove black-box fixture dir %s: %v", dir, err)
+		}
+	})
 	complaintPath := filepath.Join(dir, "case", "complaint.md")
 	mustWriteFile(t, complaintPath, "# Proposition\n\nThe proposition is true for this process and HTTP test.\n")
 	policyPath := filepath.Join(dir, "policy.json")
@@ -506,7 +527,20 @@ func (fx *blackBoxFixture) startAAR(ctx context.Context, args ...string) *testPr
 		"OPENAI_API_KEY":  "blackbox-key",
 		"OPENAI_BASE_URL": fx.provider.URL + "/v1",
 	})
-	return startTestProcess(cmd)
+	stdoutLog, stderrLog := fx.processLogPaths()
+	return startTestProcess(cmd, stdoutLog, stderrLog)
+}
+
+func (fx *blackBoxFixture) processLogPaths() (string, string) {
+	fx.mu.Lock()
+	fx.processSeq++
+	seq := fx.processSeq
+	fx.mu.Unlock()
+	dir := filepath.Join(fx.dir, "process-logs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		panic(err)
+	}
+	return filepath.Join(dir, fmt.Sprintf("%02d-stdout.log", seq)), filepath.Join(dir, fmt.Sprintf("%02d-stderr.log", seq))
 }
 
 type serviceProcess struct {
@@ -539,7 +573,7 @@ type testProcess struct {
 	stderrDone  chan error
 }
 
-func startTestProcess(cmd *exec.Cmd) *testProcess {
+func startTestProcess(cmd *exec.Cmd, stdoutLogPath string, stderrLogPath string) *testProcess {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		panic(err)
@@ -548,6 +582,8 @@ func startTestProcess(cmd *exec.Cmd) *testProcess {
 	if err != nil {
 		panic(err)
 	}
+	stdoutLog := createLogFile(stdoutLogPath)
+	stderrLog := createLogFile(stderrLogPath)
 	proc := &testProcess{
 		cmd:         cmd,
 		stderrLines: make(chan string, 128),
@@ -556,13 +592,15 @@ func startTestProcess(cmd *exec.Cmd) *testProcess {
 		stderrDone:  make(chan error, 1),
 	}
 	if err := cmd.Start(); err != nil {
+		_ = stdoutLog.Close()
+		_ = stderrLog.Close()
 		panic(err)
 	}
 	go func() {
-		proc.stdoutDone <- scanLines(stdout, &proc.stdout, nil)
+		proc.stdoutDone <- scanLines(stdout, &proc.stdout, nil, stdoutLog)
 	}()
 	go func() {
-		proc.stderrDone <- scanLines(stderr, &proc.stderr, proc.stderrLines)
+		proc.stderrDone <- scanLines(stderr, &proc.stderr, proc.stderrLines, stderrLog)
 		close(proc.stderrLines)
 	}()
 	go func() {
@@ -572,6 +610,17 @@ func startTestProcess(cmd *exec.Cmd) *testProcess {
 		proc.done <- errors.Join(waitErr, stdoutErr, stderrErr)
 	}()
 	return proc
+}
+
+func createLogFile(path string) *os.File {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		panic(err)
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		panic(err)
+	}
+	return f
 }
 
 func (p *testProcess) waitForStderrPrefix(ctx context.Context, t *testing.T, prefix string) string {
@@ -634,13 +683,19 @@ func (b *lockedBuffer) String() string {
 	return b.b.String()
 }
 
-func scanLines(r io.Reader, buf *lockedBuffer, lines chan<- string) error {
+func scanLines(r io.Reader, buf *lockedBuffer, lines chan<- string, logFile *os.File) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	var firstErr error
 	for scanner.Scan() {
 		line := scanner.Text()
 		if _, err := buf.Write([]byte(line + "\n")); err != nil {
 			return err
+		}
+		if logFile != nil && firstErr == nil {
+			if _, err := fmt.Fprintln(logFile, line); err != nil {
+				firstErr = fmt.Errorf("write process log: %w", err)
+			}
 		}
 		if lines != nil {
 			select {
@@ -649,7 +704,12 @@ func scanLines(r io.Reader, buf *lockedBuffer, lines chan<- string) error {
 			}
 		}
 	}
-	return scanner.Err()
+	if logFile != nil {
+		if err := logFile.Close(); err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("close process log: %w", err)
+		}
+	}
+	return errors.Join(firstErr, scanner.Err())
 }
 
 func findLinePrefix(text string, prefix string) (string, bool) {
@@ -828,7 +888,7 @@ func getJSON(ctx context.Context, t *testing.T, endpoint string) map[string]any 
 		t.Fatalf("GET %s: %v", endpoint, err)
 	}
 	defer resp.Body.Close()
-	return decodeHTTPJSON(t, resp, endpoint)
+	return decodeHTTPJSON(t, resp, endpoint, nil)
 }
 
 func postJSON(ctx context.Context, t *testing.T, endpoint string, body map[string]any) map[string]any {
@@ -847,15 +907,16 @@ func postJSON(ctx context.Context, t *testing.T, endpoint string, body map[strin
 		t.Fatalf("POST %s: %v", endpoint, err)
 	}
 	defer resp.Body.Close()
-	return decodeHTTPJSON(t, resp, endpoint)
+	return decodeHTTPJSON(t, resp, endpoint, wire)
 }
 
-func decodeHTTPJSON(t *testing.T, resp *http.Response, endpoint string) map[string]any {
+func decodeHTTPJSON(t *testing.T, resp *http.Response, endpoint string, requestBody []byte) map[string]any {
 	t.Helper()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read response body: %v", err)
 	}
+	logHTTPExchange(t, resp.Request.Method, endpoint, requestBody, resp.StatusCode, raw)
 	var out map[string]any
 	if err := json.Unmarshal(raw, &out); err != nil {
 		t.Fatalf("%s returned non-JSON HTTP %d: %s", endpoint, resp.StatusCode, string(raw))
@@ -864,6 +925,58 @@ func decodeHTTPJSON(t *testing.T, resp *http.Response, endpoint string) map[stri
 		t.Fatalf("%s returned HTTP %d: %#v", endpoint, resp.StatusCode, out)
 	}
 	return out
+}
+
+func logHTTPExchange(t *testing.T, method string, endpoint string, requestBody []byte, status int, responseBody []byte) {
+	t.Helper()
+	rawDir, ok := blackBoxFixtureDirs.Load(t.Name())
+	if !ok {
+		return
+	}
+	dir, ok := rawDir.(string)
+	if !ok || strings.TrimSpace(dir) == "" {
+		return
+	}
+	entry := map[string]any{
+		"time":     time.Now().UTC().Format(time.RFC3339Nano),
+		"method":   method,
+		"endpoint": endpoint,
+		"status":   status,
+	}
+	if len(requestBody) > 0 {
+		entry["request"] = jsonForLog(requestBody)
+	}
+	if len(responseBody) > 0 {
+		entry["response"] = jsonForLog(responseBody)
+	}
+	appendJSONLine(t, filepath.Join(dir, "http.ndjson"), entry)
+}
+
+func appendJSONLine(t *testing.T, path string, value any) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatalf("open %s: %v", path, err)
+	}
+	defer f.Close()
+	wire, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal log entry for %s: %v", path, err)
+	}
+	if _, err := f.Write(append(wire, '\n')); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func jsonForLog(raw []byte) any {
+	var value any
+	if err := json.Unmarshal(raw, &value); err == nil {
+		return value
+	}
+	return string(raw)
 }
 
 func readJSONFile(t *testing.T, path string) map[string]any {
@@ -938,6 +1051,26 @@ func assertFailure(t *testing.T, failure map[string]any, role string, reason str
 	}
 }
 
+func assertServiceRecord(t *testing.T, record map[string]any, wantStatus string, wantSummaryStatus string) {
+	t.Helper()
+	caseObj := mapAny(record["case"])
+	assertString(t, caseObj, "status", wantStatus)
+	if got := intValue(caseObj["exit_code"]); got != 0 {
+		t.Fatalf("exit_code = %d, want 0 in %#v", got, caseObj)
+	}
+	summary := mapAny(caseObj["summary"])
+	assertString(t, summary, "status", wantSummaryStatus)
+	for _, key := range []string{"stdout_log", "stderr_log"} {
+		path := mapString(caseObj[key])
+		if path == "" {
+			t.Fatalf("case record missing %s: %#v", key, caseObj)
+		}
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("stat %s %q: %v", key, path, err)
+		}
+	}
+}
+
 func assertString(t *testing.T, m map[string]any, key string, want string) {
 	t.Helper()
 	if got := mapString(m[key]); got != want {
@@ -992,6 +1125,43 @@ func mapString(value any) string {
 	default:
 		return strings.TrimSpace(fmt.Sprintf("%v", value))
 	}
+}
+
+func intValue(value any) int {
+	switch v := value.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	case json.Number:
+		i, _ := v.Int64()
+		return int(i)
+	default:
+		return 0
+	}
+}
+
+func safeTestName(name string) string {
+	var b strings.Builder
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	out := strings.Trim(b.String(), "_")
+	if out == "" {
+		return "test"
+	}
+	return out
 }
 
 func mustWriteFile(t *testing.T, path string, text string) {
