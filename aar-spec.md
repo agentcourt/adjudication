@@ -88,7 +88,7 @@ If a council member misses a deadline, AAR records the same kind of member failu
 
 ## Terminal Results
 
-A successful terminal case result has `status: "done"` in role result responses and `status: "ok"` in the `aar case` stdout summary.  It includes the final phase, case status, resolution, council votes, vote tally, final reason, run id, and output directory.  The output directory contains `run.json` with the final state and generated artifacts.
+A successful terminal case result has `status: "done"` in role result responses and `status: "ok"` in the `aar case` stdout summary.  The stdout summary includes the resolution, vote counts, run id, and output directory.  The output directory contains `run.json` with the final phase, case status, council votes, vote tally, final reason, final state, and generated artifacts.
 
 A procedural lawyer failure has `status: "failed"` in role responses, service result responses, and the `aar case` stdout summary.  The summary includes an `error` string and a structured `failure` object.  The final state contains `case.status: "failed"`.
 

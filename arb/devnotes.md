@@ -12,6 +12,8 @@ The Go role APIs detect deadlines and invalid-attempt exhaustion, then call `fai
 
 Verification status: `make build` passes, and focused Go tests for runner, service, CLI, and MCP pass.  `lake build Proofs` still fails in `Proofs.StepPreservation` on existing surrebuttal evidence proof obligations: the proof expects old text-only surrebuttal behavior, while the executable now allows surrebuttal evidence.  That proof repair is separate from the `fail_opportunity` runtime path.
 
+The process and HTTP black-box tests now cover the external AAR failure boundary.  They start `aar case` and `aar service`, drive lawyer and council roles over HTTP, and assert process exit status, stdout summaries, service case records, result endpoints, `run.json`, and event logs for attempt exhaustion and deadline expiration.  The service startup path now binds its listener before printing the readiness line, and the service waits for stdout capture to finish before classifying a child process from its final JSON summary.
+
 ### Provider and transport cleanup
 
 Reference: [Council API](../councilapi.md), [OpenClaw service runbook](running.md), [Pi container README](../common/pi-container/README.md)

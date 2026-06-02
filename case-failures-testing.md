@@ -29,11 +29,11 @@ The fixtures should stay small.  Use one simple complaint, a small policy with s
 
 LF-1 starts `aar case` with a one-attempt budget, a normal lawyer timeout, and a deterministic complaint.  The test waits for the plaintiff turn through `GET /lawyerapi/v1/wait`, reads `turn.opportunity_id`, and submits one invalid mutating call, such as `submit_decision` with the active opportunity id and an opening-statement payload missing required text.  The expected HTTP response is `200` with `ok: false`, and the subsequent terminal responses should report `status: "failed"`.
 
-After LF-1 triggers the failure, the test waits for the child process to exit.  The child must exit `0`.  The last stdout JSON object must contain `status: "failed"`, `error`, `failure.role: "plaintiff"`, `failure.reason: "attempts_exhausted"`, and a final state whose case status is failed.
+After LF-1 triggers the failure, the test waits for the child process to exit.  The child must exit `0`.  The last stdout JSON object must contain `status: "failed"`, `error`, `failure.role: "plaintiff"`, and `failure.reason: "attempts_exhausted"`.  `run.json` must contain a final state whose case status is failed.
 
 LF-2 repeats the same failure through `aar service`.  The test creates the case through `POST /api/v1/cases`, uses the service `/lawyerapi/v1/wait` and `/lawyerapi/v1/do` routes, and then reads `/api/v1/cases/{case_id}/result`.  The service case record should become `failed`, the service result should report `status: "failed"`, and completed role reads through the service should return the same failure object.
 
-LF-3 covers deadline expiry with the direct-case harness.  Use a short lawyer timeout, wait for an active plaintiff turn, and let the deadline pass without submitting a valid decision.  The test then calls `GET /lawyerapi/v1/wait` or `POST /lawyerapi/v1/do` and expects `status: "failed"`, `failure.reason: "deadline_expired"`, child exit `0`, and a failed stdout summary.
+LF-3 covers deadline expiry with the direct-case harness.  Use a short lawyer timeout, wait for an active plaintiff turn, and let the deadline pass without submitting a valid decision.  The direct test should wait for child exit `0`, then inspect the stdout summary, `run.json`, and events for `failure.reason: "deadline_expired"`.  A service-managed deadline test should assert the same failure through `/api/v1/cases/{case_id}/result` and completed role reads, because the private `aar case` role API exits with the child process.
 
 ## Council-Member Failure Tests
 
