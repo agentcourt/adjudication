@@ -16,6 +16,14 @@ The process and HTTP black-box tests now cover the external AAR failure boundary
 
 The failure specification now distinguishes direct `aar case` terminal artifacts from completed service-backed role reads.  The black-box tests retain per-test process logs and HTTP exchange logs on failure, and service-managed cases assert child exit code, parsed stdout summary, stdout log path, stderr log path, and final service status.
 
+### AAR MCP specification
+
+Reference: [AAR MCP Specification](../aar-mcp-spec.md), [AAR MCP Test Plan](../aar-mcp-test.md)
+
+The MCP behavior now has separate root-level specification and test-plan documents.  The spec treats `aar-mcp` as a transport adapter that binds each MCP session to one case-role or case-member assignment, exposes stable assignment tool sets, normalizes wait responses, injects the active opportunity id, and forwards calls to the service role APIs.  AAR remains the authority for case state, role validation, member validation, deadlines, attempts, and terminal case status.
+
+The test plan separates unit, process, and service tests.  It covers session binding, authentication, origin checks, tool lists, wait normalization, opportunity-id injection, forwarding, error propagation, process health, logs, and service-backed lawyer, observer, and council assignments.  OpenClaw and Pi runs remain outside the minimum passing set for this adapter boundary.
+
 ### Provider and transport cleanup
 
 Reference: [Council API](../councilapi.md), [OpenClaw service runbook](running.md), [Pi container README](../common/pi-container/README.md)
