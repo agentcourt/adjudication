@@ -522,7 +522,12 @@ def submitEvidence
           pure "plaintiff"
         else
           throw "rebuttal evidence is closed"
-    | _ => throw "submitted evidence is allowed only in arguments and rebuttals"
+    | "surrebuttals" =>
+        if c.surrebuttals.isEmpty then
+          pure "defendant"
+        else
+          throw "surrebuttal evidence is closed"
+    | _ => throw "submitted evidence is allowed only in arguments, rebuttals, and surrebuttals"
   requireRole actorRole expectedRole
   let parsedEvidence ← parseSubmittedEvidence payload c.phase expectedRole
   let evidence := { parsedEvidence with role := expectedRole }
@@ -538,10 +543,10 @@ def submitEvidence
 def requireNoSupplementalMaterials (payload : Json) : Except String Unit := do
   let offered ← getOptionalArray payload "offered_evidence"
   if !offered.isEmpty then
-    throw "offered_evidence are allowed only in arguments and rebuttals"
+    throw "offered_evidence are allowed only in arguments, rebuttals, and surrebuttals"
   let reports ← getOptionalArray payload "technical_reports"
   if !reports.isEmpty then
-    throw "technical_reports are allowed only in arguments and rebuttals"
+    throw "technical_reports are allowed only in arguments, rebuttals, and surrebuttals"
 
 def recordMeritsSubmission
   (s : ArbitrationState)
@@ -704,7 +709,7 @@ def step (req : StepRequest) : Except String ArbitrationState := do
         "defendant"
         "surrebuttal"
         req.state.policy.max_surrebuttal_chars
-        false
+        true
         req.action.payload
   | "submit_evidence" =>
       submitEvidence req.state req.action.actor_role req.action.payload

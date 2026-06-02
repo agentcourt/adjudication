@@ -1302,6 +1302,12 @@ func TestBuildAttorneyPromptConstrainsArgumentExperiments(t *testing.T) {
 	if !strings.Contains(prompt, "Final filing actions for submit_decision: submit_argument") {
 		t.Fatalf("argument prompt did not restrict submit_decision to final filing actions:\n%s", prompt)
 	}
+	if strings.Contains(prompt, "Legal operations allowed for this opportunity") {
+		t.Fatalf("argument prompt used obsolete opportunity wording:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Use submit_evidence or the chunked upload tools in arguments, rebuttals, and surrebuttals") {
+		t.Fatalf("argument prompt did not state the phase rule for evidence submission:\n%s", prompt)
+	}
 	if strings.Contains(prompt, "Allowed legal acts for submit_decision") {
 		t.Fatalf("argument prompt used obsolete submit_decision wording:\n%s", prompt)
 	}
@@ -1423,6 +1429,61 @@ func TestBuildAttorneyPromptAllowsRebuttalSupplementalMaterials(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "submit its content and provenance with the direct submit_evidence tool") {
 		t.Fatalf("rebuttal prompt did not require outside source material to enter as submitted evidence:\n%s", prompt)
+	}
+}
+
+func TestBuildAttorneyPromptAllowsSurrebuttalSupplementalMaterials(t *testing.T) {
+	origPromptBaseDir := promptBaseDir
+	promptBaseDir = filepath.Join("..", "..", "prompts")
+	defer func() { promptBaseDir = origPromptBaseDir }()
+	rc := &runContext{
+		cfg: Config{
+			Policy: DefaultPolicy(),
+		},
+		complaint: spec.Complaint{
+			Proposition: "P",
+		},
+		state: map[string]any{
+			"policy": map[string]any{
+				"evidence_standard": "preponderance",
+			},
+			"case": map[string]any{
+				"phase":              "surrebuttals",
+				"openings":           []map[string]any{},
+				"arguments":          []map[string]any{},
+				"rebuttals":          []map[string]any{},
+				"surrebuttals":       []map[string]any{},
+				"closings":           []map[string]any{},
+				"offered_evidence":   []map[string]any{},
+				"submitted_evidence": []map[string]any{},
+				"technical_reports":  []map[string]any{},
+			},
+		},
+	}
+	prompt, err := rc.buildAttorneyPrompt(Opportunity{
+		ID:           "surrebuttals:defendant",
+		Role:         "defendant",
+		Phase:        "surrebuttals",
+		Objective:    "defendant surrebuttal",
+		AllowedTools: []string{"submit_surrebuttal", "pass_phase_opportunity"},
+	})
+	if err != nil {
+		t.Fatalf("buildAttorneyPrompt returned error: %v", err)
+	}
+	if !strings.Contains(prompt, "Final filing actions for submit_decision: submit_surrebuttal, pass_phase_opportunity") {
+		t.Fatalf("surrebuttal prompt did not state final filing actions:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Use submit_evidence or the chunked upload tools in arguments, rebuttals, and surrebuttals") {
+		t.Fatalf("surrebuttal prompt did not state the phase rule for evidence submission:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Submitted evidence: admitted items may be at most") {
+		t.Fatalf("surrebuttal prompt did not state submitted-evidence limits:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Submit any material source through the direct submit_evidence tool") {
+		t.Fatalf("surrebuttal prompt did not tell counsel to submit source material:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "Legal operations allowed for this opportunity") {
+		t.Fatalf("surrebuttal prompt used obsolete opportunity wording:\n%s", prompt)
 	}
 }
 

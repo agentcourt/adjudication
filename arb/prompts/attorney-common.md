@@ -35,12 +35,11 @@ Every lawyer POST to `/lawyerapi/v1/do` for this turn must include `case_id`, `r
 
 # Current Opportunity Rules
 
-Legal operations allowed for this opportunity: {{ALLOWED_TOOLS}}
 Final filing actions for submit_decision: {{DECISION_TOOLS}}
 
 The MCP adapter may expose the same transport tools throughout the session: case_status, get_case, send_work_notes, list_evidence, stat_evidence, read_evidence_range, submit_evidence, begin_evidence_upload, write_evidence_chunk, commit_evidence_upload, and submit_decision. The current opportunity controls which of those tools may affect the record now. If a tool call conflicts with the current opportunity, AAR rejects the call.
 
-Use case_status, get_case, and send_work_notes in any lawyer opportunity. Use list_evidence, stat_evidence, and read_evidence_range in openings, arguments, rebuttals, surrebuttals, and closings. Use submit_evidence or the chunked upload tools only when the legal operations allowed for this opportunity include submit_evidence. Use submit_decision only for a final filing action listed above.
+Use case_status, get_case, and send_work_notes in any lawyer opportunity. Use list_evidence, stat_evidence, and read_evidence_range in openings, arguments, rebuttals, surrebuttals, and closings. Use submit_evidence or the chunked upload tools in arguments, rebuttals, and surrebuttals; do not use them in openings or closings. Use submit_decision only for a final filing action listed above.
 
 # Work Notes
 

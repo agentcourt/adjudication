@@ -35,6 +35,36 @@ func TestCouncilWaitReturnsReadyOpportunity(t *testing.T) {
 	}
 }
 
+func TestCouncilAPIRejectsMismatchedCaseID(t *testing.T) {
+	api, turn := testCouncilAPIWithTurn(t)
+	api.rc.cfg.CaseID = "case-123"
+
+	status, got := callCouncilAPIWait(t, api, "case_id=case-456&member_id=C1&timeout_ms=100")
+	if status != http.StatusNotFound {
+		t.Fatalf("wait status = %d, want %d", status, http.StatusNotFound)
+	}
+	if code := councilAPIErrorCode(t, got); code != "unknown_case" {
+		t.Fatalf("wait error code = %q, want unknown_case", code)
+	}
+
+	status, got = callCouncilAPIDo(t, api, map[string]any{
+		"case_id":        "case-456",
+		"member_id":      "C1",
+		"opportunity_id": "deliberation:1:C1",
+		"tool":           "get_case",
+		"arguments":      map[string]any{},
+	})
+	if status != http.StatusNotFound {
+		t.Fatalf("do status = %d, want %d", status, http.StatusNotFound)
+	}
+	if code := councilAPIErrorCode(t, got); code != "unknown_case" {
+		t.Fatalf("do error code = %q, want unknown_case", code)
+	}
+	if turn.attemptsRemaining != turn.attemptsMax {
+		t.Fatalf("attemptsRemaining = %d, want %d", turn.attemptsRemaining, turn.attemptsMax)
+	}
+}
+
 func TestCouncilWaitReturnsDoneOnTerminalCase(t *testing.T) {
 	api, _ := testCouncilAPIWithTurn(t)
 	api.setTerminal("demonstrated")

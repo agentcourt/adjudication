@@ -47,6 +47,7 @@ type AttorneyRunInfo struct {
 }
 
 type Config struct {
+	CaseID                     string
 	RunID                      string
 	ComplaintPath              string
 	CaseFilePaths              []string
@@ -73,6 +74,7 @@ type Config struct {
 }
 
 type Result struct {
+	CaseID            string                  `json:"case_id"`
 	RunID             string                  `json:"run_id"`
 	StartedAt         string                  `json:"started_at"`
 	FinishedAt        string                  `json:"finished_at"`

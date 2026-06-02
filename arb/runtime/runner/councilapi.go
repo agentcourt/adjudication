@@ -331,6 +331,10 @@ func (api *councilAPIServer) handleDo(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if !api.caseIDMatches(req.CaseID) {
+		api.writeCaseMismatch(w, req.CaseID, req.MemberID)
+		return
+	}
 	if req.MemberID == "" {
 		writeCouncilJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
@@ -525,6 +529,10 @@ func (api *councilAPIServer) parseGetWaitIdentity(w http.ResponseWriter, r *http
 		})
 		return "", "", false
 	}
+	if !api.caseIDMatches(caseID) {
+		api.writeCaseMismatch(w, caseID, memberID)
+		return "", "", false
+	}
 	if memberID == "" {
 		writeCouncilJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
@@ -534,6 +542,22 @@ func (api *councilAPIServer) parseGetWaitIdentity(w http.ResponseWriter, r *http
 		return "", "", false
 	}
 	return caseID, memberID, true
+}
+
+func (api *councilAPIServer) caseIDMatches(caseID string) bool {
+	return strings.TrimSpace(caseID) == normalizeCaseID(api.rc.cfg.CaseID)
+}
+
+func (api *councilAPIServer) writeCaseMismatch(w http.ResponseWriter, caseID string, memberID string) {
+	response := map[string]any{
+		"ok":      false,
+		"case_id": strings.TrimSpace(caseID),
+		"error":   apiError("unknown_case", "case_id does not match this runner"),
+	}
+	if strings.TrimSpace(memberID) != "" {
+		response["member_id"] = strings.TrimSpace(memberID)
+	}
+	writeCouncilJSON(w, http.StatusNotFound, response)
 }
 
 func (api *councilAPIServer) statusResponseLocked(caseID string, memberID string) map[string]any {

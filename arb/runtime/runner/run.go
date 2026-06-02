@@ -14,6 +14,7 @@ import (
 )
 
 func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Result, err error) {
+	cfg.CaseID = normalizeCaseID(cfg.CaseID)
 	if cfg.OutputDir == "" {
 		return Result{}, fmt.Errorf("output dir is required")
 	}
@@ -74,7 +75,7 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 	if err != nil {
 		return Result{}, err
 	}
-	initialState := initialState(cfg.Policy)
+	initialState := initialState(cfg.Policy, cfg.CaseID)
 	initResp, err := cfg.Engine.InitializeCase(initialState, complaint.Proposition, councilSeatMaps(council))
 	if err != nil {
 		return Result{}, err
@@ -164,6 +165,7 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 			}
 			finishedAt := time.Now().UTC()
 			result := Result{
+				CaseID:            cfg.CaseID,
 				RunID:             cfg.RunID,
 				StartedAt:         startedAt.Format(time.RFC3339),
 				FinishedAt:        finishedAt.Format(time.RFC3339),
@@ -203,12 +205,20 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 	}
 }
 
-func initialState(policy Policy) map[string]any {
+func normalizeCaseID(caseID string) string {
+	caseID = strings.TrimSpace(caseID)
+	if caseID == "" {
+		return "arb-1"
+	}
+	return caseID
+}
+
+func initialState(policy Policy, caseID string) map[string]any {
 	return map[string]any{
 		"schema_version": "v1",
 		"forum_name":     "Agent Arbitration",
 		"case": map[string]any{
-			"case_id":            "arb-1",
+			"case_id":            normalizeCaseID(caseID),
 			"caption":            "Claimant v. Respondent",
 			"proposition":        "",
 			"status":             "draft",

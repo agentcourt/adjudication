@@ -1,62 +1,32 @@
-# Running AAR With OpenClaw Lawyers
+# Running AAR With OpenClaw Through The Service APIs
 
 ## Purpose
 
-This runbook describes how to run one AAR case with real OpenClaw containers acting as the plaintiff and defendant lawyers.  Each lawyer gets one OpenClaw container for the whole case.  The container receives one assignment prompt, then works all of that role's turns by calling the AAR MCP tool `wait_for_opportunity`.
+This runbook describes the current way to run an AAR case with real OpenClaw containers.  One host process runs `aar service`, one host process runs `aar-mcp`, and one `aar case` child process runs each case.  OpenClaw containers act as lawyers and council members by using MCP tools that forward to the public service APIs.
 
-The AAR process owns the case, deadlines, evidence store, turn order, and final result.  The Lawyer MCP adapter translates OpenClaw MCP calls into the Lawyer HTTP API exposed by `aar case`.  OpenClaw owns lawyer reasoning, source search, evidence selection, legal filings, and the loop that waits for later opportunities.
+The service owns case creation, case ids, process lifecycle, routing, logs, result reads, and artifact reads.  The child runner owns arbitration state, turn order, deadlines, attempt budgets, evidence custody, filing validation, council voting, and final artifacts.  The MCP process stores only the assignment for one MCP session: `case_id` plus `role_id` for a lawyer or observer, or `case_id` plus `member_id` for a council member.
 
 ## Topology
 
 | Process | Runs where | Role |
 | --- | --- | --- |
-| `aar case` | host | Runs the arbitration and exposes Lawyer API on `127.0.0.1`. |
-| `aar-lawyer-mcp` | host | Exposes Streamable HTTP MCP on a host port reachable from Docker. |
-| OpenClaw plaintiff container | Docker | Acts as plaintiff lawyer for all plaintiff turns. |
-| OpenClaw defendant container | Docker | Acts as defendant lawyer for all defendant turns. |
-| Council backend | host | Votes after lawyer phases.  Use `direct` when testing lawyer behavior. |
+| `aar service` | host | Starts cases, records case metadata, and routes public HTTP calls by `case_id`. |
+| `aar case` | host child process | Runs one arbitration and exposes private Lawyer and Council APIs on localhost. |
+| `aar-mcp` | host | Exposes Streamable HTTP MCP and forwards tool calls to `aar service`. |
+| OpenClaw lawyer containers | Docker or remote host | Act as plaintiff and defendant through MCP. |
+| OpenClaw council containers | Docker or remote host | Act as council members through MCP. |
 
-The container talks to the host MCP adapter through `host.docker.internal`.  On Linux, Docker needs `--add-host=host.docker.internal:host-gateway`.  The MCP adapter listens on `0.0.0.0` so Docker can reach it, while the Lawyer API can remain on host loopback because only the adapter calls it.
+Local Docker containers reach the host MCP server through `host.docker.internal`.  On Linux, Docker needs `--add-host=host.docker.internal:host-gateway`.  The MCP server listens on a host address reachable from the containers, while `aar service` can stay on `127.0.0.1` because only the host MCP process and operator tools call it during local tests.
 
-The lawyer containers must be treated as remote lawyers.  Do not mount the source example directory, the run output directory, or any case-packet directory into a lawyer container.  The lawyer's access to case files comes only from AAR tools exposed through MCP.  This matches a real remote clawyer, which receives an MCP endpoint and token but cannot read the operator's filesystem.
+Lawyer containers must be treated like remote lawyers.  Do not mount the repository, the example directory, the output directory, or a case-packet directory into a lawyer container.  A lawyer receives case files only through AAR evidence tools, which matches a remote clawyer that has an MCP URL and token but no access to the operator filesystem.
 
 ## Case File Access
 
-`aar case` imports the complaint directory into the AAR record.  Files in the case packet become immutable `case_packet` evidence with an `evidence_id`, hash, size, MIME type, title, and storage record.  A lawyer sees those files only through the Lawyer API tools that AAR exposes for the current turn.
+`aar case` imports the complaint directory into the AAR record.  Files in the case packet become immutable `case_packet` evidence with an `evidence_id`, hash, size, MIME type, title, and storage record.  A lawyer or council member reads those files through MCP tools that forward to the service, then to the private runner API for that case.
 
-The file-access tools are:
+Every lawyer phase allows read-only evidence access.  Argument, rebuttal, and surrebuttal phases also allow evidence submission.  The current opportunity returned by `wait_for_opportunity` or `get_current_opportunity` states the court actions allowed for that turn.
 
-| Tool | Purpose |
-| --- | --- |
-| `case_status` | Returns the current phase, active turn, role status, current opportunity, and compact case counts. |
-| `get_case` | Returns the visible arbitration record. |
-| `get_case_result` | Returns pending status or the final resolution, council votes, and council vote rationales. |
-| `send_work_notes` | Sends private lawyer work notes to `work-notes.ndjson` for off-record review. |
-| `list_evidence` | Lists visible evidence metadata, including case-packet files and accepted submitted evidence. |
-| `stat_evidence` | Returns metadata and read limits for one visible `evidence_id`. |
-| `read_evidence_range` | Reads a bounded byte range from one visible evidence item as base64. |
-| `submit_evidence` | Admits small source material found by a lawyer, with provenance, into the AAR record. |
-| `begin_evidence_upload`, `write_evidence_chunk`, `commit_evidence_upload` | Admit larger source material through a chunked upload. |
-
-Every lawyer phase allows read-only evidence access through AAR.  Argument, rebuttal, and surrebuttal opportunities also allow evidence submission.  The MCP adapter exposes stable transport tools, and the opportunity returned by `wait_for_opportunity` or `get_current_opportunity` states which court actions AAR allows for that turn.
-
-The lawyer should cite only AAR `evidence_id` values in `offered_evidence`.  AAR tools govern court evidence and filings, not the lawyer's full investigation toolbox.  If a lawyer finds a public source with native OpenClaw web, browser, file, shell, OCR, PDF, image, audio, video, metadata, hash, signature, archive, or local analysis tools, the lawyer must submit that source through AAR evidence tools before relying on it as record support.
-
-## Inputs
-
-For `ex1`, the complaint is `examples/ex1/complaint.md`.  The output directory should be a fresh directory under `out/`, for example `out/ex1-openclaw-lawyers-20260602T020000Z`.  The OpenClaw container needs provider keys in its environment; in this workspace those keys usually come from `~/keys.txt`.
-
-The examples below use:
-
-| Name | Example value |
-| --- | --- |
-| Case id | `arb-1` |
-| Lawyer API | `127.0.0.1:19771` |
-| Lawyer MCP | `0.0.0.0:19780` on the host, `host.docker.internal:19780` from Docker |
-| MCP token | `aar-local-test-token` |
-| Model | `gpt-5.5` |
-
-Use different ports if those ports are already bound.  Use a fresh token per run when the adapter listens on a reachable interface.  Keep the token out of filings, logs intended for publication, and notes that will be shared outside the operator environment.
+Lawyers should cite only AAR `evidence_id` values in `offered_evidence`.  If a lawyer finds a public source with OpenClaw web, browser, file, shell, OCR, PDF, image, audio, video, metadata, hash, signature, archive, or local analysis tools, the lawyer must submit that source through AAR evidence tools before relying on it as record support.  Work notes are private operator diagnostics and are not evidence.
 
 ## Build
 
@@ -66,179 +36,116 @@ Run the build from `arb/`:
 make build
 ```
 
-This builds `.bin/aar`, `.bin/aar-lawyer-mcp`, `.bin/aar-council-mcp`, and the Lean engine used by the runtime.
+This builds `.bin/aar`, `.bin/aar-mcp`, and the Lean engine used by the runtime.  The split MCP adapter commands are no longer part of the supported build.
 
-## Start The Case
+## Running One Example
 
-Create the output directories for host logs and the AAR record.  Run the host-side commands from one shell so `OUT` and `TOKEN` stay available; if another terminal starts a process, export the same variables there.
+Use the example runner for local end-to-end tests:
 
 ```bash
-export OUT=out/ex1-openclaw-lawyers-$(date -u +%Y%m%dT%H%M%SZ)
-export TOKEN=aar-local-test-token
+examples/run-ex.sh ex1
+```
+
+The script starts `aar service`, starts `aar-mcp`, creates one case through `POST /api/v1/cases`, starts OpenClaw containers for plaintiff, defendant, and council members `C1` through `C5`, waits for the service result endpoint, and writes the output directory path to standard output.  Each container keeps one OpenClaw session key for the whole assignment.  The container reruns `openclaw agent` in that same session when an invocation ends after a bounded wait, because an OpenClaw agent invocation may finish even though the case has no ready opportunity.  The latest output path for an example is also written to `out/latest-exN-openclaw-lawyers.txt`.
+
+The script sources provider keys from `~/keys.txt` and passes exported provider environment variables into OpenClaw containers.  It uses `gpt-5.5` for OpenClaw agents.  It does not mount case files or output directories into the containers.
+
+## Manual Service Commands
+
+The example runner uses the same commands an operator would run by hand.  The service starts first:
+
+```bash
+OUT=out/ex1-service-openclaw-$(date -u +%Y%m%d%H%M%S)
+TOKEN=aar-local-test-token
 mkdir -p "$OUT/logs"
-```
 
-Start `aar case` with a fixed Lawyer API address.  For a lawyer test, use direct council so the review focuses on the OpenClaw lawyers' filings and evidence work.  Source the provider keys before starting `aar case`; the direct council backend uses the host xproxy process, so the host process needs the council provider keys as well as the OpenClaw containers.
-
-```bash
-set +x
-source "$HOME/keys.txt"
-export OPENAI_API_KEY OPENROUTER_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY
-
-.bin/aar case \
-  --complaint examples/ex1/complaint.md \
-  --out-dir "$OUT/case" \
-  --lawyerapi-addr 127.0.0.1:19771 \
-  --council-backend direct \
-  --lawyer-timeout-seconds 900 \
-  >"$OUT/logs/aar.stdout" \
-  2>"$OUT/logs/aar.stderr" &
-echo $! >"$OUT/aar.pid"
-```
-
-Wait until the Lawyer API port is listening before starting the MCP adapter.  A direct check is enough:
-
-```bash
-curl -fsS 'http://127.0.0.1:19771/lawyerapi/v1/get?case_id=arb-1&role_id=observer' >"$OUT/logs/observer-start.json"
-```
-
-## Start The Lawyer MCP Adapter
-
-Start one adapter for both lawyer roles.  The adapter can serve several case-role MCP sessions.  In this single-case run, the default Lawyer API base is enough.
-
-```bash
-.bin/aar-lawyer-mcp \
-  --listen 0.0.0.0:19780 \
-  --lawyerapi-base http://127.0.0.1:19771/lawyerapi/v1 \
+.bin/aar service \
+  --listen 127.0.0.1:19770 \
+  --registry-dir "$OUT/registry" \
+  --out-root "$OUT/service-out" \
+  --aar-bin "$(pwd)/.bin/aar" \
   --bearer-token "$TOKEN" \
+  >"$OUT/logs/service.stdout" \
+  2>"$OUT/logs/service.stderr" &
+echo $! >"$OUT/service.pid"
+```
+
+Then start the MCP server.  During local Docker tests it listens on all host interfaces so `host.docker.internal` can reach it:
+
+```bash
+.bin/aar-mcp \
+  --listen 0.0.0.0:19780 \
+  --lawyerapi-base http://127.0.0.1:19770/lawyerapi/v1 \
+  --councilapi-base http://127.0.0.1:19770/councilapi/v1 \
+  --bearer-token "$TOKEN" \
+  --api-bearer-token "$TOKEN" \
   --session-ttl 0 \
-  >"$OUT/logs/lawyer-mcp.stdout" \
-  2>"$OUT/logs/lawyer-mcp.stderr" &
-echo $! >"$OUT/lawyer-mcp.pid"
+  >"$OUT/logs/aar-mcp.stdout" \
+  2>"$OUT/logs/aar-mcp.stderr" &
+echo $! >"$OUT/aar-mcp.pid"
 ```
 
-Check the adapter through raw MCP only when debugging adapter reachability.  The normal OpenClaw path uses `openclaw mcp set` inside each container and then lets the agent call the MCP tools.
-
-## Prepare The Assignment Text
+Create a case through the service.  The `case_id` becomes the public routing key for every lawyer, observer, and council call:
 
 ```bash
-read -r -d '' PLAINTIFF_ASSIGNMENT <<'EOF'
-You are the plaintiff lawyer for AAR case arb-1. Use MCP server aar-arb-1-plaintiff. Work only through the AAR MCP tools for court filings.
-
-Call wait_for_opportunity first. If it returns state waiting, call wait_for_opportunity again with after_version. If it returns state ready, read the returned prompt, turn, allowed operations, limits, remaining time, attempts remaining, and opportunity id. Complete exactly that opportunity. Use case_status for compact status when useful. Use get_case and scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata before filing. Use stat_evidence and read_evidence_range when exact contents matter. Analyze what the relevant evidence proves, what it does not prove, and whether provenance, custody, conflict, or missing links affect weight.
-
-The current AAR opportunity controls court actions, not your full investigation toolbox. The MCP adapter exposes stable transport tools; the returned prompt states which court actions are allowed now. Keep private notes throughout the turn as a working journal: objective, issue breakdown, plan, work log, search log, source URLs or identifiers, tools used, scripts or programs written, packages installed, OCR or extraction steps, browser work, adverse checks, errors, reasoning, draft theory, decisions, and unresolved gaps. Call send_work_notes with the accumulated notes before submit_decision. If the existing record leaves a material gap, use all accessible and available resources that can find or test material evidence: native OpenClaw web, browser, file, shell, OCR, PDF, image, audio, video, metadata, hash, signature, archive, and local analysis tools. If the environment permits it, install useful programs, write and run scripts or small programs, download source artifacts, and use a browser for dynamic pages or visual inspection. Follow search results to source pages or artifacts before relying on them. Check adverse sources, conflicting primary material, later corrections, missing context, and source-chain breaks. Do not use credentials, paid services, private accounts, or privileged sources unless the operator explicitly provides them for this case. When the current opportunity allows submit_evidence, submit source material through the direct submit_evidence MCP tool before relying on it in a filing. Do not call submit_decision with tool_name set to submit_evidence. Use AAR evidence_id values for offered evidence. Do not cite a URL, filename, or your own notes as admitted evidence unless AAR has accepted the source and returned an evidence_id.
-
-Submit the final legal act for the turn through submit_decision. Evidence admission is separate from the final legal act. If submit_decision succeeds, return to wait_for_opportunity for the next plaintiff opportunity.
-
-If wait_for_opportunity returns state done, call get_case_result if final vote details are needed, report that the case is done, and stop. If it returns state error, report the error and stop. Do not ask the user for the next turn. Do not create a cron job. Do not listen for inbound HTTP.
-EOF
+curl -fsS \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "case_id": "arb-ex1-local",
+    "complaint_path": "examples/ex1/complaint.md",
+    "out_dir": "'"$OUT"'/case",
+    "council_backend": "councilapi",
+    "lawyer_timeout_seconds": 900,
+    "council_timeout_seconds": 900
+  }' \
+  http://127.0.0.1:19770/api/v1/cases
 ```
+
+An OpenClaw lawyer receives one MCP server definition and one assignment prompt.  The MCP URL binds that session to one role:
+
+```json
+{
+  "url": "http://host.docker.internal:19780/mcp?case_id=arb-ex1-local&role_id=plaintiff",
+  "transport": "streamable-http",
+  "headers": {
+    "Authorization": "Bearer aar-local-test-token"
+  }
+}
+```
+
+Council members use the same MCP endpoint with `member_id` instead of `role_id`:
+
+```json
+{
+  "url": "http://host.docker.internal:19780/mcp?case_id=arb-ex1-local&member_id=C1",
+  "transport": "streamable-http",
+  "headers": {
+    "Authorization": "Bearer aar-local-test-token"
+  }
+}
+```
+
+## Assignment Behavior
+
+A lawyer assignment tells OpenClaw to call `wait_for_opportunity` first and to keep calling it while the response is `state: "waiting"`.  When the response is `state: "ready"`, the lawyer reads the prompt, allowed operations, limits, remaining time, attempts remaining, and `opportunity_id`, then completes that opportunity through the AAR tools.  After a successful filing, the lawyer returns to `wait_for_opportunity` for the next turn.
+
+The lawyer should inspect the record at each opportunity.  `get_case`, `list_evidence`, `stat_evidence`, and `read_evidence_range` provide case-packet files and admitted evidence.  `send_work_notes` records private plans, work logs, search logs, source checks, scripts, installed programs, OCR or extraction work, browser work, errors, analysis, decisions, and unresolved gaps for operator review outside the record.
+
+A council assignment follows the same wait loop, but council tools are read-only except for `submit_council_vote`.  Council members review the record and admitted evidence, then vote `demonstrated` or `not_demonstrated` with a rationale grounded in the record.  Council members should not search the web or add evidence.
+
+## Review
+
+The service result endpoint returns pending status while the case runs and final vote details after completion:
 
 ```bash
-read -r -d '' DEFENDANT_ASSIGNMENT <<'EOF'
-You are the defendant lawyer for AAR case arb-1. Use MCP server aar-arb-1-defendant. Work only through the AAR MCP tools for court filings.
-
-Call wait_for_opportunity first. If it returns state waiting, call wait_for_opportunity again with after_version. If it returns state ready, read the returned prompt, turn, allowed operations, limits, remaining time, attempts remaining, and opportunity id. Complete exactly that opportunity. Use case_status for compact status when useful. Use get_case and scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata before filing. Use stat_evidence and read_evidence_range when exact contents matter. Analyze what the relevant evidence proves, what it does not prove, and whether provenance, custody, conflict, or missing links affect weight.
-
-The current AAR opportunity controls court actions, not your full investigation toolbox. The MCP adapter exposes stable transport tools; the returned prompt states which court actions are allowed now. Keep private notes throughout the turn as a working journal: objective, issue breakdown, plan, work log, search log, source URLs or identifiers, tools used, scripts or programs written, packages installed, OCR or extraction steps, browser work, adverse checks, errors, reasoning, draft theory, decisions, and unresolved gaps. Call send_work_notes with the accumulated notes before submit_decision. If the existing record leaves a material gap, use all accessible and available resources that can find or test material evidence: native OpenClaw web, browser, file, shell, OCR, PDF, image, audio, video, metadata, hash, signature, archive, and local analysis tools. If the environment permits it, install useful programs, write and run scripts or small programs, download source artifacts, and use a browser for dynamic pages or visual inspection. Follow search results to source pages or artifacts before relying on them. Check adverse sources, conflicting primary material, later corrections, missing context, and source-chain breaks. Do not use credentials, paid services, private accounts, or privileged sources unless the operator explicitly provides them for this case. When the current opportunity allows submit_evidence, submit source material through the direct submit_evidence MCP tool before relying on it in a filing. Do not call submit_decision with tool_name set to submit_evidence. Use AAR evidence_id values for offered evidence. Do not cite a URL, filename, or your own notes as admitted evidence unless AAR has accepted the source and returned an evidence_id.
-
-Submit the final legal act for the turn through submit_decision. Evidence admission is separate from the final legal act. If submit_decision succeeds, return to wait_for_opportunity for the next defendant opportunity.
-
-If wait_for_opportunity returns state done, call get_case_result if final vote details are needed, report that the case is done, and stop. If it returns state error, report the error and stop. Do not ask the user for the next turn. Do not create a cron job. Do not listen for inbound HTTP.
-EOF
+curl -fsS \
+  -H "Authorization: Bearer $TOKEN" \
+  http://127.0.0.1:19770/api/v1/cases/arb-ex1-local/result
 ```
 
-## Start The Plaintiff Lawyer
-
-Source the provider keys in the shell that starts Docker.  The values must be exported or passed through with `-e`.
-
-```bash
-set +x
-source "$HOME/keys.txt"
-export OPENAI_API_KEY OPENROUTER_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY
-```
-
-Start the plaintiff container.  The command does not mount the case packet, source tree, output directory, prompt file, or OpenClaw home.  The MCP config and assignment enter the container as command data, which stands in for what a remote clawyer would receive from the operator.
-
-```bash
-PLAINTIFF_MCP_JSON='{"url":"http://host.docker.internal:19780/mcp?case_id=arb-1&role_id=plaintiff","transport":"streamable-http","headers":{"Authorization":"Bearer '"$TOKEN"'"}}'
-
-docker run --rm \
-  --name aar-arb-1-plaintiff \
-  --add-host=host.docker.internal:host-gateway \
-  -e OPENAI_API_KEY \
-  -e OPENROUTER_API_KEY \
-  -e ANTHROPIC_API_KEY \
-  -e GEMINI_API_KEY \
-  -e AAR_MCP_JSON="$PLAINTIFF_MCP_JSON" \
-  -e AAR_ASSIGNMENT="$PLAINTIFF_ASSIGNMENT" \
-  ghcr.io/openclaw/openclaw:latest \
-  sh -lc '
-    openclaw mcp set aar-arb-1-plaintiff "$AAR_MCP_JSON"
-    openclaw agent --local --model gpt-5.5 --thinking low --timeout 1800 --session-key agent:aar:arb-1:plaintiff --message "$AAR_ASSIGNMENT" --json
-  ' >"$OUT/logs/openclaw-plaintiff.stdout" 2>"$OUT/logs/openclaw-plaintiff.stderr" &
-echo $! >"$OUT/openclaw-plaintiff.pid"
-```
-
-## Start The Defendant Lawyer
-
-Start the defendant container in the same way, with a different MCP server name, role id, and session key.
-
-```bash
-DEFENDANT_MCP_JSON='{"url":"http://host.docker.internal:19780/mcp?case_id=arb-1&role_id=defendant","transport":"streamable-http","headers":{"Authorization":"Bearer '"$TOKEN"'"}}'
-
-docker run --rm \
-  --name aar-arb-1-defendant \
-  --add-host=host.docker.internal:host-gateway \
-  -e OPENAI_API_KEY \
-  -e OPENROUTER_API_KEY \
-  -e ANTHROPIC_API_KEY \
-  -e GEMINI_API_KEY \
-  -e AAR_MCP_JSON="$DEFENDANT_MCP_JSON" \
-  -e AAR_ASSIGNMENT="$DEFENDANT_ASSIGNMENT" \
-  ghcr.io/openclaw/openclaw:latest \
-  sh -lc '
-    openclaw mcp set aar-arb-1-defendant "$AAR_MCP_JSON"
-    openclaw agent --local --model gpt-5.5 --thinking low --timeout 1800 --session-key agent:aar:arb-1:defendant --message "$AAR_ASSIGNMENT" --json
-  ' >"$OUT/logs/openclaw-defendant.stdout" 2>"$OUT/logs/openclaw-defendant.stderr" &
-echo $! >"$OUT/openclaw-defendant.pid"
-```
-
-At this point, the operator should not feed turns to the lawyers.  A lawyer container handles every opportunity for its role by repeating `wait_for_opportunity`.  The AAR process advances when each lawyer submits a valid legal act through `submit_decision`.
-
-## Wait For Completion
-
-Watch the case process, the MCP adapter log, and the two OpenClaw logs.  The AAR process exits when the case closes or fails.
-
-```bash
-tail -f "$OUT/logs/aar.stderr" "$OUT/logs/lawyer-mcp.stderr" "$OUT/logs/openclaw-plaintiff.stderr" "$OUT/logs/openclaw-defendant.stderr"
-```
-
-Check the result after `aar case` exits:
-
-```bash
-cat "$OUT/logs/aar.stdout"
-sed -n '1,260p' "$OUT/case/digest.md"
-```
-
-The expected final artifacts are in `$OUT/case/`.  The files to review first are `digest.md`, `transcript.md`, `events.ndjson`, `work-notes.ndjson`, `evidence-manifest.json`, and `state.json`.  The OpenClaw stdout files contain each agent turn's final response and metadata; the AAR record remains the source for accepted filings and admitted evidence.
-
-## Review Checklist
-
-Review whether the plaintiff and defendant actually acted through OpenClaw by checking `events.ndjson` for lawyer tool calls and MCP logs for forwarded calls.  Review whether the lawyers inspected the record before filing and whether argument phases offer admitted `evidence_id` values.  For examples that require outside research, review whether source material was submitted through AAR evidence tools before the filings relied on it.
-
-For `ex1`, outside web research is usually unnecessary because the case packet contains the relevant proof.  A good run should show lawyers reading and citing the local case-packet evidence rather than inventing facts or submitting irrelevant source material.  The record should distinguish case-packet evidence, attorney analysis, and legal argument.
-
-For open-record examples such as `ex5`, the same procedure should show real lawyer-side searching.  The evidence-manifest should contain submitted source material with title, provenance, retrieval timestamp, source URL when available, relevance, and accepted `evidence_id` values.  A filing that argues from web material without first admitting that material is a failed lawyer performance even if the final vote is plausible.
+The output directory contains the AAR record and process logs.  Review `case/digest.md`, `case/transcript.md`, `case/events.ndjson`, `case/work-notes.ndjson`, `case/evidence-manifest.json`, `case/run.json`, and `logs/openclaw-*.stdout`.  Evidence review should check whether lawyers read case-packet evidence, admitted outside sources before relying on them, used `evidence_id` values in filings, and explained what the evidence proved.
 
 ## Cleanup
 
-If the run completes, the OpenClaw containers should exit after `wait_for_opportunity` returns `state: done`.  Stop leftover processes by using the PIDs written into `$OUT`.
-
-```bash
-kill "$(cat "$OUT/aar.pid")" "$(cat "$OUT/lawyer-mcp.pid")" 2>/dev/null || true
-docker stop aar-arb-1-plaintiff aar-arb-1-defendant 2>/dev/null || true
-```
-
-Do not delete the output directory before review.  It contains the AAR record and logs needed to diagnose lawyer behavior.  It should not contain host-mounted lawyer workspaces because the lawyer containers should not receive host filesystem access.
+The example runner stops service, MCP, and leftover OpenClaw containers when the script exits.  For manual runs, stop the host processes by using the PID files, then stop any remaining containers by name.  Do not delete the output directory before review because it contains the record, work notes, service logs, MCP logs, and OpenClaw logs needed to diagnose the run.

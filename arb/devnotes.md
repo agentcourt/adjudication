@@ -4,17 +4,17 @@
 
 ### Lawyer case results
 
-Reference: [Lawyer HTTP API](../lawyerapi.md), [Lawyer MCP adapter](tools/lawyer-mcp/README.md)
+Reference: [Lawyer HTTP API](../lawyerapi.md), [OpenClaw service runbook](running.md)
 
 The Lawyer API now exposes `GET /lawyerapi/v1/result`.  The request uses the same `case_id` and `role_id` shape as the rest of the API.  While the case remains open, the response reports `status: "pending"` and returns the live turn envelope.  After the case closes, it returns the resolution, final reason when known, deliberation round, every stored council vote with rationale, and vote counts by round.
 
-The Lawyer MCP adapter exposes the same data through the read-only `get_case_result` tool.  This keeps final-result inspection available to lawyers and observers without adding another polling loop or reading output files from the operator's filesystem.  The adapter does not interpret the vote data; it forwards the case-result JSON returned by AAR.
+The unified MCP server exposes the same data through the read-only `get_case_result` tool.  This keeps final-result inspection available to lawyers and observers without adding another polling loop or reading output files from the operator's filesystem.  The MCP server does not interpret the vote data; it forwards the case-result JSON returned by AAR.
 
 ### Lawyer case status
 
-Reference: [Lawyer HTTP API](../lawyerapi.md), [Lawyer MCP adapter](tools/lawyer-mcp/README.md)
+Reference: [Lawyer HTTP API](../lawyerapi.md), [OpenClaw service runbook](running.md)
 
-The Lawyer API now exposes `GET /lawyerapi/v1/status` and the read-only `case_status` tool.  The response reports the role's current status, case phase, case status, active turn, current opportunity details, state version, and compact counts for evidence, filings, events, and council votes.  The MCP adapter exposes `case_status` through the stable tool set and calls the status endpoint directly, so a waiting lawyer can inspect case status without an active `opportunity_id`.
+The Lawyer API now exposes `GET /lawyerapi/v1/status` and the read-only `case_status` tool.  The response reports the role's current status, case phase, case status, active turn, current opportunity details, state version, and compact counts for evidence, filings, events, and council votes.  The unified MCP server exposes `case_status` through the stable tool set and calls the status endpoint directly, so a waiting lawyer can inspect case status without an active `opportunity_id`.
 
 ### Lawyer Evidence Tools
 
@@ -30,9 +30,9 @@ Lawyer prompts now tell counsel to inspect the current record, scan the evidence
 
 The Lawyer API now exposes `send_work_notes` in every active lawyer turn.  It writes the complete notes string to `work-notes.ndjson` with role, phase, turn, opportunity id, timestamp, and optional call id.  The prompts now describe those notes as a working journal: plans, issue outlines, work logs, sources checked, scripts or programs written, packages installed, browser work, OCR and extraction work, adverse checks, errors, analysis, decisions, and unresolved gaps.  The notes log is outside the record: it does not enter Lean state, `events.ndjson`, transcript output, digest output, evidence manifests, or observer event tools.  The MCP adapter exposes the tool as part of the stable lawyer transport tool set.
 
-The obsolete `tools/aar-openclaw-attorney` adapter was removed.  The supported OpenClaw lawyer path is now the Lawyer HTTP API plus `tools/lawyer-mcp`.
+The removed OpenClaw attorney adapter no longer belongs to the runtime.  The supported OpenClaw path is now `aar service` plus `aar-mcp`, with lawyers and council members acting through service-backed MCP tools.
 
-Repeated OpenClaw runs showed plaintiff finding useful sources but attempting to submit them by calling `submit_decision` with `tool_name: submit_evidence`.  Defendant could submit evidence directly in the same service, so the failure was prompt and schema ambiguity rather than a server-wide submission failure.  The lawyer prompts, runbook assignment text, MCP README, and OpenClaw skill now say that evidence admission uses the direct `submit_evidence` tool, or the direct chunked-upload tools, before the final filing.  They also state that `submit_decision` is only for the final legal act and must not wrap `submit_evidence`.  The `submit_decision` schema now filters the engine action list to final filing actions, so `submit_evidence` is no longer advertised as a valid `submit_decision.tool_name`.
+Repeated OpenClaw runs showed plaintiff finding useful sources but attempting to submit them by calling `submit_decision` with `tool_name: submit_evidence`.  Defendant could submit evidence directly in the same service, so the failure was prompt and schema ambiguity rather than a server-wide submission failure.  The lawyer prompts and runbook assignment text now say that evidence admission uses the direct `submit_evidence` tool, or the direct chunked-upload tools, before the final filing.  They also state that `submit_decision` is only for the final legal act and must not wrap `submit_evidence`.  The `submit_decision` schema now filters the engine action list to final filing actions, so `submit_evidence` is no longer advertised as a valid `submit_decision.tool_name`.
 
 ## 2026-06-01
 
@@ -60,15 +60,15 @@ The lawyer prompt templates now match that API.  They distinguish HTTP tools fro
 
 The handbook now gives remote clawyers one procedural and technical reference.  It treats the Lawyer HTTP API as the governing interface and describes MCP as one shared service process with one MCP session per case-role.  The handbook covers phase order, filing rules, evidence custody, turn budgets, observer use, MCP tool mapping, reconnection, and error handling.
 
-`aar-lawyer-mcp` now implements the MCP adapter described in the handbook.  It serves Streamable HTTP at `/mcp`, binds each MCP session from `case_id` and `role_id` query parameters, exposes stable MCP transport tools, and forwards `tools/call` requests to `/lawyerapi/v1/do`.  It fetches the live opportunity before every forwarded lawyer tool call, injects the active `opportunity_id`, and returns AAR failures as MCP tool results with structured content.  The Lawyer API remains the phase authority.
+The unified MCP server implements the MCP path described in the handbook.  It serves Streamable HTTP at `/mcp`, binds each MCP session from `case_id` and either `role_id` or `member_id` query parameters, exposes assignment-specific tools, and forwards `tools/call` requests to the service role APIs.  It fetches the live opportunity before every forwarded mutating tool call, injects the active `opportunity_id`, and returns AAR failures as MCP tool results with structured content.  The runner remains the phase authority.
 
-OpenClaw lawyer onboarding now has a workspace skill at `tools/lawyer-mcp/skills/arb/SKILL.md`.  The skill models the remote-user flow: Joe tells his own OpenClaw to act as plaintiff, defendant, or observer in an AAR case; the claw records the assignment, saves the role-bound MCP server definition, verifies `wait_for_opportunity`, and enters the wait-tool operating loop.  The claw does not need a scheduled Gateway job to discover turns.
+OpenClaw onboarding now uses assignment text plus an MCP server definition.  The remote-user flow is the same for lawyers and council members: the operator gives OpenClaw the case id, assignment id, MCP URL, and token; the claw records the MCP server definition, verifies `wait_for_opportunity`, and enters the wait-tool operating loop.  The claw does not need a scheduled Gateway job to discover turns.
 
 The Lawyer HTTP API now has `/lawyerapi/v1/wait`.  It returns the same status shape as `/get`, but it blocks until a role has work, case state changes, or the request timeout expires.  The response includes `wait.version`, so a runner can call the endpoint again with `after_version` and avoid choosing its own sleep interval.
 
-`aar-lawyer-mcp` now exposes `wait_for_opportunity` as an always-available read-only tool.  The adapter maps that tool to `/wait`, caps each call at 30 seconds, and normalizes the result to `state: ready`, `state: waiting`, `state: done`, or `state: error`.  The OpenClaw-facing instructions now tell a clawyer to call `wait_for_opportunity` repeatedly until it receives work, completion, or an error.
+The unified MCP server exposes `wait_for_opportunity` as an always-available read-only tool.  The server maps that tool to `/wait`, caps each call at 30 seconds, and normalizes the result to `state: ready`, `state: waiting`, `state: done`, or `state: error`.  The OpenClaw-facing instructions tell a clawyer or council member to call `wait_for_opportunity` repeatedly until it receives work, completion, or an error.
 
-`aar-lawyer-mcp` is expected to run as a shared service for many case-role sessions.  Each MCP session stores the binding for `case_id`, `role_id`, and the Lawyer API base URL; it does not own case state.  Idle-session expiry can therefore delete stale MCP session records without changing an arb.  A clawyer that loses a session can initialize a new MCP session with the same URL and recover current status from the Lawyer API.  The adapter now has a default 30-minute idle TTL, a configurable cleanup interval, and `--session-ttl 0` for deployments that want to disable expiry.
+`aar-mcp` runs as a shared service for many case-role and case-member sessions.  Each MCP session stores the binding for `case_id` plus one principal id; it does not own case state.  Idle-session expiry can delete stale MCP session records without changing an arb.  A clawyer or council member that loses a session can initialize a new MCP session with the same URL and recover current status from the service role APIs.  The server has a default 30-minute idle TTL, a configurable cleanup interval, and `--session-ttl 0` for deployments that want to disable expiry.
 
 - [x] Add the HTTP Lawyer API server to `aar case`.
 - [x] Replace lawyer ACP execution with turn blocking on HTTP tool calls.
@@ -636,3 +636,24 @@ proposition.
 - [x] Accept plain text as complaint input.
 - [x] Reject blank complaints and blank explicit sections.
 - [x] Cover parser behavior in tests.
+
+## 2026-06-02
+
+### Public service startup
+
+Reference: [AAR service](runtime/service/service.go)
+
+The first `ex1` service run failed during case creation because the public
+service waited only thirty seconds for the child runner to announce private
+lawyer and council APIs.  The child runner starts those private APIs after
+council preflight, and council preflight can spend more than thirty seconds on
+external model availability checks.  The public service now returns an accepted
+case once the child process starts, keeps the case in `starting`, and lets
+public role `wait` calls block within the API wait limit until the private role
+API appears.
+
+The corrected path was tested with `ex1` and `ex4` through the public service,
+the AAR MCP adapter, OpenClaw lawyer containers, and council members using the
+council API.  `ex1` closed as demonstrated with a 4-1 council vote, and `ex4`
+closed as demonstrated with a 5-0 council vote.  The searched MCP logs for both
+runs showed no HTTP 4xx or 5xx tool calls and no MCP error states.

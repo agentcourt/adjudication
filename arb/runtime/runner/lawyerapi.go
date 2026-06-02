@@ -235,6 +235,10 @@ func (api *lawyerAPIServer) handleGet(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if !api.caseIDMatches(caseID) {
+		api.writeCaseMismatch(w, caseID, role)
+		return
+	}
 	if role == "" {
 		writeLawyerJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":    false,
@@ -296,6 +300,10 @@ func (api *lawyerAPIServer) handleWait(w http.ResponseWriter, r *http.Request) {
 			"ok":    false,
 			"error": apiError("missing_case_id", "case_id is required"),
 		})
+		return
+	}
+	if !api.caseIDMatches(caseID) {
+		api.writeCaseMismatch(w, caseID, role)
 		return
 	}
 	if role == "" {
@@ -377,6 +385,10 @@ func (api *lawyerAPIServer) handleStatus(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
+	if !api.caseIDMatches(caseID) {
+		api.writeCaseMismatch(w, caseID, role)
+		return
+	}
 	if role == "" {
 		writeLawyerJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
@@ -417,6 +429,10 @@ func (api *lawyerAPIServer) handleResult(w http.ResponseWriter, r *http.Request)
 			"ok":    false,
 			"error": apiError("missing_case_id", "case_id is required"),
 		})
+		return
+	}
+	if !api.caseIDMatches(caseID) {
+		api.writeCaseMismatch(w, caseID, role)
 		return
 	}
 	if role == "" {
@@ -479,6 +495,10 @@ func (api *lawyerAPIServer) handleDo(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if !api.caseIDMatches(req.CaseID) {
+		api.writeCaseMismatch(w, req.CaseID, req.RoleID)
+		return
+	}
 	if req.RoleID == "" {
 		writeLawyerJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":      false,
@@ -501,6 +521,22 @@ func (api *lawyerAPIServer) handleDo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.handleLawyerDo(w, req)
+}
+
+func (api *lawyerAPIServer) caseIDMatches(caseID string) bool {
+	return strings.TrimSpace(caseID) == normalizeCaseID(api.rc.cfg.CaseID)
+}
+
+func (api *lawyerAPIServer) writeCaseMismatch(w http.ResponseWriter, caseID string, roleID string) {
+	response := map[string]any{
+		"ok":      false,
+		"case_id": strings.TrimSpace(caseID),
+		"error":   apiError("unknown_case", "case_id does not match this runner"),
+	}
+	if strings.TrimSpace(roleID) != "" {
+		response["role_id"] = strings.TrimSpace(roleID)
+	}
+	writeLawyerJSON(w, http.StatusNotFound, response)
 }
 
 func (api *lawyerAPIServer) handleLawyerDo(w http.ResponseWriter, req lawyerDoRequest) {
@@ -971,12 +1007,16 @@ func (api *lawyerAPIServer) currentOpportunityPayloadLocked() map[string]any {
 		return nil
 	}
 	return map[string]any{
-		"opportunity_id":     turn.opportunity.ID,
-		"role_id":            turn.opportunity.Role,
-		"phase":              turn.opportunity.Phase,
-		"objective":          turn.opportunity.Objective,
-		"may_pass":           turn.opportunity.MayPass,
-		"allowed_operations": turn.opportunity.AllowedTools,
+		"opportunity_id":       turn.opportunity.ID,
+		"role_id":              turn.opportunity.Role,
+		"phase":                turn.opportunity.Phase,
+		"objective":            turn.opportunity.Objective,
+		"may_pass":             turn.opportunity.MayPass,
+		"final_filing_actions": decisionToolEnum(turn.opportunity.AllowedTools),
+		"evidence_access": map[string]any{
+			"read":   evidenceReadAllowed(turn.opportunity),
+			"submit": evidenceSubmissionAllowed(turn.opportunity),
+		},
 		"remaining_ms":       remainingTurnMilliseconds(turn),
 		"attempts_remaining": turn.attemptsRemaining,
 		"attempts_max":       turn.attemptsMax,

@@ -66,6 +66,36 @@ func TestLawyerDoRequiresActiveOpportunityID(t *testing.T) {
 	}
 }
 
+func TestLawyerAPIRejectsMismatchedCaseID(t *testing.T) {
+	api, turn := testLawyerAPIWithTurn()
+	api.rc.cfg.CaseID = "case-123"
+
+	status, got := callLawyerAPIGet(t, api, "case_id=case-456&role_id=plaintiff")
+	if status != http.StatusNotFound {
+		t.Fatalf("get status = %d, want %d", status, http.StatusNotFound)
+	}
+	if code := lawyerAPIErrorCode(t, got); code != "unknown_case" {
+		t.Fatalf("get error code = %q, want unknown_case", code)
+	}
+
+	status, got = callLawyerAPIDo(t, api, map[string]any{
+		"case_id":        "case-456",
+		"role_id":        "plaintiff",
+		"opportunity_id": "openings:plaintiff",
+		"tool":           "get_case",
+		"arguments":      map[string]any{},
+	})
+	if status != http.StatusNotFound {
+		t.Fatalf("do status = %d, want %d", status, http.StatusNotFound)
+	}
+	if code := lawyerAPIErrorCode(t, got); code != "unknown_case" {
+		t.Fatalf("do error code = %q, want unknown_case", code)
+	}
+	if turn.attemptsRemaining != turn.attemptsMax {
+		t.Fatalf("attemptsRemaining = %d, want %d", turn.attemptsRemaining, turn.attemptsMax)
+	}
+}
+
 func TestObserverDoDoesNotRequireOpportunityID(t *testing.T) {
 	api, _ := testLawyerAPIWithTurn()
 
@@ -188,6 +218,17 @@ func TestLawyerStatusReportsWaitingRoleAndActiveTurn(t *testing.T) {
 	}
 	if current["role_id"] != "plaintiff" {
 		t.Fatalf("current_opportunity = %#v", current)
+	}
+	if _, ok := current["allowed_operations"]; ok {
+		t.Fatalf("current_opportunity used obsolete allowed_operations field: %#v", current)
+	}
+	actions := stringList(current["final_filing_actions"])
+	if len(actions) != 1 || actions[0] != "record_opening_statement" {
+		t.Fatalf("current_opportunity final_filing_actions = %#v", current["final_filing_actions"])
+	}
+	access, ok := current["evidence_access"].(map[string]any)
+	if !ok || access["read"] != true || access["submit"] != false {
+		t.Fatalf("current_opportunity evidence_access = %#v", current["evidence_access"])
 	}
 	counts, ok := got["counts"].(map[string]any)
 	if !ok {
@@ -454,7 +495,7 @@ func testLawyerAPIWithTurn() (*lawyerAPIServer, *lawyerTurn) {
 			Policy:  policy,
 			Runtime: DefaultRuntimeLimits(),
 		},
-		state:          initialState(policy),
+		state:          initialState(policy, ""),
 		fileByID:       map[string]CaseFile{},
 		uploadSessions: map[string]*EvidenceUploadSession{},
 	}

@@ -59,6 +59,7 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	invalidAttemptLimit := fs.Int("invalid-attempt-limit", 0, "Override runtime invalid-attempt limit")
 	enginePath := fs.String("engine", defaultEnginePath(), "Lean engine binary")
 	runID := fs.String("run-id", "", "Run ID override")
+	caseID := fs.String("case-id", "", "Case ID. Default: arb-1")
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: aar case --complaint FILE --out-dir DIR\n\n")
 		fs.PrintDefaults()
@@ -161,6 +162,7 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		return reportCaseError(stdout, err)
 	}
 	cfg := runner.Config{
+		CaseID:                     strings.TrimSpace(*caseID),
 		RunID:                      effectiveRunID,
 		ComplaintPath:              *complaintPath,
 		CaseFilePaths:              explicitCaseFiles,

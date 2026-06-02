@@ -37,6 +37,8 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) error {
 	switch args[0] {
 	case "case":
 		return RunCase(args[1:], stdout, stderr)
+	case "service":
+		return RunService(args[1:], stdout, stderr)
 	case "complain":
 		return RunComplain(args[1:], stdout, stderr)
 	case "validate":
@@ -49,6 +51,8 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) error {
 		switch args[1] {
 		case "case":
 			return RunCase([]string{"-h"}, stdout, stderr)
+		case "service":
+			return RunService([]string{"-h"}, stdout, stderr)
 		case "complain":
 			return RunComplain([]string{"-h"}, stdout, stderr)
 		case "validate":
@@ -68,6 +72,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Subcommands:")
 	fmt.Fprintln(w, "  case       Initialize an arbitration case from a complaint")
+	fmt.Fprintln(w, "  service    Run the multi-case AAR HTTP service")
 	fmt.Fprintln(w, "  complain   Draft complaint.md from a situation markdown file")
 	fmt.Fprintln(w, "  validate   Validate a complaint file")
 	fmt.Fprintln(w)
