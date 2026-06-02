@@ -2,7 +2,7 @@
 
 ## Current Path
 
-`aar case` now starts the HTTP Lawyer API and waits for plaintiff and defendant tool calls.  No lawyer model, lawyer ACP service, MCP bridge, or adapter runs inside the AAR runtime.  For this test, curl acted as both lawyers and as the observer.
+`aar case` now starts the HTTP Lawyer API and waits for plaintiff and defendant tool calls.  No lawyer model, MCP bridge, or adapter runs inside the AAR runtime.  For this test, curl acted as both lawyers and as the observer.
 
 The live run on 2026-06-01 used `arb/examples/ex1/complaint.md`, a temporary one-member council policy, and the Lawyer API at `http://127.0.0.1:19771/lawyerapi/v1`.  The script sourced `~/keys.txt`, started `aar case`, polled `GET /get` for plaintiff and defendant, called observer `get_turn` during each lawyer turn, and submitted every lawyer filing with `POST /do`.  For each lawyer filing, it copied `turn.opportunity_id` from the ready `GET` response into the POST body.  The case completed:
 

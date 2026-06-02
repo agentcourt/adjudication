@@ -193,8 +193,9 @@ func (rc *runContext) executeAttorneyOpportunity(ctx context.Context, _ any, opp
 		return ctx.Err()
 	case <-timer.C:
 		err := fmt.Errorf("%s lawyer opportunity timed out after %s", opportunity.Role, rc.cfg.Runtime.LawyerTurnTimeout())
-		rc.lawyerAPI.finishTurn(turn, err)
-		return err
+		failErr := rc.failOpportunity(opportunity, opportunityFailureDeadline, err.Error(), nil)
+		rc.lawyerAPI.finishTurn(turn, failErr)
+		return failErr
 	case err := <-turn.done:
 		return err
 	}
@@ -568,10 +569,15 @@ func (api *lawyerAPIServer) handleLawyerDo(w http.ResponseWriter, req lawyerDoRe
 	}
 	if time.Now().After(turn.deadline) {
 		err := fmt.Errorf("%s lawyer opportunity timed out", turn.opportunity.Role)
-		api.finishTurnLocked(turn, err)
 		response := api.responseBaseLocked(req.CaseID, req.RoleID)
 		response["ok"] = false
-		response["error"] = apiError("turn_timeout", err.Error())
+		if failErr := api.rc.failOpportunity(turn.opportunity, opportunityFailureDeadline, err.Error(), nil); failErr != nil {
+			api.finishTurnLocked(turn, failErr)
+			response["error"] = apiError("case_failure_failed", failErr.Error())
+		} else {
+			api.finishTurnLocked(turn, nil)
+			response["error"] = apiError("turn_timeout", err.Error())
+		}
 		writeLawyerJSON(w, http.StatusOK, response)
 		return
 	}
@@ -970,6 +976,8 @@ func (api *lawyerAPIServer) caseStatusPayloadLocked(roleID string) map[string]an
 		"phase":               phase,
 		"case_status":         caseStatus,
 		"resolution":          resolution,
+		"council_backend":     api.rc.cfg.CouncilBackend,
+		"council_roster":      councilSeatRoster(api.rc.council, mapList(caseObj["council_members"])),
 		"deliberation_round":  intNumber(caseObj["deliberation_round"]),
 		"state_version":       mapAny(api.rc.state)["state_version"],
 		"turn":                api.turnPayloadLocked(api.active),
@@ -980,6 +988,11 @@ func (api *lawyerAPIServer) caseStatusPayloadLocked(roleID string) map[string]an
 	if api.terminalReason != "" {
 		payload["final_reason"] = api.terminalReason
 	}
+	if caseStatus == "failed" {
+		failure := caseFailure(api.rc.state)
+		payload["failure"] = failure
+		payload["error"] = caseFailureError(api.rc.state)
+	}
 	if roleID == "observer" {
 		payload["limits"] = observerLimits(api.rc)
 	} else if api.active != nil && !api.active.completed && api.active.opportunity.Role == roleID {
@@ -989,6 +1002,9 @@ func (api *lawyerAPIServer) caseStatusPayloadLocked(roleID string) map[string]an
 }
 
 func (api *lawyerAPIServer) caseRoleStatusLocked(roleID string, caseObj map[string]any) string {
+	if mapString(caseObj["status"]) == "failed" {
+		return "failed"
+	}
 	if api.caseIsFinalLocked(caseObj) {
 		return "done"
 	}
@@ -1049,6 +1065,8 @@ func caseStatusMessage(roleStatus string) string {
 		return "Observer access is read-only."
 	case "done":
 		return "The case is done."
+	case "failed":
+		return "The case failed."
 	default:
 		return "Case status is available."
 	}
@@ -1065,6 +1083,12 @@ func (api *lawyerAPIServer) caseResultResponseLocked(caseID string, roleID strin
 	if !api.caseIsFinalLocked(caseObj) {
 		response["status"] = "pending"
 		response["message"] = "The case is still pending."
+		return response
+	}
+	if caseStatus == "failed" {
+		response["status"] = "failed"
+		response["error"] = caseFailureError(api.rc.state)
+		response["failure"] = caseFailure(api.rc.state)
 		return response
 	}
 	votes := normalizeCouncilVotes(mapList(caseObj["council_votes"]))
@@ -1086,6 +1110,9 @@ func (api *lawyerAPIServer) caseResultResponseLocked(caseID string, roleID strin
 
 func (api *lawyerAPIServer) caseIsFinalLocked(caseObj map[string]any) bool {
 	if api.terminal {
+		return true
+	}
+	if mapString(caseObj["status"]) == "failed" {
 		return true
 	}
 	if mapString(caseObj["status"]) == "closed" {
@@ -1174,7 +1201,13 @@ func (api *lawyerAPIServer) consumeAttemptLocked(turn *lawyerTurn, err error, de
 		feedback = formatInvalidAttemptLimitError(turn.opportunity.Role+" lawyer turn", turn.invalidReasons)
 	}
 	if turn.attemptsRemaining <= 0 {
-		api.finishTurnLocked(turn, feedback)
+		details := map[string]any{"invalid_reasons": append([]string(nil), turn.invalidReasons...)}
+		if failErr := api.rc.failOpportunity(turn.opportunity, opportunityFailureAttemptsExhausted, feedback.Error(), details); failErr != nil {
+			feedback = errors.Join(feedback, failErr)
+			api.finishTurnLocked(turn, feedback)
+		} else {
+			api.finishTurnLocked(turn, nil)
+		}
 	}
 	return feedback
 }
@@ -1182,12 +1215,28 @@ func (api *lawyerAPIServer) consumeAttemptLocked(turn *lawyerTurn, err error, de
 func (api *lawyerAPIServer) statusResponseLocked(caseID string, roleID string) map[string]any {
 	if api.terminal {
 		response := api.responseBaseLocked(caseID, roleID)
-		response["status"] = "done"
+		caseObj := mapAny(api.rc.state["case"])
+		if mapString(caseObj["status"]) == "failed" {
+			response["status"] = "failed"
+			response["failure"] = caseFailure(api.rc.state)
+			response["error"] = caseFailureError(api.rc.state)
+		} else {
+			response["status"] = "done"
+		}
 		response["prompt"] = ""
 		response["tools"] = []map[string]any{caseStatusHTTPToolSpec()}
 		if api.terminalReason != "" {
 			response["final_reason"] = api.terminalReason
 		}
+		return response
+	}
+	if mapString(mapAny(api.rc.state["case"])["status"]) == "failed" {
+		response := api.responseBaseLocked(caseID, roleID)
+		response["status"] = "failed"
+		response["prompt"] = ""
+		response["tools"] = []map[string]any{caseStatusHTTPToolSpec()}
+		response["failure"] = caseFailure(api.rc.state)
+		response["error"] = caseFailureError(api.rc.state)
 		return response
 	}
 	if roleID == "observer" {
@@ -1216,7 +1265,13 @@ func (api *lawyerAPIServer) statusResponseLocked(caseID string, roleID string) m
 func (api *lawyerAPIServer) waitResponseLocked(caseID string, roleID string, after string, baseline uint64) (map[string]any, string, bool) {
 	response := api.statusResponseLocked(caseID, roleID)
 	if api.terminal {
+		if response["status"] == "failed" {
+			return response, "failed", true
+		}
 		return response, "done", true
+	}
+	if response["status"] == "failed" {
+		return response, "failed", true
 	}
 	turn := api.active
 	if turn != nil && !turn.completed && turn.opportunity.Role == roleID {

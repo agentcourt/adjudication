@@ -67,7 +67,7 @@ func TestNewFromEnv(t *testing.T) {
 		},
 		{
 			name: "explicit base url",
-			env:  map[string]string{"OPENAI_API_KEY": "oa-key", "OPENAI_BASE_URL": "https://xproxy.local/v1"},
+			env:  map[string]string{"OPENAI_API_KEY": "oa-key", "OPENAI_BASE_URL": "https://proxy.local/v1"},
 		},
 	}
 

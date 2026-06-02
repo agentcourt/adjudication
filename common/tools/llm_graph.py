@@ -41,14 +41,14 @@ PHASE_STYLE = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Read xproxy llm_csv lines and write a latency plot. Run from the "
+            "Read llm_csv request lines and write a latency plot. Run from the "
             "repository root unless you pass explicit paths."
         )
     )
     parser.add_argument(
         "--log",
         required=True,
-        help="Path to the xproxy log with llm_csv lines, resolved against the working directory.",
+        help="Path to a log with llm_csv lines, resolved against the working directory.",
     )
     parser.add_argument(
         "--out",

@@ -368,10 +368,18 @@ func (api *councilAPIServer) handleCouncilDo(w http.ResponseWriter, req councilD
 	}
 	if time.Now().After(turn.deadline) {
 		err := fmt.Errorf("council member %s opportunity timed out", turn.seat.MemberID)
-		api.finishTurnLocked(turn, err)
 		response := api.responseBaseLocked(req.CaseID, req.MemberID)
 		response["ok"] = false
-		response["error"] = apiError("turn_timeout", err.Error())
+		if failErr := api.rc.failOpportunity(turn.opportunity, opportunityFailureDeadline, err.Error(), map[string]any{
+			"member_id": turn.seat.MemberID,
+			"model":     turn.seat.Model,
+		}); failErr != nil {
+			api.finishTurnLocked(turn, failErr)
+			response["error"] = apiError("member_failure_failed", failErr.Error())
+		} else {
+			api.finishTurnLocked(turn, nil)
+			response["error"] = apiError("turn_timeout", err.Error())
+		}
 		writeCouncilJSON(w, http.StatusOK, response)
 		return
 	}
@@ -514,7 +522,17 @@ func (api *councilAPIServer) consumeAttemptLocked(turn *councilTurn, err error) 
 		feedback = formatInvalidAttemptLimitError("council member "+turn.seat.MemberID, turn.invalidReasons)
 	}
 	if turn.attemptsRemaining <= 0 {
-		api.finishTurnLocked(turn, feedback)
+		details := map[string]any{
+			"member_id":       turn.seat.MemberID,
+			"model":           turn.seat.Model,
+			"invalid_reasons": append([]string(nil), turn.invalidReasons...),
+		}
+		if failErr := api.rc.failOpportunity(turn.opportunity, opportunityFailureAttemptsExhausted, feedback.Error(), details); failErr != nil {
+			feedback = errors.Join(feedback, failErr)
+			api.finishTurnLocked(turn, feedback)
+		} else {
+			api.finishTurnLocked(turn, nil)
+		}
 	}
 	return feedback
 }
@@ -563,7 +581,13 @@ func (api *councilAPIServer) writeCaseMismatch(w http.ResponseWriter, caseID str
 func (api *councilAPIServer) statusResponseLocked(caseID string, memberID string) map[string]any {
 	if api.terminal {
 		response := api.responseBaseLocked(caseID, memberID)
-		response["status"] = "done"
+		if mapString(mapAny(api.rc.state["case"])["status"]) == "failed" {
+			response["status"] = "failed"
+			response["failure"] = caseFailure(api.rc.state)
+			response["error"] = caseFailureError(api.rc.state)
+		} else {
+			response["status"] = "done"
+		}
 		response["prompt"] = ""
 		response["tools"] = []map[string]any{}
 		if api.terminalReason != "" {
@@ -572,6 +596,22 @@ func (api *councilAPIServer) statusResponseLocked(caseID string, memberID string
 		return response
 	}
 	response := api.responseBaseLocked(caseID, memberID)
+	if mapString(mapAny(api.rc.state["case"])["status"]) == "failed" {
+		response["status"] = "failed"
+		response["prompt"] = ""
+		response["tools"] = []map[string]any{}
+		response["failure"] = caseFailure(api.rc.state)
+		response["error"] = caseFailureError(api.rc.state)
+		return response
+	}
+	if failure := api.failedCouncilMemberPayloadLocked(memberID); failure != nil {
+		response["status"] = "failed"
+		response["prompt"] = ""
+		response["tools"] = []map[string]any{}
+		response["failure"] = failure
+		response["error"] = mapString(failure["message"])
+		return response
+	}
 	turn := api.active
 	if turn == nil || turn.completed || turn.seat.MemberID != memberID {
 		response["status"] = "waiting"
@@ -589,7 +629,13 @@ func (api *councilAPIServer) statusResponseLocked(caseID string, memberID string
 func (api *councilAPIServer) waitResponseLocked(caseID string, memberID string, after string, baseline uint64) (map[string]any, string, bool) {
 	response := api.statusResponseLocked(caseID, memberID)
 	if api.terminal {
+		if response["status"] == "failed" {
+			return response, "failed", true
+		}
 		return response, "done", true
+	}
+	if response["status"] == "failed" {
+		return response, "failed", true
 	}
 	turn := api.active
 	if turn != nil && !turn.completed && turn.seat.MemberID == memberID {
@@ -601,6 +647,27 @@ func (api *councilAPIServer) waitResponseLocked(caseID string, memberID string, 
 		return response, "changed", true
 	}
 	return response, "", false
+}
+
+func (api *councilAPIServer) failedCouncilMemberPayloadLocked(memberID string) map[string]any {
+	caseObj := mapAny(api.rc.state["case"])
+	for _, member := range mapList(caseObj["council_members"]) {
+		if mapString(member["member_id"]) != memberID {
+			continue
+		}
+		if mapString(member["status"]) != "failed" {
+			return nil
+		}
+		return map[string]any{
+			"type":           "opportunity_failed",
+			"role":           "council",
+			"member_id":      memberID,
+			"opportunity_id": mapString(member["failure_opportunity_id"]),
+			"reason":         mapString(member["failure_reason"]),
+			"message":        mapString(member["failure_message"]),
+		}
+	}
+	return nil
 }
 
 func (api *councilAPIServer) waitPayloadLocked(reason string) map[string]any {

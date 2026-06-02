@@ -56,8 +56,7 @@ A full run fetches OpenRouter metadata, filters models, probes tool support and 
 
 The full run requires:
 
-- `adc/.bin/adc` to exist.
-- local xproxy to be running at `127.0.0.1:${PI_CONTAINER_XPROXY_PORT:-18459}`.
+- `OPENROUTER_API_KEY` for OpenRouter model probing and clustering.
 - `OPENAI_API_KEY` for embeddings during clustering.
 - enough time for live model probing and clustering.
 
@@ -106,13 +105,7 @@ uv run --script common/tools/filter-models.py \
 
 ## Stage 3: Live Tool And Latency Probe
 
-Build `adc` before this step. Start local xproxy from the repository root before running the probe:
-
-```bash
-adc/.bin/adc xproxy
-```
-
-In another shell, run the live probe against the prefiltered model list:
+Run the live probe against the prefiltered model list:
 
 ```bash
 common/tools/model-speed.sh common/etc/personas/persons/d715074-0.txt \
@@ -126,7 +119,7 @@ The output format is:
 MODEL,ELAPSED_MS,TOOLS_SUPPORTED
 ```
 
-`TOOLS_SUPPORTED=true` means the model successfully exercised the juror-vote tool path used by `adc llm --tool-check`. `ELAPSED_MS` is used later to exclude slow models. The default council-selection threshold is 8000 milliseconds unless `--max-elapsed-ms` changes it.
+`TOOLS_SUPPORTED=true` means the model successfully called the `submit_council_vote` tool in a direct OpenRouter request. `ELAPSED_MS` is used later to exclude slow models. The default council-selection threshold is 8000 milliseconds unless `--max-elapsed-ms` changes it.
 
 A stale or partial `model-latency.csv` changes the eligible set. For example, a short 35-row latency file will exclude most clustered candidates as `latency_missing`. The 490/198/20 pipeline described below requires the full latency file used for the clustering run.
 

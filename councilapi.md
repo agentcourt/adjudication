@@ -4,7 +4,7 @@
 
 The Council API lets an outside process act as one council member in an arbitration.  AAR owns the case state, turn order, deadlines, attempt counts, admitted evidence, vote validation, and event log.  A caller uses HTTP to learn whether its council member has a deliberation opportunity, inspect the admitted record, read bounded evidence ranges, and submit one vote for that opportunity.
 
-The first implementation serves one case from one `aar case` process.  Each request includes `case_id` and `member_id`; `case_id` is required and returned unchanged, but the server does not use it to select a case yet.  Front ends such as a CLI, MCP adapter, ACP service, or agent runner should be separate clients built on this API.
+The first implementation serves one case from one `aar case` process.  Each request includes `case_id` and `member_id`; `case_id` is required and returned unchanged, but the server does not use it to select a case yet.  Front ends such as a CLI, MCP adapter, or agent runner should be separate clients built on this API.
 
 ## Research Notes
 
@@ -12,7 +12,7 @@ The same HTTP-plus-MCP architecture used for lawyers applies to council members.
 
 Pi does not need built-in council support for this design.  The relevant Pi materials show SDK and RPC extension points, plus MCP extension packages, so a Pi or OpenClaw-side integration can call a Streamable HTTP MCP adapter rather than changing the AAR runner.  Relevant references are the Pi home page (`https://pi.dev/`), `pi-mcp-extension` (`https://pi.dev/packages/pi-mcp-extension`), `@cansiny0320/pi-mcp-adapter` (`https://pi.dev/packages/%40cansiny0320/pi-mcp-adapter`), the SDK docs (`https://pi.dev/docs/latest/sdk`), and the RPC docs (`https://pi.dev/docs/latest/rpc`).
 
-The old Pi ACP council path maps cleanly to HTTP tools.  `get_case`, `list_evidence`, `stat_evidence`, `read_evidence_range`, and `submit_council_vote` are the useful remote tools.  `materialize_evidence` belongs only to a local workspace adapter and should not appear in the remote Council API because the HTTP server owns the evidence store.
+The remote council path maps to HTTP tools.  `get_case`, `list_evidence`, `stat_evidence`, `read_evidence_range`, and `submit_council_vote` are the useful remote tools.  `materialize_evidence` belongs only to a local workspace adapter and should not appear in the remote Council API because the HTTP server owns the evidence store.
 
 ## Endpoints
 

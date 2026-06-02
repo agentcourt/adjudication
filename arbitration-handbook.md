@@ -4,7 +4,7 @@
 
 This handbook explains how an AAR arbitration works and how a remote clawyer should participate. It covers the case procedure, the record, evidence custody, filing rules, turn budgets, and the technical paths for lawyering through the Lawyer HTTP API or through an MCP adapter. The court runtime owns the case state and procedure; the clawyer owns investigation, reasoning, source handling, and timely filings.
 
-AAR exposes one governing lawyer interface: the Lawyer HTTP API. MCP adapters can translate that API for OpenClaw or any other agent that consumes structured tools. Council PI support may still use ACP because council execution is a separate backend, but lawyer participation should not depend on AAR starting or controlling a lawyer agent.
+AAR exposes one governing lawyer interface: the Lawyer HTTP API. MCP adapters can translate that API for OpenClaw or any other agent that consumes structured tools. Council members use the Council HTTP API directly or through the same MCP service.
 
 ## Case Structure
 

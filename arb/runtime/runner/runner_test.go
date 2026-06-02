@@ -76,6 +76,22 @@ func TestSampleCouncilCarriesJSONRequestSpec(t *testing.T) {
 	}
 }
 
+func makeTempCouncilPool(t *testing.T, line string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "personas"), 0o755); err != nil {
+		t.Fatalf("mkdir personas: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "personas", "juror.txt"), []byte("skeptical juror"), 0o644); err != nil {
+		t.Fatalf("write persona: %v", err)
+	}
+	pool := filepath.Join(dir, "pool.jsonl")
+	if err := os.WriteFile(pool, []byte(line+"\n"), 0o644); err != nil {
+		t.Fatalf("write pool: %v", err)
+	}
+	return pool
+}
+
 func TestEvidenceRegistryStoresCaseFilesAndReadsBoundedRanges(t *testing.T) {
 	dir := t.TempDir()
 	casePath := filepath.Join(dir, "source.txt")
@@ -1145,79 +1161,8 @@ func findHTTPToolSpec(specs []map[string]any, name string) map[string]any {
 	return nil
 }
 
-func TestJurorACPToolSpecsAreReadOnly(t *testing.T) {
-	tools := make([]string, 0)
-	for _, spec := range jurorACPClientToolSpecs(true) {
-		tools = append(tools, mapString(spec["toolName"]))
-	}
-	for _, want := range []string{
-		"aar_get_case",
-		"aar_list_evidence",
-		"aar_stat_evidence",
-		"aar_read_evidence_range",
-		"aar_materialize_evidence",
-		"aar_submit_council_vote",
-	} {
-		if !slices.Contains(tools, want) {
-			t.Fatalf("juror tools missing %s: %#v", want, tools)
-		}
-	}
-	for _, forbidden := range []string{
-		"aar_begin_evidence_upload",
-		"aar_write_evidence_chunk",
-		"aar_commit_evidence_upload",
-		"aar_submit_evidence",
-		"aar_submit_decision",
-	} {
-		if slices.Contains(tools, forbidden) {
-			t.Fatalf("juror tools exposed forbidden tool %s: %#v", forbidden, tools)
-		}
-	}
-}
-
-func TestBuildCouncilACPPromptConstrainsJurorInvestigation(t *testing.T) {
-	origPromptBaseDir := promptBaseDir
-	promptBaseDir = filepath.Join("..", "..", "prompts")
-	defer func() { promptBaseDir = origPromptBaseDir }()
-	rc := &runContext{
-		cfg: Config{
-			Policy: DefaultPolicy(),
-		},
-		complaint: spec.Complaint{Proposition: "P"},
-		state: map[string]any{
-			"policy": map[string]any{"evidence_standard": "preponderance"},
-			"case": map[string]any{
-				"phase":              "deliberation",
-				"deliberation_round": 1,
-				"openings":           []map[string]any{},
-				"arguments":          []map[string]any{},
-				"rebuttals":          []map[string]any{},
-				"surrebuttals":       []map[string]any{},
-				"closings":           []map[string]any{},
-				"offered_evidence":   []map[string]any{},
-				"technical_reports":  []map[string]any{},
-				"council_votes":      []map[string]any{},
-			},
-		},
-	}
-	prompt, err := rc.buildCouncilACPPrompt(CouncilSeat{MemberID: "C1", Model: "openai://gpt-5", PersonaText: "Skeptical."}, Opportunity{ID: "deliberation:1:C1", Role: "council", Phase: "deliberation"})
-	if err != nil {
-		t.Fatalf("buildCouncilACPPrompt returned error: %v", err)
-	}
-	for _, want := range []string{
-		"You may examine admitted evidence through the read-only AAR tools.",
-		"Do not search the web, introduce new facts, create new evidence, upload evidence",
-		"Evidence identity is evidence_id plus SHA-256.",
-		"call aar_submit_council_vote exactly once",
-	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("council ACP prompt missing %q:\n%s", want, prompt)
-		}
-	}
-}
-
 func TestCouncilBackendValidation(t *testing.T) {
-	for _, backend := range []string{"", "direct", "pi", "PI", "councilapi", "COUNCILAPI"} {
+	for _, backend := range []string{"", "direct", "councilapi", "COUNCILAPI"} {
 		if err := ValidateCouncilBackend(backend); err != nil {
 			t.Fatalf("ValidateCouncilBackend(%q) returned error: %v", backend, err)
 		}
@@ -1225,24 +1170,44 @@ func TestCouncilBackendValidation(t *testing.T) {
 	if got := NormalizeCouncilBackend(""); got != "direct" {
 		t.Fatalf("NormalizeCouncilBackend empty = %q, want direct", got)
 	}
+	if err := ValidateCouncilBackend("pi"); err == nil {
+		t.Fatalf("ValidateCouncilBackend accepted removed pi backend")
+	}
 	if err := ValidateCouncilBackend("browser"); err == nil {
 		t.Fatalf("ValidateCouncilBackend accepted unknown backend")
 	}
 }
 
-func TestEnsureCouncilACPSessionRejectsSearchEnabledModel(t *testing.T) {
-	rc := &runContext{
-		cfg: Config{
-			OutputDir:         t.TempDir(),
-			CouncilACPCommand: "/tmp/acp",
-			Policy:            DefaultPolicy(),
-			Runtime:           DefaultRuntimeLimits(),
-		},
-		acpSessions: map[string]*acpPersistentSession{},
+func TestCouncilSeatRosterIncludesRequestSpec(t *testing.T) {
+	pool := makeTempCouncilPool(t, `{"openrouter_model_id":"deepseek/deepseek-v4-flash","endpoint_tag":"deepinfra/fp4","quantization":"fp4","request":{"temperature":0,"top_p":1,"max_tokens":32},"persona":"personas/juror.txt"}`)
+	council, err := sampleCouncil(pool, filepath.Dir(pool), 1)
+	if err != nil {
+		t.Fatalf("sampleCouncil error = %v", err)
 	}
-	_, err := rc.ensureCouncilACPSession(context.Background(), CouncilSeat{MemberID: "C1", Model: "openai://gpt-5?tools=search"})
-	if err == nil || !strings.Contains(err.Error(), "does not allow web-search-enabled model") {
-		t.Fatalf("ensureCouncilACPSession error = %v, want web-search rejection", err)
+	roster := councilSeatRoster(council, []map[string]any{{"member_id": "C1", "status": "removed"}})
+	if len(roster) != 1 {
+		t.Fatalf("roster length = %d, want 1", len(roster))
+	}
+	member := roster[0]
+	if member["status"] != "removed" || member["persona_filename"] != "personas/juror.txt" {
+		t.Fatalf("member metadata = %#v", member)
+	}
+	requestSpec := mapAny(member["request_spec"])
+	if requestSpec["endpoint"] != "openrouter" || requestSpec["model"] != "deepseek/deepseek-v4-flash" {
+		t.Fatalf("request_spec model = %#v", requestSpec)
+	}
+	provider := mapAny(requestSpec["provider"])
+	only := stringList(provider["only"])
+	if len(only) != 1 || only[0] != "deepinfra/fp4" {
+		t.Fatalf("provider.only = %#v", provider["only"])
+	}
+	quantizations := stringList(provider["quantizations"])
+	if len(quantizations) != 1 || quantizations[0] != "fp4" {
+		t.Fatalf("provider.quantizations = %#v", provider["quantizations"])
+	}
+	request := mapAny(requestSpec["request"])
+	if request["temperature"] == nil || request["top_p"] == nil || request["max_tokens"] == nil {
+		t.Fatalf("request = %#v", request)
 	}
 }
 
@@ -1575,37 +1540,6 @@ func TestBuildCouncilPromptIncludesPersonaAndRecord(t *testing.T) {
 	}
 }
 
-func TestCloseACPSessionsClosesAndClears(t *testing.T) {
-	t.Parallel()
-
-	closed := make([]string, 0, 2)
-	rc := &runContext{
-		acpSessions: map[string]*acpPersistentSession{
-			"defendant": {
-				cleanup: func() error {
-					closed = append(closed, "defendant")
-					return nil
-				},
-			},
-			"plaintiff": {
-				cleanup: func() error {
-					closed = append(closed, "plaintiff")
-					return nil
-				},
-			},
-		},
-	}
-	if err := rc.closeACPSessions(); err != nil {
-		t.Fatalf("closeACPSessions returned error: %v", err)
-	}
-	if len(rc.acpSessions) != 0 {
-		t.Fatalf("closeACPSessions left %d sessions", len(rc.acpSessions))
-	}
-	if got, want := closed, []string{"defendant", "plaintiff"}; !slices.Equal(got, want) {
-		t.Fatalf("close order = %#v, want %#v", got, want)
-	}
-}
-
 func TestIsFunctionArgumentParseError(t *testing.T) {
 	t.Parallel()
 
@@ -1679,12 +1613,12 @@ func TestExecuteCouncilOpportunityRetriesAfterOversizeResponse(t *testing.T) {
 	}
 }
 
-func TestExecuteCouncilOpportunityDismissesAfterRepeatedOversizeResponses(t *testing.T) {
+func TestExecuteCouncilOpportunityFailsMemberAfterRepeatedOversizeResponses(t *testing.T) {
 	origPromptBaseDir := promptBaseDir
 	promptBaseDir = filepath.Join("..", "..", "prompts")
 	defer func() { promptBaseDir = origPromptBaseDir }()
 
-	rc := newCouncilOpportunityTestContext(t, "invalid_response")
+	rc := newCouncilOpportunityTestContext(t, opportunityFailureAttemptsExhausted)
 	rc.cfg.Runtime.InvalidAttemptLimit = 2
 	client := &fakeCouncilResponseClient{
 		responses: []openaiapi.Response{
@@ -1698,8 +1632,8 @@ func TestExecuteCouncilOpportunityDismissesAfterRepeatedOversizeResponses(t *tes
 	if client.calls != 2 {
 		t.Fatalf("client calls = %d, want 2", client.calls)
 	}
-	assertRemovedCouncilMember(t, rc, "invalid_response")
-	if got := mapString(rc.events[0].Payload["cause"]); !strings.Contains(got, "exceeded invalid-attempt limit") || !strings.Contains(got, "byte limit") {
+	assertFailedCouncilMember(t, rc, opportunityFailureAttemptsExhausted)
+	if got := mapString(rc.events[1].Payload["cause"]); !strings.Contains(got, "exceeded invalid-attempt limit") || !strings.Contains(got, "byte limit") {
 		t.Fatalf("cause = %q, want invalid-attempt byte-limit cause", got)
 	}
 }
@@ -1707,26 +1641,26 @@ func TestExecuteCouncilOpportunityDismissesAfterRepeatedOversizeResponses(t *tes
 func TestRemoveTimedOutCouncilMemberRecordsEvent(t *testing.T) {
 	t.Parallel()
 
-	rc := newCouncilRemovalTestContext(t, "timed_out")
-	opportunity := Opportunity{Phase: "deliberation"}
+	rc := newCouncilRemovalTestContext(t, opportunityFailureDeadline)
+	opportunity := Opportunity{ID: "deliberation:1:C1", Role: "council", Phase: "deliberation"}
 	seat := CouncilSeat{MemberID: "C1", Model: "openrouter://openai/gpt-4o"}
 	if err := rc.removeTimedOutCouncilMember(opportunity, seat, context.DeadlineExceeded); err != nil {
 		t.Fatalf("removeTimedOutCouncilMember returned error: %v", err)
 	}
-	assertRemovedCouncilMember(t, rc, "timed_out")
+	assertFailedCouncilMember(t, rc, opportunityFailureDeadline)
 }
 
 func TestRemoveRequestFailedCouncilMemberRecordsEvent(t *testing.T) {
 	t.Parallel()
 
-	rc := newCouncilRemovalTestContext(t, "request_failed")
-	opportunity := Opportunity{Phase: "deliberation"}
+	rc := newCouncilRemovalTestContext(t, opportunityFailureRequestFailed)
+	opportunity := Opportunity{ID: "deliberation:1:C1", Role: "council", Phase: "deliberation"}
 	seat := CouncilSeat{MemberID: "C1", Model: "openrouter://anthropic/claude-3.7-sonnet"}
 	if err := rc.removeRequestFailedCouncilMember(opportunity, seat, fmt.Errorf("responses request failed: 404 model not found")); err != nil {
 		t.Fatalf("removeRequestFailedCouncilMember returned error: %v", err)
 	}
-	assertRemovedCouncilMember(t, rc, "request_failed")
-	if got := mapString(rc.events[0].Payload["cause"]); !strings.Contains(got, "404") {
+	assertFailedCouncilMember(t, rc, opportunityFailureRequestFailed)
+	if got := mapString(rc.events[1].Payload["cause"]); !strings.Contains(got, "404") {
 		t.Fatalf("cause = %q, want 404 marker", got)
 	}
 }
@@ -1755,12 +1689,12 @@ func (c *fakeCouncilResponseClient) CreateResponseWithRequestSpec(_ context.Cont
 	return c.CreateResponseWithMaxOutputTokens(context.Background(), "", inputItems, nil, "", nil, nil)
 }
 
-func newCouncilOpportunityTestContext(t *testing.T, removalStatus string) *runContext {
+func newCouncilOpportunityTestContext(t *testing.T, failureReason string) *runContext {
 	t.Helper()
 
 	dir := t.TempDir()
 	enginePath := filepath.Join(dir, "engine.sh")
-	script := councilEngineScript(removalStatus)
+	script := councilEngineScript(failureReason)
 	if err := os.WriteFile(enginePath, []byte(script), 0o755); err != nil {
 		t.Fatalf("write engine script: %v", err)
 	}
@@ -1797,12 +1731,12 @@ func newCouncilOpportunityTestContext(t *testing.T, removalStatus string) *runCo
 	}
 }
 
-func newCouncilRemovalTestContext(t *testing.T, status string) *runContext {
+func newCouncilRemovalTestContext(t *testing.T, failureReason string) *runContext {
 	t.Helper()
 
 	dir := t.TempDir()
 	enginePath := filepath.Join(dir, "engine.sh")
-	script := councilEngineScript(status)
+	script := councilEngineScript(failureReason)
 	if err := os.WriteFile(enginePath, []byte(script), 0o755); err != nil {
 		t.Fatalf("write engine script: %v", err)
 	}
@@ -1819,19 +1753,19 @@ func newCouncilRemovalTestContext(t *testing.T, status string) *runContext {
 	}
 }
 
-func councilEngineScript(removalStatus string) string {
-	removalState := fmt.Sprintf(`{"ok":true,"state":{"case":{"phase":"deliberation","resolution":"","council_members":[{"member_id":"C1","status":"%s"}]}}}`, removalStatus)
+func councilEngineScript(failureReason string) string {
+	failureState := fmt.Sprintf(`{"ok":true,"state":{"case":{"phase":"deliberation","resolution":"","council_members":[{"member_id":"C1","status":"failed","failure_reason":"%s","failure_opportunity_id":"deliberation:1:C1","failure_message":"member failed"}]}}}`, failureReason)
 	voteState := `{"ok":true,"state":{"case":{"phase":"deliberation","resolution":"","council_members":[{"member_id":"C1","status":"seated"}],"council_votes":[{"round":1,"member_id":"C1","vote":"demonstrated","rationale":"record sufficient"}]}}}`
 	return fmt.Sprintf(`#!/bin/sh
 request=$(cat)
 case "$request" in
-  *remove_council_member*) printf '%%s\n' '%s' ;;
+  *fail_opportunity*) printf '%%s\n' '%s' ;;
   *) printf '%%s\n' '%s' ;;
 esac
-`, removalState, voteState)
+`, failureState, voteState)
 }
 
-func assertRemovedCouncilMember(t *testing.T, rc *runContext, status string) {
+func assertFailedCouncilMember(t *testing.T, rc *runContext, reason string) {
 	t.Helper()
 
 	caseObj := mapAny(rc.state["case"])
@@ -1839,20 +1773,30 @@ func assertRemovedCouncilMember(t *testing.T, rc *runContext, status string) {
 	if len(members) != 1 {
 		t.Fatalf("council member count = %d, want 1", len(members))
 	}
-	if got := mapString(members[0]["status"]); got != status {
-		t.Fatalf("member status = %q, want %s", got, status)
+	if got := mapString(members[0]["status"]); got != "failed" {
+		t.Fatalf("member status = %q, want failed", got)
 	}
-	if len(rc.events) != 1 {
-		t.Fatalf("event count = %d, want 1", len(rc.events))
+	if got := mapString(members[0]["failure_reason"]); got != reason {
+		t.Fatalf("failure_reason = %q, want %s", got, reason)
+	}
+	if len(rc.events) != 2 {
+		t.Fatalf("event count = %d, want 2", len(rc.events))
 	}
 	event := rc.events[0]
+	if event.Type != "opportunity_failed" {
+		t.Fatalf("first event type = %q, want opportunity_failed", event.Type)
+	}
+	event = rc.events[1]
 	if event.Type != "council_member_removed" {
 		t.Fatalf("event type = %q, want council_member_removed", event.Type)
 	}
 	if got := mapString(event.Payload["member_id"]); got != "C1" {
 		t.Fatalf("member_id = %q, want C1", got)
 	}
-	if got := mapString(event.Payload["status"]); got != status {
-		t.Fatalf("status = %q, want %s", got, status)
+	if got := mapString(event.Payload["status"]); got != "failed" {
+		t.Fatalf("status = %q, want failed", got)
+	}
+	if got := mapString(event.Payload["failure_reason"]); got != reason {
+		t.Fatalf("failure_reason = %q, want %s", got, reason)
 	}
 }

@@ -4,7 +4,7 @@
 
 The Lawyer API lets an outside process act as a plaintiff lawyer, defendant lawyer, or observer in an arbitration.  AAR owns the case state, turn order, evidence store, filing validation, deadlines, attempts, and event log.  A caller uses HTTP to ask what the role can do, then executes one returned tool at a time.  Lawyers can also send private work notes for operator analysis; those notes are written to `work-notes.ndjson` and do not become part of the case record.
 
-The first implementation serves one case from one `aar case` process.  Each request includes `case_id` and `role_id`; `case_id` is required and returned unchanged, but the server does not use it to select a case yet.  Front ends such as a CLI, MCP server, ACP service, or agent runner should be separate clients built on this API.
+The first implementation serves one case from one `aar case` process.  Each request includes `case_id` and `role_id`; `case_id` is required and returned unchanged, but the server does not use it to select a case yet.  Front ends such as a CLI, MCP server, or agent runner should be separate clients built on this API.
 
 ## Endpoints
 

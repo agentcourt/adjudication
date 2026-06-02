@@ -6,59 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
-	openaiapi "adjudication/common/openai"
+	"adjudication/common/modelrequest"
 	"adjudication/common/persona"
-	xproxy "adjudication/common/xproxy"
 )
-
-func maybeStartXProxy(configPath string, port int) (*xproxy.XProxyServer, error) {
-	if port <= 0 {
-		port = xproxy.DefaultPort
-	}
-	if xproxyHealthy(port) {
-		return nil, nil
-	}
-	server, err := xproxy.StartXProxyServer(xproxy.XProxyOptions{
-		ConfigPath: configPath,
-		Port:       port,
-	})
-	if err != nil {
-		return nil, err
-	}
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if xproxyHealthy(port) {
-			return server, nil
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	_ = server.Close()
-	return nil, fmt.Errorf("xproxy did not become healthy on 127.0.0.1:%d", port)
-}
-
-func xproxyHealthy(port int) bool {
-	client := http.Client{Timeout: 500 * time.Millisecond}
-	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/healthz", port))
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
-}
-
-func newXProxyClient(port int, timeout time.Duration) (*openaiapi.Client, error) {
-	if port <= 0 {
-		port = xproxy.DefaultPort
-	}
-	return openaiapi.New("xproxy", fmt.Sprintf("http://127.0.0.1:%d/v1", port), false, timeout)
-}
 
 func loadCaseFiles(dir string) ([]CaseFile, error) {
 	entries, err := os.ReadDir(dir)
@@ -212,13 +168,85 @@ func councilSeatMaps(council []CouncilSeat) []map[string]any {
 	out := make([]map[string]any, 0, len(council))
 	for _, seat := range council {
 		out = append(out, map[string]any{
-			"member_id":        seat.MemberID,
-			"model":            seat.Model,
-			"persona_filename": seat.PersonaFile,
-			"status":           "seated",
+			"member_id":              seat.MemberID,
+			"model":                  seat.Model,
+			"persona_filename":       seat.PersonaFile,
+			"status":                 "seated",
+			"failure_reason":         "",
+			"failure_opportunity_id": "",
+			"failure_message":        "",
 		})
 	}
 	return out
+}
+
+func councilSeatRoster(council []CouncilSeat, caseMembers []map[string]any) []map[string]any {
+	statusByID := map[string]string{}
+	failureByID := map[string]map[string]any{}
+	for _, member := range caseMembers {
+		memberID := mapString(member["member_id"])
+		if memberID == "" {
+			continue
+		}
+		statusByID[memberID] = mapString(member["status"])
+		failureByID[memberID] = map[string]any{
+			"failure_reason":         mapString(member["failure_reason"]),
+			"failure_opportunity_id": mapString(member["failure_opportunity_id"]),
+			"failure_message":        mapString(member["failure_message"]),
+		}
+	}
+	out := make([]map[string]any, 0, len(council))
+	for _, seat := range council {
+		status := statusByID[seat.MemberID]
+		if status == "" {
+			status = "seated"
+		}
+		entry := map[string]any{
+			"member_id":        seat.MemberID,
+			"model":            seat.Model,
+			"persona_filename": seat.PersonaFile,
+			"status":           status,
+		}
+		if status == "failed" {
+			for key, value := range failureByID[seat.MemberID] {
+				if mapString(value) != "" {
+					entry[key] = value
+				}
+			}
+		}
+		if requestSpec := councilSeatRequestSpecMap(seat); len(requestSpec) > 0 {
+			entry["request_spec"] = requestSpec
+			if provider, _ := requestSpec["provider"].(map[string]any); len(provider) > 0 {
+				entry["provider"] = provider
+			}
+			if request, _ := requestSpec["request"].(map[string]any); len(request) > 0 {
+				entry["request"] = request
+			}
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+func councilSeatRequestSpecMap(seat CouncilSeat) map[string]any {
+	if seat.RequestSpec != nil {
+		raw, err := json.Marshal(seat.RequestSpec)
+		if err == nil {
+			var out map[string]any
+			if json.Unmarshal(raw, &out) == nil {
+				return out
+			}
+		}
+	}
+	spec, err := modelrequest.ParseLegacy(seat.Model)
+	if err != nil {
+		return nil
+	}
+	return map[string]any{
+		"endpoint": spec.Endpoint,
+		"model":    spec.Model,
+		"persona":  seat.PersonaFile,
+	}
 }
 
 func caseFileMetas(files []CaseFile) []CaseFileMeta {

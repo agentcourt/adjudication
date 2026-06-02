@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-
-	"adjudication/common/xproxy"
 )
 
 const openRouterMetadataHeader = "X-OpenRouter-Experimental-Metadata"
@@ -36,17 +34,57 @@ type Spec struct {
 	VariantMetadata map[string]any       `json:"variant_metadata,omitempty"`
 }
 
+type ModelRef struct {
+	Endpoint string
+	Model    string
+	Query    string
+}
+
+func ParseModelRef(model string) (ModelRef, error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return ModelRef{}, errors.New("model must be non-empty string")
+	}
+	endpoint, rest, ok := strings.Cut(model, "://")
+	if !ok {
+		return ModelRef{}, fmt.Errorf("model %q must be endpoint://model", model)
+	}
+	endpoint = strings.TrimSpace(endpoint)
+	rest = strings.TrimSpace(rest)
+	if endpoint == "" {
+		return ModelRef{}, fmt.Errorf("model %q has empty endpoint", model)
+	}
+	if rest == "" {
+		return ModelRef{}, fmt.Errorf("model %q has empty model", model)
+	}
+	if strings.Contains(endpoint, " ") || strings.ContainsAny(endpoint, "/?#") {
+		return ModelRef{}, fmt.Errorf("model %q has invalid endpoint %q", model, endpoint)
+	}
+	if strings.Contains(rest, "#") {
+		return ModelRef{}, fmt.Errorf("model %q must not include a fragment", model)
+	}
+	modelID, query, _ := strings.Cut(rest, "?")
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		return ModelRef{}, fmt.Errorf("model %q has empty model id", model)
+	}
+	if strings.ContainsAny(modelID, " \t\r\n") {
+		return ModelRef{}, fmt.Errorf("model %q has whitespace in model id", model)
+	}
+	return ModelRef{Endpoint: endpoint, Model: modelID, Query: query}, nil
+}
+
 func ParseLegacy(model string) (Spec, error) {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		return Spec{}, errors.New("model must be non-empty string")
 	}
-	parsed, err := xproxy.ParseXProxyModel(model)
+	parsed, err := ParseModelRef(model)
 	if err != nil {
 		return Spec{}, err
 	}
 	_, rest, _ := strings.Cut(model, "://")
-	return Spec{Endpoint: parsed.Endpoint, Model: rest}, nil
+	return Spec{Endpoint: parsed.Endpoint, Model: strings.TrimSpace(rest)}, nil
 }
 
 func ParseJSON(data []byte) (Spec, error) {
@@ -108,7 +146,7 @@ func ParseMap(raw map[string]any) (Spec, error) {
 			out.Headers[openRouterMetadataHeader] = "enabled"
 		}
 	}
-	if _, err := xproxy.ParseXProxyModel(out.RuntimeModel()); err != nil {
+	if _, err := ParseModelRef(out.RuntimeModel()); err != nil {
 		return Spec{}, fmt.Errorf("invalid request model %q: %w", out.RuntimeModel(), err)
 	}
 	return out, nil
@@ -129,10 +167,13 @@ func (s Spec) RuntimeModel() string {
 func (s Spec) UpstreamModel() string {
 	model := strings.TrimSpace(s.Model)
 	if strings.Contains(model, "://") {
-		parsed, err := xproxy.ParseXProxyModel(model)
+		parsed, err := ParseModelRef(model)
 		if err == nil {
-			return parsed.ModelOut
+			return parsed.Model
 		}
+	}
+	if strings.Contains(model, "?") {
+		model, _, _ = strings.Cut(model, "?")
 	}
 	return model
 }

@@ -88,6 +88,39 @@ func TestCouncilWaitReturnsDoneOnTerminalCase(t *testing.T) {
 	}
 }
 
+func TestCouncilWaitReturnsFailedForFailedMember(t *testing.T) {
+	api, _ := testCouncilAPIWithTurn(t)
+	api.active = nil
+	caseObj := mapAny(api.rc.state["case"])
+	caseObj["council_members"] = []map[string]any{{
+		"member_id":              "C1",
+		"status":                 "failed",
+		"failure_reason":         opportunityFailureAttemptsExhausted,
+		"failure_opportunity_id": "deliberation:1:C1",
+		"failure_message":        "Council member C1 exhausted attempts.",
+	}}
+
+	status, got := callCouncilAPIWait(t, api, "case_id=arb-1&member_id=C1&timeout_ms=100")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["status"] != "failed" {
+		t.Fatalf("status field = %#v, want failed", got["status"])
+	}
+	wait, ok := got["wait"].(map[string]any)
+	if !ok || wait["reason"] != "failed" {
+		t.Fatalf("wait = %#v, want reason failed", got["wait"])
+	}
+	failure, ok := got["failure"].(map[string]any)
+	if !ok || failure["reason"] != opportunityFailureAttemptsExhausted || failure["member_id"] != "C1" {
+		t.Fatalf("failure = %#v", got["failure"])
+	}
+	tools := mapList(got["tools"])
+	if len(tools) != 0 {
+		t.Fatalf("tools = %#v, want none", tools)
+	}
+}
+
 func TestCouncilDoRequiresActiveOpportunityID(t *testing.T) {
 	api, turn := testCouncilAPIWithTurn(t)
 

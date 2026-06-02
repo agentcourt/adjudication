@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"adjudication/common/modelrequest"
-	"adjudication/common/xproxy"
 )
 
 type Spec struct {
@@ -34,7 +33,7 @@ func ParseRecord(record string, baseDir string) (Spec, error) {
 	if model == "" || fileRef == "" {
 		return Spec{}, fmt.Errorf("invalid persona record: %s", line)
 	}
-	if _, err := xproxy.ParseXProxyModel(model); err != nil {
+	if _, err := modelrequest.ParseModelRef(model); err != nil {
 		return Spec{}, fmt.Errorf("invalid persona model %q: %w", model, err)
 	}
 	return loadSpecPersona(model, fileRef, baseDir, nil)

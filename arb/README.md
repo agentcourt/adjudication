@@ -89,12 +89,8 @@ curl -sS -X POST "$BASE/do" \
 | `--attorney-instructions` | Standing lawyer instructions file. Defaults to `./attorney-instructions/default.md` when present. |
 | `--lawyerapi-addr` | Lawyer API listen address. Default: `127.0.0.1:0`. |
 | `--lawyer-timeout-seconds` | Lawyer turn timeout override. Default: 900 seconds. |
-| `--council-backend` | Council backend. `direct` uses xproxy. `pi` runs jurors as read-only Pi ACP agents. |
-| `--council-acp-command` | ACP command for `--council-backend pi`. Defaults to `<common-root>/pi-container/acp-podman.sh` when PI council is selected. |
-| `--council-acp-session-cwd` | Council ACP working-directory override for `--council-backend pi`. |
-| `--common-root` | Shared `common/` tree used for the pool, xproxy config, and PI council launcher. |
-| `--xproxy-config` | xproxy configuration file. Defaults under `common/`. |
-| `--xproxy-port` | xproxy port. Default: `18459`. |
+| `--council-backend` | Council backend. `direct` calls the selected model provider from the runner. `councilapi` waits for external council members through the Council API. |
+| `--common-root` | Shared `common/` tree used for the council pool and persona files. |
 | `--timeout-seconds` | Council LLM timeout override. |
 | `--max-response-bytes` | Maximum parsed response size override. |
 | `--invalid-attempt-limit` | Maximum invalid attempt count before a turn fails. |

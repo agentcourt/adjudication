@@ -17,8 +17,6 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client coun
 		return fmt.Errorf("unknown council member %q", memberID)
 	}
 	switch NormalizeCouncilBackend(rc.cfg.CouncilBackend) {
-	case councilBackendPI:
-		return rc.executeCouncilACPOpportunity(ctx, opportunity, seat)
 	case councilBackendAPI:
 		return rc.executeCouncilAPIOpportunity(ctx, opportunity, seat)
 	}
@@ -158,10 +156,7 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client coun
 		return rc.recordEvent("council_vote", "council", opportunity.Phase, eventPayload)
 	}
 	limitErr := formatInvalidAttemptLimitError(fmt.Sprintf("council member %s", memberID), invalidAttemptReasons)
-	if lastInvalidAttemptWasOversize(invalidAttemptReasons) {
-		return rc.removeInvalidResponseCouncilMember(opportunity, seat, limitErr)
-	}
-	return limitErr
+	return rc.removeInvalidResponseCouncilMember(opportunity, seat, limitErr)
 }
 
 func (rc *runContext) createCouncilResponse(
@@ -189,42 +184,27 @@ func (rc *runContext) createCouncilResponse(
 }
 
 func (rc *runContext) removeTimedOutCouncilMember(opportunity Opportunity, seat CouncilSeat, cause error) error {
-	return rc.removeCouncilMember(opportunity, seat, "timed_out", cause)
+	return rc.removeCouncilMember(opportunity, seat, opportunityFailureDeadline, cause)
 }
 
 func (rc *runContext) removeRequestFailedCouncilMember(opportunity Opportunity, seat CouncilSeat, cause error) error {
-	return rc.removeCouncilMember(opportunity, seat, "request_failed", cause)
+	return rc.removeCouncilMember(opportunity, seat, opportunityFailureRequestFailed, cause)
 }
 
 func (rc *runContext) removeInvalidResponseCouncilMember(opportunity Opportunity, seat CouncilSeat, cause error) error {
-	return rc.removeCouncilMember(opportunity, seat, "invalid_response", cause)
+	return rc.removeCouncilMember(opportunity, seat, opportunityFailureAttemptsExhausted, cause)
 }
 
-func (rc *runContext) removeCouncilMember(opportunity Opportunity, seat CouncilSeat, status string, cause error) error {
+func (rc *runContext) removeCouncilMember(opportunity Opportunity, seat CouncilSeat, reason string, cause error) error {
 	memberID := seat.MemberID
-	stepResp, err := rc.cfg.Engine.Step(rc.state, "remove_council_member", "system", map[string]any{
-		"member_id": memberID,
-		"status":    status,
-	})
-	if err != nil {
-		return err
-	}
-	if ok, _ := stepResp["ok"].(bool); !ok {
-		return fmt.Errorf("remove_council_member rejected: %s", mapString(stepResp["error"]))
-	}
-	rc.state = mapAny(stepResp["state"])
-	if rc.lawyerAPI != nil {
-		rc.lawyerAPI.signalChanged()
-	}
-	if rc.councilAPI != nil {
-		rc.councilAPI.signalChanged()
-	}
-	return rc.recordEvent("council_member_removed", "system", opportunity.Phase, map[string]any{
+	if err := rc.failOpportunity(opportunity, reason, cause.Error(), map[string]any{
 		"member_id": memberID,
 		"model":     seat.Model,
-		"status":    status,
-		"cause":     cause.Error(),
-	})
+	}); err != nil {
+		return err
+	}
+	rc.signalRoleAPIs()
+	return nil
 }
 
 func (rc *runContext) findCouncilSeat(memberID string) (CouncilSeat, bool) {
@@ -294,13 +274,6 @@ func councilResponseOversizeCorrection(size int, limit int) string {
 	return fmt.Sprintf("Your response payload was %d bytes; the limit is %d bytes. Call submit_council_vote exactly once with only vote and a concise rationale. Do not include analysis outside the tool call.", size, limit)
 }
 
-func lastInvalidAttemptWasOversize(reasons []string) bool {
-	if len(reasons) == 0 {
-		return false
-	}
-	return strings.HasPrefix(strings.TrimSpace(reasons[len(reasons)-1]), "council response exceeded byte limit")
-}
-
 func (rc *runContext) renderCouncilRecord() string {
 	caseObj := mapAny(rc.state["case"])
 	sections := []string{
@@ -318,6 +291,42 @@ func (rc *runContext) renderCouncilRecord() string {
 		sections = append(sections, "Prior rounds:\n"+prior)
 	}
 	return strings.Join(sections, "\n\n")
+}
+
+func (rc *runContext) councilView(seat CouncilSeat, opportunity Opportunity) map[string]any {
+	caseObj := mapAny(rc.state["case"])
+	return map[string]any{
+		"proposition":       rc.complaint.Proposition,
+		"evidence_standard": currentEvidenceStandard(rc.state, rc.cfg.Policy),
+		"phase":             currentPhase(rc.state),
+		"member": map[string]any{
+			"member_id":        seat.MemberID,
+			"model":            seat.Model,
+			"persona_filename": seat.PersonaFile,
+		},
+		"opportunity": map[string]any{
+			"id":            opportunity.ID,
+			"role":          opportunity.Role,
+			"phase":         opportunity.Phase,
+			"objective":     opportunity.Objective,
+			"allowed_tools": opportunity.AllowedTools,
+			"may_pass":      opportunity.MayPass,
+		},
+		"record": map[string]any{
+			"evidence":           rc.listVisibleEvidence(),
+			"openings":           mapList(caseObj["openings"]),
+			"arguments":          mapList(caseObj["arguments"]),
+			"rebuttals":          mapList(caseObj["rebuttals"]),
+			"surrebuttals":       mapList(caseObj["surrebuttals"]),
+			"closings":           mapList(caseObj["closings"]),
+			"submitted_evidence": mapList(caseObj["submitted_evidence"]),
+			"exhibits":           rc.attorneyExhibits(),
+			"technical_reports":  mapList(caseObj["technical_reports"]),
+			"prior_council_votes": mapList(
+				caseObj["council_votes"],
+			),
+		},
+	}
 }
 
 func renderFilingList(items []map[string]any) string {

@@ -112,6 +112,25 @@ func NewFromEnv(online bool, timeout time.Duration) (*Client, error) {
 	return New(apiKey, baseURL, online, timeout)
 }
 
+func NewForEndpoint(endpoint string, online bool, timeout time.Duration) (*Client, error) {
+	switch strings.ToLower(strings.TrimSpace(endpoint)) {
+	case "openai":
+		apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+		if apiKey == "" {
+			return nil, fmt.Errorf("OPENAI_API_KEY is required for openai models")
+		}
+		return New(apiKey, "https://api.openai.com/v1", online, timeout)
+	case "openrouter":
+		apiKey := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
+		if apiKey == "" {
+			return nil, fmt.Errorf("OPENROUTER_API_KEY is required for openrouter models")
+		}
+		return New(apiKey, "https://openrouter.ai/api/v1", online, timeout)
+	default:
+		return nil, fmt.Errorf("unsupported model endpoint %q", endpoint)
+	}
+}
+
 func (c *Client) CreateResponse(
 	ctx context.Context,
 	model string,
@@ -266,10 +285,6 @@ func requestOptions(spec *modelrequest.Spec) []option.RequestOption {
 }
 
 func modelForClient(spec modelrequest.Spec, baseURL string) string {
-	baseURL = strings.ToLower(strings.TrimSpace(baseURL))
-	if strings.Contains(baseURL, "127.0.0.1") || strings.Contains(baseURL, "localhost") || strings.Contains(baseURL, "xproxy") {
-		return spec.RuntimeModel()
-	}
 	return spec.UpstreamModel()
 }
 

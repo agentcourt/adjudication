@@ -49,18 +49,17 @@ AAR exposes read-only evidence tools through the HTTP Lawyer API in every active
 - `begin_evidence_upload`, `write_evidence_chunk`, and `commit_evidence_upload` submit larger source evidence by chunks.
 - `submit_decision` submits the legal act for the current opportunity.
 
-## Juror methods
+## Council API tools
 
-When `aar case` runs with `--council-backend pi`, council members are Pi ACP juror agents. Juror evidence access is read-only and available only during deliberation. Jurors receive these AAR methods:
+When `aar case` runs with `--council-backend councilapi`, council members use read-only evidence tools during deliberation.  These tools are available through the Council HTTP API and through the MCP service that forwards to it:
 
-- `aar_get_case` returns the visible arbitration record.
-- `aar_list_evidence` lists visible evidence metadata.
-- `aar_stat_evidence` returns metadata, allowed read operations, and remaining limits for one evidence.
-- `aar_read_evidence_range` returns a bounded byte range as base64 and logs an `evidence_read` event with role `council`.
-- `aar_materialize_evidence` copies exact bytes into the managed juror workspace and logs an `evidence_materialized` event with role `council`.
-- `aar_submit_council_vote` submits the juror's vote through the same Lean `submit_council_vote` transition used by the direct council path.
+- `get_case` returns the visible arbitration record.
+- `list_evidence` lists visible evidence metadata.
+- `stat_evidence` returns metadata, allowed read operations, and remaining limits for one evidence.
+- `read_evidence_range` returns a bounded byte range as base64 and logs an `evidence_read` event with role `council`.
+- `submit_council_vote` submits the council member's vote through the same Lean `submit_council_vote` transition used by the direct council path.
 
-Jurors do not receive upload, submit-evidence, or attorney-decision methods. AAR does not grant jurors web search or a path to introduce new facts. The Pi backend rejects council models that request web-search tools. The procedural boundary is: attorneys build the record; jurors examine the admitted record.
+Council members do not receive upload, submit-evidence, or lawyer-decision methods.  AAR does not grant council members a path to introduce new facts.  The procedural boundary is: lawyers build the record; council members examine the admitted record.
 
 ## Chunked upload methods
 

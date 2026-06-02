@@ -410,6 +410,45 @@ func TestLawyerWaitReturnsDoneOnTerminalCase(t *testing.T) {
 	}
 }
 
+func TestLawyerAPIsReportFailedCase(t *testing.T) {
+	api, _ := testLawyerAPIWithTurn()
+	caseObj := mapAny(api.rc.state["case"])
+	caseObj["status"] = "failed"
+	caseObj["phase"] = "arguments"
+	caseObj["failure"] = map[string]any{
+		"failure_type":   "opportunity_failed",
+		"role":           "plaintiff",
+		"phase":          "arguments",
+		"opportunity_id": "arguments:plaintiff",
+		"reason":         opportunityFailureDeadline,
+		"message":        "Plaintiff lawyer opportunity arguments:plaintiff failed because the deadline expired.",
+	}
+
+	status, got := callLawyerAPIWait(t, api, "case_id=arb-1&role_id=plaintiff&timeout_ms=100")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["status"] != "failed" {
+		t.Fatalf("status field = %#v, want failed", got["status"])
+	}
+	wait, ok := got["wait"].(map[string]any)
+	if !ok || wait["reason"] != "failed" {
+		t.Fatalf("wait = %#v, want reason failed", got["wait"])
+	}
+	failure, ok := got["failure"].(map[string]any)
+	if !ok || failure["type"] != "opportunity_failed" || failure["reason"] != opportunityFailureDeadline {
+		t.Fatalf("failure = %#v", got["failure"])
+	}
+
+	_, got = callLawyerAPIResult(t, api, "case_id=arb-1&role_id=observer")
+	if got["status"] != "failed" {
+		t.Fatalf("result status = %#v, want failed", got["status"])
+	}
+	if got["result"] != nil {
+		t.Fatalf("result = %#v, want nil for failed case", got["result"])
+	}
+}
+
 func TestLawyerResultReportsPendingCase(t *testing.T) {
 	api, _ := testLawyerAPIWithTurn()
 

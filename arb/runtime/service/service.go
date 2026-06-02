@@ -61,8 +61,6 @@ type CaseCreateRequest struct {
 	CommonRoot              string   `json:"common_root,omitempty"`
 	EnginePath              string   `json:"engine_path,omitempty"`
 	CouncilPoolPath         string   `json:"council_pool_path,omitempty"`
-	XProxyConfigPath        string   `json:"xproxy_config_path,omitempty"`
-	XProxyPort              int      `json:"xproxy_port,omitempty"`
 	AttorneyInstructions    string   `json:"attorney_instructions,omitempty"`
 	PromptDir               string   `json:"prompt_dir,omitempty"`
 	AttorneyCommonPrompt    string   `json:"attorney_common_prompt,omitempty"`
@@ -326,13 +324,11 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 	addStringFlag("--common-root", firstNonEmpty(req.CommonRoot, s.cfg.CommonRoot))
 	addStringFlag("--engine", firstNonEmpty(req.EnginePath, s.cfg.EnginePath))
 	addStringFlag("--council-pool", req.CouncilPoolPath)
-	addStringFlag("--xproxy-config", req.XProxyConfigPath)
 	addStringFlag("--attorney-instructions", req.AttorneyInstructions)
 	addStringFlag("--prompt-dir", req.PromptDir)
 	addStringFlag("--attorney-common-prompt", req.AttorneyCommonPrompt)
 	addStringFlag("--attorney-arguments-prompt", req.AttorneyArgumentsPrompt)
 	addStringFlag("--attorney-rebuttals-prompt", req.AttorneyRebuttalsPrompt)
-	addIntFlag("--xproxy-port", req.XProxyPort)
 	addIntFlag("--lawyer-timeout-seconds", req.LawyerTimeoutSeconds)
 	addIntFlag("--timeout-seconds", req.CouncilTimeoutSeconds)
 	addIntFlag("--invalid-attempt-limit", req.InvalidAttemptLimit)
@@ -458,6 +454,9 @@ func (s *Server) waitChild(rec *CaseRecord) {
 	switch {
 	case rec.canceling:
 		rec.Status = "canceled"
+	case exitCode == 0 && mapString(rec.Summary["status"]) == "failed":
+		rec.Status = "failed"
+		rec.Error = mapString(rec.Summary["error"])
 	case exitCode == 0:
 		rec.Status = "completed"
 	default:
@@ -720,20 +719,28 @@ func (s *Server) completedCouncilRead(w http.ResponseWriter, r *http.Request, re
 		writeJSON(w, http.StatusGone, map[string]any{"ok": false, "case_id": rec.CaseID, "member_id": memberID, "error": apiError("case_not_active", "case has no active runner and no readable final artifact")})
 		return
 	}
+	status := "done"
+	if mapString(run["status"]) == "failed" || mapString(mapAny(mapAny(run["final_state"])["case"])["status"]) == "failed" {
+		status = "failed"
+	}
 	resp := map[string]any{
 		"ok":        true,
 		"case_id":   rec.CaseID,
 		"member_id": memberID,
-		"status":    "done",
+		"status":    status,
 		"prompt":    "",
 		"tools":     []map[string]any{},
 		"turn":      nil,
+	}
+	if status == "failed" {
+		resp["error"] = mapString(run["error"])
+		resp["failure"] = mapAny(run["failure"])
 	}
 	if reason := mapString(run["final_reason"]); reason != "" {
 		resp["final_reason"] = reason
 	}
 	if pathBase(r.URL.Path) == "wait" {
-		resp["wait"] = map[string]any{"reason": "done", "version": 0, "state_version": stateVersionFromRun(run)}
+		resp["wait"] = map[string]any{"reason": status, "version": 0, "state_version": stateVersionFromRun(run)}
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -778,11 +785,17 @@ func (s *Server) startingCouncilRead(w http.ResponseWriter, r *http.Request, rec
 
 func finalStatusResponse(caseID string, roleID string, run map[string]any, includeWait bool) map[string]any {
 	caseObj := mapAny(mapAny(run["final_state"])["case"])
+	status := "done"
+	message := "The case is done."
+	if mapString(run["status"]) == "failed" || mapString(caseObj["status"]) == "failed" {
+		status = "failed"
+		message = "The case failed."
+	}
 	resp := map[string]any{
 		"ok":                  true,
 		"case_id":             caseID,
 		"role_id":             roleID,
-		"status":              "done",
+		"status":              status,
 		"phase":               mapString(run["phase"]),
 		"case_status":         mapString(caseObj["status"]),
 		"resolution":          mapString(run["resolution"]),
@@ -790,13 +803,17 @@ func finalStatusResponse(caseID string, roleID string, run map[string]any, inclu
 		"tools":               []map[string]any{},
 		"turn":                nil,
 		"current_opportunity": nil,
-		"message":             "The case is done.",
+		"message":             message,
+	}
+	if status == "failed" {
+		resp["error"] = mapString(run["error"])
+		resp["failure"] = mapAny(run["failure"])
 	}
 	if reason := mapString(run["final_reason"]); reason != "" {
 		resp["final_reason"] = reason
 	}
 	if includeWait {
-		resp["wait"] = map[string]any{"reason": "done", "version": 0, "state_version": stateVersionFromRun(run)}
+		resp["wait"] = map[string]any{"reason": status, "version": 0, "state_version": stateVersionFromRun(run)}
 	}
 	return resp
 }
@@ -805,6 +822,10 @@ func finalResultResponse(caseID string, roleID string, run map[string]any) map[s
 	finalState := mapAny(run["final_state"])
 	caseObj := mapAny(finalState["case"])
 	votes := mapList(caseObj["council_votes"])
+	status := "done"
+	if mapString(run["status"]) == "failed" || mapString(caseObj["status"]) == "failed" {
+		status = "failed"
+	}
 	resp := map[string]any{
 		"ok":          true,
 		"case_id":     caseID,
@@ -812,7 +833,7 @@ func finalResultResponse(caseID string, roleID string, run map[string]any) map[s
 		"turn":        nil,
 		"phase":       mapString(run["phase"]),
 		"case_status": mapString(caseObj["status"]),
-		"status":      "done",
+		"status":      status,
 		"result": map[string]any{
 			"resolution":         mapString(run["resolution"]),
 			"phase":              mapString(run["phase"]),
@@ -822,6 +843,11 @@ func finalResultResponse(caseID string, roleID string, run map[string]any) map[s
 			"vote_tally":         voteTally(votes),
 			"deliberation_round": intNumber(caseObj["deliberation_round"]),
 		},
+	}
+	if status == "failed" {
+		resp["error"] = mapString(run["error"])
+		resp["failure"] = mapAny(run["failure"])
+		resp["result"] = nil
 	}
 	if reason := mapString(run["final_reason"]); reason != "" {
 		resp["final_reason"] = reason
@@ -849,6 +875,10 @@ func (s *Server) handleCaseResult(w http.ResponseWriter, caseID string) {
 	}
 	run, err := readRunJSON(rec)
 	if err != nil {
+		if rec.Status == "failed" {
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "case_id": caseID, "status": "failed", "error": rec.Error})
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "case_id": caseID, "status": rec.Status, "message": "The case is still pending or has no final result."})
 		return
 	}

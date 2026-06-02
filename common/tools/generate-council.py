@@ -16,11 +16,9 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from urllib.error import URLError
 from urllib.request import urlopen
 
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
-DEFAULT_XPROXY_PORT = 18459
 SECONDS_PER_DAY = 86400.0
 
 
@@ -56,11 +54,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--num-personas", default="all", help="cluster-personas rows to sample from --cluster-input, or 'all'")
     parser.add_argument("--gene-dim", type=int, default=3, help="PCA dimensions per gene")
     parser.add_argument("--expires", type=float, default=7.0, help="Reuse intermediate files younger than this many days. Default: %(default)s. Use 0 to regenerate all intermediates")
-    parser.add_argument("--xproxy-port", type=int, default=0, help="xproxy port for health checks. Default uses PI_CONTAINER_XPROXY_PORT or 18459")
     parser.add_argument("--use-existing-metadata", action="store_true", help="Do not fetch OpenRouter metadata")
     parser.add_argument("--use-existing-latency", action="store_true", help="Do not run model-speed.sh")
     parser.add_argument("--use-existing-clusters", action="store_true", help="Do not run cluster-personas.py")
-    parser.add_argument("--no-xproxy-check", action="store_true", help="Skip xproxy health check before live probe/clustering")
     parser.add_argument("--dry-run", action="store_true", help="Print planned actions without changing files")
     return parser.parse_args(argv)
 
@@ -166,34 +162,6 @@ def fetch_metadata(url: str, out_path: Path, dry_run: bool) -> None:
     out_path.write_bytes(payload)
 
 
-def xproxy_port(args: argparse.Namespace) -> int:
-    if args.xproxy_port > 0:
-        return args.xproxy_port
-    raw = os.environ.get("PI_CONTAINER_XPROXY_PORT", "").strip()
-    if raw:
-        try:
-            port = int(raw)
-        except ValueError as exc:
-            raise SystemExit("PI_CONTAINER_XPROXY_PORT must be an integer") from exc
-        if port <= 0:
-            raise SystemExit("PI_CONTAINER_XPROXY_PORT must be positive")
-        return port
-    return DEFAULT_XPROXY_PORT
-
-
-def ensure_xproxy(port: int, dry_run: bool) -> None:
-    url = f"http://127.0.0.1:{port}/healthz"
-    print(f"check xproxy {url}")
-    if dry_run:
-        return
-    try:
-        with urlopen(url, timeout=2.0) as response:
-            if response.status != 200:
-                raise SystemExit(f"xproxy health check failed: HTTP {response.status}")
-    except URLError as exc:
-        raise SystemExit(f"xproxy is not reachable at {url}; start adc/.bin/adc xproxy first") from exc
-
-
 def read_noncomment_lines(path: Path) -> list[str]:
     rows: list[str] = []
     for raw in path.read_text().splitlines():
@@ -213,7 +181,7 @@ def build_models(latency_path: Path, models_path: Path, max_elapsed_ms: int, dry
         for row in csv.reader(handle):
             if not row or all(not cell.strip() for cell in row):
                 continue
-            if row[0].strip().lower() in {"model", "xproxy_model"}:
+            if row[0].strip().lower() in {"model", "runtime_model"}:
                 continue
             if len(row) < 3:
                 raise SystemExit(f"invalid latency row: {row}")
@@ -406,9 +374,6 @@ def main(argv: list[str]) -> int:
     elif is_fresh(model_latency, now, expires):
         use_fresh("model latency", [model_latency], root, now)
     else:
-        if not args.no_xproxy_check:
-            ensure_xproxy(xproxy_port(args), args.dry_run)
-        require_file(rel_path(root, "adc/.bin/adc"), "adc/.bin/adc")
         ensure_parent(model_latency, args.dry_run)
         ensure_parent(model_speed_log, args.dry_run)
         run_command(
@@ -444,8 +409,6 @@ def main(argv: list[str]) -> int:
     if args.use_existing_clusters or fresh_all(cluster_outputs, now, expires):
         use_fresh("cluster outputs", cluster_outputs, root, now)
     else:
-        if not args.no_xproxy_check:
-            ensure_xproxy(xproxy_port(args), args.dry_run)
         ensure_parent(clusters, args.dry_run)
         ensure_parent(pca, args.dry_run)
         ensure_parent(cluster_log, args.dry_run)

@@ -178,58 +178,6 @@ func listOfMaps(value any) []map[string]any {
 	}
 }
 
-func getCaseToolSpec() map[string]any {
-	return map[string]any{
-		"method":      acpCustomMethod("get_case"),
-		"toolName":    "aar_get_case",
-		"description": "Return the current visible arbitration record.",
-		"parameters":  map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
-	}
-}
-
-func listEvidenceToolSpec() map[string]any {
-	return map[string]any{
-		"method":      acpCustomMethod("list_evidence"),
-		"toolName":    "aar_list_evidence",
-		"description": "List visible immutable record evidence with metadata, including case-packet files and accepted submitted evidence.",
-		"parameters":  map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
-	}
-}
-
-func statEvidenceToolSpec() map[string]any {
-	return map[string]any{
-		"method":      acpCustomMethod("stat_evidence"),
-		"toolName":    "aar_stat_evidence",
-		"description": "Return metadata, allowed operations, and read limits for one visible evidence.",
-		"parameters": map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"evidence_id": map[string]any{"type": "string"},
-			},
-			"required":             []string{"evidence_id"},
-			"additionalProperties": false,
-		},
-	}
-}
-
-func readEvidenceRangeToolSpec() map[string]any {
-	return map[string]any{
-		"method":      acpCustomMethod("read_evidence_range"),
-		"toolName":    "aar_read_evidence_range",
-		"description": "Read a bounded byte range from one visible evidence as base64. This never mutates the record.",
-		"parameters": map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"evidence_id": map[string]any{"type": "string"},
-				"offset":      map[string]any{"type": "integer", "minimum": 0},
-				"length":      map[string]any{"type": "integer", "minimum": 1},
-			},
-			"required":             []string{"evidence_id", "offset", "length"},
-			"additionalProperties": false,
-		},
-	}
-}
-
 func decisionToolEnum(allowedTools []string) []string {
 	fallback := []string{
 		"record_opening_statement",
@@ -333,10 +281,6 @@ func evidenceReadAllowed(opportunity Opportunity) bool {
 
 func evidenceSubmissionAllowed(opportunity Opportunity) bool {
 	return opportunity.Phase == "arguments" || opportunity.Phase == "rebuttals" || opportunity.Phase == "surrebuttals"
-}
-
-func acpCustomMethod(name string) string {
-	return "_aar/" + strings.TrimSpace(name)
 }
 
 func (rc *runContext) attorneyView(opportunity Opportunity) map[string]any {

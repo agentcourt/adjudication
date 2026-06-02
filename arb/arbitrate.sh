@@ -25,8 +25,8 @@
 # The script assumes `.bin/aar` and `.bin/aarengine` have already been built. It
 # does not run the Makefile build target.
 #
-# If `$HOME/keys.txt` exists, the script sources it. The run requires
-# provider keys needed by the xproxy council configuration.
+# If `$HOME/keys.txt` exists, the script sources it. The direct council backend
+# requires provider keys for the selected council models.
 set -euo pipefail
 
 cd -- "$(dirname "$0")"

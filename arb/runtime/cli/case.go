@@ -18,13 +18,14 @@ import (
 )
 
 type caseRunSummary struct {
-	Status       string `json:"status"`
-	Result       string `json:"result,omitempty"`
-	VotesFor     *int   `json:"votes_for,omitempty"`
-	VotesAgainst *int   `json:"votes_against,omitempty"`
-	RunID        string `json:"run_id,omitempty"`
-	OutputDir    string `json:"out_dir,omitempty"`
-	Error        string `json:"error,omitempty"`
+	Status       string         `json:"status"`
+	Result       string         `json:"result,omitempty"`
+	VotesFor     *int           `json:"votes_for,omitempty"`
+	VotesAgainst *int           `json:"votes_against,omitempty"`
+	RunID        string         `json:"run_id,omitempty"`
+	OutputDir    string         `json:"out_dir,omitempty"`
+	Error        string         `json:"error,omitempty"`
+	Failure      map[string]any `json:"failure,omitempty"`
 }
 
 func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
@@ -48,11 +49,7 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	councilPool := fs.String("council-pool", "", "Council model/persona pool file. Default: <common-root>/data/personas/pool.csv")
 	lawyerAPIAddr := fs.String("lawyerapi-addr", "127.0.0.1:0", "Lawyer API listen address")
 	councilAPIAddr := fs.String("councilapi-addr", "127.0.0.1:0", "Council API listen address when --council-backend=councilapi")
-	councilBackend := fs.String("council-backend", "direct", "Council backend: direct, pi, or councilapi")
-	councilACPCommand := fs.String("council-acp-command", "", "Council ACP command override for --council-backend=pi. Default: <common-root>/pi-container/acp-podman.sh")
-	councilACPSessionCwd := fs.String("council-acp-session-cwd", "", "Council ACP session cwd override for --council-backend=pi")
-	xproxyConfig := fs.String("xproxy-config", "", "xproxy config path. Default: <common-root>/etc/xproxy.json")
-	xproxyPort := fs.Int("xproxy-port", 18459, "xproxy port")
+	councilBackend := fs.String("council-backend", "direct", "Council backend: direct or councilapi")
 	timeoutSeconds := fs.Int("timeout-seconds", 0, "Override runtime council LLM timeout in seconds")
 	lawyerTimeoutSeconds := fs.Int("lawyer-timeout-seconds", 0, "Override runtime lawyer turn timeout in seconds")
 	maxResponseBytes := fs.Int("max-response-bytes", 0, "Override runtime max parsed response bytes")
@@ -145,14 +142,6 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	if councilPoolPath == "" {
 		councilPoolPath = filepath.Join(commonRootResolved, "data", "personas", "pool.csv")
 	}
-	xproxyConfigPath := strings.TrimSpace(*xproxyConfig)
-	if xproxyConfigPath == "" {
-		xproxyConfigPath = filepath.Join(commonRootResolved, "etc", "xproxy.json")
-	}
-	councilACPCommandPath := strings.TrimSpace(*councilACPCommand)
-	if runner.NormalizeCouncilBackend(*councilBackend) == "pi" && councilACPCommandPath == "" {
-		councilACPCommandPath = filepath.Join(commonRootResolved, "pi-container", "acp-podman.sh")
-	}
 	effectiveRunID := strings.TrimSpace(*runID)
 	if effectiveRunID == "" {
 		effectiveRunID = fmt.Sprintf("run-%d", time.Now().UTC().UnixNano())
@@ -177,12 +166,8 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		LawyerAPIAddr:              strings.TrimSpace(*lawyerAPIAddr),
 		Policy:                     policy,
 		Runtime:                    runtimeLimits,
-		XProxyConfigPath:           xproxyConfigPath,
-		XProxyPort:                 *xproxyPort,
 		CouncilBackend:             runner.NormalizeCouncilBackend(*councilBackend),
 		CouncilAPIAddr:             strings.TrimSpace(*councilAPIAddr),
-		CouncilACPCommand:          councilACPCommandPath,
-		CouncilACPSessionCwd:       strings.TrimSpace(*councilACPSessionCwd),
 		Engine:                     lean.New([]string{*enginePath}),
 	}
 	result, err := runner.Run(context.Background(), cfg, complaint)
@@ -269,12 +254,14 @@ func validateExplicitCaseFilePath(path string) error {
 func buildCaseSuccessSummary(result runner.Result, outDir string) caseRunSummary {
 	votesFor, votesAgainst := finalVoteCounts(result.FinalState)
 	return caseRunSummary{
-		Status:       "ok",
+		Status:       strings.TrimSpace(result.Status),
 		Result:       strings.TrimSpace(result.Resolution),
 		VotesFor:     &votesFor,
 		VotesAgainst: &votesAgainst,
 		RunID:        strings.TrimSpace(result.RunID),
 		OutputDir:    strings.TrimSpace(outDir),
+		Error:        strings.TrimSpace(result.Error),
+		Failure:      result.Failure,
 	}
 }
 
@@ -491,10 +478,10 @@ func locateCommonRootFrom(start string) string {
 	}
 	for {
 		candidate := filepath.Join(base, "common")
-		if fileExists(filepath.Join(candidate, "etc", "xproxy.json")) || fileExists(filepath.Join(candidate, "etc", "personas.csv")) {
+		if fileExists(filepath.Join(candidate, "etc", "personas.csv")) || fileExists(filepath.Join(candidate, "data", "personas", "pool.csv")) {
 			return candidate
 		}
-		if filepath.Base(base) == "common" && (fileExists(filepath.Join(base, "etc", "xproxy.json")) || fileExists(filepath.Join(base, "etc", "personas.csv"))) {
+		if filepath.Base(base) == "common" && (fileExists(filepath.Join(base, "etc", "personas.csv")) || fileExists(filepath.Join(base, "data", "personas", "pool.csv"))) {
 			return base
 		}
 		next := filepath.Dir(base)

@@ -91,9 +91,9 @@ def load_models(path: Path) -> list[dict[str, Any]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--metadata", required=True, type=Path, help="Provider model metadata JSON")
-    parser.add_argument("--out", required=True, type=Path, help="Output file containing kept xproxy model ids")
+    parser.add_argument("--out", required=True, type=Path, help="Output file containing kept runtime model ids")
     parser.add_argument("--decisions", required=True, type=Path, help="CSV audit log of keep/skip decisions")
-    parser.add_argument("--prefix", default="openrouter://", help="XProxy model id prefix")
+    parser.add_argument("--prefix", default="openrouter://", help="Runtime model id prefix")
     args = parser.parse_args()
 
     models = load_models(args.metadata)
@@ -109,10 +109,10 @@ def main() -> int:
             if not model_id:
                 continue
             decision, reason, evidence = decide(model)
-            xproxy_model = args.prefix + model_id
-            writer.writerow([xproxy_model, decision, reason, evidence])
+            runtime_model = args.prefix + model_id
+            writer.writerow([runtime_model, decision, reason, evidence])
             if decision == "keep":
-                kept.append(xproxy_model)
+                kept.append(runtime_model)
 
     args.out.write_text("".join(model + "\n" for model in kept))
     print(f"kept={len(kept)} skipped={len(models) - len(kept)} total={len(models)}", file=sys.stderr)

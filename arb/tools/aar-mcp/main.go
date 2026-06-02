@@ -363,7 +363,7 @@ func validRoleID(roleID string) bool {
 
 func sessionInstructions(session *mcpSession) string {
 	return fmt.Sprintf(
-		"This MCP session is bound to case_id %s and %s %s. Call wait_for_opportunity first. If it returns state waiting, call wait_for_opportunity again with after_version. If it returns state ready, read the returned prompt, turn, limits, and tools, then complete exactly that opportunity. If wait_for_opportunity returns state done, stop. If it returns state error, report the error and stop.",
+		"This MCP session is bound to case_id %s and %s %s. Call wait_for_opportunity first. If it returns state waiting, call wait_for_opportunity again with after_version. If it returns state ready, read the returned prompt, turn, limits, and tools, then complete exactly that opportunity. If wait_for_opportunity returns state done or failed, stop. If it returns state error, report the error and stop.",
 		session.CaseID,
 		session.AssignmentType,
 		session.principalID(),
@@ -829,6 +829,8 @@ func waitToolState(value map[string]any) string {
 	switch strings.ToLower(mapString(value["status"])) {
 	case "ready":
 		return "ready"
+	case "failed":
+		return "failed"
 	case "done", "terminal", "complete", "completed":
 		return "done"
 	}
@@ -851,6 +853,8 @@ func waitToolMessage(state string) string {
 		return "An opportunity is ready. Use the returned prompt, turn, limits, and tools to act."
 	case "done":
 		return "The case is done. Stop acting on this assignment."
+	case "failed":
+		return "The case failed. Stop acting on this assignment."
 	case "error":
 		return "This assignment cannot continue without operator attention."
 	default:

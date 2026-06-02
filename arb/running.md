@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This runbook describes the current way to run an AAR case with real OpenClaw containers.  One host process runs `aar service`, one host process runs `aar-mcp`, and one `aar case` child process runs each case.  OpenClaw containers act as lawyers and council members by using MCP tools that forward to the public service APIs.
+This runbook describes the current way to run an AAR case with real OpenClaw lawyers and Pi council members.  One host process runs `aar service`, one host process runs `aar-mcp`, and one `aar case` child process runs each case.  OpenClaw containers act as lawyers through MCP tools that forward to the public service APIs.  Pi council members use the same MCP service, with each member configured from the council roster returned by AAR.
 
 The service owns case creation, case ids, process lifecycle, routing, logs, result reads, and artifact reads.  The child runner owns arbitration state, turn order, deadlines, attempt budgets, evidence custody, filing validation, council voting, and final artifacts.  The MCP process stores only the assignment for one MCP session: `case_id` plus `role_id` for a lawyer or observer, or `case_id` plus `member_id` for a council member.
 
@@ -14,7 +14,7 @@ The service owns case creation, case ids, process lifecycle, routing, logs, resu
 | `aar case` | host child process | Runs one arbitration and exposes private Lawyer and Council APIs on localhost. |
 | `aar-mcp` | host | Exposes Streamable HTTP MCP and forwards tool calls to `aar service`. |
 | OpenClaw lawyer containers | Docker or remote host | Act as plaintiff and defendant through MCP. |
-| OpenClaw council containers | Docker or remote host | Act as council members through MCP. |
+| Pi council containers | Podman or remote host | Act as council members through MCP. |
 
 Local Docker containers reach the host MCP server through `host.docker.internal`.  On Linux, Docker needs `--add-host=host.docker.internal:host-gateway`.  The MCP server listens on a host address reachable from the containers, while `aar service` can stay on `127.0.0.1` because only the host MCP process and operator tools call it during local tests.
 
@@ -46,9 +46,9 @@ Use the example runner for local end-to-end tests:
 examples/run-ex.sh ex1
 ```
 
-The script starts `aar service`, starts `aar-mcp`, creates one case through `POST /api/v1/cases`, starts OpenClaw containers for plaintiff, defendant, and council members `C1` through `C5`, waits for the service result endpoint, and writes the output directory path to standard output.  Each container keeps one OpenClaw session key for the whole assignment.  The container reruns `openclaw agent` in that same session when an invocation ends after a bounded wait, because an OpenClaw agent invocation may finish even though the case has no ready opportunity.  The latest output path for an example is also written to `out/latest-exN-openclaw-lawyers.txt`.
+The script starts `aar service`, starts `aar-mcp`, creates one case through `POST /api/v1/cases`, starts OpenClaw containers for plaintiff and defendant, starts Pi council members `C1` through `C5`, waits for the service result endpoint, and writes the output directory path to standard output.  Each OpenClaw container keeps one session key for the whole lawyer assignment.  Each Pi member receives one mounted home directory under the output directory, so its session files, MCP config, settings, and model config remain available for review.  The latest output path for an example is also written to `out/latest-exN-openclaw-lawyers.txt`.
 
-The script sources provider keys from `~/keys.txt` and passes exported provider environment variables into OpenClaw containers.  It uses `gpt-5.5` for OpenClaw agents.  It does not mount case files or output directories into the containers.
+The script sources provider keys from `~/keys.txt`.  It passes `OPENAI_API_KEY` into the OpenClaw lawyer containers and passes `OPENROUTER_API_KEY` into the Pi council containers.  It uses `gpt-5.5` for OpenClaw agents.  It does not mount case files or output directories into the lawyer containers.
 
 ## Manual Service Commands
 
@@ -114,7 +114,7 @@ An OpenClaw lawyer receives one MCP server definition and one assignment prompt.
 }
 ```
 
-Council members use the same MCP endpoint with `member_id` instead of `role_id`:
+Council members use the same MCP endpoint with `member_id` instead of `role_id`.  The example runner writes this URL into the Pi member's `.mcp.json` file:
 
 ```json
 {
@@ -132,7 +132,7 @@ A lawyer assignment tells OpenClaw to call `wait_for_opportunity` first and to k
 
 The lawyer should inspect the record at each opportunity.  `get_case`, `list_evidence`, `stat_evidence`, and `read_evidence_range` provide case-packet files and admitted evidence.  `send_work_notes` records private plans, work logs, search logs, source checks, scripts, installed programs, OCR or extraction work, browser work, errors, analysis, decisions, and unresolved gaps for operator review outside the record.
 
-A council assignment follows the same wait loop, but council tools are read-only except for `submit_council_vote`.  Council members review the record and admitted evidence, then vote `demonstrated` or `not_demonstrated` with a rationale grounded in the record.  Council members should not search the web or add evidence.
+A council assignment follows the same wait loop, but council tools are read-only except for `submit_council_vote`.  Council members review the record and admitted evidence, then vote `demonstrated` or `not_demonstrated` with a rationale grounded in the record.  Pi receives the selected OpenRouter model, max-token limit, and provider routing constraints in `.pi/agent/models.json`; the routing constraints come from the sampled council pool entry.
 
 ## Review
 
@@ -148,4 +148,4 @@ The output directory contains the AAR record and process logs.  Review `case/dig
 
 ## Cleanup
 
-The example runner stops service, MCP, and leftover OpenClaw containers when the script exits.  For manual runs, stop the host processes by using the PID files, then stop any remaining containers by name.  Do not delete the output directory before review because it contains the record, work notes, service logs, MCP logs, and OpenClaw logs needed to diagnose the run.
+The example runner stops service, MCP, leftover OpenClaw containers, and Pi member loops when the script exits.  For manual runs, stop the host processes by using the PID files, then stop any remaining containers by name.  Do not delete the output directory before review because it contains the record, work notes, service logs, MCP logs, OpenClaw logs, Pi logs, and Pi member homes needed to diagnose the run.

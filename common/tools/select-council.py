@@ -219,7 +219,7 @@ def load_latency(path: Path) -> dict[str, tuple[str, str]]:
         for line_num, row in enumerate(csv.reader(handle), start=1):
             if not row or all(not cell.strip() for cell in row):
                 continue
-            if line_num == 1 and row[0].strip().lower() in {"model", "xproxy_model"}:
+            if line_num == 1 and row[0].strip().lower() in {"model", "runtime_model"}:
                 continue
             if len(row) < 3:
                 raise ValueError(f"{path}:{line_num}: expected at least 3 columns")

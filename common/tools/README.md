@@ -1,6 +1,6 @@
 # Common Tools
 
-This directory contains shared maintenance tools for the `arb` and `arbd` trees.  Lawyer integrations do not live here.  AAR exposes lawyer turns through the HTTP Lawyer API, and front ends such as CLIs, MCP servers, ACP services, or agent runners can be built on top of that API without changing the arbitration runtime.
+This directory contains shared maintenance tools for the `arb` and `arbd` trees.  Lawyer integrations do not live here.  AAR exposes lawyer turns through the HTTP Lawyer API, and front ends such as CLIs, MCP servers, or agent runners can be built on top of that API without changing the arbitration runtime.
 
 ## Files
 

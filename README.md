@@ -38,7 +38,7 @@ agent attorneys and judges.
 
 This repo contains three adjudication systems in one repository and one Go module.  [Agent District Court](adc/) models U.S. Federal District Court procedure, including pleadings, discovery, motions, jury selection, trial, verdict, and reporting.  [Agent Arbitration](arb/) models arbitration before a council, with a smaller procedural surface and a shorter path to decision.  [Agent Arbitration Degree](arbd/) uses the same council procedure for questions of degree and returns one bounded integer answer in `[0,100]` from each council member.
 
-Lean defines the procedural engines and the proof surface for all three systems.  Go builds the command-line tools, storage layer, prompt assembly, report generation, provider clients, and ACP integration.  The repository root exists to keep those shared parts together; the day-to-day build and run entrypoints remain in `adc/`, `arb/`, and `arbd/`.
+Lean defines the procedural engines and the proof surface for all three systems.  Go builds the command-line tools, storage layer, prompt assembly, report generation, provider clients, and HTTP service interfaces.  The repository root exists to keep those shared parts together; the day-to-day build and run entrypoints remain in `adc/`, `arb/`, and `arbd/`.
 
 ## Layout
 
@@ -47,7 +47,7 @@ Lean defines the procedural engines and the proof surface for all three systems.
 | `adc/` | District-court system, including the Lean engine, Go runtime, examples, and reports |
 | `arb/` | Arbitration system, including the Lean engine, Go runtime, examples, and prompts |
 | `arbd/` | Degree-based arbitration system, including the Lean engine, Go runtime, examples, prompts, and reports |
-| `common/` | Shared Go packages, provider and ACP integration, personas, `xproxy`, the PI container build path, and repository tools |
+| `common/` | Shared Go packages, provider clients, personas, the Pi container build path, and repository tools |
 | `go.mod` and `go.sum` | Root Go module for shared packages and all three runtimes |
 
 The three systems share infrastructure but remain separate applications.  `adc/` builds `adc` and `adcengine`.  `arb/` builds `aar` and `aarengine`.  `arbd/` builds `aard` and `aardengine`.  Shared code lives under `common/`, not in a sibling checkout outside the repository.
@@ -58,7 +58,7 @@ This repository builds with Go `1.25` and Lean `4.27.0` with `lake`.  `make` dri
 
 The shared persona and model curation corpus lives under `common/data/personas/`.  The shared tools resolve their default paths against the current working directory.  Run them from the repository root unless you pass explicit paths.
 
-Live runs require Podman, network access to the configured model providers, and the corresponding API keys.  The checked-in district-court demo uses ACP attorneys through `xproxy`, so `OPENAI_API_KEY` is required and some model pools also require `OPENROUTER_API_KEY`.  `arb/` and `arbd/` use the same shared provider and ACP path where the selected models require it.
+Live runs require Podman, network access to the configured model providers, and the corresponding API keys.  OpenClaw lawyer runs use `OPENAI_API_KEY` when the selected OpenClaw model is an OpenAI model.  Pi council runs use `OPENROUTER_API_KEY` for OpenRouter council seats.
 
 ## Build And Run
 

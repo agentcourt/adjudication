@@ -63,13 +63,7 @@ type Config struct {
 	CouncilAPIAddr             string
 	Policy                     Policy
 	Runtime                    RuntimeLimits
-	XProxyConfigPath           string
-	XProxyPort                 int
-	ACPArgs                    []string
-	ACPEnv                     []string
 	CouncilBackend             string
-	CouncilACPCommand          string
-	CouncilACPSessionCwd       string
 	Engine                     lean.Engine
 }
 
@@ -79,6 +73,8 @@ type Result struct {
 	StartedAt         string                  `json:"started_at"`
 	FinishedAt        string                  `json:"finished_at"`
 	Status            string                  `json:"status"`
+	Error             string                  `json:"error,omitempty"`
+	Failure           map[string]any          `json:"failure,omitempty"`
 	Phase             string                  `json:"phase"`
 	Resolution        string                  `json:"resolution"`
 	Complaint         spec.Complaint          `json:"complaint"`
@@ -216,7 +212,6 @@ type runContext struct {
 	uploadSessions    map[string]*EvidenceUploadSession
 	council           []CouncilSeat
 	attorneys         map[string]AttorneyRunInfo
-	acpSessions       map[string]*acpPersistentSession
 	lawyerAPI         *lawyerAPIServer
 	councilAPI        *councilAPIServer
 	workProductDirs   map[string]string

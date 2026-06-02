@@ -135,10 +135,10 @@ func ValidatePolicy(policy Policy) error {
 
 func ValidateCouncilBackend(backend string) error {
 	switch strings.TrimSpace(strings.ToLower(backend)) {
-	case "", "direct", councilBackendPI, councilBackendAPI:
+	case "", "direct", councilBackendAPI:
 		return nil
 	default:
-		return fmt.Errorf("council backend must be direct, pi, or councilapi")
+		return fmt.Errorf("council backend must be direct or councilapi")
 	}
 }
 

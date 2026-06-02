@@ -46,17 +46,7 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 		attorneyMap[attorney.Role] = attorney
 	}
 	startedAt := time.Now().UTC()
-	server, err := maybeStartXProxy(cfg.XProxyConfigPath, cfg.XProxyPort)
-	if err != nil {
-		return Result{}, err
-	}
-	if server != nil {
-		defer server.Close()
-	}
-	llmClient, err := newXProxyClient(cfg.XProxyPort, cfg.Runtime.CouncilRequestTimeout())
-	if err != nil {
-		return Result{}, err
-	}
+	llmClient := newDirectCouncilClient(cfg.Runtime.CouncilRequestTimeout())
 	var caseFiles []CaseFile
 	if len(cfg.CaseFilePaths) != 0 {
 		caseFiles, err = loadCaseFilesFromPaths(cfg.CaseFilePaths)
@@ -94,7 +84,6 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 		uploadSessions:    map[string]*EvidenceUploadSession{},
 		council:           council,
 		attorneys:         attorneyMap,
-		acpSessions:       map[string]*acpPersistentSession{},
 		workProductDirs:   map[string]string{},
 	}
 	if err := rc.initializeEvidenceRegistry(); err != nil {
@@ -116,9 +105,6 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 			if closeErr := rc.councilAPI.Close(shutdownCtx); closeErr != nil {
 				err = errors.Join(err, closeErr)
 			}
-		}
-		if closeErr := rc.closeACPSessions(); closeErr != nil {
-			err = errors.Join(err, closeErr)
 		}
 	}()
 	if cfg.CouncilBackend == councilBackendAPI {
@@ -164,12 +150,23 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 				rc.councilAPI.setTerminal(reason)
 			}
 			finishedAt := time.Now().UTC()
+			caseObj := mapAny(rc.state["case"])
+			status := "ok"
+			var failure map[string]any
+			errorMessage := ""
+			if mapString(caseObj["status"]) == "failed" {
+				status = "failed"
+				failure = caseFailure(rc.state)
+				errorMessage = caseFailureError(rc.state)
+			}
 			result := Result{
 				CaseID:            cfg.CaseID,
 				RunID:             cfg.RunID,
 				StartedAt:         startedAt.Format(time.RFC3339),
 				FinishedAt:        finishedAt.Format(time.RFC3339),
-				Status:            "ok",
+				Status:            status,
+				Error:             errorMessage,
+				Failure:           failure,
 				Phase:             currentPhase(rc.state),
 				Resolution:        currentResolution(rc.state),
 				Complaint:         complaint,
