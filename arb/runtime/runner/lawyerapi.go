@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -76,6 +77,7 @@ func startLawyerAPIServer(rc *runContext) (*lawyerAPIServer, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(lawyerAPIBasePath+"/get", api.handleGet)
 	mux.HandleFunc(lawyerAPIBasePath+"/wait", api.handleWait)
+	mux.HandleFunc(lawyerAPIBasePath+"/result", api.handleResult)
 	mux.HandleFunc(lawyerAPIBasePath+"/do", api.handleDo)
 	api.server = &http.Server{Handler: mux}
 	go func() {
@@ -355,6 +357,48 @@ func (api *lawyerAPIServer) handleWait(w http.ResponseWriter, r *http.Request) {
 		}
 		cond.Wait()
 	}
+}
+
+func (api *lawyerAPIServer) handleResult(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeLawyerJSON(w, http.StatusMethodNotAllowed, map[string]any{
+			"ok":    false,
+			"error": apiError("method_not_allowed", "use GET"),
+		})
+		return
+	}
+	role := strings.TrimSpace(r.URL.Query().Get("role_id"))
+	caseID := strings.TrimSpace(r.URL.Query().Get("case_id"))
+	if caseID == "" {
+		writeLawyerJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": apiError("missing_case_id", "case_id is required"),
+		})
+		return
+	}
+	if role == "" {
+		writeLawyerJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":      false,
+			"case_id": caseID,
+			"error":   apiError("missing_role_id", "role_id is required"),
+		})
+		return
+	}
+	if role != "observer" {
+		if err := validateAttorneyRole(role); err != nil {
+			writeLawyerJSON(w, http.StatusForbidden, map[string]any{
+				"ok":      false,
+				"case_id": caseID,
+				"role_id": role,
+				"error":   apiError("invalid_role", err.Error()),
+			})
+			return
+		}
+	}
+	api.mu.Lock()
+	response := api.caseResultResponseLocked(caseID, role)
+	api.mu.Unlock()
+	writeLawyerJSON(w, http.StatusOK, response)
 }
 
 func (api *lawyerAPIServer) handleDo(w http.ResponseWriter, r *http.Request) {
@@ -814,6 +858,101 @@ func (api *lawyerAPIServer) observerViewLocked() map[string]any {
 		"turn":   api.turnPayloadLocked(api.active),
 		"events": len(api.rc.events),
 		"policy": api.rc.cfg.Policy.StateMap(),
+	}
+}
+
+func (api *lawyerAPIServer) caseResultResponseLocked(caseID string, roleID string) map[string]any {
+	response := api.responseBaseLocked(caseID, roleID)
+	caseObj := mapAny(api.rc.state["case"])
+	phase := currentPhase(api.rc.state)
+	caseStatus := mapString(caseObj["status"])
+	resolution := currentResolution(api.rc.state)
+	response["phase"] = phase
+	response["case_status"] = caseStatus
+	if !api.caseIsFinalLocked(caseObj) {
+		response["status"] = "pending"
+		response["message"] = "The case is still pending."
+		return response
+	}
+	votes := normalizeCouncilVotes(mapList(caseObj["council_votes"]))
+	response["status"] = "done"
+	if api.terminalReason != "" {
+		response["final_reason"] = api.terminalReason
+	}
+	response["result"] = map[string]any{
+		"resolution":         resolution,
+		"phase":              phase,
+		"case_status":        caseStatus,
+		"final_reason":       api.terminalReason,
+		"council_votes":      votes,
+		"vote_tally":         councilVoteTally(votes),
+		"deliberation_round": intNumber(caseObj["deliberation_round"]),
+	}
+	return response
+}
+
+func (api *lawyerAPIServer) caseIsFinalLocked(caseObj map[string]any) bool {
+	if api.terminal {
+		return true
+	}
+	if mapString(caseObj["status"]) == "closed" {
+		return true
+	}
+	if currentPhase(api.rc.state) == "closed" {
+		return true
+	}
+	return false
+}
+
+func normalizeCouncilVotes(votes []map[string]any) []map[string]any {
+	out := make([]map[string]any, 0, len(votes))
+	for _, vote := range votes {
+		out = append(out, map[string]any{
+			"round":     intNumber(vote["round"]),
+			"member_id": mapString(vote["member_id"]),
+			"vote":      mapString(vote["vote"]),
+			"rationale": mapString(vote["rationale"]),
+		})
+	}
+	return out
+}
+
+func councilVoteTally(votes []map[string]any) map[string]any {
+	rounds := map[int]map[string]int{}
+	finalRound := 0
+	for _, vote := range votes {
+		round := intNumber(vote["round"])
+		if round <= 0 {
+			round = 1
+		}
+		if round > finalRound {
+			finalRound = round
+		}
+		if rounds[round] == nil {
+			rounds[round] = map[string]int{}
+		}
+		rounds[round][mapString(vote["vote"])]++
+	}
+	byRound := make([]map[string]any, 0, len(rounds))
+	for round, counts := range rounds {
+		byRound = append(byRound, map[string]any{
+			"round":            round,
+			"demonstrated":     counts["demonstrated"],
+			"not_demonstrated": counts["not_demonstrated"],
+		})
+	}
+	sort.Slice(byRound, func(i, j int) bool {
+		return intNumber(byRound[i]["round"]) < intNumber(byRound[j]["round"])
+	})
+	finalCounts := map[string]int{}
+	if finalRound > 0 {
+		finalCounts = rounds[finalRound]
+	}
+	return map[string]any{
+		"final_round":      finalRound,
+		"demonstrated":     finalCounts["demonstrated"],
+		"not_demonstrated": finalCounts["not_demonstrated"],
+		"rounds":           byRound,
 	}
 }
 

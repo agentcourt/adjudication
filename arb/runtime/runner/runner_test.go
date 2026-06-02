@@ -944,13 +944,6 @@ func TestBuildAttorneyPromptIncludesWorkGuidanceEveryTurn(t *testing.T) {
 	promptBaseDir = filepath.Join("..", "..", "prompts")
 	defer func() { promptBaseDir = origPromptBaseDir }()
 
-	promptDirs := []struct {
-		name string
-		dir  string
-	}{
-		{name: "default"},
-		{name: "evidence-rich", dir: filepath.Join("..", "..", "prompts", "evidence-rich-30m")},
-	}
 	opportunities := []Opportunity{
 		{
 			ID:           "openings:plaintiff",
@@ -999,46 +992,43 @@ func TestBuildAttorneyPromptIncludesWorkGuidanceEveryTurn(t *testing.T) {
 		"Use list_evidence, stat_evidence, and read_evidence_range when exact evidence bytes matter.",
 	}
 
-	for _, promptDir := range promptDirs {
-		for _, opportunity := range opportunities {
-			t.Run(promptDir.name+"/"+opportunity.ID, func(t *testing.T) {
-				rc := &runContext{
-					cfg: Config{
-						Policy:    DefaultPolicy(),
-						PromptDir: promptDir.dir,
+	for _, opportunity := range opportunities {
+		t.Run(opportunity.ID, func(t *testing.T) {
+			rc := &runContext{
+				cfg: Config{
+					Policy: DefaultPolicy(),
+				},
+				complaint: spec.Complaint{
+					Proposition: "P",
+				},
+				caseFiles: []CaseFile{{EvidenceID: "case-file.txt", Name: "case-file.txt", MimeType: "text/plain", TextReadable: true}},
+				state: map[string]any{
+					"policy": map[string]any{
+						"evidence_standard": "preponderance",
 					},
-					complaint: spec.Complaint{
-						Proposition: "P",
+					"case": map[string]any{
+						"phase":              opportunity.Phase,
+						"openings":           []map[string]any{},
+						"arguments":          []map[string]any{},
+						"rebuttals":          []map[string]any{},
+						"surrebuttals":       []map[string]any{},
+						"closings":           []map[string]any{},
+						"offered_evidence":   []map[string]any{},
+						"submitted_evidence": []map[string]any{},
+						"technical_reports":  []map[string]any{},
 					},
-					caseFiles: []CaseFile{{EvidenceID: "case-file.txt", Name: "case-file.txt", MimeType: "text/plain", TextReadable: true}},
-					state: map[string]any{
-						"policy": map[string]any{
-							"evidence_standard": "preponderance",
-						},
-						"case": map[string]any{
-							"phase":              opportunity.Phase,
-							"openings":           []map[string]any{},
-							"arguments":          []map[string]any{},
-							"rebuttals":          []map[string]any{},
-							"surrebuttals":       []map[string]any{},
-							"closings":           []map[string]any{},
-							"offered_evidence":   []map[string]any{},
-							"submitted_evidence": []map[string]any{},
-							"technical_reports":  []map[string]any{},
-						},
-					},
+				},
+			}
+			prompt, err := rc.buildAttorneyPrompt(opportunity)
+			if err != nil {
+				t.Fatalf("buildAttorneyPrompt returned error: %v", err)
+			}
+			for _, want := range required {
+				if !strings.Contains(prompt, want) {
+					t.Fatalf("prompt missing %q:\n%s", want, prompt)
 				}
-				prompt, err := rc.buildAttorneyPrompt(opportunity)
-				if err != nil {
-					t.Fatalf("buildAttorneyPrompt returned error: %v", err)
-				}
-				for _, want := range required {
-					if !strings.Contains(prompt, want) {
-						t.Fatalf("prompt missing %q:\n%s", want, prompt)
-					}
-				}
-			})
-		}
+			}
+		})
 	}
 }
 

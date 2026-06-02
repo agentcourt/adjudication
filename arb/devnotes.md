@@ -2,6 +2,14 @@
 
 ## 2026-06-02
 
+### Lawyer case results
+
+Reference: [Lawyer HTTP API](../lawyerapi.md), [Lawyer MCP adapter](tools/lawyer-mcp/README.md)
+
+The Lawyer API now exposes `GET /lawyerapi/v1/result`.  The request uses the same `case_id` and `role_id` shape as the rest of the API.  While the case remains open, the response reports `status: "pending"` and returns the live turn envelope.  After the case closes, it returns the resolution, final reason when known, deliberation round, every stored council vote with rationale, and vote counts by round.
+
+The Lawyer MCP adapter exposes the same data through the read-only `get_case_result` tool.  This keeps final-result inspection available to lawyers and observers without adding another polling loop or reading output files from the operator's filesystem.  The adapter does not interpret the vote data; it forwards the case-result JSON returned by AAR.
+
 ### Lawyer Evidence Tools
 
 Reference: [Evidence Handling](docs/evidence-handling.md), [OpenClaw lawyer runbook](running.md)
@@ -12,9 +20,9 @@ Surrebuttals now use the same exhibit and technical-report validation path as ar
 
 Lawyer prompts now tell counsel to inspect the current record, scan the evidence list at each opportunity, analyze relevant evidence before advocating from it, and use targeted search when the record leaves a material gap.  They distinguish AAR court tools from native OpenClaw investigation tools, so a clawyer should use web, browser, file, shell, OCR, PDF, image, audio, video, metadata, hash, signature, archive, and local analysis tools when those tools can find or test material sources.  They require source-page retrieval after search results, adverse-source checks, and a search ledger when material evidence cannot be found or captured.  Counsel must submit material outside sources through AAR evidence tools before relying on them when evidence submission is available.  Remote clawyers receive case-packet files and later submissions through AAR evidence tools rather than local filesystem access.
 
-`buildAttorneyPrompt` now adds the evidence-read reminder in every lawyer phase.  A test renders openings, arguments, rebuttals, surrebuttals, and closings through both the default prompts and the evidence-rich prompt directory, and checks that each generated prompt includes instructions for work notes, evidence scans, evidence analysis, native tools, browser work, local programs, and evidence-reading tools.
+`buildAttorneyPrompt` now adds the evidence-read reminder in every lawyer phase.  A test renders openings, arguments, rebuttals, surrebuttals, and closings through the single prompt directory, and checks that each generated prompt includes instructions for work notes, evidence scans, evidence analysis, native tools, browser work, local programs, and evidence-reading tools.
 
-The Lawyer API now exposes `send_work_notes` in every active lawyer turn.  It writes the complete notes string to `work-notes.ndjson` with role, phase, turn, opportunity id, timestamp, and optional call id.  The prompts now describe those notes as a working journal: plans, issue outlines, work logs, search logs, sources checked, scripts or programs written, packages installed, browser work, OCR and extraction work, adverse checks, errors, analysis, decisions, and unresolved gaps.  The notes log is outside the record: it does not enter Lean state, `events.ndjson`, transcript output, digest output, evidence manifests, or observer event tools.  The MCP adapter exposes the tool through the same dynamic tool-list path as other Lawyer API tools.
+The Lawyer API now exposes `send_work_notes` in every active lawyer turn.  It writes the complete notes string to `work-notes.ndjson` with role, phase, turn, opportunity id, timestamp, and optional call id.  The prompts now describe those notes as a working journal: plans, issue outlines, work logs, sources checked, scripts or programs written, packages installed, browser work, OCR and extraction work, adverse checks, errors, analysis, decisions, and unresolved gaps.  The notes log is outside the record: it does not enter Lean state, `events.ndjson`, transcript output, digest output, evidence manifests, or observer event tools.  The MCP adapter exposes the tool as part of the stable lawyer transport tool set.
 
 The obsolete `tools/aar-openclaw-attorney` adapter was removed.  The supported OpenClaw lawyer path is now the Lawyer HTTP API plus `tools/lawyer-mcp`.
 
@@ -42,11 +50,11 @@ The old lawyer ACP and OpenClaw bridge path has been removed from the AAR runtim
 
 The Lawyer API now treats `opportunity_id` as a per-turn guard on plaintiff and defendant `POST /do` calls.  A lawyer receives the current value from `GET /get` in `turn.opportunity_id` and must send it back with every lawyer tool call for that turn.  Missing or stale values fail before tool execution and do not consume the turn's invalid-attempt budget.
 
-The lawyer prompt templates now match that API.  They distinguish HTTP tools from legal acts submitted through `submit_decision`, state the current opportunity id, and remove old local-agent wording.  The evidence-rich prompt set received the same structure so `--prompt-dir prompts/evidence-rich-30m` remains aligned with the default templates.
+The lawyer prompt templates now match that API.  They distinguish HTTP tools from legal acts submitted through `submit_decision`, state the current opportunity id, and remove old local-agent wording.  The single prompt set now contains the evidence-focused source retrieval, preservation, and work-note guidance that previously lived in a separate prompt override directory.
 
-The handbook now gives remote clawyers one procedural and technical reference.  It treats the Lawyer HTTP API as the governing interface and describes MCP as one shared service process with one MCP session per case-role.  The handbook covers phase order, filing rules, evidence custody, turn budgets, observer use, MCP tool mapping, dynamic tool-list behavior, reconnection, and error handling.
+The handbook now gives remote clawyers one procedural and technical reference.  It treats the Lawyer HTTP API as the governing interface and describes MCP as one shared service process with one MCP session per case-role.  The handbook covers phase order, filing rules, evidence custody, turn budgets, observer use, MCP tool mapping, reconnection, and error handling.
 
-`aar-lawyer-mcp` now implements the MCP adapter described in the handbook.  It serves Streamable HTTP at `/mcp`, binds each MCP session from `case_id` and `role_id` query parameters, exposes the current Lawyer API tools through `tools/list`, and forwards `tools/call` requests to `/lawyerapi/v1/do`.  It fetches the live opportunity before every forwarded lawyer tool call, injects the active `opportunity_id`, and returns AAR failures as MCP tool results with structured content.
+`aar-lawyer-mcp` now implements the MCP adapter described in the handbook.  It serves Streamable HTTP at `/mcp`, binds each MCP session from `case_id` and `role_id` query parameters, exposes stable MCP transport tools, and forwards `tools/call` requests to `/lawyerapi/v1/do`.  It fetches the live opportunity before every forwarded lawyer tool call, injects the active `opportunity_id`, and returns AAR failures as MCP tool results with structured content.  The Lawyer API remains the phase authority.
 
 OpenClaw lawyer onboarding now has a workspace skill at `tools/lawyer-mcp/skills/arb/SKILL.md`.  The skill models the remote-user flow: Joe tells his own OpenClaw to act as plaintiff, defendant, or observer in an AAR case; the claw records the assignment, saves the role-bound MCP server definition, verifies `wait_for_opportunity`, and enters the wait-tool operating loop.  The claw does not need a scheduled Gateway job to discover turns.
 

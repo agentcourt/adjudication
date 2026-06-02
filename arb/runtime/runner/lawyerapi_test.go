@@ -288,6 +288,67 @@ func TestLawyerWaitReturnsDoneOnTerminalCase(t *testing.T) {
 	}
 }
 
+func TestLawyerResultReportsPendingCase(t *testing.T) {
+	api, _ := testLawyerAPIWithTurn()
+
+	status, got := callLawyerAPIResult(t, api, "case_id=arb-1&role_id=observer")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["status"] != "pending" {
+		t.Fatalf("status field = %#v, want pending", got["status"])
+	}
+	if got["result"] != nil {
+		t.Fatalf("result = %#v, want nil for pending case", got["result"])
+	}
+	if got["message"] != "The case is still pending." {
+		t.Fatalf("message = %#v", got["message"])
+	}
+}
+
+func TestLawyerResultReportsFinalCouncilVotes(t *testing.T) {
+	api, _ := testLawyerAPIWithTurn()
+	caseObj := mapAny(api.rc.state["case"])
+	caseObj["status"] = "closed"
+	caseObj["phase"] = "closed"
+	caseObj["resolution"] = "demonstrated"
+	caseObj["deliberation_round"] = 1
+	caseObj["council_votes"] = []map[string]any{
+		{"round": 1, "member_id": "C1", "vote": "demonstrated", "rationale": "official record proves control"},
+		{"round": 1, "member_id": "C2", "vote": "not_demonstrated", "rationale": "intent not proven"},
+	}
+	api.setTerminal("threshold_met")
+
+	status, got := callLawyerAPIResult(t, api, "case_id=arb-1&role_id=plaintiff")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["status"] != "done" {
+		t.Fatalf("status field = %#v, want done", got["status"])
+	}
+	result, ok := got["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("result = %#v, want object", got["result"])
+	}
+	if result["resolution"] != "demonstrated" {
+		t.Fatalf("resolution = %#v", result["resolution"])
+	}
+	votes := mapList(result["council_votes"])
+	if len(votes) != 2 {
+		t.Fatalf("votes = %#v, want 2", result["council_votes"])
+	}
+	if votes[0]["member_id"] != "C1" || votes[0]["rationale"] != "official record proves control" {
+		t.Fatalf("first vote = %#v", votes[0])
+	}
+	tally, ok := result["vote_tally"].(map[string]any)
+	if !ok {
+		t.Fatalf("vote_tally = %#v, want object", result["vote_tally"])
+	}
+	if intNumber(tally["demonstrated"]) != 1 || intNumber(tally["not_demonstrated"]) != 1 {
+		t.Fatalf("vote_tally = %#v", tally)
+	}
+}
+
 func TestLawyerWaitTimeout(t *testing.T) {
 	api, _ := testLawyerAPIWithTurn()
 
@@ -358,6 +419,18 @@ func callLawyerAPIWait(t *testing.T, api *lawyerAPIServer, query string) (int, m
 	req := httptest.NewRequest(http.MethodGet, lawyerAPIBasePath+"/wait?"+query, nil)
 	rec := httptest.NewRecorder()
 	api.handleWait(rec, req)
+	var got map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return rec.Code, got
+}
+
+func callLawyerAPIResult(t *testing.T, api *lawyerAPIServer, query string) (int, map[string]any) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, lawyerAPIBasePath+"/result?"+query, nil)
+	rec := httptest.NewRecorder()
+	api.handleResult(rec, req)
 	var got map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode response: %v", err)

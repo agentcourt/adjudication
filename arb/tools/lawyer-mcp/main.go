@@ -369,7 +369,7 @@ func (s *mcpServer) handleInitialize(w http.ResponseWriter, r *http.Request, msg
 
 func sessionInstructions(session *mcpSession) string {
 	return fmt.Sprintf(
-		"This MCP session is bound to case_id %s and role_id %s. Call wait_for_opportunity first. If it returns state waiting, call wait_for_opportunity again with the returned after_version. If it returns state ready, use the returned prompt, turn, limits, and available tools to complete exactly that opportunity. After a successful submit_decision, call wait_for_opportunity again. If it returns state done, stop. If it returns state error, report the error and stop. Tools are forwarded to the AAR Lawyer API.",
+		"This MCP session is bound to case_id %s and role_id %s. Call wait_for_opportunity first. If it returns state waiting, call wait_for_opportunity again with the returned after_version. If it returns state ready, use the returned prompt, turn, limits, and allowed operations to complete exactly that opportunity. The MCP tool list is stable; the opportunity prompt controls which legal actions are allowed in the current turn. AAR rejects calls that are not allowed for the live opportunity. After a successful submit_decision, call wait_for_opportunity again. If it returns state done, stop. If it returns state error, report the error and stop. Tools are forwarded to the AAR Lawyer API.",
 		session.CaseID,
 		session.RoleID,
 	)
@@ -507,15 +507,7 @@ func randomSessionID() (string, error) {
 }
 
 func (s *mcpServer) listTools(ctx context.Context, session *mcpSession) (map[string]any, error) {
-	status, err := s.getCurrent(ctx, session)
-	if err != nil {
-		return nil, err
-	}
-	tools := []map[string]any{currentOpportunityToolSpec(), waitForOpportunityToolSpec()}
-	for _, tool := range lawyerToolsFromStatus(status) {
-		tools = append(tools, mcpToolSpecFromLawyer(tool))
-	}
-	return map[string]any{"tools": tools}, nil
+	return map[string]any{"tools": stableLawyerToolSpecs(session.RoleID)}, nil
 }
 
 func currentOpportunityToolSpec() map[string]any {
@@ -528,6 +520,229 @@ func currentOpportunityToolSpec() map[string]any {
 			"additionalProperties": false,
 		},
 		"annotations": map[string]any{"readOnlyHint": true},
+	}
+}
+
+func stableLawyerToolSpecs(roleID string) []map[string]any {
+	tools := []map[string]any{currentOpportunityToolSpec(), waitForOpportunityToolSpec()}
+	if roleID == "observer" {
+		return append(tools,
+			mcpToolSpec("get_case", "Return the current arbitration record.", mcpEmptyObjectSchema(), true),
+			mcpToolSpec("get_case_result", "Return final case results, including council votes and rationales. If the case is pending, report pending status.", mcpEmptyObjectSchema(), true),
+			mcpToolSpec("get_turn", "Return the current turn role, phase, deadline, and attempts.", mcpEmptyObjectSchema(), true),
+			mcpToolSpec("list_events", "List recorded case events.", mcpListEventsSchema(), true),
+			mcpToolSpec("list_evidence", "List visible immutable record evidence.", mcpEmptyObjectSchema(), true),
+			mcpToolSpec("stat_evidence", "Return metadata for one visible evidence item.", mcpEvidenceIDSchema(), true),
+			mcpToolSpec("read_evidence_range", "Read a bounded byte range from one visible evidence item as base64.", mcpReadEvidenceRangeSchema(), true),
+		)
+	}
+	return append(tools,
+		mcpToolSpec("get_case", "Return the current visible arbitration record.", mcpEmptyObjectSchema(), true),
+		mcpToolSpec("get_case_result", "Return final case results, including council votes and rationales. If the case is pending, report pending status.", mcpEmptyObjectSchema(), true),
+		mcpToolSpec("send_work_notes", "Send private work notes for off-record operator analysis. This does not create evidence, a filing, a technical report, or a case event.", mcpWorkNotesSchema(), false),
+		mcpToolSpec("list_evidence", "List visible immutable record evidence. AAR rejects this call when evidence access is not allowed for the current opportunity.", mcpEmptyObjectSchema(), true),
+		mcpToolSpec("stat_evidence", "Return metadata and read limits for one visible evidence item. AAR rejects this call when evidence access is not allowed for the current opportunity.", mcpEvidenceIDSchema(), true),
+		mcpToolSpec("read_evidence_range", "Read a bounded byte range from one visible evidence item as base64. AAR rejects this call when evidence access is not allowed for the current opportunity.", mcpReadEvidenceRangeSchema(), true),
+		mcpToolSpec("begin_evidence_upload", "Begin a chunked evidence upload. Use this only when the current opportunity allows submit_evidence.", mcpBeginEvidenceUploadSchema(), false),
+		mcpToolSpec("write_evidence_chunk", "Write one base64 chunk into an upload session. Use this only after begin_evidence_upload succeeds.", mcpWriteEvidenceChunkSchema(), false),
+		mcpToolSpec("commit_evidence_upload", "Verify and admit a completed evidence upload. Use this only when the current opportunity allows submit_evidence.", mcpCommitEvidenceUploadSchema(), false),
+		mcpToolSpec("submit_evidence", "Submit source evidence with provenance. Use this only when the current opportunity allows submit_evidence.", mcpSubmittedEvidenceSchema(), false),
+		mcpToolSpec("submit_decision", "Submit the final legal act for the current opportunity. Use the final action names listed in the opportunity prompt.", mcpSubmitDecisionSchema(), false),
+	)
+}
+
+func mcpToolSpec(name string, description string, schema map[string]any, readOnly bool) map[string]any {
+	spec := map[string]any{
+		"name":        name,
+		"description": description,
+		"inputSchema": schema,
+	}
+	if readOnly {
+		spec["annotations"] = map[string]any{"readOnlyHint": true}
+	}
+	return spec
+}
+
+func mcpEmptyObjectSchema() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}
+}
+
+func mcpEvidenceIDSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"evidence_id": map[string]any{"type": "string"},
+		},
+		"required":             []string{"evidence_id"},
+		"additionalProperties": false,
+	}
+}
+
+func mcpReadEvidenceRangeSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"evidence_id": map[string]any{"type": "string"},
+			"offset":      map[string]any{"type": "integer", "minimum": 0},
+			"length":      map[string]any{"type": "integer", "minimum": 1},
+		},
+		"required":             []string{"evidence_id", "offset", "length"},
+		"additionalProperties": false,
+	}
+}
+
+func mcpWorkNotesSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"notes": map[string]any{
+				"type":        "string",
+				"description": "Accumulated private work notes for this lawyer turn.",
+			},
+		},
+		"required":             []string{"notes"},
+		"additionalProperties": false,
+	}
+}
+
+func mcpBeginEvidenceUploadSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"title":               map[string]any{"type": "string"},
+			"mime_type":           map[string]any{"type": "string"},
+			"expected_size_bytes": map[string]any{"type": "integer", "minimum": 1},
+			"expected_sha256":     map[string]any{"type": "string"},
+			"source_url":          map[string]any{"type": "string"},
+			"source_description":  map[string]any{"type": "string"},
+			"retrieval_timestamp": map[string]any{"type": "string"},
+			"relevance":           map[string]any{"type": "string"},
+			"parent_evidence_id":  map[string]any{"type": "string"},
+			"derivation_method":   map[string]any{"type": "string"},
+		},
+		"required":             []string{"title", "mime_type", "expected_size_bytes", "relevance"},
+		"additionalProperties": false,
+	}
+}
+
+func mcpWriteEvidenceChunkSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"upload_id":      map[string]any{"type": "string"},
+			"offset":         map[string]any{"type": "integer", "minimum": 0},
+			"content_base64": map[string]any{"type": "string"},
+		},
+		"required":             []string{"upload_id", "offset", "content_base64"},
+		"additionalProperties": false,
+	}
+}
+
+func mcpCommitEvidenceUploadSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"upload_id":              map[string]any{"type": "string"},
+			"expected_sha256":        map[string]any{"type": "string"},
+			"preferred_filename_ext": map[string]any{"type": "string"},
+		},
+		"required":             []string{"upload_id"},
+		"additionalProperties": false,
+	}
+}
+
+func mcpSubmittedEvidenceSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"title":                  map[string]any{"type": "string"},
+			"source_url":             map[string]any{"type": "string"},
+			"source_description":     map[string]any{"type": "string"},
+			"retrieval_timestamp":    map[string]any{"type": "string"},
+			"mime_type":              map[string]any{"type": "string"},
+			"relevance":              map[string]any{"type": "string"},
+			"content":                map[string]any{"type": "string"},
+			"content_base64":         map[string]any{"type": "string"},
+			"preferred_filename_ext": map[string]any{"type": "string"},
+		},
+		"required":             []string{"title", "mime_type", "relevance"},
+		"additionalProperties": false,
+	}
+}
+
+func mcpSubmitDecisionSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"kind": map[string]any{"type": "string", "enum": []string{"tool", "pass"}},
+			"tool_name": map[string]any{
+				"type": "string",
+				"enum": []string{
+					"record_opening_statement",
+					"submit_argument",
+					"submit_rebuttal",
+					"submit_surrebuttal",
+					"deliver_closing_statement",
+					"pass_phase_opportunity",
+				},
+			},
+			"payload": mcpAttorneyPayloadSchema(),
+		},
+		"required":             []string{"kind"},
+		"additionalProperties": false,
+	}
+}
+
+func mcpAttorneyPayloadSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"text":              map[string]any{"type": "string"},
+			"offered_evidence":  mcpOfferedEvidenceSchema(),
+			"technical_reports": mcpTechnicalReportsSchema(),
+		},
+		"additionalProperties": false,
+	}
+}
+
+func mcpOfferedEvidenceSchema() map[string]any {
+	return map[string]any{
+		"type": "array",
+		"items": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"evidence_id": map[string]any{"type": "string"},
+				"label":       map[string]any{"type": "string"},
+			},
+			"required":             []string{"evidence_id", "label"},
+			"additionalProperties": false,
+		},
+	}
+}
+
+func mcpTechnicalReportsSchema() map[string]any {
+	return map[string]any{
+		"type": "array",
+		"items": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"title":   map[string]any{"type": "string"},
+				"summary": map[string]any{"type": "string"},
+			},
+			"required":             []string{"title", "summary"},
+			"additionalProperties": false,
+		},
+	}
+}
+
+func mcpListEventsSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"offset": map[string]any{"type": "integer", "minimum": 0},
+			"limit":  map[string]any{"type": "integer", "minimum": 1, "maximum": 1000},
+		},
+		"additionalProperties": false,
 	}
 }
 
@@ -620,21 +835,16 @@ func (s *mcpServer) callTool(ctx context.Context, session *mcpSession, params js
 		}
 		return toolResult(result, mapString(result["state"]) == "error"), nil
 	}
+	if call.Name == "get_case_result" {
+		result, err := s.getCaseResult(ctx, session)
+		if err != nil {
+			return toolResult(map[string]any{"ok": false, "error": err.Error()}, true), nil
+		}
+		return toolResult(result, false), nil
+	}
 	status, err := s.getCurrent(ctx, session)
 	if err != nil {
 		return toolResult(map[string]any{"ok": false, "error": err.Error()}, true), nil
-	}
-	if !toolAvailable(status, call.Name) {
-		return toolResult(map[string]any{
-			"ok":      false,
-			"case_id": session.CaseID,
-			"role_id": session.RoleID,
-			"turn":    status["turn"],
-			"error": map[string]any{
-				"code":    "tool_unavailable",
-				"message": fmt.Sprintf("tool %q is not available for this role and turn", call.Name),
-			},
-		}, true), nil
 	}
 	result, err := s.postTool(ctx, session, status, call.Name, call.Arguments)
 	if err != nil {
@@ -642,15 +852,6 @@ func (s *mcpServer) callTool(ctx context.Context, session *mcpSession, params js
 	}
 	ok, _ := result["ok"].(bool)
 	return toolResult(result, !ok), nil
-}
-
-func toolAvailable(status map[string]any, name string) bool {
-	for _, tool := range lawyerToolsFromStatus(status) {
-		if mapString(tool["name"]) == name {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *mcpServer) getCurrent(ctx context.Context, session *mcpSession) (map[string]any, error) {
@@ -677,6 +878,36 @@ func (s *mcpServer) getCurrent(ctx context.Context, session *mcpSession) (map[st
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("Lawyer API GET returned HTTP %d: %s", resp.StatusCode, compactJSON(value))
+	}
+	return value, nil
+}
+
+func (s *mcpServer) getCaseResult(ctx context.Context, session *mcpSession) (map[string]any, error) {
+	u, err := url.Parse(session.LawyerAPIBase + "/result")
+	if err != nil {
+		return nil, fmt.Errorf("build Lawyer API result URL: %w", err)
+	}
+	query := u.Query()
+	query.Set("case_id", session.CaseID)
+	query.Set("role_id", session.RoleID)
+	u.RawQuery = query.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("call Lawyer API result: %w", err)
+	}
+	defer resp.Body.Close()
+	value, err := decodeJSONObject(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("decode Lawyer API result response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		value["ok"] = false
+		value["http_status"] = resp.StatusCode
+		value["message"] = fmt.Sprintf("Lawyer API result returned HTTP %d.", resp.StatusCode)
 	}
 	return value, nil
 }

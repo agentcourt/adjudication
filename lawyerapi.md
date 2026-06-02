@@ -12,6 +12,7 @@ The first implementation serves one case from one `aar case` process.  Each requ
 | --- | --- | --- |
 | `GET` | `/lawyerapi/v1/get?case_id={case_id}&role_id={role_id}` | Return role status, prompt, tools, limits, and the live turn budget. |
 | `GET` | `/lawyerapi/v1/wait?case_id={case_id}&role_id={role_id}` | Wait for role status or case state to change, then return the same status shape as `GET /get`. |
+| `GET` | `/lawyerapi/v1/result?case_id={case_id}&role_id={role_id}` | Return final case results, including council votes and rationales, or report that the case is pending. |
 | `POST` | `/lawyerapi/v1/do` | Execute one tool call for the role. |
 
 All responses are JSON.  HTTP status codes describe request handling, and the response body uses `ok` to report whether the requested API operation succeeded.  Well-formed tool calls that fail procedural validation usually return HTTP `200` with `ok: false`, because the server understood the request and rejected the attempted action.
@@ -167,6 +168,74 @@ The response uses the same envelope as `GET /get` and adds a `wait` object:
 ```
 
 When `wait.reason` is `timeout`, the caller should call `wait` again with the returned `wait.version` as `after_version`.  When the role has an actionable opportunity, the response has `status: "ready"` and includes prompt, tools, limits, and the active `turn.opportunity_id`.  When the case reaches a terminal result while a wait request is active, the response has `status: "done"` and `final_reason`.  A remote runner can use `wait` to block on AAR state without inventing its own sleep interval.
+
+## RESULT
+
+`GET /lawyerapi/v1/result` requires `case_id` and `role_id`.  It is read-only and may be called by a lawyer or observer.  If the case is still open, it reports pending status and does not include a final result object.  The response uses the same envelope as the other Lawyer API read methods, including the live `turn` object when a lawyer turn is active.
+
+```bash
+curl -sS "$BASE/result?case_id=arb-1&role_id=observer"
+```
+
+A pending response has this shape:
+
+```json
+{
+  "ok": true,
+  "case_id": "arb-1",
+  "role_id": "observer",
+  "status": "pending",
+  "phase": "arguments",
+  "case_status": "open",
+  "message": "The case is still pending.",
+  "turn": {
+    "role_id": "plaintiff",
+    "phase": "arguments",
+    "opportunity_id": "arguments:plaintiff"
+  }
+}
+```
+
+When the case is closed, the response includes the resolution, final reason when known, all council votes with rationales, and a vote tally by round.  The `rationale` field is the council member's explanation for that vote.
+
+```json
+{
+  "ok": true,
+  "case_id": "arb-1",
+  "role_id": "observer",
+  "status": "done",
+  "phase": "closed",
+  "case_status": "closed",
+  "final_reason": "threshold_met",
+  "result": {
+    "resolution": "demonstrated",
+    "phase": "closed",
+    "case_status": "closed",
+    "final_reason": "threshold_met",
+    "deliberation_round": 1,
+    "council_votes": [
+      {
+        "round": 1,
+        "member_id": "C1",
+        "vote": "demonstrated",
+        "rationale": "The admitted record proved the proposition by a preponderance."
+      }
+    ],
+    "vote_tally": {
+      "final_round": 1,
+      "demonstrated": 1,
+      "not_demonstrated": 0,
+      "rounds": [
+        {
+          "round": 1,
+          "demonstrated": 1,
+          "not_demonstrated": 0
+        }
+      ]
+    }
+  }
+}
+```
 
 ## POST
 
