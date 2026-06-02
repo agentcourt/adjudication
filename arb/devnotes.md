@@ -24,6 +24,8 @@ The MCP behavior now has separate root-level specification and test-plan documen
 
 The test plan separates unit, process, and service tests.  It covers session binding, authentication, origin checks, tool lists, wait normalization, opportunity-id injection, forwarding, error propagation, process health, logs, and service-backed lawyer, observer, and council assignments.  OpenClaw and Pi runs remain outside the minimum passing set for this adapter boundary.
 
+The first executable pass now starts `aar-mcp` as a subprocess, drives `/mcp` with JSON-RPC over HTTP, and uses fake Lawyer and Council role APIs behind the adapter.  The tests cover invalid startup, health readiness, bearer authentication, origin checks, missing and deleted sessions, lawyer, observer, and council tool sets, wait-state normalization, opportunity-id injection, AAR `ok:false` and non-2xx propagation, outbound service authorization, and log redaction.  Idle-session expiry remains a direct unit test because testing it through the process would depend on wall-clock timing rather than the expiry rule.
+
 ### Provider and transport cleanup
 
 Reference: [Council API](../councilapi.md), [OpenClaw service runbook](running.md), [Pi container README](../common/pi-container/README.md)
