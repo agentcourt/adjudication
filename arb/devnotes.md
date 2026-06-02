@@ -2,6 +2,16 @@
 
 ## 2026-06-01
 
+### Council API and MCP adapter
+
+Reference: [Council HTTP API](../councilapi.md)
+
+The Council API follows the Lawyer API architecture but binds each active client to `case_id` and `member_id`.  The HTTP server exposes `get`, `wait`, and `do`, and the MCP adapter only brokers those calls over Streamable HTTP.  The API keeps vote validation, deadlines, attempts, and evidence read budgets in AAR rather than moving that state into an agent adapter.
+
+The adapter uses one MCP session per case-member.  A failed or expired MCP session can be re-created with the same URL because AAR remains the source of the active opportunity and turn budget.  The council tool set is small enough to expose dynamically from the current Council API status without adding adapter-side arbitration rules.
+
+## 2026-06-01
+
 ### Lawyer API
 
 Reference: [Lawyer HTTP API](../lawyerapi.md)

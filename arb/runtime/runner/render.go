@@ -17,7 +17,7 @@ func (rc *runContext) recordEvent(eventType string, role string, phase string, p
 
 func (rc *runContext) recordEventAtTurn(turn int, eventType string, role string, phase string, payload map[string]any) error {
 	event := Event{
-		Timestamp: time.Now().Format("2006-01-02 15:04:05.000"),
+		Timestamp: time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00"),
 		Turn:      turn,
 		Role:      role,
 		Phase:     phase,

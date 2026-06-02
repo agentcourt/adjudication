@@ -212,7 +212,7 @@ func TestRunCaseRejectsInvalidCouncilBackend(t *testing.T) {
 	if summary.Status != "error" {
 		t.Fatalf("summary status = %q, want error", summary.Status)
 	}
-	if !strings.Contains(summary.Error, "council backend must be direct or pi") {
+	if !strings.Contains(summary.Error, "council backend must be direct, pi, or councilapi") {
 		t.Fatalf("summary error = %q, want invalid council backend message", summary.Error)
 	}
 }

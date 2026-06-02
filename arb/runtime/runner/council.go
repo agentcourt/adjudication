@@ -16,8 +16,11 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client coun
 	if !ok {
 		return fmt.Errorf("unknown council member %q", memberID)
 	}
-	if NormalizeCouncilBackend(rc.cfg.CouncilBackend) == councilBackendPI {
+	switch NormalizeCouncilBackend(rc.cfg.CouncilBackend) {
+	case councilBackendPI:
 		return rc.executeCouncilACPOpportunity(ctx, opportunity, seat)
+	case councilBackendAPI:
+		return rc.executeCouncilAPIOpportunity(ctx, opportunity, seat)
 	}
 	ctx, cancel := withTimeout(ctx, rc.cfg.Runtime.CouncilTimeout())
 	defer cancel()
@@ -129,6 +132,9 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client coun
 		if rc.lawyerAPI != nil {
 			rc.lawyerAPI.signalChanged()
 		}
+		if rc.councilAPI != nil {
+			rc.councilAPI.signalChanged()
+		}
 		eventPayload := map[string]any{
 			"member_id": memberID,
 			"model":     seat.Model,
@@ -209,6 +215,9 @@ func (rc *runContext) removeCouncilMember(opportunity Opportunity, seat CouncilS
 	rc.state = mapAny(stepResp["state"])
 	if rc.lawyerAPI != nil {
 		rc.lawyerAPI.signalChanged()
+	}
+	if rc.councilAPI != nil {
+		rc.councilAPI.signalChanged()
 	}
 	return rc.recordEvent("council_member_removed", "system", opportunity.Phase, map[string]any{
 		"member_id": memberID,

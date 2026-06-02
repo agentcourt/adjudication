@@ -1092,7 +1092,7 @@ func TestBuildCouncilACPPromptConstrainsJurorInvestigation(t *testing.T) {
 }
 
 func TestCouncilBackendValidation(t *testing.T) {
-	for _, backend := range []string{"", "direct", "pi", "PI"} {
+	for _, backend := range []string{"", "direct", "pi", "PI", "councilapi", "COUNCILAPI"} {
 		if err := ValidateCouncilBackend(backend); err != nil {
 			t.Fatalf("ValidateCouncilBackend(%q) returned error: %v", backend, err)
 		}

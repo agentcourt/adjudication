@@ -610,6 +610,9 @@ func (api *lawyerAPIServer) commitEvidenceUploadLocked(turn *lawyerTurn, args ma
 	}
 	api.rc.state = mapAny(stepResp["state"])
 	api.signalChangedLocked()
+	if api.rc.councilAPI != nil {
+		api.rc.councilAPI.signalChanged()
+	}
 	api.rc.caseFiles = append(api.rc.caseFiles, file)
 	api.rc.fileByID[file.EvidenceID] = file
 	api.rc.submittedEvidence = append(api.rc.submittedEvidence, meta)
@@ -647,6 +650,9 @@ func (api *lawyerAPIServer) submitEvidenceLocked(turn *lawyerTurn, args map[stri
 	meta.EvidenceID = evidence.EvidenceID
 	api.rc.state = mapAny(stepResp["state"])
 	api.signalChangedLocked()
+	if api.rc.councilAPI != nil {
+		api.rc.councilAPI.signalChanged()
+	}
 	api.rc.caseFiles = append(api.rc.caseFiles, file)
 	api.rc.fileByID[file.EvidenceID] = file
 	api.rc.submittedEvidence = append(api.rc.submittedEvidence, meta)
@@ -680,6 +686,9 @@ func (api *lawyerAPIServer) submitDecisionLocked(turn *lawyerTurn, args map[stri
 	}
 	api.rc.state = mapAny(stepResp["state"])
 	api.signalChangedLocked()
+	if api.rc.councilAPI != nil {
+		api.rc.councilAPI.signalChanged()
+	}
 	if err := api.rc.recordEventAtTurn(turn.turnNumber, "attorney_action", turn.opportunity.Role, turn.opportunity.Phase, map[string]any{
 		"opportunity_id": turn.opportunity.ID,
 		"action_type":    actionType,

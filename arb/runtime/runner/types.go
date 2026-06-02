@@ -59,6 +59,7 @@ type Config struct {
 	AttorneyArgumentPromptPath string
 	AttorneyRebuttalPromptPath string
 	LawyerAPIAddr              string
+	CouncilAPIAddr             string
 	Policy                     Policy
 	Runtime                    RuntimeLimits
 	XProxyConfigPath           string
@@ -205,6 +206,7 @@ type runContext struct {
 	attorneys         map[string]AttorneyRunInfo
 	acpSessions       map[string]*acpPersistentSession
 	lawyerAPI         *lawyerAPIServer
+	councilAPI        *councilAPIServer
 	workProductDirs   map[string]string
 	events            []Event
 	turn              int

@@ -47,7 +47,8 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	legacyCommonRoot := fs.String("agentcourt-root", "", "Deprecated alias for --common-root")
 	councilPool := fs.String("council-pool", "", "Council model/persona pool file. Default: <common-root>/data/personas/pool.csv")
 	lawyerAPIAddr := fs.String("lawyerapi-addr", "127.0.0.1:0", "Lawyer API listen address")
-	councilBackend := fs.String("council-backend", "direct", "Council backend: direct or pi. pi runs jurors as read-only Pi ACP agents")
+	councilAPIAddr := fs.String("councilapi-addr", "127.0.0.1:0", "Council API listen address when --council-backend=councilapi")
+	councilBackend := fs.String("council-backend", "direct", "Council backend: direct, pi, or councilapi")
 	councilACPCommand := fs.String("council-acp-command", "", "Council ACP command override for --council-backend=pi. Default: <common-root>/pi-container/acp-podman.sh")
 	councilACPSessionCwd := fs.String("council-acp-session-cwd", "", "Council ACP session cwd override for --council-backend=pi")
 	xproxyConfig := fs.String("xproxy-config", "", "xproxy config path. Default: <common-root>/etc/xproxy.json")
@@ -177,6 +178,7 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		XProxyConfigPath:           xproxyConfigPath,
 		XProxyPort:                 *xproxyPort,
 		CouncilBackend:             runner.NormalizeCouncilBackend(*councilBackend),
+		CouncilAPIAddr:             strings.TrimSpace(*councilAPIAddr),
 		CouncilACPCommand:          councilACPCommandPath,
 		CouncilACPSessionCwd:       strings.TrimSpace(*councilACPSessionCwd),
 		Engine:                     lean.New([]string{*enginePath}),

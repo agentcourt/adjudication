@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"adjudication/arb/runtime/spec"
 )
@@ -69,6 +70,25 @@ func TestExportAttorneyWorkProduct(t *testing.T) {
 	}
 	if string(raw) != "line one\n" {
 		t.Fatalf("exported note = %q, want %q", string(raw), "line one\n")
+	}
+}
+
+func TestRecordEventUsesUTCTimestamp(t *testing.T) {
+	rc := &runContext{
+		cfg: Config{OutputDir: t.TempDir()},
+	}
+	if err := rc.recordEventAtTurn(1, "test_event", "system", "openings", nil); err != nil {
+		t.Fatalf("recordEventAtTurn returned error: %v", err)
+	}
+	if len(rc.events) != 1 {
+		t.Fatalf("event count = %d, want 1", len(rc.events))
+	}
+	timestamp := rc.events[0].Timestamp
+	if !strings.HasSuffix(timestamp, "Z") {
+		t.Fatalf("timestamp = %q, want UTC suffix", timestamp)
+	}
+	if _, err := time.Parse("2006-01-02T15:04:05.000Z07:00", timestamp); err != nil {
+		t.Fatalf("timestamp = %q, want millisecond UTC timestamp: %v", timestamp, err)
 	}
 }
 

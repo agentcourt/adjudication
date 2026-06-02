@@ -111,10 +111,23 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 		if closeErr := rc.lawyerAPI.Close(shutdownCtx); closeErr != nil {
 			err = errors.Join(err, closeErr)
 		}
+		if rc.councilAPI != nil {
+			if closeErr := rc.councilAPI.Close(shutdownCtx); closeErr != nil {
+				err = errors.Join(err, closeErr)
+			}
+		}
 		if closeErr := rc.closeACPSessions(); closeErr != nil {
 			err = errors.Join(err, closeErr)
 		}
 	}()
+	if cfg.CouncilBackend == councilBackendAPI {
+		councilAPI, err := startCouncilAPIServer(rc)
+		if err != nil {
+			return Result{}, err
+		}
+		rc.councilAPI = councilAPI
+		fmt.Fprintf(os.Stderr, "councilapi listening on %s\n", councilAPI.baseURL)
+	}
 	for _, replacement := range councilReplacements {
 		if err := rc.recordEvent("council_member_replaced", "system", currentPhase(rc.state), map[string]any{
 			"member_id":                    replacement.MemberID,
@@ -145,6 +158,9 @@ func Run(ctx context.Context, cfg Config, complaint spec.Complaint) (result Resu
 		if terminal {
 			if rc.lawyerAPI != nil {
 				rc.lawyerAPI.setTerminal(reason)
+			}
+			if rc.councilAPI != nil {
+				rc.councilAPI.setTerminal(reason)
 			}
 			finishedAt := time.Now().UTC()
 			result := Result{
