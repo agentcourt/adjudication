@@ -42,7 +42,10 @@ func runLocal(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 	runID := fs.String("run-id", "", "Run ID override")
 	caseID := fs.String("case-id", "", "Case ID")
 	lawyerInstructions := fs.String("lawyer-instructions", filepath.Join("agent-instructions", "openclaw-lawyer.md.tmpl"), "OpenClaw lawyer instruction template")
+	remoteLawyerSkill := fs.String("remote-lawyer-skill", filepath.Join("agent-instructions", "openclaw-remote-lawyer-skill.md.tmpl"), "OpenClaw remote lawyer skill template")
 	councilInstructions := fs.String("council-instructions", filepath.Join("agent-instructions", "pi-council.md.tmpl"), "Pi council instruction template")
+	autoLawyers := fs.String("auto-lawyers", "both", "OpenClaw lawyers started by aar run: both, plaintiff, or defendant")
+	mcpPublicBaseURL := fs.String("mcp-public-base-url", "", "Public MCP base URL for remote lawyers, for example http://aar-host.example:8001")
 	dockerCommand := fs.String("docker", "docker", "Docker command")
 	podmanCommand := fs.String("podman", "podman", "Podman command")
 	openClawImage := fs.String("openclaw-image", "", "OpenClaw container image")
@@ -121,7 +124,10 @@ func runLocal(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 		RunID:                      *runID,
 		CaseID:                     *caseID,
 		LawyerInstructionsPath:     *lawyerInstructions,
+		RemoteLawyerSkillPath:      *remoteLawyerSkill,
 		CouncilInstructionsPath:    *councilInstructions,
+		AutoLawyers:                *autoLawyers,
+		MCPPublicBaseURL:           *mcpPublicBaseURL,
 		DockerCommand:              *dockerCommand,
 		PodmanCommand:              *podmanCommand,
 		OpenClawImage:              *openClawImage,

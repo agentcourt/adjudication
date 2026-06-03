@@ -62,6 +62,26 @@ func TestPiCouncilInstructionsUseProxyToolNames(t *testing.T) {
 	}
 }
 
+func TestRemoteLawyerSkillIncludesConnectionAndWorkLoop(t *testing.T) {
+	path := filepath.Join("..", "..", "agent-instructions", "openclaw-remote-lawyer-skill.md.tmpl")
+	mcpJSON := `{"url":"http://aar.example:8001/mcp?case_id=case-1&role_id=plaintiff","transport":"streamable-http","headers":{"Authorization":"Bearer token-1"}}`
+	got, err := renderInstructions(path, instructionData{
+		CaseID:    "case-1",
+		RoleID:    "plaintiff",
+		MCPServer: "aar-case-1-plaintiff",
+		MCPURL:    "http://aar.example:8001/mcp?case_id=case-1&role_id=plaintiff",
+		MCPJSON:   mcpJSON,
+	})
+	if err != nil {
+		t.Fatalf("render instructions: %v", err)
+	}
+	for _, want := range []string{"openclaw mcp set", "aar-case-1-plaintiff", "Bearer token-1", "wait_for_opportunity", "send_work_notes", "submit_evidence", "submit_decision"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rendered skill missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestWritePiConfigFromRosterEntry(t *testing.T) {
 	maxTokens := int64(1234)
 	allowFallbacks := false
@@ -339,17 +359,100 @@ func TestApplyDefaultsOpenClawStartDelay(t *testing.T) {
 	}
 }
 
+func TestAutoLawyerRoles(t *testing.T) {
+	tests := []struct {
+		mode string
+		want string
+	}{
+		{mode: "both", want: "plaintiff,defendant"},
+		{mode: "plaintiff", want: "plaintiff"},
+		{mode: "defendant", want: "defendant"},
+	}
+	for _, tc := range tests {
+		got, err := autoLawyerRoles(tc.mode)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.mode, err)
+		}
+		if strings.Join(got, ",") != tc.want {
+			t.Fatalf("%s roles = %#v", tc.mode, got)
+		}
+	}
+	if _, err := autoLawyerRoles("none"); err == nil {
+		t.Fatalf("expected invalid mode error")
+	}
+	if got := strings.Join(manualLawyerRoles("defendant"), ","); got != "plaintiff" {
+		t.Fatalf("manual roles = %q", got)
+	}
+}
+
+func TestPublicMCPBaseAndManualAddressValidation(t *testing.T) {
+	base, err := publicMCPBase("http://aar.example:8001/", "0.0.0.0:1234")
+	if err != nil {
+		t.Fatalf("public base: %v", err)
+	}
+	if base != "http://aar.example:8001" {
+		t.Fatalf("base = %q", base)
+	}
+	if err := validateManualLawyerAddress("", "0.0.0.0:1234"); err == nil {
+		t.Fatalf("expected wildcard listen error")
+	}
+	if err := validateManualLawyerAddress("", "192.0.2.10:1234"); err != nil {
+		t.Fatalf("non-wildcard listen: %v", err)
+	}
+}
+
+func TestWriteRemoteLawyerSkill(t *testing.T) {
+	dir := t.TempDir()
+	templatePath := filepath.Join(dir, "remote.md.tmpl")
+	if err := os.WriteFile(templatePath, []byte("case={{.CaseID}} role={{.RoleID}} server={{.MCPServer}} url={{.MCPURL}} json={{.MCPJSON}}\n"), 0o644); err != nil {
+		t.Fatalf("write template: %v", err)
+	}
+	state := &runState{
+		opts: Options{
+			CaseID:                "case-1",
+			OutputDir:             dir,
+			RemoteLawyerSkillPath: templatePath,
+		},
+		mcpPublicBase: "http://aar.example:8001",
+		token:         "token-1",
+	}
+	if err := state.writeRemoteLawyerSkill("plaintiff"); err != nil {
+		t.Fatalf("write remote skill: %v", err)
+	}
+	path := filepath.Join(dir, "openclaw-plaintiff-lawyer-skill.md")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read skill: %v", err)
+	}
+	text := string(raw)
+	for _, want := range []string{"case=case-1", "role=plaintiff", "http://aar.example:8001/mcp?case_id=case-1&role_id=plaintiff", "Bearer token-1"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("skill missing %q: %s", want, text)
+		}
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat skill: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("skill mode = %o", info.Mode().Perm())
+	}
+}
+
 func TestWriteRunSummaryIncludesOpenClawStartDelay(t *testing.T) {
 	dir := t.TempDir()
 	if err := writeRunSummary(dir, proceeding.Result{
 		CaseID: "case-1",
 		RunID:  "run-1",
 		Status: "ok",
-	}, Options{OpenClawStartDelaySeconds: 15}); err != nil {
+	}, Options{OpenClawStartDelaySeconds: 15, AutoLawyers: "defendant", MCPPublicBaseURL: "http://aar.example:8001"}); err != nil {
 		t.Fatalf("write run summary: %v", err)
 	}
 	summary := readJSONMap(t, filepath.Join(dir, "local-run.json"))
 	if summary["openclaw_lawyer_start_delay_seconds"] != float64(15) {
+		t.Fatalf("summary = %#v", summary)
+	}
+	if summary["auto_lawyers"] != "defendant" || summary["mcp_public_base_url"] != "http://aar.example:8001" {
 		t.Fatalf("summary = %#v", summary)
 	}
 }

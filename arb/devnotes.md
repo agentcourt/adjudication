@@ -12,6 +12,8 @@ The staged Codex homes are deleted when the run exits because `auth.json` contai
 
 `aar run` now patches the in-container OpenClaw config before starting each lawyer.  The patch sets `plugins.entries.codex.config.appServer.turnCompletionIdleTimeoutMs` and `postToolRawAssistantCompletionIdleTimeoutMs` to the effective AAR lawyer turn timeout.  The ex1 OpenClaw/Pi run on 2026-06-03 failed before this change because the embedded Codex app server abandoned a provider turn after about 120 seconds during plaintiff opening.  The rerun passed that point, completed all lawyer filings, and closed the case.
 
+`aar run --auto-lawyers` controls which OpenClaw lawyers the local process starts.  The default `both` starts plaintiff and defendant.  `plaintiff` starts only the plaintiff and writes `openclaw-defendant-lawyer-skill.md` for a remote defendant; `defendant` starts only the defendant and writes `openclaw-plaintiff-lawyer-skill.md` for a remote plaintiff.  Manual lawyer mode requires a reachable MCP URL.  Use `--mcp-public-base-url` when `--mcp-listen` binds to a wildcard address.
+
 ### AAR opportunity failure
 
 Reference: [AAR Case Failures](../case-failures.md)

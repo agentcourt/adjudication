@@ -43,6 +43,10 @@ mkdir -p work/defamation
 
 When `--file` is absent, `aar case` scans the complaint directory for initial evidence.  That scan skips the complaint itself, the situation file, `README.md`, signing evidence, and directories.  It loads `.txt`, `.md`, `.pem`, and `.b64` evidence as text-readable evidence, and it records other file types as byte-bearing evidence.
 
+`aar run` starts a complete local arbitration with OpenClaw lawyers, the AAR MCP server, and Pi council members.  By default it starts both OpenClaw lawyers.  Use `--auto-lawyers defendant` when a remote OpenClaw will act as plaintiff, or `--auto-lawyers plaintiff` when a remote OpenClaw will act as defendant.  For a remote lawyer, also provide a reachable MCP base URL, such as `--mcp-public-base-url http://aar-host.example:8001`, and bind MCP to that port with `--mcp-listen 0.0.0.0:8001`.
+
+When a lawyer is remote, `aar run` writes a role-specific skill file in the run output directory.  The plaintiff file is `openclaw-plaintiff-lawyer-skill.md`; the defendant file is `openclaw-defendant-lawyer-skill.md`.  Paste that file to the remote OpenClaw.  It contains the MCP server JSON, the exact `openclaw mcp set` command, the case id, the role id, and the work loop for waiting, investigating, submitting evidence, sending work notes, and filing each turn.
+
 ## Lawyer API
 
 The Lawyer API lets a plaintiff, defendant, or observer use plain HTTP.  A lawyer calls `GET /lawyerapi/v1/get` with `case_id` and `role_id` to receive the current prompt, available tools, role status, opportunity id, live deadline, attempts left, and limits.  A remote runner can call `GET /lawyerapi/v1/wait` to block until its role has work or case state changes.  A lawyer copies `turn.opportunity_id` from the ready response into each `POST /lawyerapi/v1/do` request for the turn.  `POST /do` executes one tool call, including `submit_decision` when the role is ready to file the legal act for the turn.

@@ -32,6 +32,7 @@ const (
 	defaultOpenClawTimeoutSeconds = 3600
 	defaultOpenClawAuth           = "auto"
 	defaultOpenClawStartDelay     = 15
+	defaultAutoLawyers            = "both"
 	defaultPiImage                = "agentcourt-pi-sandbox"
 	defaultPiMCPAdapter           = "npm:pi-mcp-adapter"
 	defaultPiMCPServer            = "aar"
@@ -65,7 +66,10 @@ type Options struct {
 	RunID                      string
 	CaseID                     string
 	LawyerInstructionsPath     string
+	RemoteLawyerSkillPath      string
 	CouncilInstructionsPath    string
+	AutoLawyers                string
+	MCPPublicBaseURL           string
 	DockerCommand              string
 	PodmanCommand              string
 	OpenClawImage              string
@@ -88,6 +92,7 @@ type instructionData struct {
 	MemberID  string
 	MCPServer string
 	MCPURL    string
+	MCPJSON   string
 }
 
 type processRecord struct {
@@ -132,6 +137,7 @@ type runState struct {
 	logDir        string
 	caseBase      string
 	mcpBase       string
+	mcpPublicBase string
 	token         string
 	openClawAuth  openClawAuthConfig
 	processes     []*processRecord
@@ -191,6 +197,15 @@ func Run(ctx context.Context, opts Options) (result proceeding.Result, err error
 	mcpListenAddr, err := resolveListenAddr(opts.MCPListenAddr, "0.0.0.0")
 	if err != nil {
 		return proceeding.Result{}, fmt.Errorf("resolve MCP listen address: %w", err)
+	}
+	state.mcpPublicBase, err = publicMCPBase(opts.MCPPublicBaseURL, mcpListenAddr)
+	if err != nil {
+		return proceeding.Result{}, err
+	}
+	if len(manualLawyerRoles(opts.AutoLawyers)) > 0 {
+		if err := validateManualLawyerAddress(opts.MCPPublicBaseURL, mcpListenAddr); err != nil {
+			return proceeding.Result{}, err
+		}
 	}
 	_, mcpPort, err := net.SplitHostPort(mcpListenAddr)
 	if err != nil {
@@ -253,17 +268,31 @@ func Run(ctx context.Context, opts Options) (result proceeding.Result, err error
 		return proceeding.Result{}, err
 	}
 
-	if err := state.startOpenClawLawyer(runCtx, "plaintiff", mcpPort); err != nil {
-		cancel()
-		return proceeding.Result{}, err
+	for _, role := range manualLawyerRoles(opts.AutoLawyers) {
+		if err := state.writeRemoteLawyerSkill(role); err != nil {
+			cancel()
+			return proceeding.Result{}, err
+		}
 	}
-	if err := state.waitOpenClawStartDelay(runCtx); err != nil {
-		cancel()
-		return proceeding.Result{}, err
+	startedPlaintiff := false
+	if autoLawyerEnabled(opts.AutoLawyers, "plaintiff") {
+		if err := state.startOpenClawLawyer(runCtx, "plaintiff", mcpPort); err != nil {
+			cancel()
+			return proceeding.Result{}, err
+		}
+		startedPlaintiff = true
 	}
-	if err := state.startOpenClawLawyer(runCtx, "defendant", mcpPort); err != nil {
-		cancel()
-		return proceeding.Result{}, err
+	if autoLawyerEnabled(opts.AutoLawyers, "defendant") {
+		if startedPlaintiff {
+			if err := state.waitOpenClawStartDelay(runCtx); err != nil {
+				cancel()
+				return proceeding.Result{}, err
+			}
+		}
+		if err := state.startOpenClawLawyer(runCtx, "defendant", mcpPort); err != nil {
+			cancel()
+			return proceeding.Result{}, err
+		}
 	}
 	roster, err := state.waitForCouncilRoster(runCtx, caseDone, mcpDone)
 	if err != nil {
@@ -362,8 +391,14 @@ func applyDefaults(opts Options) Options {
 	if strings.TrimSpace(opts.LawyerInstructionsPath) == "" {
 		opts.LawyerInstructionsPath = filepath.Join("agent-instructions", "openclaw-lawyer.md.tmpl")
 	}
+	if strings.TrimSpace(opts.RemoteLawyerSkillPath) == "" {
+		opts.RemoteLawyerSkillPath = filepath.Join("agent-instructions", "openclaw-remote-lawyer-skill.md.tmpl")
+	}
 	if strings.TrimSpace(opts.CouncilInstructionsPath) == "" {
 		opts.CouncilInstructionsPath = filepath.Join("agent-instructions", "pi-council.md.tmpl")
+	}
+	if strings.TrimSpace(opts.AutoLawyers) == "" {
+		opts.AutoLawyers = defaultAutoLawyers
 	}
 	return opts
 }
@@ -381,12 +416,51 @@ func validateOptions(opts Options) error {
 	if strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")) == "" {
 		return fmt.Errorf("OPENROUTER_API_KEY is required for Pi council")
 	}
-	for _, path := range []string{opts.LawyerInstructionsPath, opts.CouncilInstructionsPath} {
+	if _, err := autoLawyerRoles(opts.AutoLawyers); err != nil {
+		return err
+	}
+	for _, path := range []string{opts.LawyerInstructionsPath, opts.RemoteLawyerSkillPath, opts.CouncilInstructionsPath} {
 		if _, err := os.Stat(path); err != nil {
 			return fmt.Errorf("stat instruction template %s: %w", path, err)
 		}
 	}
 	return nil
+}
+
+func autoLawyerRoles(mode string) ([]string, error) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "both":
+		return []string{"plaintiff", "defendant"}, nil
+	case "plaintiff":
+		return []string{"plaintiff"}, nil
+	case "defendant":
+		return []string{"defendant"}, nil
+	default:
+		return nil, fmt.Errorf("invalid auto lawyer mode %q; expected both, plaintiff, or defendant", mode)
+	}
+}
+
+func autoLawyerEnabled(mode string, role string) bool {
+	roles, err := autoLawyerRoles(mode)
+	if err != nil {
+		return false
+	}
+	for _, current := range roles {
+		if current == role {
+			return true
+		}
+	}
+	return false
+}
+
+func manualLawyerRoles(mode string) []string {
+	manual := []string{}
+	for _, role := range []string{"plaintiff", "defendant"} {
+		if !autoLawyerEnabled(mode, role) {
+			manual = append(manual, role)
+		}
+	}
+	return manual
 }
 
 func defaultCodexAuthPath() string {
@@ -498,6 +572,48 @@ func resolveListenAddr(value string, defaultHost string) (string, error) {
 	return net.JoinHostPort(host, port), nil
 }
 
+func publicMCPBase(value string, listenAddr string) (string, error) {
+	value = strings.TrimRight(strings.TrimSpace(value), "/")
+	if value == "" {
+		return "http://" + listenAddr, nil
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return "", fmt.Errorf("parse MCP public base URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("MCP public base URL must use http or https")
+	}
+	if strings.TrimSpace(parsed.Host) == "" {
+		return "", fmt.Errorf("MCP public base URL requires a host")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("MCP public base URL must not contain a query or fragment")
+	}
+	return value, nil
+}
+
+func validateManualLawyerAddress(publicBase string, listenAddr string) error {
+	if strings.TrimSpace(publicBase) != "" {
+		return nil
+	}
+	host, _, err := net.SplitHostPort(listenAddr)
+	if err != nil {
+		return fmt.Errorf("parse MCP listen address %q: %w", listenAddr, err)
+	}
+	switch host {
+	case "", "0.0.0.0", "::":
+		return fmt.Errorf("manual lawyer mode requires --mcp-public-base-url when --mcp-listen uses a wildcard host")
+	default:
+		return nil
+	}
+}
+
+func appendMCPAssignment(baseURL string, caseID string, key string, value string) string {
+	baseURL = strings.TrimRight(baseURL, "/")
+	return baseURL + "/mcp?case_id=" + url.QueryEscape(caseID) + "&" + key + "=" + url.QueryEscape(value)
+}
+
 func waitForHealth(ctx context.Context, rawURL string, timeout time.Duration) error {
 	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -569,7 +685,7 @@ func (s *runState) waitForMCP(ctx context.Context, caseDone <-chan caseOutcome, 
 
 func (s *runState) startOpenClawLawyer(ctx context.Context, role string, mcpPort string) error {
 	server := "aar-" + s.opts.CaseID + "-" + role
-	mcpURL := "http://" + net.JoinHostPort(s.opts.DockerMCPHost, mcpPort) + "/mcp?case_id=" + url.QueryEscape(s.opts.CaseID) + "&role_id=" + url.QueryEscape(role)
+	mcpURL := appendMCPAssignment("http://"+net.JoinHostPort(s.opts.DockerMCPHost, mcpPort), s.opts.CaseID, "role_id", role)
 	instructions, err := renderInstructions(s.opts.LawyerInstructionsPath, instructionData{
 		CaseID:    s.opts.CaseID,
 		RoleID:    role,
@@ -619,6 +735,38 @@ func (s *runState) startOpenClawLawyer(ctx context.Context, role string, mcpPort
 	s.mu.Lock()
 	s.processes = append(s.processes, proc)
 	s.mu.Unlock()
+	return nil
+}
+
+func (s *runState) writeRemoteLawyerSkill(role string) error {
+	server := "aar-" + s.opts.CaseID + "-" + role
+	mcpURL := appendMCPAssignment(s.mcpPublicBase, s.opts.CaseID, "role_id", role)
+	mcpJSON, err := json.Marshal(map[string]any{
+		"url":       mcpURL,
+		"transport": "streamable-http",
+		"headers":   map[string]string{"Authorization": "Bearer " + s.token},
+	})
+	if err != nil {
+		return err
+	}
+	instructions, err := renderInstructions(s.opts.RemoteLawyerSkillPath, instructionData{
+		CaseID:    s.opts.CaseID,
+		RoleID:    role,
+		MCPServer: server,
+		MCPURL:    mcpURL,
+		MCPJSON:   string(mcpJSON),
+	})
+	if err != nil {
+		return err
+	}
+	name := "openclaw-" + role + "-lawyer-skill.md"
+	path := filepath.Join(s.opts.OutputDir, name)
+	if err := os.WriteFile(path, []byte(instructions), 0o600); err != nil {
+		return fmt.Errorf("write remote lawyer skill %s: %w", path, err)
+	}
+	if s.opts.Log != nil {
+		fmt.Fprintf(s.opts.Log, "remote %s lawyer skill written to %s\n", role, path)
+	}
 	return nil
 }
 
@@ -859,7 +1007,7 @@ func (s *runState) startPiCouncil(ctx context.Context, entry councilRosterEntry,
 		return fmt.Errorf("council opportunity id is required for %s", entry.MemberID)
 	}
 	server := defaultPiMCPServer
-	mcpURL := "http://" + net.JoinHostPort(s.opts.PodmanMCPHost, mcpPort) + "/mcp?case_id=" + url.QueryEscape(s.opts.CaseID) + "&member_id=" + url.QueryEscape(entry.MemberID)
+	mcpURL := appendMCPAssignment("http://"+net.JoinHostPort(s.opts.PodmanMCPHost, mcpPort), s.opts.CaseID, "member_id", entry.MemberID)
 	instructions, err := renderInstructions(s.opts.CouncilInstructionsPath, instructionData{
 		CaseID:    s.opts.CaseID,
 		MemberID:  entry.MemberID,
@@ -1190,6 +1338,8 @@ func writeRunSummary(outDir string, result proceeding.Result, opts Options) erro
 		"resolution":                          result.Resolution,
 		"error":                               result.Error,
 		"failure":                             result.Failure,
+		"auto_lawyers":                        opts.AutoLawyers,
+		"mcp_public_base_url":                 opts.MCPPublicBaseURL,
 		"openclaw_lawyer_start_delay_seconds": opts.OpenClawStartDelaySeconds,
 	})
 }
