@@ -1,28 +1,26 @@
-# Running AAR With OpenClaw Through The Service APIs
+# Running AAR With OpenClaw And Pi
 
 ## Purpose
 
-This runbook describes the current way to run an AAR case with real OpenClaw lawyers and Pi council members.  One host process runs `aar service`, one host process runs `aar mcp`, and one `aar case` child process runs each case.  OpenClaw containers act as lawyers through MCP tools that forward to the public service APIs.  Pi council members use the same MCP service, with each member configured from the council roster returned by AAR.
+This runbook describes the current way to run one local AAR case with real OpenClaw lawyers and Pi council members.  The command is `aar run`.  It starts the case runtime and MCP server in the same process, then starts one OpenClaw container for each lawyer and one Pi container for each council member.
 
-The service owns case creation, case ids, process lifecycle, routing, logs, result reads, and artifact reads.  The child runner owns arbitration state, turn order, deadlines, attempt budgets, evidence custody, filing validation, council voting, and final artifacts.  The MCP process stores only the assignment for one MCP session: `case_id` plus `role_id` for a lawyer or observer, or `case_id` plus `member_id` for a council member.
+The case runtime owns arbitration state, turn order, deadlines, attempt budgets, evidence custody, filing validation, council voting, and final artifacts.  The MCP server exposes the case runtime to remote-style agents.  Each MCP session stores only the assignment for that session: `case_id` plus `role_id` for a lawyer or observer, or `case_id` plus `member_id` for a council member.
 
 ## Topology
 
 | Process | Runs where | Role |
 | --- | --- | --- |
-| `aar service` | host | Starts cases, records case metadata, and routes public HTTP calls by `case_id`. |
-| `aar case` | host child process | Runs one arbitration and exposes private Lawyer and Council APIs on localhost. |
-| `aar mcp` | host | Exposes Streamable HTTP MCP and forwards tool calls to `aar service`. |
+| `aar run` | host | Runs one arbitration, starts the case API and MCP server, starts local agents, and writes artifacts. |
 | OpenClaw lawyer containers | Docker or remote host | Act as plaintiff and defendant through MCP. |
 | Pi council containers | Podman or remote host | Act as council members through MCP. |
 
-Local Docker containers reach the host MCP server through `host.docker.internal`.  On Linux, Docker needs `--add-host=host.docker.internal:host-gateway`.  The MCP server listens on a host address reachable from the containers, while `aar service` can stay on `127.0.0.1` because only the host MCP process and operator tools call it during local tests.
+Local Docker containers reach the host MCP server through `host.docker.internal`.  On Linux, Docker needs `--add-host=host.docker.internal:host-gateway`.  Pi containers run with Podman host networking and reach MCP through `127.0.0.1`.
 
 Lawyer containers must be treated like remote lawyers.  Do not mount the repository, the example directory, the output directory, or a case-packet directory into a lawyer container.  A lawyer receives case files only through AAR evidence tools, which matches a remote clawyer that has an MCP URL and token but no access to the operator filesystem.
 
 ## Case File Access
 
-`aar case` imports the complaint directory into the AAR record.  Files in the case packet become immutable `case_packet` evidence with an `evidence_id`, hash, size, MIME type, title, and storage record.  A lawyer or council member reads those files through MCP tools that forward to the service, then to the private runner API for that case.
+`aar run` imports the complaint directory into the AAR record.  Files in the case packet become immutable `case_packet` evidence with an `evidence_id`, hash, size, MIME type, title, and storage record.  A lawyer or council member reads those files through MCP tools that forward to the case API for that case.
 
 Every lawyer phase allows read-only evidence access.  Argument, rebuttal, and surrebuttal phases also allow evidence submission.  The current opportunity returned by `wait_for_opportunity` or `get_current_opportunity` states the court actions allowed for that turn.
 
@@ -40,19 +38,19 @@ This builds `.bin/aar` and the Lean engine used by the runtime.  The split MCP a
 
 ## Running One Example
 
-Use the example runner for local end-to-end tests:
+Run an example directly:
 
 ```bash
-examples/run-ex.sh ex1
+.bin/aar run ex1
 ```
 
-The script starts `aar service`, starts `aar mcp`, creates one case through `POST /api/v1/cases`, starts OpenClaw containers for plaintiff and defendant, starts Pi council members `C1` through `C5`, waits for the service result endpoint, and writes the output directory path to standard output.  Each OpenClaw container keeps one session key for the whole lawyer assignment.  Each Pi member receives one mounted home directory under the output directory, so its session files, MCP config, settings, and model config remain available for review.  The latest output path for an example is also written to `out/latest-exN-openclaw-lawyers.txt`.
+The command starts the case runtime and MCP server, starts OpenClaw containers for plaintiff and defendant, starts Pi council members from the AAR roster, and writes final artifacts under the output directory.  Each OpenClaw container keeps one session key for the whole lawyer assignment.  Each Pi member receives one mounted home directory under the output directory, so its session files, MCP config, settings, and model config remain available for review.
 
-The script sources provider keys from `~/keys.txt`.  It passes `OPENAI_API_KEY` into the OpenClaw lawyer containers and passes `OPENROUTER_API_KEY` into the Pi council containers.  It uses `gpt-5.5` for OpenClaw agents.  It does not mount case files or output directories into the lawyer containers.
+The command reads provider keys from the environment.  `OPENAI_API_KEY` is required for OpenClaw lawyers, and `OPENROUTER_API_KEY` is required for Pi council members.  It uses `gpt-5.5` for OpenClaw agents by default.  It does not mount case files or output directories into the lawyer containers.
 
 ## Manual Service Commands
 
-The example runner uses the same commands an operator would run by hand.  The service starts first:
+The service commands remain available for multi-case service work.  They are separate from `aar run`.  The service starts first:
 
 ```bash
 OUT=out/ex1-service-openclaw-$(date -u +%Y%m%d%H%M%S)

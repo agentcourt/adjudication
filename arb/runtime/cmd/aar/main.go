@@ -31,6 +31,8 @@ func dispatch(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 		return runCase(ctx, args[1:], stdout, stderr)
 	case "mcp":
 		return runMCP(ctx, args[1:], stdout, stderr)
+	case "run":
+		return runLocal(ctx, args[1:], stdout, stderr)
 	case "service":
 		return runService(ctx, args[1:], stdout, stderr)
 	case "complain":
@@ -47,6 +49,8 @@ func dispatch(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 			return runCase(ctx, []string{"-h"}, stdout, stderr)
 		case "mcp":
 			return runMCP(ctx, []string{"-h"}, stdout, stderr)
+		case "run":
+			return runLocal(ctx, []string{"-h"}, stdout, stderr)
 		case "service":
 			return runService(ctx, []string{"-h"}, stdout, stderr)
 		case "complain":
@@ -69,6 +73,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "Subcommands:")
 	fmt.Fprintln(w, "  case       Initialize an arbitration case from a complaint")
 	fmt.Fprintln(w, "  mcp        Run the AAR MCP service")
+	fmt.Fprintln(w, "  run        Run one local case with OpenClaw lawyers and Pi council")
 	fmt.Fprintln(w, "  service    Run the multi-case AAR HTTP service")
 	fmt.Fprintln(w, "  complain   Draft complaint.md from a situation markdown file")
 	fmt.Fprintln(w, "  validate   Validate a complaint file")
