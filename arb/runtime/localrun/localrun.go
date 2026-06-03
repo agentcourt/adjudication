@@ -33,6 +33,7 @@ const (
 	defaultOpenClawAuth           = "auto"
 	defaultPiImage                = "agentcourt-pi-sandbox"
 	defaultPiMCPAdapter           = "npm:pi-mcp-adapter"
+	defaultPiMCPServer            = "aar"
 	defaultCaseStartupWait        = 30 * time.Second
 	defaultCouncilRosterWait      = 2 * time.Minute
 	openClawCodexContainerHome    = "/aar-codex"
@@ -793,7 +794,7 @@ func (s *runState) startPiCouncil(ctx context.Context, entry councilRosterEntry,
 	if opportunityID == "" {
 		return fmt.Errorf("council opportunity id is required for %s", entry.MemberID)
 	}
-	server := "aar-" + s.opts.CaseID + "-" + entry.MemberID
+	server := defaultPiMCPServer
 	mcpURL := "http://" + net.JoinHostPort(s.opts.PodmanMCPHost, mcpPort) + "/mcp?case_id=" + url.QueryEscape(s.opts.CaseID) + "&member_id=" + url.QueryEscape(entry.MemberID)
 	instructions, err := renderInstructions(s.opts.CouncilInstructionsPath, instructionData{
 		CaseID:    s.opts.CaseID,

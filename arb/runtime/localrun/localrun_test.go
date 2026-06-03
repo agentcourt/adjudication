@@ -43,6 +43,24 @@ func TestRenderInstructionsRejectsMissingTemplateKey(t *testing.T) {
 	}
 }
 
+func TestPiCouncilInstructionsUseProxyToolNames(t *testing.T) {
+	path := filepath.Join("..", "..", "agent-instructions", "pi-council.md.tmpl")
+	got, err := renderInstructions(path, instructionData{
+		CaseID:    "case-1",
+		MemberID:  "C1",
+		MCPServer: defaultPiMCPServer,
+		MCPURL:    "http://127.0.0.1:19780/mcp?case_id=case-1&member_id=C1",
+	})
+	if err != nil {
+		t.Fatalf("render instructions: %v", err)
+	}
+	for _, want := range []string{"aar_wait_for_opportunity", "aar_get_case", "aar_list_evidence", "aar_stat_evidence", "aar_read_evidence_range", "aar_submit_council_vote"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rendered instructions missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestWritePiConfigFromRosterEntry(t *testing.T) {
 	maxTokens := int64(1234)
 	allowFallbacks := false
