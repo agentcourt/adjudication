@@ -10,6 +10,8 @@ Reference: [OpenClaw OAuth-Derived Codex Auth](openclaw-oauth.md)
 
 The staged Codex homes are deleted when the run exits because `auth.json` contains bearer and refresh credentials.  The implementation does not mount the operator's whole `~/.codex` directory into OpenClaw containers.  The API-key path still passes only the `OPENAI_API_KEY` environment variable into the OpenClaw container.
 
+`aar run` now patches the in-container OpenClaw config before starting each lawyer.  The patch sets `plugins.entries.codex.config.appServer.turnCompletionIdleTimeoutMs` and `postToolRawAssistantCompletionIdleTimeoutMs` to the effective AAR lawyer turn timeout.  The ex1 OpenClaw/Pi run on 2026-06-03 failed before this change because the embedded Codex app server abandoned a provider turn after about 120 seconds during plaintiff opening.  The rerun passed that point, completed all lawyer filings, and closed the case.
+
 ### AAR opportunity failure
 
 Reference: [AAR Case Failures](../case-failures.md)

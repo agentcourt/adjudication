@@ -31,6 +31,7 @@ const (
 	defaultOpenClawThinking       = "low"
 	defaultOpenClawTimeoutSeconds = 3600
 	defaultOpenClawAuth           = "auto"
+	defaultOpenClawStartDelay     = 15
 	defaultPiImage                = "agentcourt-pi-sandbox"
 	defaultPiMCPAdapter           = "npm:pi-mcp-adapter"
 	defaultPiMCPServer            = "aar"
@@ -73,6 +74,7 @@ type Options struct {
 	OpenClawTimeoutSeconds     int
 	OpenClawAuth               string
 	OpenClawCodexAuthPath      string
+	OpenClawStartDelaySeconds  int
 	PiImage                    string
 	PiMCPAdapter               string
 	DockerMCPHost              string
@@ -255,6 +257,10 @@ func Run(ctx context.Context, opts Options) (result proceeding.Result, err error
 		cancel()
 		return proceeding.Result{}, err
 	}
+	if err := state.waitOpenClawStartDelay(runCtx); err != nil {
+		cancel()
+		return proceeding.Result{}, err
+	}
 	if err := state.startOpenClawLawyer(runCtx, "defendant", mcpPort); err != nil {
 		cancel()
 		return proceeding.Result{}, err
@@ -274,7 +280,7 @@ func Run(ctx context.Context, opts Options) (result proceeding.Result, err error
 			if err := <-mcpDone; err != nil && !errors.Is(err, context.Canceled) {
 				return outcome.result, err
 			}
-			if writeErr := writeRunSummary(opts.OutputDir, outcome.result); writeErr != nil {
+			if writeErr := writeRunSummary(opts.OutputDir, outcome.result, opts); writeErr != nil {
 				return outcome.result, writeErr
 			}
 			return outcome.result, outcome.err
@@ -330,6 +336,9 @@ func applyDefaults(opts Options) Options {
 	}
 	if strings.TrimSpace(opts.OpenClawAuth) == "" {
 		opts.OpenClawAuth = defaultOpenClawAuth
+	}
+	if opts.OpenClawStartDelaySeconds < 0 {
+		opts.OpenClawStartDelaySeconds = defaultOpenClawStartDelay
 	}
 	if strings.TrimSpace(opts.OpenClawCodexAuthPath) == "" {
 		opts.OpenClawCodexAuthPath = defaultCodexAuthPath()
@@ -583,6 +592,10 @@ func (s *runState) startOpenClawLawyer(ctx context.Context, role string, mcpPort
 	if err != nil {
 		return err
 	}
+	configPrefix, err := openClawConfigPatchCommand(effectiveLawyerTurnTimeoutSeconds(s.opts))
+	if err != nil {
+		return err
+	}
 	args := []string{
 		"run", "--rm",
 		"--name", name,
@@ -597,7 +610,7 @@ func (s *runState) startOpenClawLawyer(ctx context.Context, role string, mcpPort
 		"-e", "AAR_PRINCIPAL="+role,
 		s.opts.OpenClawImage,
 		"sh", "-lc",
-		fmt.Sprintf("set -u\n%sopenclaw mcp set \"$AAR_MCP_NAME\" \"$AAR_MCP_JSON\"\nexec openclaw agent --local --model %q --thinking %q --timeout %d --session-key \"$AAR_SESSION_KEY\" --message \"$AAR_ASSIGNMENT\" --json", commandPrefix, s.opts.OpenClawModel, s.opts.OpenClawThinking, s.opts.OpenClawTimeoutSeconds),
+		fmt.Sprintf("set -eu\n%s%sopenclaw mcp set \"$AAR_MCP_NAME\" \"$AAR_MCP_JSON\"\nexec openclaw agent --local --model %q --thinking %q --timeout %d --session-key \"$AAR_SESSION_KEY\" --message \"$AAR_ASSIGNMENT\" --json", commandPrefix, configPrefix, s.opts.OpenClawModel, s.opts.OpenClawThinking, s.opts.OpenClawTimeoutSeconds),
 	)
 	proc, err := s.startProcess(ctx, "openclaw-"+role, "docker", s.opts.DockerCommand, args, name, nil)
 	if err != nil {
@@ -607,6 +620,57 @@ func (s *runState) startOpenClawLawyer(ctx context.Context, role string, mcpPort
 	s.processes = append(s.processes, proc)
 	s.mu.Unlock()
 	return nil
+}
+
+func effectiveLawyerTurnTimeoutSeconds(opts Options) int {
+	if opts.LawyerTimeoutSeconds > 0 {
+		return opts.LawyerTimeoutSeconds
+	}
+	return proceeding.DefaultRuntimeLimits().LawyerTurnTimeoutSeconds
+}
+
+func openClawConfigPatchCommand(lawyerTimeoutSeconds int) (string, error) {
+	if lawyerTimeoutSeconds <= 0 {
+		return "", fmt.Errorf("lawyer timeout must be positive")
+	}
+	timeoutMS := lawyerTimeoutSeconds * 1000
+	patch := map[string]any{
+		"plugins": map[string]any{
+			"entries": map[string]any{
+				"codex": map[string]any{
+					"enabled": true,
+					"config": map[string]any{
+						"appServer": map[string]any{
+							"turnCompletionIdleTimeoutMs":                 timeoutMS,
+							"postToolRawAssistantCompletionIdleTimeoutMs": timeoutMS,
+						},
+					},
+				},
+			},
+		},
+	}
+	raw, err := json.Marshal(patch)
+	if err != nil {
+		return "", fmt.Errorf("marshal OpenClaw config patch: %w", err)
+	}
+	return fmt.Sprintf("cat > /tmp/aar-openclaw-config.json <<'JSON'\n%s\nJSON\nopenclaw config patch --file /tmp/aar-openclaw-config.json\n", raw), nil
+}
+
+func (s *runState) waitOpenClawStartDelay(ctx context.Context) error {
+	delay := time.Duration(s.opts.OpenClawStartDelaySeconds) * time.Second
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case err := <-s.agentErrs:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *runState) openClawAuthArgs(role string) ([]string, string, error) {
@@ -1118,14 +1182,15 @@ func (s *runState) cleanupSecrets() error {
 	return errors.Join(errs...)
 }
 
-func writeRunSummary(outDir string, result proceeding.Result) error {
+func writeRunSummary(outDir string, result proceeding.Result, opts Options) error {
 	return writeJSONFile(filepath.Join(outDir, "local-run.json"), map[string]any{
-		"case_id":    result.CaseID,
-		"run_id":     result.RunID,
-		"status":     result.Status,
-		"resolution": result.Resolution,
-		"error":      result.Error,
-		"failure":    result.Failure,
+		"case_id":                             result.CaseID,
+		"run_id":                              result.RunID,
+		"status":                              result.Status,
+		"resolution":                          result.Resolution,
+		"error":                               result.Error,
+		"failure":                             result.Failure,
+		"openclaw_lawyer_start_delay_seconds": opts.OpenClawStartDelaySeconds,
 	})
 }
 

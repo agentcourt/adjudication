@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"adjudication/arb/runtime/proceeding"
 	"adjudication/common/modelrequest"
 )
 
@@ -284,6 +285,72 @@ func TestOpenClawAuthArgsForCodexUsesAbsoluteMountPath(t *testing.T) {
 	}
 	if err := state.cleanupSecrets(); err != nil {
 		t.Fatalf("cleanup secrets: %v", err)
+	}
+}
+
+func TestEffectiveLawyerTurnTimeoutSeconds(t *testing.T) {
+	if got := effectiveLawyerTurnTimeoutSeconds(Options{}); got != proceeding.DefaultRuntimeLimits().LawyerTurnTimeoutSeconds {
+		t.Fatalf("default timeout = %d", got)
+	}
+	if got := effectiveLawyerTurnTimeoutSeconds(Options{LawyerTimeoutSeconds: 123}); got != 123 {
+		t.Fatalf("override timeout = %d", got)
+	}
+}
+
+func TestOpenClawConfigPatchCommandUsesLawyerTimeout(t *testing.T) {
+	cmd, err := openClawConfigPatchCommand(900)
+	if err != nil {
+		t.Fatalf("config patch command: %v", err)
+	}
+	start := strings.Index(cmd, "\n")
+	end := strings.Index(cmd, "\nJSON\n")
+	if start < 0 || end < 0 || end <= start {
+		t.Fatalf("command does not contain JSON heredoc: %q", cmd)
+	}
+	raw := cmd[start+1 : end]
+	var patch map[string]any
+	if err := json.Unmarshal([]byte(raw), &patch); err != nil {
+		t.Fatalf("decode patch: %v", err)
+	}
+	codex := patch["plugins"].(map[string]any)["entries"].(map[string]any)["codex"].(map[string]any)
+	if codex["enabled"] != true {
+		t.Fatalf("codex enabled = %#v", codex["enabled"])
+	}
+	appServer := codex["config"].(map[string]any)["appServer"].(map[string]any)
+	for _, name := range []string{"turnCompletionIdleTimeoutMs", "postToolRawAssistantCompletionIdleTimeoutMs"} {
+		if appServer[name] != float64(900000) {
+			t.Fatalf("%s = %#v", name, appServer[name])
+		}
+	}
+	if !strings.Contains(cmd, "openclaw config patch --file /tmp/aar-openclaw-config.json") {
+		t.Fatalf("command = %q", cmd)
+	}
+}
+
+func TestApplyDefaultsOpenClawStartDelay(t *testing.T) {
+	if got := applyDefaults(Options{OpenClawStartDelaySeconds: -1}).OpenClawStartDelaySeconds; got != defaultOpenClawStartDelay {
+		t.Fatalf("default start delay = %d", got)
+	}
+	if got := applyDefaults(Options{OpenClawStartDelaySeconds: 0}).OpenClawStartDelaySeconds; got != 0 {
+		t.Fatalf("zero start delay = %d", got)
+	}
+	if got := applyDefaults(Options{OpenClawStartDelaySeconds: 27}).OpenClawStartDelaySeconds; got != 27 {
+		t.Fatalf("override start delay = %d", got)
+	}
+}
+
+func TestWriteRunSummaryIncludesOpenClawStartDelay(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeRunSummary(dir, proceeding.Result{
+		CaseID: "case-1",
+		RunID:  "run-1",
+		Status: "ok",
+	}, Options{OpenClawStartDelaySeconds: 15}); err != nil {
+		t.Fatalf("write run summary: %v", err)
+	}
+	summary := readJSONMap(t, filepath.Join(dir, "local-run.json"))
+	if summary["openclaw_lawyer_start_delay_seconds"] != float64(15) {
+		t.Fatalf("summary = %#v", summary)
 	}
 }
 
