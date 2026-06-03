@@ -49,6 +49,8 @@ func runLocal(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 	openClawModel := fs.String("openclaw-model", "", "OpenClaw model")
 	openClawThinking := fs.String("openclaw-thinking", "", "OpenClaw thinking setting")
 	openClawTimeoutSeconds := fs.Int("openclaw-timeout-seconds", 0, "OpenClaw agent timeout seconds")
+	openClawAuth := fs.String("openclaw-auth", "", "OpenClaw auth mode: auto, codex, or api-key")
+	openClawCodexAuth := fs.String("openclaw-codex-auth", "", "Codex auth.json path for OpenClaw")
 	piImage := fs.String("pi-image", "", "Pi container image")
 	piMCPAdapter := fs.String("pi-mcp-adapter", "", "Pi MCP adapter package")
 	dockerMCPHost := fs.String("docker-mcp-host", "", "Host name used by Docker containers to reach MCP")
@@ -125,6 +127,8 @@ func runLocal(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 		OpenClawModel:              *openClawModel,
 		OpenClawThinking:           *openClawThinking,
 		OpenClawTimeoutSeconds:     *openClawTimeoutSeconds,
+		OpenClawAuth:               *openClawAuth,
+		OpenClawCodexAuthPath:      *openClawCodexAuth,
 		PiImage:                    *piImage,
 		PiMCPAdapter:               *piMCPAdapter,
 		DockerMCPHost:              *dockerMCPHost,

@@ -2,6 +2,14 @@
 
 ## 2026-06-02
 
+### OpenClaw lawyer authentication
+
+Reference: [OpenClaw OAuth-Derived Codex Auth](openclaw-oauth.md)
+
+`aar run` now supports both OpenClaw lawyer authentication paths.  Automatic mode prefers a readable Codex `auth.json`, stages one copied Codex home per lawyer container, mounts it as `/aar-codex`, and sets `CODEX_HOME=/aar-codex`.  If no readable Codex auth file exists, automatic mode uses `OPENAI_API_KEY`.  Explicit `codex` and `api-key` modes force either path.
+
+The staged Codex homes are deleted when the run exits because `auth.json` contains bearer and refresh credentials.  The implementation does not mount the operator's whole `~/.codex` directory into OpenClaw containers.  The API-key path still passes only the `OPENAI_API_KEY` environment variable into the OpenClaw container.
+
 ### AAR opportunity failure
 
 Reference: [AAR Case Failures](../case-failures.md)

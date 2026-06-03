@@ -46,7 +46,9 @@ Run an example directly:
 
 The command starts the case runtime and MCP server, starts OpenClaw containers for plaintiff and defendant, starts Pi council members from the AAR roster, and writes final artifacts under the output directory.  Each OpenClaw container keeps one session key for the whole lawyer assignment.  Each Pi member receives one mounted home directory under the output directory, so its session files, MCP config, settings, and model config remain available for review.
 
-The command reads provider keys from the environment.  `OPENAI_API_KEY` is required for OpenClaw lawyers, and `OPENROUTER_API_KEY` is required for Pi council members.  It uses `gpt-5.5` for OpenClaw agents by default.  It does not mount case files or output directories into the lawyer containers.
+The command supports two OpenClaw lawyer authentication paths.  By default, `--openclaw-auth auto` first looks for a readable Codex auth file at `~/.codex/auth.json`, or at `$CODEX_HOME/auth.json` when `CODEX_HOME` is set.  If that file is available, `aar run` copies it into one temporary Codex home per OpenClaw lawyer container, mounts that directory as `/aar-codex`, and sets `CODEX_HOME=/aar-codex` inside the container.  If no readable Codex auth file is available, automatic mode falls back to `OPENAI_API_KEY`.
+
+Use `--openclaw-auth codex` to require the Codex auth-file path.  Use `--openclaw-codex-auth PATH` to choose a different `auth.json` file.  Use `--openclaw-auth api-key` to require `OPENAI_API_KEY`.  `OPENROUTER_API_KEY` is still required for Pi council members.  The command uses `gpt-5.5` for OpenClaw agents by default.  It does not mount case files or output directories into the lawyer containers.
 
 ## Manual Service Commands
 
@@ -111,7 +113,7 @@ An OpenClaw lawyer receives one MCP server definition and one assignment prompt.
 }
 ```
 
-Council members use the same MCP endpoint with `member_id` instead of `role_id`.  The example runner writes this URL into the Pi member's `.mcp.json` file:
+Council members use the same MCP endpoint with `member_id` instead of `role_id`.  `aar run` writes this URL into the Pi member's `.mcp.json` file:
 
 ```json
 {
@@ -145,4 +147,4 @@ The output directory contains the AAR record and process logs.  Review `case/dig
 
 ## Cleanup
 
-The example runner stops service, MCP, leftover OpenClaw containers, and Pi member loops when the script exits.  For manual runs, stop the host processes by using the PID files, then stop any remaining containers by name.  Do not delete the output directory before review because it contains the record, work notes, service logs, MCP logs, OpenClaw logs, Pi logs, and Pi member homes needed to diagnose the run.
+`aar run` stops the case runtime, MCP server, OpenClaw containers, and Pi council containers when the command exits.  It also removes staged OpenClaw Codex homes because they contain authentication material.  For manual service runs, stop the host processes by using the PID files, then stop any remaining containers by name.  Do not delete the output directory before review because it contains the record, work notes, service logs, MCP logs, OpenClaw logs, Pi logs, and Pi member homes needed to diagnose the run.

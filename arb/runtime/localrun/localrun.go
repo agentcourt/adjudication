@@ -30,10 +30,12 @@ const (
 	defaultOpenClawModel          = "gpt-5.5"
 	defaultOpenClawThinking       = "low"
 	defaultOpenClawTimeoutSeconds = 3600
+	defaultOpenClawAuth           = "auto"
 	defaultPiImage                = "agentcourt-pi-sandbox"
 	defaultPiMCPAdapter           = "npm:pi-mcp-adapter"
 	defaultCaseStartupWait        = 30 * time.Second
 	defaultCouncilRosterWait      = 2 * time.Minute
+	openClawCodexContainerHome    = "/aar-codex"
 )
 
 type Options struct {
@@ -68,6 +70,8 @@ type Options struct {
 	OpenClawModel              string
 	OpenClawThinking           string
 	OpenClawTimeoutSeconds     int
+	OpenClawAuth               string
+	OpenClawCodexAuthPath      string
 	PiImage                    string
 	PiMCPAdapter               string
 	DockerMCPHost              string
@@ -105,15 +109,22 @@ type councilRosterEntry struct {
 }
 
 type runState struct {
-	opts      Options
-	logDir    string
-	caseBase  string
-	mcpBase   string
-	token     string
-	processes []*processRecord
-	agentErrs chan error
+	opts         Options
+	logDir       string
+	caseBase     string
+	mcpBase      string
+	token        string
+	openClawAuth openClawAuthConfig
+	processes    []*processRecord
+	secretDirs   []string
+	agentErrs    chan error
 
 	mu sync.Mutex
+}
+
+type openClawAuthConfig struct {
+	Mode          string
+	CodexAuthPath string
 }
 
 func Run(ctx context.Context, opts Options) (result proceeding.Result, err error) {
@@ -124,14 +135,19 @@ func Run(ctx context.Context, opts Options) (result proceeding.Result, err error
 	if err := validateOptions(opts); err != nil {
 		return proceeding.Result{}, err
 	}
+	openClawAuth, err := resolveOpenClawAuth(opts)
+	if err != nil {
+		return proceeding.Result{}, err
+	}
 	if err := os.MkdirAll(filepath.Join(opts.OutputDir, "logs"), 0o755); err != nil {
 		return proceeding.Result{}, fmt.Errorf("create output logs: %w", err)
 	}
 	state := &runState{
-		opts:      opts,
-		logDir:    filepath.Join(opts.OutputDir, "logs"),
-		token:     strings.TrimSpace(opts.MCPBearerToken),
-		agentErrs: make(chan error, 32),
+		opts:         opts,
+		logDir:       filepath.Join(opts.OutputDir, "logs"),
+		token:        strings.TrimSpace(opts.MCPBearerToken),
+		openClawAuth: openClawAuth,
+		agentErrs:    make(chan error, 32),
 	}
 	if state.token == "" {
 		token, err := randomToken()
@@ -143,7 +159,7 @@ func Run(ctx context.Context, opts Options) (result proceeding.Result, err error
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	defer func() {
-		err = errors.Join(err, state.stopAgents())
+		err = errors.Join(err, state.stopAgents(), state.cleanupSecrets())
 	}()
 
 	caseAPIAddr, err := resolveListenAddr(opts.CaseAPIAddr, "127.0.0.1")
@@ -290,6 +306,12 @@ func applyDefaults(opts Options) Options {
 	if opts.OpenClawTimeoutSeconds <= 0 {
 		opts.OpenClawTimeoutSeconds = defaultOpenClawTimeoutSeconds
 	}
+	if strings.TrimSpace(opts.OpenClawAuth) == "" {
+		opts.OpenClawAuth = defaultOpenClawAuth
+	}
+	if strings.TrimSpace(opts.OpenClawCodexAuthPath) == "" {
+		opts.OpenClawCodexAuthPath = defaultCodexAuthPath()
+	}
 	if strings.TrimSpace(opts.PiImage) == "" {
 		if image := strings.TrimSpace(os.Getenv("PI_CONTAINER_IMAGE")); image != "" {
 			opts.PiImage = image
@@ -325,9 +347,6 @@ func validateOptions(opts Options) error {
 	if strings.TrimSpace(opts.CaseID) == "" {
 		return fmt.Errorf("case id is required")
 	}
-	if strings.TrimSpace(os.Getenv("OPENAI_API_KEY")) == "" {
-		return fmt.Errorf("OPENAI_API_KEY is required for OpenClaw lawyers")
-	}
 	if strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")) == "" {
 		return fmt.Errorf("OPENROUTER_API_KEY is required for Pi council")
 	}
@@ -337,6 +356,84 @@ func validateOptions(opts Options) error {
 		}
 	}
 	return nil
+}
+
+func defaultCodexAuthPath() string {
+	if codexHome := strings.TrimSpace(os.Getenv("CODEX_HOME")); codexHome != "" {
+		return filepath.Join(codexHome, "auth.json")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return filepath.Join(".codex", "auth.json")
+	}
+	return filepath.Join(home, ".codex", "auth.json")
+}
+
+func resolveOpenClawAuth(opts Options) (openClawAuthConfig, error) {
+	mode := strings.ToLower(strings.TrimSpace(opts.OpenClawAuth))
+	if mode == "" {
+		mode = defaultOpenClawAuth
+	}
+	switch mode {
+	case "auto":
+		path, err := validateCodexAuthPath(opts.OpenClawCodexAuthPath)
+		if err == nil {
+			return openClawAuthConfig{Mode: "codex", CodexAuthPath: path}, nil
+		}
+		if strings.TrimSpace(os.Getenv("OPENAI_API_KEY")) != "" {
+			return openClawAuthConfig{Mode: "api-key"}, nil
+		}
+		return openClawAuthConfig{}, fmt.Errorf("OpenClaw auth requires a readable Codex auth file at %s or OPENAI_API_KEY", opts.OpenClawCodexAuthPath)
+	case "codex":
+		path, err := validateCodexAuthPath(opts.OpenClawCodexAuthPath)
+		if err != nil {
+			return openClawAuthConfig{}, err
+		}
+		return openClawAuthConfig{Mode: "codex", CodexAuthPath: path}, nil
+	case "api-key":
+		if strings.TrimSpace(os.Getenv("OPENAI_API_KEY")) == "" {
+			return openClawAuthConfig{}, fmt.Errorf("OPENAI_API_KEY is required when --openclaw-auth=api-key")
+		}
+		return openClawAuthConfig{Mode: "api-key"}, nil
+	default:
+		return openClawAuthConfig{}, fmt.Errorf("invalid OpenClaw auth mode %q; expected auto, codex, or api-key", mode)
+	}
+}
+
+func validateCodexAuthPath(path string) (string, error) {
+	path = expandUserPath(strings.TrimSpace(path))
+	if path == "" {
+		return "", fmt.Errorf("Codex auth path is required")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read Codex auth file %s: %w", path, err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return "", fmt.Errorf("decode Codex auth file %s: %w", path, err)
+	}
+	if len(decoded) == 0 {
+		return "", fmt.Errorf("Codex auth file %s is empty", path)
+	}
+	return path, nil
+}
+
+func expandUserPath(path string) string {
+	if path == "~" {
+		home, err := os.UserHomeDir()
+		if err == nil && strings.TrimSpace(home) != "" {
+			return home
+		}
+		return path
+	}
+	if strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil && strings.TrimSpace(home) != "" {
+			return filepath.Join(home, path[2:])
+		}
+	}
+	return path
 }
 
 func resolveListenAddr(value string, defaultHost string) (string, error) {
@@ -460,20 +557,26 @@ func (s *runState) startOpenClawLawyer(ctx context.Context, role string, mcpPort
 		return err
 	}
 	name := containerName("aar-" + s.opts.CaseID + "-" + role)
+	authArgs, commandPrefix, err := s.openClawAuthArgs(role)
+	if err != nil {
+		return err
+	}
 	args := []string{
 		"run", "--rm",
 		"--name", name,
 		"--add-host=host.docker.internal:host-gateway",
-		"-e", "OPENAI_API_KEY",
-		"-e", "AAR_MCP_NAME=" + server,
-		"-e", "AAR_MCP_JSON=" + string(mcpJSON),
-		"-e", "AAR_SESSION_KEY=agent:aar:" + s.opts.CaseID + ":" + role,
-		"-e", "AAR_ASSIGNMENT=" + instructions,
-		"-e", "AAR_PRINCIPAL=" + role,
+	}
+	args = append(args, authArgs...)
+	args = append(args,
+		"-e", "AAR_MCP_NAME="+server,
+		"-e", "AAR_MCP_JSON="+string(mcpJSON),
+		"-e", "AAR_SESSION_KEY=agent:aar:"+s.opts.CaseID+":"+role,
+		"-e", "AAR_ASSIGNMENT="+instructions,
+		"-e", "AAR_PRINCIPAL="+role,
 		s.opts.OpenClawImage,
 		"sh", "-lc",
-		fmt.Sprintf("set -u\nopenclaw mcp set \"$AAR_MCP_NAME\" \"$AAR_MCP_JSON\"\nexec openclaw agent --local --model %q --thinking %q --timeout %d --session-key \"$AAR_SESSION_KEY\" --message \"$AAR_ASSIGNMENT\" --json", s.opts.OpenClawModel, s.opts.OpenClawThinking, s.opts.OpenClawTimeoutSeconds),
-	}
+		fmt.Sprintf("set -u\n%sopenclaw mcp set \"$AAR_MCP_NAME\" \"$AAR_MCP_JSON\"\nexec openclaw agent --local --model %q --thinking %q --timeout %d --session-key \"$AAR_SESSION_KEY\" --message \"$AAR_ASSIGNMENT\" --json", commandPrefix, s.opts.OpenClawModel, s.opts.OpenClawThinking, s.opts.OpenClawTimeoutSeconds),
+	)
 	proc, err := s.startProcess(ctx, "openclaw-"+role, "docker", s.opts.DockerCommand, args, name)
 	if err != nil {
 		return err
@@ -482,6 +585,51 @@ func (s *runState) startOpenClawLawyer(ctx context.Context, role string, mcpPort
 	s.processes = append(s.processes, proc)
 	s.mu.Unlock()
 	return nil
+}
+
+func (s *runState) openClawAuthArgs(role string) ([]string, string, error) {
+	switch s.openClawAuth.Mode {
+	case "api-key":
+		return []string{"-e", "OPENAI_API_KEY"}, "", nil
+	case "codex":
+		home, err := s.stageOpenClawCodexAuth(role)
+		if err != nil {
+			return nil, "", err
+		}
+		args := []string{
+			"-v", home + ":" + openClawCodexContainerHome + ":rw",
+			"-e", "CODEX_HOME=" + openClawCodexContainerHome,
+		}
+		return args, "unset OPENAI_API_KEY\n", nil
+	default:
+		return nil, "", fmt.Errorf("unsupported OpenClaw auth mode %q", s.openClawAuth.Mode)
+	}
+}
+
+func (s *runState) stageOpenClawCodexAuth(role string) (string, error) {
+	home := filepath.Join(s.opts.OutputDir, "openclaw-"+role+"-codex")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		return "", fmt.Errorf("create OpenClaw Codex home: %w", err)
+	}
+	raw, err := os.ReadFile(s.openClawAuth.CodexAuthPath)
+	if err != nil {
+		return "", fmt.Errorf("read Codex auth file %s: %w", s.openClawAuth.CodexAuthPath, err)
+	}
+	target := filepath.Join(home, "auth.json")
+	tmp := target + ".tmp"
+	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+		return "", fmt.Errorf("write staged Codex auth file: %w", err)
+	}
+	if err := os.Rename(tmp, target); err != nil {
+		return "", errors.Join(fmt.Errorf("install staged Codex auth file: %w", err), os.Remove(tmp))
+	}
+	if err := os.Chmod(target, 0o600); err != nil {
+		return "", fmt.Errorf("chmod staged Codex auth file: %w", err)
+	}
+	s.mu.Lock()
+	s.secretDirs = append(s.secretDirs, home)
+	s.mu.Unlock()
+	return home, nil
 }
 
 func (s *runState) waitForCouncilRoster(ctx context.Context, caseDone <-chan caseOutcome, mcpDone <-chan error) ([]councilRosterEntry, error) {
@@ -768,6 +916,22 @@ func (s *runState) stopAgents() error {
 		}
 		if err := proc.command.Process.Kill(); err != nil {
 			errs = append(errs, fmt.Errorf("kill %s: %w", proc.name, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func (s *runState) cleanupSecrets() error {
+	s.mu.Lock()
+	dirs := append([]string{}, s.secretDirs...)
+	s.mu.Unlock()
+	var errs []error
+	for _, dir := range dirs {
+		if strings.TrimSpace(dir) == "" {
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			errs = append(errs, fmt.Errorf("remove staged secret directory %s: %w", dir, err))
 		}
 	}
 	return errors.Join(errs...)

@@ -109,6 +109,111 @@ func TestWritePiConfigRejectsUnsupportedRequestFields(t *testing.T) {
 	}
 }
 
+func TestResolveOpenClawAuthAutoPrefersCodexAuth(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "api-key")
+	path := writeCodexAuth(t, t.TempDir())
+	auth, err := resolveOpenClawAuth(Options{
+		OpenClawAuth:          "auto",
+		OpenClawCodexAuthPath: path,
+	})
+	if err != nil {
+		t.Fatalf("resolve OpenClaw auth: %v", err)
+	}
+	if auth.Mode != "codex" || auth.CodexAuthPath != path {
+		t.Fatalf("auth = %#v", auth)
+	}
+}
+
+func TestResolveOpenClawAuthAutoFallsBackToAPIKey(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "api-key")
+	auth, err := resolveOpenClawAuth(Options{
+		OpenClawAuth:          "auto",
+		OpenClawCodexAuthPath: filepath.Join(t.TempDir(), "missing-auth.json"),
+	})
+	if err != nil {
+		t.Fatalf("resolve OpenClaw auth: %v", err)
+	}
+	if auth.Mode != "api-key" {
+		t.Fatalf("auth = %#v", auth)
+	}
+}
+
+func TestResolveOpenClawAuthRequiresSelectedCredential(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	_, err := resolveOpenClawAuth(Options{
+		OpenClawAuth:          "auto",
+		OpenClawCodexAuthPath: filepath.Join(t.TempDir(), "missing-auth.json"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "OpenClaw auth requires") {
+		t.Fatalf("error = %v", err)
+	}
+	_, err = resolveOpenClawAuth(Options{OpenClawAuth: "api-key"})
+	if err == nil || !strings.Contains(err.Error(), "OPENAI_API_KEY") {
+		t.Fatalf("api-key error = %v", err)
+	}
+}
+
+func TestOpenClawAuthArgsForAPIKey(t *testing.T) {
+	state := &runState{openClawAuth: openClawAuthConfig{Mode: "api-key"}}
+	args, prefix, err := state.openClawAuthArgs("plaintiff")
+	if err != nil {
+		t.Fatalf("auth args: %v", err)
+	}
+	if prefix != "" {
+		t.Fatalf("prefix = %q", prefix)
+	}
+	if strings.Join(args, "\x00") != "-e\x00OPENAI_API_KEY" {
+		t.Fatalf("args = %#v", args)
+	}
+}
+
+func TestOpenClawAuthArgsForCodex(t *testing.T) {
+	out := t.TempDir()
+	source := writeCodexAuth(t, t.TempDir())
+	state := &runState{
+		opts:         Options{OutputDir: out},
+		openClawAuth: openClawAuthConfig{Mode: "codex", CodexAuthPath: source},
+	}
+	args, prefix, err := state.openClawAuthArgs("plaintiff")
+	if err != nil {
+		t.Fatalf("auth args: %v", err)
+	}
+	if prefix != "unset OPENAI_API_KEY\n" {
+		t.Fatalf("prefix = %q", prefix)
+	}
+	joined := strings.Join(args, "\n")
+	if strings.Contains(joined, "OPENAI_API_KEY") {
+		t.Fatalf("args contain OPENAI_API_KEY: %#v", args)
+	}
+	if !strings.Contains(joined, "CODEX_HOME=/aar-codex") {
+		t.Fatalf("args missing CODEX_HOME: %#v", args)
+	}
+	staged := filepath.Join(out, "openclaw-plaintiff-codex", "auth.json")
+	raw, err := os.ReadFile(staged)
+	if err != nil {
+		t.Fatalf("read staged auth: %v", err)
+	}
+	if !strings.Contains(string(raw), `"auth_mode"`) {
+		t.Fatalf("staged auth = %s", string(raw))
+	}
+	info, err := os.Stat(staged)
+	if err != nil {
+		t.Fatalf("stat staged auth: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("staged auth mode = %o", info.Mode().Perm())
+	}
+	if len(state.secretDirs) != 1 {
+		t.Fatalf("secret dirs = %#v", state.secretDirs)
+	}
+	if err := state.cleanupSecrets(); err != nil {
+		t.Fatalf("cleanup secrets: %v", err)
+	}
+	if _, err := os.Stat(staged); !os.IsNotExist(err) {
+		t.Fatalf("staged auth still exists: %v", err)
+	}
+}
+
 func TestResolveListenAddrAllocatesPort(t *testing.T) {
 	addr, err := resolveListenAddr("0.0.0.0:0", "127.0.0.1")
 	if err != nil {
@@ -144,4 +249,14 @@ func readJSONMap(t *testing.T, path string) map[string]any {
 		t.Fatalf("decode %s: %v", path, err)
 	}
 	return out
+}
+
+func writeCodexAuth(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "auth.json")
+	raw := []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"test","refresh_token":"test"}}` + "\n")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write Codex auth: %v", err)
+	}
+	return path
 }
