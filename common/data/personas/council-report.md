@@ -12,7 +12,7 @@
 ## Eligibility
 
 - Candidate model/persona pairs: 490
-- Eligible candidate pairs: 198
+- Eligible candidate pairs: 190
 - Selected rows: 20
 - Expected coverage: 3 genes x 3 samples
 - Minimum context: 200000
@@ -27,6 +27,7 @@
 - coverage_samples_per_gene: 14
 - operational_failure:context_limit: 8
 - operational_failure:council_vote_tool_noncompliance: 16
+- operational_failure:pi_mcp_tool_noncompliance: 8
 - required_parameters_missing:tool_choice: 8
 
 ## Selected Provider Counts
@@ -64,9 +65,10 @@
 | 12 | openrouter://mistralai/ministral-14b-2512 | personas/persons/d715074-1.txt | mistralai | 262144 | 262144 | 262144 |  | 1256 | dim=9 norm=0.6682 [0.09417, 0.2482, -0.07762, -0.1665, 0.2014, -0.3597, ...] |
 | 13 | openrouter://google/gemini-2.0-flash-lite-001 | personas/persons/d715074-8.txt | google | 1048576 | 1048576 | 1048576 | 8192 | 907 | dim=9 norm=0.5264 [0.2829, -0.09668, 0.1003, 0.3076, -0.06739, -0.1015, ...] |
 | 14 | openrouter://anthropic/claude-sonnet-4.6 | personas/persons/d715074-5.txt | anthropic | 1000000 | 1000000 | 1000000 | 128000 | 2747 | dim=9 norm=0.4964 [-0.3431, -0.01488, -0.2067, 0.01418, 0.186, -0.05364, ...] |
-| 15 | openrouter://qwen/qwen3-coder-flash | personas/persons/d715074-8.txt | qwen | 1000000 | 1000000 | 1000000 | 65536 | 2091 | dim=9 norm=0.6649 [-0.3785, 0.1318, -0.04534, 0.1093, -0.1042, -0.3678, ...] |
-| 16 | openrouter://kwaipilot/kat-coder-pro-v2 | personas/persons/d715074-3.txt | kwaipilot | 256000 | 256000 | 256000 | 80000 | 7643 | dim=9 norm=0.3835 [0.1043, 0.1784, 0.06131, 0.01229, 0.1406, 0.2494, ...] |
+| 15 | openrouter://kwaipilot/kat-coder-pro-v2 | personas/persons/d715074-3.txt | kwaipilot | 256000 | 256000 | 256000 | 80000 | 7643 | dim=9 norm=0.3835 [0.1043, 0.1784, 0.06131, 0.01229, 0.1406, 0.2494, ...] |
+| 16 | openrouter://qwen/qwen3-max-thinking | personas/persons/e91db77-0.txt | qwen | 262144 | 262144 | 262144 | 32768 | 3743 | dim=9 norm=0.828 [-0.08898, 0.3665, -0.331, 0.4783, 0.01373, 0.01291, ...] |
 | 17 | openrouter://arcee-ai/trinity-large-thinking | personas/persons/c4e1a2b-0.txt | arcee-ai | 262144 | 262144 | 262144 | 262144 | 3099 | dim=9 norm=0.6754 [-0.4386, 0.1623, -0.07927, 0.1879, 0.1862, 0.002992, ...] |
 | 18 | openrouter://inclusionai/ling-2.6-flash | personas/persons/e50e538-0.txt | inclusionai | 262144 | 262144 | 262144 | 32768 | 1235 | dim=9 norm=0.5639 [0.3061, -0.2584, 0.07799, -0.291, -0.1795, 0.04719, ...] |
 | 19 | openrouter://bytedance-seed/seed-1.6-flash | personas/persons/e50e538-0.txt | bytedance-seed | 262144 | 262144 | 262144 | 32768 | 4504 | dim=9 norm=0.4945 [0.2578, -0.1044, -0.03909, -0.05426, 0.3077, -0.02294, ...] |
 | 20 | openrouter://minimax/minimax-m1 | personas/persons/c4e1a2b-0.txt | minimax | 1000000 | 1000000 | 1000000 | 40000 | 3657 | dim=9 norm=0.5734 [0.04555, 0.1172, -0.2257, -0.2705, 0.1031, 0.2718, ...] |
+

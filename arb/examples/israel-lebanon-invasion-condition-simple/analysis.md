@@ -231,7 +231,7 @@ Summary:
 
 Results:
 
-- Run 01: operational failure before merits result. Error: `acp attorney did not submit a decision`. The run produced `events.ndjson` and `run.log`, but no `run.json`. Last events show the defendant in the argument phase attempted to access `/home/user/official-source-record.txt`, received `ENOENT`, and did not submit the required decision. There was also one recoverable plaintiff opening over-limit attempt at 10,636 characters against the 10,000-character policy limit.
+- Run 01: operational failure before merits result. Error: `attorney did not submit a decision`. The run produced `events.ndjson` and `run.log`, but no `run.json`. Last events show the defendant in the argument phase attempted to access `/home/user/official-source-record.txt`, received `ENOENT`, and did not submit the required decision. There was also one recoverable plaintiff opening over-limit attempt at 10,636 characters against the 10,000-character policy limit.
 - Run 02: completed, `demonstrated`, 3 demonstrated / 2 not_demonstrated. Run id `run-1777653494900883000`.
 - Run 03: completed, `not_demonstrated`, 0 demonstrated / 5 not_demonstrated. Run id `run-1777654015359955000`. There was one recoverable defendant opening over-limit attempt at 10,019 characters against the 10,000-character policy limit.
 - Run 04: completed, `demonstrated`, 4 demonstrated / 1 not_demonstrated. Run id `run-1777654590699490000`.
