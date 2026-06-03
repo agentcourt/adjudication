@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"adjudication/common/modelrequest"
 	"adjudication/common/persona"
 )
 
@@ -126,6 +125,11 @@ func councilPoolMeta(path string, baseDir string) ([]persona.Spec, error) {
 	if err != nil {
 		return nil, err
 	}
+	for index, spec := range specs {
+		if spec.RequestSpec == nil {
+			return nil, fmt.Errorf("council pool record %d has no request_spec; JSONL request-spec records are required", index+1)
+		}
+	}
 	return specs, nil
 }
 
@@ -238,15 +242,7 @@ func councilSeatRequestSpecMap(seat CouncilSeat) map[string]any {
 			}
 		}
 	}
-	spec, err := modelrequest.ParseLegacy(seat.Model)
-	if err != nil {
-		return nil
-	}
-	return map[string]any{
-		"endpoint": spec.Endpoint,
-		"model":    spec.Model,
-		"persona":  seat.PersonaFile,
-	}
+	return nil
 }
 
 func caseFileMetas(files []CaseFile) []CaseFileMeta {

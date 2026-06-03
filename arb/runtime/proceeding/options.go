@@ -87,7 +87,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	}
 	councilPoolPath := strings.TrimSpace(opts.CouncilPoolPath)
 	if councilPoolPath == "" {
-		councilPoolPath = filepath.Join(commonRootResolved, "data", "personas", "pool.csv")
+		councilPoolPath = defaultCouncilPoolPath(commonRootResolved)
 	}
 	effectiveRunID := strings.TrimSpace(opts.RunID)
 	if effectiveRunID == "" {
@@ -137,6 +137,16 @@ func DefaultCommonRoot() string {
 		return locateCommonRootFrom(cwd)
 	}
 	return filepath.FromSlash("../common")
+}
+
+func defaultCouncilPoolPath(commonRoot string) string {
+	if cwd, err := os.Getwd(); err == nil {
+		localPool := filepath.Join(cwd, "pool.jsonl")
+		if fileExists(localPool) {
+			return localPool
+		}
+	}
+	return filepath.Join(commonRoot, "data", "personas", "pool.jsonl")
 }
 
 func resolveExplicitCaseFiles(patterns []string) ([]string, error) {
@@ -296,10 +306,10 @@ func locateCommonRootFrom(start string) string {
 	}
 	for {
 		candidate := filepath.Join(base, "common")
-		if fileExists(filepath.Join(candidate, "etc", "personas.csv")) || fileExists(filepath.Join(candidate, "data", "personas", "pool.csv")) {
+		if fileExists(filepath.Join(candidate, "etc", "personas.csv")) || fileExists(filepath.Join(candidate, "data", "personas", "pool.jsonl")) {
 			return candidate
 		}
-		if filepath.Base(base) == "common" && (fileExists(filepath.Join(base, "etc", "personas.csv")) || fileExists(filepath.Join(base, "data", "personas", "pool.csv"))) {
+		if filepath.Base(base) == "common" && (fileExists(filepath.Join(base, "etc", "personas.csv")) || fileExists(filepath.Join(base, "data", "personas", "pool.jsonl"))) {
 			return base
 		}
 		next := filepath.Dir(base)

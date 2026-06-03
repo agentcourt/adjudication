@@ -30,7 +30,7 @@ func runLocal(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 	attorneyArgumentPrompt := fs.String("attorney-arguments-prompt", "", "Attorney arguments prompt file override")
 	attorneyRebuttalPrompt := fs.String("attorney-rebuttals-prompt", "", "Attorney rebuttals prompt file override")
 	commonRoot := fs.String("common-root", proceeding.DefaultCommonRoot(), "Path to sibling shared common directory")
-	councilPool := fs.String("council-pool", "", "Council model/persona pool file")
+	councilPool := fs.String("council-pool", "", "Council JSONL request-spec pool file")
 	caseAPIAddr := fs.String("caseapi-addr", "127.0.0.1:0", "Private case API listen address")
 	mcpListenAddr := fs.String("mcp-listen", "0.0.0.0:0", "MCP listen address")
 	mcpBearerToken := fs.String("mcp-bearer-token", "", "MCP bearer token. Default: generated")

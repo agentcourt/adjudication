@@ -941,7 +941,7 @@ func piRequestSpec(entry councilRosterEntry) (modelrequest.Spec, error) {
 	if entry.RequestSpec != nil {
 		return *entry.RequestSpec, nil
 	}
-	return modelrequest.ParseLegacy(entry.Model)
+	return modelrequest.Spec{}, fmt.Errorf("council roster entry %s has no request_spec; JSONL council pool records are required", entry.MemberID)
 }
 
 func writeJSONFile(path string, value any) error {

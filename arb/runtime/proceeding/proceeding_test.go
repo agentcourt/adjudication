@@ -76,6 +76,25 @@ func TestSampleCouncilCarriesJSONRequestSpec(t *testing.T) {
 	}
 }
 
+func TestSampleCouncilRejectsLegacyPoolRecord(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "personas"), 0o755); err != nil {
+		t.Fatalf("mkdir personas: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "personas", "juror.txt"), []byte("skeptical juror"), 0o644); err != nil {
+		t.Fatalf("write persona: %v", err)
+	}
+	pool := filepath.Join(dir, "pool.csv")
+	if err := os.WriteFile(pool, []byte("openrouter://openai/gpt-5,personas/juror.txt\n"), 0o644); err != nil {
+		t.Fatalf("write pool: %v", err)
+	}
+
+	_, err := sampleCouncil(pool, dir, 1)
+	if err == nil || !strings.Contains(err.Error(), "request_spec") {
+		t.Fatalf("sampleCouncil error = %v, want request_spec error", err)
+	}
+}
+
 func makeTempCouncilPool(t *testing.T, line string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -1672,7 +1691,7 @@ type fakeCouncilResponseClient struct {
 	calls     int
 }
 
-func (c *fakeCouncilResponseClient) CreateResponseWithMaxOutputTokens(_ context.Context, _ string, inputItems []map[string]any, _ []map[string]any, _ string, _ *float64, _ *int64) (openaiapi.Response, error) {
+func (c *fakeCouncilResponseClient) CreateResponseWithRequestSpec(_ context.Context, _ modelrequest.Spec, inputItems []map[string]any, _ []map[string]any, _ string) (openaiapi.Response, error) {
 	c.inputs = append(c.inputs, append([]map[string]any(nil), inputItems...))
 	call := c.calls
 	c.calls++
@@ -1683,10 +1702,6 @@ func (c *fakeCouncilResponseClient) CreateResponseWithMaxOutputTokens(_ context.
 		return c.responses[call], nil
 	}
 	return openaiapi.Response{}, fmt.Errorf("unexpected fake council client call %d", call+1)
-}
-
-func (c *fakeCouncilResponseClient) CreateResponseWithRequestSpec(_ context.Context, _ modelrequest.Spec, inputItems []map[string]any, _ []map[string]any, _ string) (openaiapi.Response, error) {
-	return c.CreateResponseWithMaxOutputTokens(context.Background(), "", inputItems, nil, "", nil, nil)
 }
 
 func newCouncilOpportunityTestContext(t *testing.T, failureReason string) *runContext {
@@ -1727,7 +1742,22 @@ func newCouncilOpportunityTestContext(t *testing.T, failureReason string) *runCo
 				"resolution":         "",
 			},
 		},
-		council: []CouncilSeat{{MemberID: "C1", Model: "openrouter://openai/gpt-4o", PersonaText: "Concise."}},
+		council: []CouncilSeat{councilTestSeat("C1")},
+	}
+}
+
+func councilTestSeat(memberID string) CouncilSeat {
+	spec := modelrequest.Spec{
+		Endpoint: "openai",
+		Model:    "gpt-4o",
+		Persona:  "personas/test.txt",
+	}
+	return CouncilSeat{
+		MemberID:    memberID,
+		Model:       spec.RuntimeModel(),
+		PersonaFile: spec.Persona,
+		RequestSpec: &spec,
+		PersonaText: "Concise.",
 	}
 }
 

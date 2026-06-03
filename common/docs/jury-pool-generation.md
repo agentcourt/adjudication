@@ -1,8 +1,8 @@
 # Jury Pool Generation
 
-This document describes the pipeline that produces a selected council file from OpenRouter model metadata, live tool-probe results, checked-in persona texts, clustering output, and PCA coordinates.
+This document describes the older CSV pipeline that produced selected council files from OpenRouter model metadata, live tool-probe results, checked-in persona texts, clustering output, and PCA coordinates. Runtime council pools now use JSONL request-spec records, because provider endpoint and quantization constraints must remain attached to each sampled council member.
 
-The runtime default pool remains `common/data/personas/pool.csv`. The selected council output described here is `common/data/personas/council.csv`. Do not treat a 20-row council file as the full model/persona pool. Promote or copy it into `pool.csv` only after making that runtime decision explicitly.
+The runtime no longer uses the CSV files described here as its default council pool. A current pool record must carry the OpenRouter model id, provider endpoint tag, quantization when known, and persona path in JSONL form.
 
 Run the commands below from the repository root unless the command says otherwise. Use `uv run --script` for Python scripts with PEP 723 metadata.
 
@@ -26,9 +26,9 @@ Run the commands below from the repository root unless the command says otherwis
 | `common/data/personas/pca-cluster.csv` | `MODEL,PERSONA_FILE,GENE,PC1,PC2,PC3,CLUSTER` rows from `cluster-personas.py` |
 | `common/data/personas/model-operational-failures.csv` | Manual exclusion ledger for known model failures |
 | `common/tools/select-council.py` | Selects a behaviorally diverse council from cluster/PCA data |
-| `common/data/personas/council.csv` | Selected council rows, written as `MODEL,personas/persons/....txt` |
+| `common/data/personas/council.csv` | Historical selected council rows, written as `MODEL,personas/persons/....txt` |
 | `common/data/personas/council-report.md` | Default selection report from `generate-council.py` |
-| `common/data/personas/pool.csv` | Runtime default pool consumed by `aar`/`arb` unless `--council-pool` overrides it |
+| `common/data/personas/pool.csv` | Historical CSV pool file; not a current runtime council pool |
 
 Rows in `common/etc/personas.csv`, `common/data/personas/council.csv`, and `common/data/personas/pool.csv` have two columns:
 
@@ -227,19 +227,13 @@ For the current cluster data and the restored full latency file, the expected re
 candidates=490 eligible=198 selected=20 out=common/data/personas/council.csv
 ```
 
-`council.csv` is a selected council candidate set. It is not the full pool. Use it directly with `--council-pool` only when a 20-row selected council file is the intended input.
+`council.csv` is a historical selected council candidate set. It is not a current runtime pool, because it omits provider endpoint and quantization constraints.
 
 ## Stage 9: Runtime Pool Decision
 
-`aar`/`arb` read `common/data/personas/pool.csv` by default when `--council-pool` is not supplied. The runtime does not read `clusters.csv`, `pca-cluster.csv`, `model-latency.csv`, or the council-selection report.
+`aar`/`arb` read JSONL request-spec pools. When `--council-pool` is not supplied, the runtime checks `./pool.jsonl`, then `<common-root>/data/personas/pool.jsonl`. The runtime does not read `clusters.csv`, `pca-cluster.csv`, `model-latency.csv`, `pool.csv`, or the council-selection report.
 
-There are three distinct choices:
-
-1. Pass `common/data/personas/council.csv` explicitly with `--council-pool` for a run.
-2. Copy or promote `council.csv` to `pool.csv` if the selected council should become the default runtime pool.
-3. Leave `pool.csv` unchanged and keep `council.csv` as an offline selection evidence.
-
-Do not change `pool.csv` implicitly as part of council generation. That is a runtime behavior change.
+Do not promote a CSV file into a runtime pool. A runtime pool entry must preserve the request-spec fields needed for provider routing.
 
 ## Verification
 
@@ -265,11 +259,4 @@ python3 -m py_compile common/tools/select-council.py
 sed -n '1,120p' common/data/personas/council-report.md
 ```
 
-If `pool.csv` is changed separately, apply the same path and uniqueness checks to `pool.csv`:
-
-```bash
-wc -l common/data/personas/pool.csv
-sort common/data/personas/pool.csv | uniq | wc -l
-awk -F, '{ if ($2 ~ /^\//) abs++; else rel++; if ($2 !~ /^personas\/persons\//) bad++; } END { printf "absolute=%d relative=%d bad_relative=%d total=%d\n", abs+0, rel+0, bad+0, NR }' common/data/personas/pool.csv
-sed -n '1,20p' common/data/personas/pool.csv
-```
+Use the current JSONL pool workflow for runtime council pools.

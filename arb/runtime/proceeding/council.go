@@ -168,19 +168,11 @@ func (rc *runContext) createCouncilResponse(
 	prevID string,
 	defaultMaxOutputTokens int64,
 ) (openaiapi.Response, error) {
-	if seat.RequestSpec != nil {
-		spec := seat.RequestSpec.WithFallbackMaxOutputTokens(defaultMaxOutputTokens)
-		return client.CreateResponseWithRequestSpec(ctx, spec, inputItems, tools, prevID)
+	if seat.RequestSpec == nil {
+		return openaiapi.Response{}, fmt.Errorf("council member %s has no request_spec; JSONL council pool records are required", seat.MemberID)
 	}
-	return client.CreateResponseWithMaxOutputTokens(
-		ctx,
-		seat.Model,
-		inputItems,
-		tools,
-		prevID,
-		nil,
-		&defaultMaxOutputTokens,
-	)
+	spec := seat.RequestSpec.WithFallbackMaxOutputTokens(defaultMaxOutputTokens)
+	return client.CreateResponseWithRequestSpec(ctx, spec, inputItems, tools, prevID)
 }
 
 func (rc *runContext) removeTimedOutCouncilMember(opportunity Opportunity, seat CouncilSeat, cause error) error {

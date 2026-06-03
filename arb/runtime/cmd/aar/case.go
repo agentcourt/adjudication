@@ -39,7 +39,7 @@ func runCase(ctx context.Context, args []string, stdout io.Writer, stderr io.Wri
 	attorneyRebuttalPrompt := fs.String("attorney-rebuttals-prompt", "", "Attorney rebuttals prompt file override")
 	commonRoot := fs.String("common-root", proceeding.DefaultCommonRoot(), "Path to the sibling shared common directory")
 	legacyCommonRoot := fs.String("agentcourt-root", "", "Deprecated alias for --common-root")
-	councilPool := fs.String("council-pool", "", "Council model/persona pool file. Default: <common-root>/data/personas/pool.csv")
+	councilPool := fs.String("council-pool", "", "Council JSONL request-spec pool file. Default: ./pool.jsonl when present, else <common-root>/data/personas/pool.jsonl")
 	caseAPIAddr := fs.String("caseapi-addr", "127.0.0.1:0", "Private case API listen address")
 	councilBackend := fs.String("council-backend", "direct", "Council backend: direct or councilapi")
 	timeoutSeconds := fs.Int("timeout-seconds", 0, "Override runtime council LLM timeout in seconds")

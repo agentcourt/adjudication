@@ -13,15 +13,6 @@ import (
 )
 
 type councilResponseClient interface {
-	CreateResponseWithMaxOutputTokens(
-		ctx context.Context,
-		model string,
-		inputItems []map[string]any,
-		tools []map[string]any,
-		previousResponseID string,
-		temperature *float64,
-		maxOutputTokens *int64,
-	) (openaiapi.Response, error)
 	CreateResponseWithRequestSpec(
 		ctx context.Context,
 		spec modelrequest.Spec,
@@ -162,14 +153,14 @@ func createCouncilAvailabilityResponse(
 	inputItems []map[string]any,
 	maxOutputTokens *int64,
 ) (openaiapi.Response, error) {
-	if seat.RequestSpec != nil {
-		spec := seat.RequestSpec.WithFallbackMaxOutputTokens(0)
-		if maxOutputTokens != nil {
-			spec = spec.WithFallbackMaxOutputTokens(*maxOutputTokens)
-		}
-		return client.CreateResponseWithRequestSpec(ctx, spec, inputItems, nil, "")
+	if seat.RequestSpec == nil {
+		return openaiapi.Response{}, fmt.Errorf("council member %s has no request_spec; JSONL council pool records are required", seat.MemberID)
 	}
-	return client.CreateResponseWithMaxOutputTokens(ctx, seat.Model, inputItems, nil, "", nil, maxOutputTokens)
+	spec := seat.RequestSpec.WithFallbackMaxOutputTokens(0)
+	if maxOutputTokens != nil {
+		spec = spec.WithFallbackMaxOutputTokens(*maxOutputTokens)
+	}
+	return client.CreateResponseWithRequestSpec(ctx, spec, inputItems, nil, "")
 }
 
 func councilPreflightTimeout(limits RuntimeLimits) time.Duration {

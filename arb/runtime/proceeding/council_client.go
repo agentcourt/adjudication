@@ -23,26 +23,6 @@ func newDirectCouncilClient(timeout time.Duration) *directCouncilClient {
 	}
 }
 
-func (c *directCouncilClient) CreateResponseWithMaxOutputTokens(
-	ctx context.Context,
-	model string,
-	inputItems []map[string]any,
-	tools []map[string]any,
-	previousResponseID string,
-	temperature *float64,
-	maxOutputTokens *int64,
-) (openaiapi.Response, error) {
-	spec, err := modelrequest.ParseLegacy(model)
-	if err != nil {
-		return openaiapi.Response{}, err
-	}
-	spec.Request.Temperature = temperature
-	if maxOutputTokens != nil {
-		spec.Request.MaxOutputTokens = maxOutputTokens
-	}
-	return c.CreateResponseWithRequestSpec(ctx, spec, inputItems, tools, previousResponseID)
-}
-
 func (c *directCouncilClient) CreateResponseWithRequestSpec(
 	ctx context.Context,
 	spec modelrequest.Spec,

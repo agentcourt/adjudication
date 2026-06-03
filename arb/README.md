@@ -85,7 +85,7 @@ curl -sS -X POST "$BASE/do" \
 | `--policy` | Policy JSON file. Defaults to `./etc/policy.json` when present. |
 | `--council-size` | Override `policy.council_size`. |
 | `--evidence-standard` | Override `policy.evidence_standard`. |
-| `--council-pool` | Council model and persona pool. Defaults to `../common/data/personas/pool.csv` when `arb/` is the working directory. |
+| `--council-pool` | Council JSONL request-spec pool. Defaults to `./pool.jsonl` when present, otherwise `<common-root>/data/personas/pool.jsonl`. |
 | `--attorney-instructions` | Standing lawyer instructions file. Defaults to `./attorney-instructions/default.md` when present. |
 | `--caseapi-addr` | Private case API listen address. Default: `127.0.0.1:0`. |
 | `--lawyer-timeout-seconds` | Lawyer turn timeout override. Default: 900 seconds. |

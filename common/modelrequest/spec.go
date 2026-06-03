@@ -74,19 +74,6 @@ func ParseModelRef(model string) (ModelRef, error) {
 	return ModelRef{Endpoint: endpoint, Model: modelID, Query: query}, nil
 }
 
-func ParseLegacy(model string) (Spec, error) {
-	model = strings.TrimSpace(model)
-	if model == "" {
-		return Spec{}, errors.New("model must be non-empty string")
-	}
-	parsed, err := ParseModelRef(model)
-	if err != nil {
-		return Spec{}, err
-	}
-	_, rest, _ := strings.Cut(model, "://")
-	return Spec{Endpoint: parsed.Endpoint, Model: strings.TrimSpace(rest)}, nil
-}
-
 func ParseJSON(data []byte) (Spec, error) {
 	dec := json.NewDecoder(strings.NewReader(string(data)))
 	dec.UseNumber()
@@ -110,24 +97,19 @@ func ParseMap(raw map[string]any) (Spec, error) {
 	if endpoint == "" && openRouterModelID != "" {
 		endpoint = "openrouter"
 	}
-	if endpoint == "" && strings.Contains(model, "://") {
-		legacy, err := ParseLegacy(model)
-		if err != nil {
-			return Spec{}, err
-		}
-		endpoint = legacy.Endpoint
-		model = legacy.Model
-	}
 	if endpoint == "" {
 		return Spec{}, errors.New("request spec endpoint is required")
 	}
 	if model == "" {
 		return Spec{}, errors.New("request spec model is required")
 	}
+	if strings.Contains(model, "://") {
+		return Spec{}, errors.New("request spec model must not include endpoint:// prefix")
+	}
 	out := Spec{
 		Endpoint:        strings.TrimSpace(endpoint),
 		Model:           strings.TrimSpace(model),
-		Persona:         firstStringField(raw, "persona", "persona_file"),
+		Persona:         personaField(raw),
 		Headers:         headersFromRaw(raw["headers"]),
 		VariantMetadata: variantMetadata(raw),
 	}
@@ -227,6 +209,20 @@ func firstStringField(raw map[string]any, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func personaField(raw map[string]any) string {
+	if value := stringField(raw, "persona_file"); value != "" {
+		return value
+	}
+	switch value := raw["persona"].(type) {
+	case string:
+		return strings.TrimSpace(value)
+	case map[string]any:
+		return firstStringField(value, "path", "file", "persona_file")
+	default:
+		return ""
+	}
 }
 
 func boolPtr(value bool) *bool { return &value }

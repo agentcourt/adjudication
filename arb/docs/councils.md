@@ -21,9 +21,9 @@ The runner accepts `--council-size` as a direct override, and then validates the
 
 ## Pool File
 
-The pool file comes from `--council-pool` when the caller supplies it.  Otherwise the CLI uses [the shared default pool](../../common/data/personas/pool.csv).  That file is a flat list of `MODEL,PERSONA_FILE` records, one per line, with blank lines and `#` comments ignored by [the persona loader](../../common/persona/persona.go).
+The pool file comes from `--council-pool` when the caller supplies it.  Otherwise the CLI uses `./pool.jsonl` when that file exists, falling back to `<common-root>/data/personas/pool.jsonl`.  The file is newline-delimited JSON, and each usable line must be a request spec with `openrouter_model_id` or explicit `endpoint` and `model`, provider routing fields such as `endpoint_tag` and `quantization` when available, and a persona path.
 
-Each usable line becomes one independent sampleable record.  The loader validates the model id as `endpoint://model`, resolves the persona filename relative to the pool file, reads the persona text immediately, and requires that text to be non-empty.  If the pool file repeats a line, the runtime treats each repeated line as a separate entry in the sampling pool, because the loader preserves record multiplicity rather than collapsing identical records.
+Each usable line becomes one independent sampleable record.  The loader resolves the persona filename relative to the pool file, reads the persona text immediately, and requires that text to be non-empty.  If the pool file repeats a line, the runtime treats each repeated line as a separate entry in the sampling pool, because the loader preserves record multiplicity rather than collapsing identical records.
 
 ## Sampling
 

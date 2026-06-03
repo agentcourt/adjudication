@@ -71,8 +71,9 @@ func TestWritePiConfigFromRosterEntry(t *testing.T) {
 			Endpoint: "openrouter",
 			Model:    "anthropic/claude-sonnet-4",
 			Provider: &modelrequest.ProviderConstraints{
-				Only:           []string{"Anthropic"},
+				Only:           []string{"anthropic"},
 				AllowFallbacks: &allowFallbacks,
+				Quantizations:  []string{"bf16"},
 			},
 			Request: modelrequest.RequestParameters{MaxOutputTokens: &maxTokens},
 		},
@@ -100,6 +101,10 @@ func TestWritePiConfigFromRosterEntry(t *testing.T) {
 	if routing["allow_fallbacks"] != false {
 		t.Fatalf("routing = %#v", routing)
 	}
+	quantizations := routing["quantizations"].([]any)
+	if len(quantizations) != 1 || quantizations[0] != "bf16" {
+		t.Fatalf("routing quantizations = %#v", routing["quantizations"])
+	}
 	mcpConfig := readJSONMap(t, filepath.Join(home, ".mcp.json"))
 	servers := mcpConfig["mcpServers"].(map[string]any)
 	server := servers["aar-case-C1"].(map[string]any)
@@ -109,6 +114,16 @@ func TestWritePiConfigFromRosterEntry(t *testing.T) {
 	headers := server["headers"].(map[string]any)
 	if headers["Authorization"] != "Bearer token-1" {
 		t.Fatalf("headers = %#v", headers)
+	}
+}
+
+func TestWritePiConfigRejectsMissingRequestSpec(t *testing.T) {
+	_, err := writePiConfig(t.TempDir(), councilRosterEntry{
+		MemberID: "C1",
+		Model:    "openrouter://anthropic/claude-sonnet-4",
+	}, "server", "http://example/mcp", "token")
+	if err == nil || !strings.Contains(err.Error(), "request_spec") {
+		t.Fatalf("error = %v", err)
 	}
 }
 

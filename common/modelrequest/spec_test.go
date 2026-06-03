@@ -16,7 +16,7 @@ func TestParseJSONDerivesOpenRouterProviderFromInventoryRow(t *testing.T) {
 		"quantization":"fp4",
 		"raw_endpoint_sha256":"abc123",
 		"request":{"temperature":0,"top_p":1,"max_tokens":1024},
-		"persona":"personas/persons/d715074-5.txt"
+		"persona":{"id":"d715074-5","path":"personas/persons/d715074-5.txt"}
 	}`)
 	spec, err := ParseJSON(raw)
 	if err != nil {
@@ -103,14 +103,14 @@ func TestParseJSONAcceptsExplicitProvider(t *testing.T) {
 	}
 }
 
-func TestParseLegacy(t *testing.T) {
+func TestParseJSONRejectsEndpointModelString(t *testing.T) {
 	t.Parallel()
 
-	spec, err := ParseLegacy("openrouter://openai/gpt-5?tools=search")
-	if err != nil {
-		t.Fatalf("ParseLegacy error = %v", err)
+	_, err := ParseJSON([]byte(`{"endpoint":"openrouter","model":"openrouter://openai/gpt-5","persona":"p.txt"}`))
+	if err == nil {
+		t.Fatalf("ParseJSON accepted endpoint-prefixed model")
 	}
-	if spec.RuntimeModel() != "openrouter://openai/gpt-5?tools=search" {
-		t.Fatalf("RuntimeModel = %q", spec.RuntimeModel())
+	if err.Error() != "request spec model must not include endpoint:// prefix" {
+		t.Fatalf("error = %v", err)
 	}
 }

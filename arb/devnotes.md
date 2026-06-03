@@ -38,7 +38,7 @@ The first executable pass now starts `aar mcp` as a subprocess, drives `/mcp` wi
 
 Reference: [Council API](../councilapi.md), [OpenClaw service runbook](running.md), [Pi container README](../common/pi-container/README.md)
 
-AAR council calls now use direct provider clients for the `direct` backend.  Model ids keep the `endpoint://model` form, and the runtime selects the OpenAI or OpenRouter client from that endpoint.  The case runner no longer starts a local provider proxy, and the CLI no longer accepts provider-proxy or removed council-agent flags.
+AAR council calls now use direct provider clients for the `direct` backend.  Council seats carry JSON request specs with endpoint, model, provider, quantization, request parameters, and persona information.  The case runner no longer starts a local provider proxy, and the CLI no longer accepts provider-proxy or removed council-agent flags.
 
 Local service examples now run OpenClaw containers for lawyers and Pi containers for council members.  Council members receive their model and routing configuration through the mounted Pi home and reach the case through the Council API-backed MCP service.  Shared persona-generation tools now probe OpenRouter directly and keep OpenAI embeddings direct.
 

@@ -134,3 +134,27 @@ func TestResolvePromptFileRejectsDirectory(t *testing.T) {
 		t.Fatalf("resolvePromptFile error = %v, want file error", err)
 	}
 }
+
+func TestDefaultCouncilPoolPathPrefersLocalJSONL(t *testing.T) {
+	oldCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get cwd: %v", err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "pool.jsonl"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write pool: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldCwd); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	})
+
+	got := defaultCouncilPoolPath(filepath.Join(dir, "common"))
+	if got != filepath.Join(dir, "pool.jsonl") {
+		t.Fatalf("defaultCouncilPoolPath = %q", got)
+	}
+}

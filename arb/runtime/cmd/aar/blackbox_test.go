@@ -461,11 +461,11 @@ func newBlackBoxFixture(t *testing.T) *blackBoxFixture {
 	for _, name := range []string{"c1.txt", "c2.txt", "c3.txt"} {
 		mustWriteFile(t, filepath.Join(poolDir, name), "Process test council persona.\n")
 	}
-	councilPoolPath := filepath.Join(poolDir, "pool.csv")
+	councilPoolPath := filepath.Join(poolDir, "pool.jsonl")
 	mustWriteFile(t, councilPoolPath, strings.Join([]string{
-		"openai://blackbox-council,c1.txt",
-		"openai://blackbox-council,c2.txt",
-		"openai://blackbox-council,c3.txt",
+		`{"endpoint":"openai","model":"blackbox-council","persona":"c1.txt"}`,
+		`{"endpoint":"openai","model":"blackbox-council","persona":"c2.txt"}`,
+		`{"endpoint":"openai","model":"blackbox-council","persona":"c3.txt"}`,
 		"",
 	}, "\n"))
 	t.Cleanup(provider.Close)
