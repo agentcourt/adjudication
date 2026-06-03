@@ -36,7 +36,8 @@ const (
 	defaultPiImage                = "agentcourt-pi-sandbox"
 	defaultPiMCPAdapter           = "npm:pi-mcp-adapter"
 	defaultPiMCPServer            = "aar"
-	defaultCaseStartupWait        = 30 * time.Second
+	defaultCaseAPIStartupWait     = 10 * time.Minute
+	defaultMCPStartupWait         = 30 * time.Second
 	defaultCouncilRosterWait      = 2 * time.Minute
 	openClawCodexContainerHome    = "/aar-codex"
 )
@@ -645,7 +646,7 @@ func waitForHealth(ctx context.Context, rawURL string, timeout time.Duration) er
 func (s *runState) waitForCaseAPI(ctx context.Context, caseDone <-chan caseOutcome) error {
 	healthDone := make(chan error, 1)
 	go func() {
-		healthDone <- waitForHealth(ctx, s.caseBase+"/health", defaultCaseStartupWait)
+		healthDone <- waitForHealth(ctx, s.caseBase+"/health", defaultCaseAPIStartupWait)
 	}()
 	select {
 	case err := <-healthDone:
@@ -663,7 +664,7 @@ func (s *runState) waitForCaseAPI(ctx context.Context, caseDone <-chan caseOutco
 func (s *runState) waitForMCP(ctx context.Context, caseDone <-chan caseOutcome, mcpDone <-chan error) error {
 	healthDone := make(chan error, 1)
 	go func() {
-		healthDone <- waitForHealth(ctx, s.mcpBase+"/health", defaultCaseStartupWait)
+		healthDone <- waitForHealth(ctx, s.mcpBase+"/health", defaultMCPStartupWait)
 	}()
 	select {
 	case err := <-healthDone:
