@@ -129,16 +129,16 @@ func TestBlackBoxMCPThroughService(t *testing.T) {
 
 func (fx *blackBoxFixture) startMCP(ctx context.Context, t *testing.T, svc *serviceProcess) *mcpServiceProcess {
 	t.Helper()
-	mcpBin := filepath.Join(fx.arbRoot, ".bin", "aar-mcp")
-	if _, err := os.Stat(mcpBin); err != nil {
-		t.Skipf("%s is required; run make build in arb first", mcpBin)
+	aarBin := filepath.Join(fx.arbRoot, ".bin", "aar")
+	if _, err := os.Stat(aarBin); err != nil {
+		t.Skipf("%s is required; run make build in arb first", aarBin)
 	}
 	listen := freeListenAddr(t)
 	token := "mcp-test-token"
-	cmd := exec.CommandContext(ctx, mcpBin,
+	cmd := exec.CommandContext(ctx, aarBin,
+		"mcp",
 		"--listen", listen,
-		"--lawyerapi-base", svc.baseURL+"/lawyerapi/v1",
-		"--councilapi-base", svc.baseURL+"/councilapi/v1",
+		"--caseapi-base", svc.baseURL,
 		"--bearer-token", token,
 	)
 	cmd.Dir = fx.arbRoot
@@ -167,9 +167,9 @@ func waitMCPHealth(ctx context.Context, t *testing.T, mcp *mcpServiceProcess) {
 		}
 		select {
 		case err := <-mcp.done:
-			t.Fatalf("aar-mcp exited before health check: %v\nstderr:\n%s\nstdout:\n%s", err, mcp.stderrString(), mcp.stdoutString())
+			t.Fatalf("aar mcp exited before health check: %v\nstderr:\n%s\nstdout:\n%s", err, mcp.stderrString(), mcp.stdoutString())
 		case <-ctx.Done():
-			t.Fatalf("timeout waiting for aar-mcp health\nstderr:\n%s\nstdout:\n%s", mcp.stderrString(), mcp.stdoutString())
+			t.Fatalf("timeout waiting for aar mcp health\nstderr:\n%s\nstdout:\n%s", mcp.stderrString(), mcp.stdoutString())
 		case <-ticker.C:
 		}
 	}

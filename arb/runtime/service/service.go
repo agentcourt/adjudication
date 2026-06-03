@@ -36,6 +36,7 @@ type Config struct {
 	EnginePath  string
 	BearerToken string
 	StartupWait time.Duration
+	Log         io.Writer
 }
 
 type Server struct {
@@ -127,6 +128,21 @@ func New(cfg Config) (*Server, error) {
 	return s, nil
 }
 
+func Run(ctx context.Context, cfg Config) error {
+	server, err := New(cfg)
+	if err != nil {
+		return err
+	}
+	ln, err := server.Listen()
+	if err != nil {
+		return err
+	}
+	if cfg.Log != nil {
+		fmt.Fprintf(cfg.Log, "aar service listening on http://%s\n", ln.Addr().String())
+	}
+	return server.Serve(ctx, ln)
+}
+
 func (s *Server) ListenAddr() string {
 	return s.cfg.ListenAddr
 }
@@ -139,17 +155,24 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	if ln == nil {
 		return fmt.Errorf("listener is required")
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	server := &http.Server{
 		Handler: s.Handler(),
 	}
+	shutdownDone := make(chan error, 1)
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_ = server.Shutdown(shutdownCtx)
+		shutdownDone <- server.Shutdown(shutdownCtx)
 	}()
 	err := server.Serve(ln)
 	if errors.Is(err, http.ErrServerClosed) {
+		if shutdownErr := <-shutdownDone; shutdownErr != nil {
+			return shutdownErr
+		}
 		return nil
 	}
 	return err
@@ -717,7 +740,7 @@ func (s *Server) proxyDo(w http.ResponseWriter, r *http.Request, kind string) {
 		return
 	}
 	if !isActive(rec) {
-		writeJSON(w, http.StatusGone, map[string]any{"ok": false, "case_id": caseID, "error": apiError("case_not_active", "case has no active runner for mutating requests")})
+		writeJSON(w, http.StatusGone, map[string]any{"ok": false, "case_id": caseID, "error": apiError("case_not_active", "case has no active case process for mutating requests")})
 		return
 	}
 	if kind == "council" {
@@ -804,7 +827,7 @@ func copyResponse(w http.ResponseWriter, resp *http.Response) {
 func (s *Server) completedLawyerRead(w http.ResponseWriter, r *http.Request, rec *CaseRecord, roleID string) {
 	run, err := readRunJSON(rec)
 	if err != nil {
-		writeJSON(w, http.StatusGone, map[string]any{"ok": false, "case_id": rec.CaseID, "role_id": roleID, "error": apiError("case_not_active", "case has no active runner and no readable final artifact")})
+		writeJSON(w, http.StatusGone, map[string]any{"ok": false, "case_id": rec.CaseID, "role_id": roleID, "error": apiError("case_not_active", "case has no active case process and no readable final artifact")})
 		return
 	}
 	switch pathBase(r.URL.Path) {
@@ -821,7 +844,7 @@ func (s *Server) completedLawyerRead(w http.ResponseWriter, r *http.Request, rec
 func (s *Server) completedCouncilRead(w http.ResponseWriter, r *http.Request, rec *CaseRecord, memberID string) {
 	run, err := readRunJSON(rec)
 	if err != nil {
-		writeJSON(w, http.StatusGone, map[string]any{"ok": false, "case_id": rec.CaseID, "member_id": memberID, "error": apiError("case_not_active", "case has no active runner and no readable final artifact")})
+		writeJSON(w, http.StatusGone, map[string]any{"ok": false, "case_id": rec.CaseID, "member_id": memberID, "error": apiError("case_not_active", "case has no active case process and no readable final artifact")})
 		return
 	}
 	status := "done"
@@ -862,7 +885,7 @@ func (s *Server) startingLawyerRead(w http.ResponseWriter, r *http.Request, rec 
 		"tools":               []map[string]any{},
 		"turn":                nil,
 		"current_opportunity": nil,
-		"message":             "The case runner is starting.",
+		"message":             "The case process is starting.",
 	}
 	if pathBase(r.URL.Path) == "wait" {
 		resp["wait"] = map[string]any{"reason": "starting", "version": 0}
@@ -880,7 +903,7 @@ func (s *Server) startingCouncilRead(w http.ResponseWriter, r *http.Request, rec
 		"prompt":    "",
 		"tools":     []map[string]any{},
 		"turn":      nil,
-		"message":   "The case runner is starting.",
+		"message":   "The case process is starting.",
 	}
 	if pathBase(r.URL.Path) == "wait" {
 		resp["wait"] = map[string]any{"reason": "starting", "version": 0}

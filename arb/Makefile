@@ -8,11 +8,9 @@ build:
 	cd engine && lake build aarengine
 	install -m 755 engine/.lake/build/bin/aarengine $(BIN_DIR)/aarengine
 	cd runtime && $(GO_ENV) go build -o ../$(BIN_DIR)/aar ./cmd/aar
-	$(GO_ENV) go build -o $(BIN_DIR)/aar-mcp ./tools/aar-mcp
 
 test:
 	cd runtime && $(GO_ENV) go test ./...
-	$(GO_ENV) go test ./tools/aar-mcp
 
 prove:
 	cd engine && lake build Proofs

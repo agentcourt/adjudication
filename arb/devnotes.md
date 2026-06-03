@@ -20,11 +20,11 @@ The failure specification now distinguishes direct `aar case` terminal artifacts
 
 Reference: [AAR MCP Specification](../aar-mcp-spec.md), [AAR MCP Test Plan](../aar-mcp-test.md)
 
-The MCP behavior now has separate root-level specification and test-plan documents.  The spec treats `aar-mcp` as a transport adapter that binds each MCP session to one case-role or case-member assignment, exposes stable assignment tool sets, normalizes wait responses, injects the active opportunity id, and forwards calls to the service role APIs.  AAR remains the authority for case state, role validation, member validation, deadlines, attempts, and terminal case status.
+The MCP behavior now has separate root-level specification and test-plan documents.  The spec treats `aar mcp` as a transport adapter that binds each MCP session to one case-role or case-member assignment, exposes stable assignment tool sets, normalizes wait responses, injects the active opportunity id, and forwards calls to the service role APIs.  AAR remains the authority for case state, role validation, member validation, deadlines, attempts, and terminal case status.
 
 The test plan separates unit, process, and service tests.  It covers session binding, authentication, origin checks, tool lists, wait normalization, opportunity-id injection, forwarding, error propagation, process health, logs, and service-backed lawyer, observer, and council assignments.  OpenClaw and Pi runs remain outside the minimum passing set for this adapter boundary.
 
-The first executable pass now starts `aar-mcp` as a subprocess, drives `/mcp` with JSON-RPC over HTTP, and uses fake Lawyer and Council role APIs behind the adapter.  The tests cover invalid startup, health readiness, bearer authentication, origin checks, missing and deleted sessions, lawyer, observer, and council tool sets, wait-state normalization, opportunity-id injection, AAR `ok:false` and non-2xx propagation, outbound service authorization, and log redaction.  Idle-session expiry remains a direct unit test because testing it through the process would depend on wall-clock timing rather than the expiry rule.
+The first executable pass now starts `aar mcp` as a subprocess, drives `/mcp` with JSON-RPC over HTTP, and uses fake Lawyer and Council role APIs behind the adapter.  The tests cover invalid startup, health readiness, bearer authentication, origin checks, missing and deleted sessions, lawyer, observer, and council tool sets, wait-state normalization, opportunity-id injection, AAR `ok:false` and non-2xx propagation, outbound service authorization, and log redaction.  Idle-session expiry remains a direct unit test because testing it through the process would depend on wall-clock timing rather than the expiry rule.
 
 ### Provider and transport cleanup
 
@@ -62,7 +62,7 @@ Lawyer prompts now tell counsel to inspect the current record, scan the evidence
 
 The Lawyer API now exposes `send_work_notes` in every active lawyer turn.  It writes the complete notes string to `work-notes.ndjson` with role, phase, turn, opportunity id, timestamp, and optional call id.  The prompts now describe those notes as a working journal: plans, issue outlines, work logs, sources checked, scripts or programs written, packages installed, browser work, OCR and extraction work, adverse checks, errors, analysis, decisions, and unresolved gaps.  The notes log is outside the record: it does not enter Lean state, `events.ndjson`, transcript output, digest output, evidence manifests, or observer event tools.  The MCP adapter exposes the tool as part of the stable lawyer transport tool set.
 
-The removed OpenClaw attorney adapter no longer belongs to the runtime.  The supported OpenClaw path is now `aar service` plus `aar-mcp`, with lawyers and council members acting through service-backed MCP tools.
+The removed OpenClaw attorney adapter no longer belongs to the runtime.  The supported OpenClaw path is now `aar service` plus `aar mcp`, with lawyers and council members acting through service-backed MCP tools.
 
 Repeated OpenClaw runs showed plaintiff finding useful sources but attempting to submit them by calling `submit_decision` with `tool_name: submit_evidence`.  Defendant could submit evidence directly in the same service, so the failure was prompt and schema ambiguity rather than a server-wide submission failure.  The lawyer prompts and runbook assignment text now say that evidence admission uses the direct `submit_evidence` tool, or the direct chunked-upload tools, before the final filing.  They also state that `submit_decision` is only for the final legal act and must not wrap `submit_evidence`.  The `submit_decision` schema now filters the engine action list to final filing actions, so `submit_evidence` is no longer advertised as a valid `submit_decision.tool_name`.
 
@@ -100,7 +100,7 @@ The Lawyer HTTP API now has `/lawyerapi/v1/wait`.  It returns the same status sh
 
 The unified MCP server exposes `wait_for_opportunity` as an always-available read-only tool.  The server maps that tool to `/wait`, caps each call at 30 seconds, and normalizes the result to `state: ready`, `state: waiting`, `state: done`, or `state: error`.  The OpenClaw-facing instructions tell a clawyer or council member to call `wait_for_opportunity` repeatedly until it receives work, completion, or an error.
 
-`aar-mcp` runs as a shared service for many case-role and case-member sessions.  Each MCP session stores the binding for `case_id` plus one principal id; it does not own case state.  Idle-session expiry can delete stale MCP session records without changing an arb.  A clawyer or council member that loses a session can initialize a new MCP session with the same URL and recover current status from the service role APIs.  The server has a default 30-minute idle TTL, a configurable cleanup interval, and `--session-ttl 0` for deployments that want to disable expiry.
+`aar mcp` runs as a shared service for many case-role and case-member sessions.  Each MCP session stores the binding for `case_id` plus one principal id; it does not own case state.  Idle-session expiry can delete stale MCP session records without changing an arb.  A clawyer or council member that loses a session can initialize a new MCP session with the same URL and recover current status from the service role APIs.  The server has a default 30-minute idle TTL, a configurable cleanup interval, and `--session-ttl 0` for deployments that want to disable expiry.
 
 - [x] Add the HTTP Lawyer API server to `aar case`.
 - [x] Replace local lawyer execution with turn blocking on HTTP tool calls.
@@ -710,7 +710,7 @@ requirements and preserving the final JSON summary for service status.
 
 Reference: [MCP process test](runtime/cmd/aar/mcp_blackbox_test.go)
 
-The external MCP test now starts `aar service`, starts `aar-mcp`, creates a
+The external MCP test now starts `aar service`, starts `aar mcp`, creates a
 real service-managed case with the Council API backend, and drives plaintiff,
 defendant, observer, and council assignments through MCP JSON-RPC.  The test
 checks tool lists, observer rejection of mutating tools, work-note recording,

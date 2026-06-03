@@ -26,7 +26,7 @@ The service topology has three process classes.  One manager process exposes the
 |---|---:|---|
 | `aar service` | 1 | Starts cases, records case metadata, routes HTTP calls, exposes operator endpoints, and reads case artifacts. |
 | `aar case` | One per active case | Runs one arbitration case, owns the `runContext`, exposes private role APIs, and writes the case packet. |
-| `aar-mcp` | 1 | Serves MCP sessions for lawyer roles, observers, and council members by forwarding to `aar service`. |
+| `aar mcp` | 1 | Serves MCP sessions for lawyer roles, observers, and council members by forwarding to `aar service`. |
 
 Each case runner listens on private localhost ports assigned by the manager.  A runner started for case `arb-20260602-0001` might expose `http://127.0.0.1:21431/lawyerapi/v1` and `http://127.0.0.1:21432/councilapi/v1`.  The public clients never need those private addresses.  They call the manager, and the manager proxies to the correct runner after resolving the case id.
 
@@ -151,17 +151,16 @@ The unified server should use assignment-neutral tool names.  Every assignment e
 
 ### MCP Tool Authority
 
-The MCP server must maintain separate tool providers under the shared transport.  A lawyer provider exposes the stable lawyer tool set, forwards read-only status and result calls to the Lawyer API, fetches the active opportunity before mutating calls, injects `opportunity_id` where required, and returns runner failures as MCP tool errors with structured content.  A council provider fetches the current Council API status, exposes the current council tools, injects the active `opportunity_id`, and forwards the call to the Council API.
+The MCP server must maintain separate tool providers under the shared transport.  A lawyer provider exposes the stable lawyer tool set, forwards read-only status and result calls to the Lawyer API, fetches the active opportunity before mutating calls, injects `opportunity_id` where required, and returns case-process failures as MCP tool errors with structured content.  A council provider fetches the current Council API status, exposes the current council tools, injects the active `opportunity_id`, and forwards the call to the Council API.
 
 This split keeps authorization local and visible in code.  A session created with `role_id=plaintiff` cannot call `submit_council_vote` because the lawyer provider never exposes that tool.  A session created with `member_id=C1` cannot call `submit_decision` or submit evidence because the council provider never exposes lawyer tools.
 
-The unified MCP process should support one manager Lawyer API base and one manager Council API base.  It should not accept per-case API maps in service mode, because case routing belongs to the manager.  Both MCP providers point at the manager:
+The unified MCP process should support one Case API base.  It should not accept per-case API maps in service mode, because case routing belongs to the manager.  Both MCP providers derive their HTTP paths from the same base:
 
 ```bash
-.bin/aar-mcp \
+.bin/aar mcp \
   --listen 0.0.0.0:19780 \
-  --lawyerapi-base http://127.0.0.1:19770/lawyerapi/v1 \
-  --councilapi-base http://127.0.0.1:19770/councilapi/v1 \
+  --caseapi-base http://127.0.0.1:19770 \
   --bearer-token "$AAR_MCP_TOKEN"
 ```
 
@@ -213,7 +212,7 @@ Manager restart recovery should read the persistent registry and reconcile child
 
 ## Greenfield Cutover
 
-The service branch should treat `aar service` and `aar-mcp` as the supported entry points for multi-case operation.  The split MCP adapter binaries should disappear after the unified server passes the lawyer and council tests.  Documentation and examples should describe the service topology only, so a new operator sees one HTTP manager and one MCP endpoint.
+The service branch should treat `aar service` and `aar mcp` as the supported entry points for multi-case operation.  The split MCP adapter binaries should disappear after the unified server passes the lawyer and council tests.  Documentation and examples should describe the service topology only, so a new operator sees one HTTP manager and one MCP endpoint.
 
 The `aar case` command should remain as the child runner used by the manager.  It is still useful as a direct development command, but it should accept the same case identity and terminal-state behavior that the manager expects.  The runner should gain a `--case-id` flag, pass that value into `initialState`, and reject Lawyer or Council API requests whose `case_id` differs from the configured value.
 
@@ -230,8 +229,8 @@ The implementation should proceed in phases that keep the runner as the arbitrat
 | 5 | Add public Lawyer and Council API proxy routes on the manager.  `GET` routes should route by query `case_id`; `POST /do` should read a bounded JSON body, extract `case_id`, and forward the original body to the private runner API. | Proxy tests for unknown case ids, inactive cases, missing case ids, request-size rejection, response status preservation, private API timeout, and read-only completed-case responses from artifacts. |
 | 6 | Add registry persistence as one JSON file per case under a registry directory, written through atomic rename.  Manager startup should reconcile registry rows with live child processes and completed output packets. | Persistence tests for atomic writes, reload, completed-case recovery from `run.json`, missing-child failure marking, and canceled-case preservation. |
 | 7 | Add artifact endpoints scoped to the registered output directory: listing, `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, and evidence reads by `evidence_id`. | Artifact tests for path traversal rejection, symlink escape rejection, evidence manifest lookup, byte ranges, MIME type reporting, and missing-file errors. |
-| 8 | Build `aar-mcp` from shared transport code and separate assignment providers.  One MCP session binds to one `case_id` plus either `role_id` or `member_id`; all assignments use `wait_for_opportunity` and `get_current_opportunity`, and provider-specific tools remain separated by assignment type. | MCP tests for session initialization, invalid mixed principals, bearer-token rejection, lawyer tool authority, council tool authority, opportunity-id injection, runner error propagation, and session expiry. |
-| 9 | Remove the split MCP adapter commands and update build targets, runbooks, skills, and example scripts to use `aar service` and `aar-mcp`. | Build tests proving only supported commands are generated, documentation checks for stale adapter names, and example-run tests through the service manager. |
+| 8 | Build `aar mcp` from shared transport code and separate assignment providers.  One MCP session binds to one `case_id` plus either `role_id` or `member_id`; all assignments use `wait_for_opportunity` and `get_current_opportunity`, and provider-specific tools remain separated by assignment type. | MCP tests for session initialization, invalid mixed principals, bearer-token rejection, lawyer tool authority, council tool authority, opportunity-id injection, runner error propagation, and session expiry. |
+| 9 | Remove the split MCP adapter commands and update build targets, runbooks, skills, and example scripts to use `aar service` and `aar mcp`. | Build tests proving only supported commands are generated, documentation checks for stale adapter names, and example-run tests through the service manager. |
 | 10 | Run end-to-end examples through the service topology with OpenClaw lawyers and council API members where applicable. | `examples/ex1` through `examples/ex6` should complete or fail with diagnosable service errors; review should confirm evidence submission, evidence reads, work notes, final results, and clean terminal `done` responses. |
 
 ## Open Design Decisions

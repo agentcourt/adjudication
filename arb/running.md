@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This runbook describes the current way to run an AAR case with real OpenClaw lawyers and Pi council members.  One host process runs `aar service`, one host process runs `aar-mcp`, and one `aar case` child process runs each case.  OpenClaw containers act as lawyers through MCP tools that forward to the public service APIs.  Pi council members use the same MCP service, with each member configured from the council roster returned by AAR.
+This runbook describes the current way to run an AAR case with real OpenClaw lawyers and Pi council members.  One host process runs `aar service`, one host process runs `aar mcp`, and one `aar case` child process runs each case.  OpenClaw containers act as lawyers through MCP tools that forward to the public service APIs.  Pi council members use the same MCP service, with each member configured from the council roster returned by AAR.
 
 The service owns case creation, case ids, process lifecycle, routing, logs, result reads, and artifact reads.  The child runner owns arbitration state, turn order, deadlines, attempt budgets, evidence custody, filing validation, council voting, and final artifacts.  The MCP process stores only the assignment for one MCP session: `case_id` plus `role_id` for a lawyer or observer, or `case_id` plus `member_id` for a council member.
 
@@ -12,7 +12,7 @@ The service owns case creation, case ids, process lifecycle, routing, logs, resu
 | --- | --- | --- |
 | `aar service` | host | Starts cases, records case metadata, and routes public HTTP calls by `case_id`. |
 | `aar case` | host child process | Runs one arbitration and exposes private Lawyer and Council APIs on localhost. |
-| `aar-mcp` | host | Exposes Streamable HTTP MCP and forwards tool calls to `aar service`. |
+| `aar mcp` | host | Exposes Streamable HTTP MCP and forwards tool calls to `aar service`. |
 | OpenClaw lawyer containers | Docker or remote host | Act as plaintiff and defendant through MCP. |
 | Pi council containers | Podman or remote host | Act as council members through MCP. |
 
@@ -36,7 +36,7 @@ Run the build from `arb/`:
 make build
 ```
 
-This builds `.bin/aar`, `.bin/aar-mcp`, and the Lean engine used by the runtime.  The split MCP adapter commands are no longer part of the supported build.
+This builds `.bin/aar` and the Lean engine used by the runtime.  The split MCP adapter commands are no longer part of the supported build.
 
 ## Running One Example
 
@@ -46,7 +46,7 @@ Use the example runner for local end-to-end tests:
 examples/run-ex.sh ex1
 ```
 
-The script starts `aar service`, starts `aar-mcp`, creates one case through `POST /api/v1/cases`, starts OpenClaw containers for plaintiff and defendant, starts Pi council members `C1` through `C5`, waits for the service result endpoint, and writes the output directory path to standard output.  Each OpenClaw container keeps one session key for the whole lawyer assignment.  Each Pi member receives one mounted home directory under the output directory, so its session files, MCP config, settings, and model config remain available for review.  The latest output path for an example is also written to `out/latest-exN-openclaw-lawyers.txt`.
+The script starts `aar service`, starts `aar mcp`, creates one case through `POST /api/v1/cases`, starts OpenClaw containers for plaintiff and defendant, starts Pi council members `C1` through `C5`, waits for the service result endpoint, and writes the output directory path to standard output.  Each OpenClaw container keeps one session key for the whole lawyer assignment.  Each Pi member receives one mounted home directory under the output directory, so its session files, MCP config, settings, and model config remain available for review.  The latest output path for an example is also written to `out/latest-exN-openclaw-lawyers.txt`.
 
 The script sources provider keys from `~/keys.txt`.  It passes `OPENAI_API_KEY` into the OpenClaw lawyer containers and passes `OPENROUTER_API_KEY` into the Pi council containers.  It uses `gpt-5.5` for OpenClaw agents.  It does not mount case files or output directories into the lawyer containers.
 
@@ -73,16 +73,15 @@ echo $! >"$OUT/service.pid"
 Then start the MCP server.  During local Docker tests it listens on all host interfaces so `host.docker.internal` can reach it:
 
 ```bash
-.bin/aar-mcp \
+.bin/aar mcp \
   --listen 0.0.0.0:19780 \
-  --lawyerapi-base http://127.0.0.1:19770/lawyerapi/v1 \
-  --councilapi-base http://127.0.0.1:19770/councilapi/v1 \
+  --caseapi-base http://127.0.0.1:19770 \
   --bearer-token "$TOKEN" \
   --api-bearer-token "$TOKEN" \
   --session-ttl 0 \
-  >"$OUT/logs/aar-mcp.stdout" \
-  2>"$OUT/logs/aar-mcp.stderr" &
-echo $! >"$OUT/aar-mcp.pid"
+  >"$OUT/logs/mcp.stdout" \
+  2>"$OUT/logs/mcp.stderr" &
+echo $! >"$OUT/mcp.pid"
 ```
 
 Create a case through the service.  The `case_id` becomes the public routing key for every lawyer, observer, and council call:

@@ -5,7 +5,7 @@ usage() {
   cat >&2 <<'EOF'
 Usage: examples/run-ex.sh EXAMPLE
 
-Run one arb example through aar service and aar-mcp.
+Run one arb example through aar service and aar mcp.
 
 The script starts OpenClaw containers for plaintiff and defendant lawyers.
 Council members run as Pi agents in Podman and use the same MCP service.
@@ -39,8 +39,8 @@ TOKEN="aar-${EX}-${RUN_ID}"
 SERVICE_PORT=$((22000 + RANDOM % 10000))
 MCP_PORT=$((SERVICE_PORT + 1))
 SERVICE_BASE="http://127.0.0.1:${SERVICE_PORT}"
-LAWYER_API="${SERVICE_BASE}/lawyerapi/v1"
-COUNCIL_API="${SERVICE_BASE}/councilapi/v1"
+CASE_API="$SERVICE_BASE"
+LAWYER_API="${CASE_API}/lawyerapi/v1"
 MCP_FROM_DOCKER="http://host.docker.internal:${MCP_PORT}/mcp"
 MCP_FROM_PODMAN="http://127.0.0.1:${MCP_PORT}/mcp"
 PI_IMAGE="${PI_CONTAINER_IMAGE:-agentcourt-pi-sandbox}"
@@ -93,17 +93,16 @@ if [[ ! -s "$OUT/logs/service-start.json" ]]; then
   exit 1
 fi
 
-.bin/aar-mcp \
+.bin/aar mcp \
   --listen "0.0.0.0:${MCP_PORT}" \
-  --lawyerapi-base "$LAWYER_API" \
-  --councilapi-base "$COUNCIL_API" \
+  --caseapi-base "$CASE_API" \
   --bearer-token "$TOKEN" \
   --api-bearer-token "$TOKEN" \
   --session-ttl 0 \
-  >"$OUT/logs/aar-mcp.stdout" \
-  2>"$OUT/logs/aar-mcp.stderr" &
+  >"$OUT/logs/mcp.stdout" \
+  2>"$OUT/logs/mcp.stderr" &
 MCP_PID=$!
-echo "$MCP_PID" >"$OUT/aar-mcp.pid"
+echo "$MCP_PID" >"$OUT/mcp.pid"
 
 CREATE_BODY="$OUT/create-case.json"
 jq -n \
