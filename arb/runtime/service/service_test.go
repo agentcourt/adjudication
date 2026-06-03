@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -138,6 +139,183 @@ func TestJoinBaseAndPathUsesSingleCaseAPIBase(t *testing.T) {
 	}
 	if got := u.String(); got != "http://127.0.0.1:21431/councilapi/v1/wait" {
 		t.Fatalf("council target = %q", got)
+	}
+}
+
+func TestClerkCreateCompletesAndListsRecord(t *testing.T) {
+	root := t.TempDir()
+	aarBin := writeFakeAAR(t, `#!/bin/sh
+if [ "$1" != "run" ]; then exit 64; fi
+shift
+case_id=""
+run_id=""
+out_dir=""
+complaint=""
+example=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --case-id) case_id="$2"; shift 2 ;;
+    --run-id) run_id="$2"; shift 2 ;;
+    --out-dir) out_dir="$2"; shift 2 ;;
+    --complaint) complaint="$2"; shift 2 ;;
+    --*) shift 2 ;;
+    *) example="$1"; shift ;;
+  esac
+done
+mkdir -p "$out_dir"
+printf '{"case_id":"%s","run_id":"%s","status":"ok","resolution":"demonstrated","example":"%s","complaint":"%s"}\n' "$case_id" "$run_id" "$example" "$complaint"
+`)
+	s := newClerkTestServer(t, root, aarBin)
+	complaint := filepath.Join(t.TempDir(), "complaint.md")
+	if err := os.WriteFile(complaint, []byte("# Complaint\n"), 0o644); err != nil {
+		t.Fatalf("write complaint: %v", err)
+	}
+
+	status, got := servicePost(t, s, "/clerk/v1/cases", map[string]any{
+		"case_id":        "clerk-1",
+		"run_id":         "run-clerk-1",
+		"complaint_path": complaint,
+		"auto_lawyers":   "defendant",
+	})
+	if status != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusAccepted, got)
+	}
+	rec := waitClerkStatus(t, s, "clerk-1", "completed")
+	if rec["run_id"] != "run-clerk-1" {
+		t.Fatalf("run_id = %#v", rec["run_id"])
+	}
+	if _, err := os.Stat(filepath.Join(root, "clerk-1", clerkRecordName)); err != nil {
+		t.Fatalf("stat clerk record: %v", err)
+	}
+	summary, ok := rec["summary"].(map[string]any)
+	if !ok || summary["status"] != "ok" || summary["resolution"] != "demonstrated" {
+		t.Fatalf("summary = %#v", rec["summary"])
+	}
+
+	status, got = servicePost(t, s, "/clerk/v1/cases", map[string]any{
+		"case_id":        "clerk-1",
+		"complaint_path": complaint,
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("duplicate status = %d, want %d", status, http.StatusBadRequest)
+	}
+}
+
+func TestClerkCreateRejectsMissingComplaintWithoutExample(t *testing.T) {
+	root := t.TempDir()
+	aarBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
+	s := newClerkTestServer(t, root, aarBin)
+
+	status, got := servicePost(t, s, "/clerk/v1/cases", map[string]any{"case_id": "missing-complaint"})
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", status, http.StatusBadRequest)
+	}
+	errObj, ok := got["error"].(map[string]any)
+	if !ok || !strings.Contains(mapString(errObj["message"]), "complaint_path is required") {
+		t.Fatalf("error = %#v", got["error"])
+	}
+}
+
+func TestClerkKillTerminatesActiveRun(t *testing.T) {
+	root := t.TempDir()
+	aarBin := writeFakeAAR(t, `#!/bin/sh
+if [ "$1" != "run" ]; then exit 64; fi
+trap 'exit 0' INT TERM
+while :; do sleep 1; done
+`)
+	s := newClerkTestServer(t, root, aarBin)
+	complaint := filepath.Join(t.TempDir(), "complaint.md")
+	if err := os.WriteFile(complaint, []byte("# Complaint\n"), 0o644); err != nil {
+		t.Fatalf("write complaint: %v", err)
+	}
+	status, got := servicePost(t, s, "/clerk/v1/cases", map[string]any{
+		"case_id":        "clerk-kill",
+		"complaint_path": complaint,
+	})
+	if status != http.StatusAccepted {
+		t.Fatalf("create status = %d, want %d: %#v", status, http.StatusAccepted, got)
+	}
+
+	status, got = servicePost(t, s, "/clerk/v1/cases/clerk-kill/kill", map[string]any{})
+	if status != http.StatusOK {
+		t.Fatalf("kill status = %d, want %d: %#v", status, http.StatusOK, got)
+	}
+	rec := waitClerkStatus(t, s, "clerk-kill", "killed")
+	if rec["pid"] != nil {
+		t.Fatalf("pid = %#v, want omitted", rec["pid"])
+	}
+}
+
+func TestClerkListReadsExistingRecordsFromOutputRoot(t *testing.T) {
+	root := t.TempDir()
+	aarBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
+	outDir := filepath.Join(root, "existing")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatalf("mkdir out dir: %v", err)
+	}
+	rec := ClerkRecord{
+		CaseID:    "existing",
+		RunID:     "run-existing",
+		Status:    "completed",
+		OutDir:    outDir,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatalf("marshal clerk record: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, clerkRecordName), raw, 0o644); err != nil {
+		t.Fatalf("write clerk record: %v", err)
+	}
+	s := newClerkTestServer(t, root, aarBin)
+
+	status, got := serviceGet(t, s, "/clerk/v1/cases")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	cases, ok := got["cases"].([]any)
+	if !ok || len(cases) != 1 {
+		t.Fatalf("cases = %#v", got["cases"])
+	}
+	listed, ok := cases[0].(map[string]any)
+	if !ok || listed["case_id"] != "existing" || listed["status"] != "completed" {
+		t.Fatalf("listed = %#v", cases[0])
+	}
+}
+
+func TestClerkKillRejectsDiskOnlyActiveRecord(t *testing.T) {
+	root := t.TempDir()
+	aarBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
+	outDir := filepath.Join(root, "active-disk")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatalf("mkdir out dir: %v", err)
+	}
+	rec := ClerkRecord{
+		CaseID:    "active-disk",
+		RunID:     "run-active-disk",
+		Status:    "running",
+		OutDir:    outDir,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatalf("marshal clerk record: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, clerkRecordName), raw, 0o644); err != nil {
+		t.Fatalf("write clerk record: %v", err)
+	}
+	s := newClerkTestServer(t, root, aarBin)
+
+	status, got := servicePost(t, s, "/clerk/v1/cases/active-disk/kill", map[string]any{})
+	if status != http.StatusConflict {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusConflict, got)
+	}
+	if got["ok"] != false {
+		t.Fatalf("ok = %#v, want false", got["ok"])
+	}
+	errObj, ok := got["error"].(map[string]any)
+	if !ok || errObj["code"] != "case_not_attached" {
+		t.Fatalf("error = %#v", got["error"])
 	}
 }
 
@@ -327,6 +505,28 @@ func syncCond(mu *sync.Mutex) *sync.Cond {
 	return sync.NewCond(mu)
 }
 
+func writeFakeAAR(t *testing.T, script string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "aar")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake aar: %v", err)
+	}
+	return path
+}
+
+func newClerkTestServer(t *testing.T, outputRoot string, aarBin string) *Server {
+	t.Helper()
+	s, err := New(Config{
+		RegistryDir: filepath.Join(t.TempDir(), "registry"),
+		OutputRoot:  outputRoot,
+		AARBin:      aarBin,
+	})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	return s
+}
+
 func serviceGet(t *testing.T, s *Server, path string) (int, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -337,4 +537,52 @@ func serviceGet(t *testing.T, s *Server, path string) (int, map[string]any) {
 		t.Fatalf("decode response: %v", err)
 	}
 	return rec.Code, got
+}
+
+func servicePost(t *testing.T, s *Server, path string, body map[string]any) (int, map[string]any) {
+	t.Helper()
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal post body: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	var got map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return rec.Code, got
+}
+
+func waitClerkStatus(t *testing.T, s *Server, caseID string, want string) map[string]any {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	var last map[string]any
+	for time.Now().Before(deadline) {
+		status, got := serviceGet(t, s, "/clerk/v1/cases")
+		if status != http.StatusOK {
+			t.Fatalf("list status = %d, want %d", status, http.StatusOK)
+		}
+		cases, ok := got["cases"].([]any)
+		if !ok {
+			t.Fatalf("cases = %#v", got["cases"])
+		}
+		for _, item := range cases {
+			rec, ok := item.(map[string]any)
+			if !ok {
+				t.Fatalf("case item = %#v", item)
+			}
+			if rec["case_id"] == caseID {
+				last = rec
+				if rec["status"] == want {
+					return rec
+				}
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("case %s did not reach status %s; last = %#v", caseID, want, last)
+	return nil
 }

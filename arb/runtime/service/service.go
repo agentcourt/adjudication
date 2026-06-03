@@ -44,11 +44,12 @@ type Config struct {
 }
 
 type Server struct {
-	cfg    Config
-	mu     sync.Mutex
-	cond   *sync.Cond
-	cases  map[string]*CaseRecord
-	client *http.Client
+	cfg        Config
+	mu         sync.Mutex
+	cond       *sync.Cond
+	cases      map[string]*CaseRecord
+	clerkCases map[string]*ClerkRecord
+	client     *http.Client
 }
 
 type CaseCreateRequest struct {
@@ -119,8 +120,9 @@ func New(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("create output root: %w", err)
 	}
 	s := &Server{
-		cfg:   cfg,
-		cases: map[string]*CaseRecord{},
+		cfg:        cfg,
+		cases:      map[string]*CaseRecord{},
+		clerkCases: map[string]*ClerkRecord{},
 		client: &http.Client{
 			Timeout: 10 * time.Minute,
 		},
@@ -184,6 +186,8 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/clerk/v1/cases", s.handleClerkCases)
+	mux.HandleFunc("/clerk/v1/cases/", s.handleClerkCase)
 	mux.HandleFunc("/api/v1/cases", s.handleCases)
 	mux.HandleFunc("/api/v1/cases/", s.handleCase)
 	mux.HandleFunc("/lawyerapi/v1/get", s.proxyLawyerGET)
@@ -296,7 +300,7 @@ func (s *Server) handleCase(w http.ResponseWriter, r *http.Request) {
 func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseRecord, error) {
 	caseID := strings.TrimSpace(req.CaseID)
 	if caseID == "" {
-		caseID = "arb-" + time.Now().UTC().Format("20060102-150405") + "-" + randomHex(4)
+		caseID = "arb-" + time.Now().UTC().Format("20060102150405") + "-" + randomHex(4)
 	}
 	if err := validateID(caseID, "case_id"); err != nil {
 		return CaseRecord{}, err
@@ -444,7 +448,11 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 }
 
 func captureStdout(stdout io.Reader, logFile *os.File) error {
-	scanner := bufio.NewScanner(stdout)
+	return captureProcessLog(stdout, logFile)
+}
+
+func captureProcessLog(input io.Reader, logFile *os.File) error {
+	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16<<20)
 	var firstErr error
 	closed := false
