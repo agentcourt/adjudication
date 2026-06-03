@@ -31,23 +31,23 @@ func runLocal(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 	attorneyRebuttalPrompt := fs.String("attorney-rebuttals-prompt", "", "Attorney rebuttals prompt file override")
 	commonRoot := fs.String("common-root", proceeding.DefaultCommonRoot(), "Path to sibling shared common directory")
 	councilPool := fs.String("council-pool", "", "Council JSONL request-spec pool file")
-	caseAPIAddr := fs.String("caseapi-addr", "127.0.0.1:0", "Private case API listen address")
+	caseAPIAddr := fs.String("caseapi-addr", proceeding.DefaultCaseAPIAddr, "Private case API listen address")
 	mcpListenAddr := fs.String("mcp-listen", "0.0.0.0:0", "MCP listen address")
 	mcpBearerToken := fs.String("mcp-bearer-token", "", "MCP bearer token. Default: generated")
-	councilTimeoutSeconds := fs.Int("council-timeout-seconds", 900, "Council turn timeout seconds")
-	lawyerTimeoutSeconds := fs.Int("lawyer-timeout-seconds", 900, "Lawyer turn timeout seconds")
+	councilTimeoutSeconds := fs.Int("council-timeout-seconds", localrun.DefaultRunCouncilTimeoutSeconds, "Council turn timeout seconds")
+	lawyerTimeoutSeconds := fs.Int("lawyer-timeout-seconds", localrun.DefaultRunLawyerTimeoutSeconds, "Lawyer turn timeout seconds")
 	maxResponseBytes := fs.Int("max-response-bytes", 0, "Override runtime max parsed response bytes")
 	invalidAttemptLimit := fs.Int("invalid-attempt-limit", 0, "Override runtime invalid-attempt limit")
 	enginePath := fs.String("engine", proceeding.DefaultEnginePath(), "Lean engine binary")
 	runID := fs.String("run-id", "", "Run ID override")
 	caseID := fs.String("case-id", "", "Case ID")
-	lawyerInstructions := fs.String("lawyer-instructions", filepath.Join("agent-instructions", "openclaw-lawyer.md.tmpl"), "OpenClaw lawyer instruction template")
-	remoteLawyerSkill := fs.String("remote-lawyer-skill", filepath.Join("agent-instructions", "openclaw-remote-lawyer-skill.md.tmpl"), "OpenClaw remote lawyer skill template")
-	councilInstructions := fs.String("council-instructions", filepath.Join("agent-instructions", "pi-council.md.tmpl"), "Pi council instruction template")
-	autoLawyers := fs.String("auto-lawyers", "both", "OpenClaw lawyers started by aar run: both, plaintiff, or defendant")
+	lawyerInstructions := fs.String("lawyer-instructions", localrun.DefaultLawyerInstructionsPath(), "OpenClaw lawyer instruction template")
+	remoteLawyerSkill := fs.String("remote-lawyer-skill", localrun.DefaultRemoteLawyerSkillPath(), "OpenClaw remote lawyer skill template")
+	councilInstructions := fs.String("council-instructions", localrun.DefaultCouncilInstructionsPath(), "Pi council instruction template")
+	autoLawyers := fs.String("auto-lawyers", localrun.DefaultAutoLawyers, "OpenClaw lawyers started by aar run: both, plaintiff, or defendant")
 	mcpPublicBaseURL := fs.String("mcp-public-base-url", "", "Public MCP base URL for remote lawyers, for example http://aar-host.example:8001")
-	dockerCommand := fs.String("docker", "docker", "Docker command")
-	podmanCommand := fs.String("podman", "podman", "Podman command")
+	dockerCommand := fs.String("docker", localrun.DefaultDockerCommand, "Docker command")
+	podmanCommand := fs.String("podman", localrun.DefaultPodmanCommand, "Podman command")
 	openClawImage := fs.String("openclaw-image", "", "OpenClaw container image")
 	openClawModel := fs.String("openclaw-model", "", "OpenClaw model")
 	openClawThinking := fs.String("openclaw-thinking", "", "OpenClaw thinking setting")
@@ -57,6 +57,7 @@ func runLocal(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 	openClawStartDelaySeconds := fs.Int("openclaw-lawyer-start-delay-seconds", -1, "Delay between plaintiff and defendant OpenClaw startup; 0 disables")
 	piImage := fs.String("pi-image", "", "Pi container image")
 	piMCPAdapter := fs.String("pi-mcp-adapter", "", "Pi MCP adapter package")
+	councilOutputLimitBytes := fs.Int64("council-output-limit-bytes", localrun.DefaultCouncilOutputLimitBytes, "Total stdout plus stderr byte limit per Pi council agent")
 	dockerMCPHost := fs.String("docker-mcp-host", "", "Host name used by Docker containers to reach MCP")
 	podmanMCPHost := fs.String("podman-mcp-host", "", "Host name used by Podman containers to reach MCP")
 	fs.Usage = func() {
@@ -139,6 +140,7 @@ func runLocal(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 		OpenClawStartDelaySeconds:  *openClawStartDelaySeconds,
 		PiImage:                    *piImage,
 		PiMCPAdapter:               *piMCPAdapter,
+		CouncilOutputLimitBytes:    *councilOutputLimitBytes,
 		DockerMCPHost:              *dockerMCPHost,
 		PodmanMCPHost:              *podmanMCPHost,
 		Log:                        stderr,

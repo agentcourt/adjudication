@@ -24,13 +24,14 @@ const (
 	serverName         = "aar"
 	serverVersion      = "0.1.0"
 
+	DefaultListenAddr             = "127.0.0.1:19780"
+	DefaultSessionTTL             = 30 * time.Minute
+	DefaultSessionCleanupInterval = time.Minute
+
 	waitToolName       = "wait_for_opportunity"
 	waitToolDefault    = 30 * time.Second
 	waitToolMax        = 30 * time.Second
 	waitToolHTTPMargin = 2 * time.Second
-
-	defaultSessionTTL             = 30 * time.Minute
-	defaultSessionCleanupInterval = time.Minute
 )
 
 type Options struct {
@@ -51,7 +52,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	listen := strings.TrimSpace(opts.ListenAddr)
 	if listen == "" {
-		listen = "127.0.0.1:19780"
+		listen = DefaultListenAddr
 	}
 	caseAPIBase, err := normalizeCaseAPIBase(opts.CaseAPIBase)
 	if err != nil {
@@ -64,14 +65,14 @@ func Run(ctx context.Context, opts Options) error {
 	if opts.DisableSessionExpiry {
 		sessionTTL = 0
 	} else if sessionTTL == 0 {
-		sessionTTL = defaultSessionTTL
+		sessionTTL = DefaultSessionTTL
 	}
 	if sessionTTL < 0 {
 		return fmt.Errorf("session-ttl must be non-negative")
 	}
 	sessionCleanupInterval := opts.SessionCleanupInterval
 	if sessionCleanupInterval == 0 {
-		sessionCleanupInterval = defaultSessionCleanupInterval
+		sessionCleanupInterval = DefaultSessionCleanupInterval
 	}
 	if sessionTTL > 0 && sessionCleanupInterval <= 0 {
 		return fmt.Errorf("session-cleanup-interval must be positive when session expiry is enabled")

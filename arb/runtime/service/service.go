@@ -20,11 +20,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"adjudication/arb/runtime/proceeding"
 )
 
 const (
+	DefaultListenAddr      = "127.0.0.1:19770"
+	DefaultCaseStartupWait = 30 * time.Second
+
 	defaultMaxProxyBodyBytes = 32 << 20
-	defaultCaseStartupWait   = 30 * time.Second
 )
 
 type Config struct {
@@ -94,7 +98,7 @@ type CaseRecord struct {
 func New(cfg Config) (*Server, error) {
 	cfg.ListenAddr = strings.TrimSpace(cfg.ListenAddr)
 	if cfg.ListenAddr == "" {
-		cfg.ListenAddr = "127.0.0.1:19770"
+		cfg.ListenAddr = DefaultListenAddr
 	}
 	if strings.TrimSpace(cfg.RegistryDir) == "" {
 		return nil, fmt.Errorf("registry dir is required")
@@ -106,7 +110,7 @@ func New(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("aar binary path is required")
 	}
 	if cfg.StartupWait <= 0 {
-		cfg.StartupWait = defaultCaseStartupWait
+		cfg.StartupWait = DefaultCaseStartupWait
 	}
 	if err := os.MkdirAll(cfg.RegistryDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create registry dir: %w", err)
@@ -322,7 +326,7 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 
 	councilBackend := strings.TrimSpace(req.CouncilBackend)
 	if councilBackend == "" {
-		councilBackend = "direct"
+		councilBackend = proceeding.DefaultCouncilBackend
 	}
 	caseAPIAddr, err := chooseLocalCaseAPIAddr()
 	if err != nil {
@@ -485,7 +489,7 @@ func (s *Server) captureStderr(rec *CaseRecord, stderr io.Reader, logFile *os.Fi
 }
 
 func chooseLocalCaseAPIAddr() (string, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := net.Listen("tcp", proceeding.DefaultCaseAPIAddr)
 	if err != nil {
 		return "", fmt.Errorf("choose caseapi address: %w", err)
 	}
@@ -498,7 +502,7 @@ func chooseLocalCaseAPIAddr() (string, error) {
 
 func (s *Server) pollCaseAPIStartup(rec *CaseRecord, timeout time.Duration) {
 	if timeout <= 0 {
-		timeout = defaultCaseStartupWait
+		timeout = DefaultCaseStartupWait
 	}
 	deadline := time.Now().Add(timeout)
 	for {

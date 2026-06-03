@@ -1,12 +1,16 @@
 package localrun
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"adjudication/arb/runtime/proceeding"
 	"adjudication/common/modelrequest"
@@ -309,7 +313,7 @@ func TestOpenClawAuthArgsForCodexUsesAbsoluteMountPath(t *testing.T) {
 }
 
 func TestEffectiveLawyerTurnTimeoutSeconds(t *testing.T) {
-	if got := effectiveLawyerTurnTimeoutSeconds(Options{}); got != proceeding.DefaultRuntimeLimits().LawyerTurnTimeoutSeconds {
+	if got := effectiveLawyerTurnTimeoutSeconds(Options{}); got != DefaultRunLawyerTimeoutSeconds {
 		t.Fatalf("default timeout = %d", got)
 	}
 	if got := effectiveLawyerTurnTimeoutSeconds(Options{LawyerTimeoutSeconds: 123}); got != 123 {
@@ -356,6 +360,123 @@ func TestApplyDefaultsOpenClawStartDelay(t *testing.T) {
 	}
 	if got := applyDefaults(Options{OpenClawStartDelaySeconds: 27}).OpenClawStartDelaySeconds; got != 27 {
 		t.Fatalf("override start delay = %d", got)
+	}
+}
+
+func TestApplyDefaultsRunTurnTimeouts(t *testing.T) {
+	opts := applyDefaults(Options{})
+	if opts.CouncilTimeoutSeconds != DefaultRunCouncilTimeoutSeconds {
+		t.Fatalf("default council timeout = %d", opts.CouncilTimeoutSeconds)
+	}
+	if opts.LawyerTimeoutSeconds != DefaultRunLawyerTimeoutSeconds {
+		t.Fatalf("default lawyer timeout = %d", opts.LawyerTimeoutSeconds)
+	}
+	opts = applyDefaults(Options{CouncilTimeoutSeconds: 123, LawyerTimeoutSeconds: 456})
+	if opts.CouncilTimeoutSeconds != 123 || opts.LawyerTimeoutSeconds != 456 {
+		t.Fatalf("timeouts = council %d lawyer %d", opts.CouncilTimeoutSeconds, opts.LawyerTimeoutSeconds)
+	}
+}
+
+func TestApplyDefaultsCouncilOutputLimit(t *testing.T) {
+	if got := applyDefaults(Options{}).CouncilOutputLimitBytes; got != DefaultCouncilOutputLimitBytes {
+		t.Fatalf("default council output limit = %d", got)
+	}
+	if got := applyDefaults(Options{CouncilOutputLimitBytes: 123}).CouncilOutputLimitBytes; got != 123 {
+		t.Fatalf("council output limit override = %d", got)
+	}
+}
+
+func TestCouncilProcessOutputSizeCountsLogs(t *testing.T) {
+	dir := t.TempDir()
+	stdoutPath := filepath.Join(dir, "pi-C1.stdout")
+	stderrPath := filepath.Join(dir, "pi-C1.stderr")
+	if err := os.WriteFile(stdoutPath, []byte("abcdef"), 0o644); err != nil {
+		t.Fatalf("write stdout: %v", err)
+	}
+	if err := os.WriteFile(stderrPath, []byte("xyz"), 0o644); err != nil {
+		t.Fatalf("write stderr: %v", err)
+	}
+	size, err := councilProcessOutputSize(&processRecord{
+		name:       "pi-C1",
+		stdoutPath: stdoutPath,
+		stderrPath: stderrPath,
+	})
+	if err != nil {
+		t.Fatalf("council process output size: %v", err)
+	}
+	if size.Stdout != 6 || size.Stderr != 3 || size.Total != 9 {
+		t.Fatalf("size = %#v", size)
+	}
+}
+
+func TestMonitorCouncilOutputKillsProcessOverLimit(t *testing.T) {
+	dir := t.TempDir()
+	stdoutPath := filepath.Join(dir, "pi-C1.stdout")
+	stderrPath := filepath.Join(dir, "pi-C1.stderr")
+	stdout, err := os.Create(stdoutPath)
+	if err != nil {
+		t.Fatalf("create stdout: %v", err)
+	}
+	stderr, err := os.Create(stderrPath)
+	if err != nil {
+		t.Fatalf("create stderr: %v", err)
+	}
+	if _, err := stdout.WriteString("abcdef"); err != nil {
+		t.Fatalf("write stdout: %v", err)
+	}
+	cmd := exec.Command("sleep", "60")
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start sleep: %v", err)
+	}
+	proc := &processRecord{
+		name:       "pi-C1",
+		kind:       "podman",
+		command:    cmd,
+		done:       make(chan error, 1),
+		stdoutPath: stdoutPath,
+		stderrPath: stderrPath,
+		finished:   make(chan struct{}),
+	}
+	go func() {
+		waitErr := cmd.Wait()
+		closeOut := stdout.Close()
+		closeErr := stderr.Close()
+		proc.markExited()
+		proc.done <- errors.Join(waitErr, closeOut, closeErr)
+	}()
+	t.Cleanup(func() {
+		if !proc.isExited() {
+			_ = cmd.Process.Kill()
+			<-proc.finished
+		}
+	})
+
+	state := &runState{
+		opts:      Options{CouncilOutputLimitBytes: 5},
+		agentErrs: make(chan error, 1),
+	}
+	state.monitorCouncilOutput(context.Background(), proc, councilProcessTarget{
+		memberID:      "C1",
+		opportunityID: "deliberation:1:C1",
+	}, 10*time.Millisecond)
+	select {
+	case <-proc.finished:
+	case err := <-state.agentErrs:
+		t.Fatalf("agent error: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatalf("process was not killed")
+	}
+	reason, message, details := proc.forcedFailure()
+	if reason != councilFailureOutputLimit {
+		t.Fatalf("forced reason = %q", reason)
+	}
+	if !strings.Contains(message, "exceeded the output limit") {
+		t.Fatalf("message = %q", message)
+	}
+	if details["output_bytes"] != int64(6) || details["output_limit_bytes"] != int64(5) {
+		t.Fatalf("details = %#v", details)
 	}
 }
 

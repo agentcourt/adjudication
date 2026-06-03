@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"adjudication/arb/runtime/proceeding"
 	"adjudication/arb/runtime/service"
@@ -17,14 +16,14 @@ import (
 func runService(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) error {
 	fs := flag.NewFlagSet("service", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	listen := fs.String("listen", "127.0.0.1:19770", "Service listen address")
+	listen := fs.String("listen", service.DefaultListenAddr, "Service listen address")
 	registryDir := fs.String("registry-dir", "", "Case registry directory")
 	outputRoot := fs.String("out-root", "", "Case output root")
 	aarBin := fs.String("aar-bin", "", "Path to aar binary used for child cases")
 	commonRoot := fs.String("common-root", proceeding.DefaultCommonRoot(), "Path to sibling shared common directory")
 	enginePath := fs.String("engine", proceeding.DefaultEnginePath(), "Lean engine binary")
 	bearerToken := fs.String("bearer-token", "", "Optional bearer token required for service requests")
-	startupWait := fs.Duration("case-startup-timeout", 30*time.Second, "Maximum time to wait for a child case API health response")
+	startupWait := fs.Duration("case-startup-timeout", service.DefaultCaseStartupWait, "Maximum time to wait for a child case API health response")
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: aar service [options]\n\n")
 		fs.PrintDefaults()

@@ -60,6 +60,7 @@ type councilFailRequest struct {
 	CaseID        string         `json:"case_id"`
 	MemberID      string         `json:"member_id"`
 	OpportunityID string         `json:"opportunity_id"`
+	Reason        string         `json:"reason,omitempty"`
 	Message       string         `json:"message,omitempty"`
 	Details       map[string]any `json:"details,omitempty"`
 }
@@ -362,6 +363,7 @@ func (api *councilAPIServer) handleFail(w http.ResponseWriter, r *http.Request) 
 	req.CaseID = strings.TrimSpace(req.CaseID)
 	req.MemberID = strings.TrimSpace(req.MemberID)
 	req.OpportunityID = strings.TrimSpace(req.OpportunityID)
+	req.Reason = strings.TrimSpace(req.Reason)
 	req.Message = strings.TrimSpace(req.Message)
 	if req.CaseID == "" {
 		writeCouncilJSON(w, http.StatusBadRequest, map[string]any{
@@ -388,6 +390,18 @@ func (api *councilAPIServer) handleFail(w http.ResponseWriter, r *http.Request) 
 			"case_id":   req.CaseID,
 			"member_id": req.MemberID,
 			"error":     apiError("missing_opportunity_id", "opportunity_id is required"),
+		})
+		return
+	}
+	if req.Reason == "" {
+		req.Reason = opportunityFailureAgentExited
+	}
+	if req.Reason != opportunityFailureAgentExited && req.Reason != opportunityFailureAgentOutputLimit {
+		writeCouncilJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":        false,
+			"case_id":   req.CaseID,
+			"member_id": req.MemberID,
+			"error":     apiError("invalid_reason", "reason must be agent_exited or agent_output_limit_exceeded"),
 		})
 		return
 	}
@@ -420,7 +434,7 @@ func (api *councilAPIServer) handleCouncilFail(w http.ResponseWriter, req counci
 	details := cloneMap(req.Details)
 	details["member_id"] = turn.seat.MemberID
 	details["model"] = turn.seat.Model
-	if failErr := api.rc.failOpportunity(turn.opportunity, opportunityFailureAgentExited, req.Message, details); failErr != nil {
+	if failErr := api.rc.failOpportunity(turn.opportunity, req.Reason, req.Message, details); failErr != nil {
 		api.finishTurnLocked(turn, failErr)
 		response["ok"] = false
 		response["error"] = apiError("member_failure_failed", failErr.Error())

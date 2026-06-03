@@ -259,6 +259,44 @@ func TestCouncilFailRecordsMemberFailure(t *testing.T) {
 	}
 }
 
+func TestCouncilFailRecordsOutputLimitReason(t *testing.T) {
+	api, turn := testCouncilAPIWithTurnFailureReason(t, opportunityFailureAgentOutputLimit)
+
+	status, got := callCouncilAPIFail(t, api, map[string]any{
+		"case_id":        "arb-1",
+		"member_id":      "C1",
+		"opportunity_id": "deliberation:1:C1",
+		"reason":         opportunityFailureAgentOutputLimit,
+		"message":        "Council member C1 agent process exceeded the output limit.",
+		"details": map[string]any{
+			"output_bytes":       11,
+			"output_limit_bytes": 10,
+		},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["ok"] != true {
+		t.Fatalf("ok = %#v, want true in %#v", got["ok"], got)
+	}
+	if !turn.completed {
+		t.Fatalf("turn.completed = false, want true")
+	}
+	caseObj := mapAny(api.rc.state["case"])
+	members := mapList(caseObj["council_members"])
+	if len(members) == 0 {
+		t.Fatalf("missing council members")
+	}
+	member := members[0]
+	if mapString(member["failure_reason"]) != opportunityFailureAgentOutputLimit {
+		t.Fatalf("failure_reason = %#v, want %s", member["failure_reason"], opportunityFailureAgentOutputLimit)
+	}
+	failure := mapAny(got["failure"])
+	if mapString(failure["reason"]) != opportunityFailureAgentOutputLimit {
+		t.Fatalf("failure = %#v", got["failure"])
+	}
+}
+
 func TestCouncilFailRejectsWrongCurrentTurn(t *testing.T) {
 	api, turn := testCouncilAPIWithTurn(t)
 

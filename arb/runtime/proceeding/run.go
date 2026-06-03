@@ -13,6 +13,8 @@ import (
 	"adjudication/arb/runtime/spec"
 )
 
+const DefaultCaseID = "arb-1"
+
 func runConfigured(ctx context.Context, cfg Config, complaint spec.Complaint) (result Result, err error) {
 	cfg.CaseID = normalizeCaseID(cfg.CaseID)
 	if cfg.OutputDir == "" {
@@ -193,7 +195,7 @@ func runConfigured(ctx context.Context, cfg Config, complaint spec.Complaint) (r
 func normalizeCaseID(caseID string) string {
 	caseID = strings.TrimSpace(caseID)
 	if caseID == "" {
-		return "arb-1"
+		return DefaultCaseID
 	}
 	return caseID
 }

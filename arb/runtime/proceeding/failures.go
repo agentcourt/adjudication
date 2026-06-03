@@ -10,6 +10,7 @@ const (
 	opportunityFailureAttemptsExhausted = "attempts_exhausted"
 	opportunityFailureRequestFailed     = "request_failed"
 	opportunityFailureAgentExited       = "agent_exited"
+	opportunityFailureAgentOutputLimit  = "agent_output_limit_exceeded"
 )
 
 func (rc *runContext) failOpportunity(opportunity Opportunity, reason string, message string, details map[string]any) error {
@@ -96,6 +97,8 @@ func opportunityFailureMessage(opportunity Opportunity, reason string) string {
 		return fmt.Sprintf("%s opportunity %s failed because the request failed.", titleCase(role), opportunityID)
 	case opportunityFailureAgentExited:
 		return fmt.Sprintf("%s opportunity %s failed because the assigned agent process exited before completing the opportunity.", titleCase(role), opportunityID)
+	case opportunityFailureAgentOutputLimit:
+		return fmt.Sprintf("%s opportunity %s failed because the assigned agent process exceeded the output limit before completing the opportunity.", titleCase(role), opportunityID)
 	default:
 		return fmt.Sprintf("%s opportunity %s failed: %s.", titleCase(role), opportunityID, reason)
 	}

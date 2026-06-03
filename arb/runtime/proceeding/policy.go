@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const DefaultCouncilBackend = "direct"
+
 func DefaultPolicy() Policy {
 	return Policy{
 		CouncilSize:                        5,
@@ -135,7 +137,7 @@ func ValidatePolicy(policy Policy) error {
 
 func ValidateCouncilBackend(backend string) error {
 	switch strings.TrimSpace(strings.ToLower(backend)) {
-	case "", "direct", councilBackendAPI:
+	case "", DefaultCouncilBackend, councilBackendAPI:
 		return nil
 	default:
 		return fmt.Errorf("council backend must be direct or councilapi")
@@ -145,7 +147,7 @@ func ValidateCouncilBackend(backend string) error {
 func NormalizeCouncilBackend(backend string) string {
 	backend = strings.TrimSpace(strings.ToLower(backend))
 	if backend == "" {
-		return "direct"
+		return DefaultCouncilBackend
 	}
 	return backend
 }

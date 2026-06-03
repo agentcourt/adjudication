@@ -10,7 +10,10 @@ import (
 	"time"
 )
 
-const caseAPIHealthPath = "/health"
+const (
+	DefaultCaseAPIAddr = "127.0.0.1:0"
+	caseAPIHealthPath  = "/health"
+)
 
 type caseAPIServer struct {
 	rc         *runContext
@@ -24,7 +27,7 @@ type caseAPIServer struct {
 func startCaseAPIServer(rc *runContext, includeCouncil bool) (*caseAPIServer, error) {
 	addr := strings.TrimSpace(rc.cfg.CaseAPIAddr)
 	if addr == "" {
-		addr = "127.0.0.1:0"
+		addr = DefaultCaseAPIAddr
 	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {

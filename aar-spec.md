@@ -86,7 +86,7 @@ Council-member failure does not by itself fail the case.  AAR marks that member 
 
 If a council member misses a deadline, AAR records the same kind of member failure.  The failed member's API reports `status: "failed"` and no tools.  Other members can still wait and act if the case remains active.
 
-If the process supervising a council agent sees that the agent exited while AAR still reports the same member and opportunity as ready, it should call `POST /councilapi/v1/fail` with `case_id`, `member_id`, `opportunity_id`, and a factual `message`.  AAR records that member failure with reason `agent_exited`, marks the member failed, and advances the case under the council rules.  If the opportunity already completed before the process exit was observed, the supervisor should not report a member failure.
+If the process supervising a council agent sees that the agent exited while AAR still reports the same member and opportunity as ready, it should call `POST /councilapi/v1/fail` with `case_id`, `member_id`, `opportunity_id`, and a factual `message`.  The request may include `reason: "agent_exited"`; that value is also the default when `reason` is omitted.  If the supervisor terminates a council agent because stdout plus stderr exceeded the configured byte limit, it should call the same endpoint with `reason: "agent_output_limit_exceeded"` and details containing `output_bytes` and `output_limit_bytes`.  AAR records the member failure, marks the member failed, and advances the case under the council rules.  If the opportunity already completed before the process exit was observed, the supervisor should not report a member failure.
 
 ## Terminal Results
 
@@ -100,7 +100,7 @@ A council-member failure appears inside case state and events.  If the case late
 
 The structured failure object for participant failure has type `opportunity_failed`.  It identifies the role, phase, opportunity id, reason, and message.  Council-member failure also identifies the member id and may include model or invalid-reason details.
 
-Lawyer failure reasons include `deadline_expired` and `attempts_exhausted`.  Council-member failure reasons include `deadline_expired`, `attempts_exhausted`, and request-failure reasons produced by the council backend.  The `message` field should name the role or member, opportunity, and reason in plain text.
+Lawyer failure reasons include `deadline_expired` and `attempts_exhausted`.  Council-member failure reasons include `deadline_expired`, `attempts_exhausted`, `request_failed`, `agent_exited`, and `agent_output_limit_exceeded`.  The `message` field should name the role or member, opportunity, and reason in plain text.
 
 The same failure fact should appear in every applicable external report.  For a direct lawyer failure, `aar case` stdout and `run.json` should agree.  For a service-managed lawyer failure, service result, completed lawyer role status, observer status, and lawyer result should agree with the child stdout summary and `run.json`.  For a council-member failure, the failed member API, observer status, final state, and event log should agree.
 

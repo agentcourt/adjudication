@@ -32,15 +32,38 @@ const (
 	defaultOpenClawTimeoutSeconds = 3600
 	defaultOpenClawAuth           = "auto"
 	defaultOpenClawStartDelay     = 15
-	defaultAutoLawyers            = "both"
 	defaultPiImage                = "agentcourt-pi-sandbox"
 	defaultPiMCPAdapter           = "npm:pi-mcp-adapter"
 	defaultPiMCPServer            = "aar"
 	defaultCaseAPIStartupWait     = 10 * time.Minute
 	defaultMCPStartupWait         = 30 * time.Second
 	defaultCouncilRosterWait      = 2 * time.Minute
+	defaultCouncilOutputCheck     = 5 * time.Second
+	councilFailureAgentExited     = "agent_exited"
+	councilFailureOutputLimit     = "agent_output_limit_exceeded"
 	openClawCodexContainerHome    = "/aar-codex"
 )
+
+const (
+	DefaultRunCouncilTimeoutSeconds = 15 * 60
+	DefaultRunLawyerTimeoutSeconds  = DefaultRunCouncilTimeoutSeconds
+	DefaultCouncilOutputLimitBytes  = 128 * 1024 * 1024
+	DefaultAutoLawyers              = "both"
+	DefaultDockerCommand            = "docker"
+	DefaultPodmanCommand            = "podman"
+)
+
+func DefaultLawyerInstructionsPath() string {
+	return filepath.Join("agent-instructions", "openclaw-lawyer.md.tmpl")
+}
+
+func DefaultRemoteLawyerSkillPath() string {
+	return filepath.Join("agent-instructions", "openclaw-remote-lawyer-skill.md.tmpl")
+}
+
+func DefaultCouncilInstructionsPath() string {
+	return filepath.Join("agent-instructions", "pi-council.md.tmpl")
+}
 
 type Options struct {
 	ComplaintPath              string
@@ -82,6 +105,7 @@ type Options struct {
 	OpenClawStartDelaySeconds  int
 	PiImage                    string
 	PiMCPAdapter               string
+	CouncilOutputLimitBytes    int64
 	DockerMCPHost              string
 	PodmanMCPHost              string
 	Log                        io.Writer
@@ -103,8 +127,15 @@ type processRecord struct {
 	done     chan error
 	stopName string
 
-	mu     sync.Mutex
-	exited bool
+	stdoutPath string
+	stderrPath string
+	finished   chan struct{}
+
+	mu            sync.Mutex
+	exited        bool
+	forcedReason  string
+	forcedMessage string
+	forcedDetails map[string]any
 }
 
 type councilProcessTarget struct {
@@ -125,6 +156,12 @@ type councilStatusResponse struct {
 type councilStatusTurn struct {
 	MemberID      string `json:"member_id"`
 	OpportunityID string `json:"opportunity_id"`
+}
+
+type processOutputSize struct {
+	Stdout int64
+	Stderr int64
+	Total  int64
 }
 
 type councilRosterEntry struct {
@@ -347,10 +384,10 @@ type rosterOutcome struct {
 
 func applyDefaults(opts Options) Options {
 	if strings.TrimSpace(opts.DockerCommand) == "" {
-		opts.DockerCommand = "docker"
+		opts.DockerCommand = DefaultDockerCommand
 	}
 	if strings.TrimSpace(opts.PodmanCommand) == "" {
-		opts.PodmanCommand = "podman"
+		opts.PodmanCommand = DefaultPodmanCommand
 	}
 	if strings.TrimSpace(opts.OpenClawImage) == "" {
 		opts.OpenClawImage = defaultOpenClawImage
@@ -373,6 +410,12 @@ func applyDefaults(opts Options) Options {
 	if strings.TrimSpace(opts.OpenClawCodexAuthPath) == "" {
 		opts.OpenClawCodexAuthPath = defaultCodexAuthPath()
 	}
+	if opts.CouncilTimeoutSeconds <= 0 {
+		opts.CouncilTimeoutSeconds = DefaultRunCouncilTimeoutSeconds
+	}
+	if opts.LawyerTimeoutSeconds <= 0 {
+		opts.LawyerTimeoutSeconds = DefaultRunLawyerTimeoutSeconds
+	}
 	if strings.TrimSpace(opts.PiImage) == "" {
 		if image := strings.TrimSpace(os.Getenv("PI_CONTAINER_IMAGE")); image != "" {
 			opts.PiImage = image
@@ -383,6 +426,9 @@ func applyDefaults(opts Options) Options {
 	if strings.TrimSpace(opts.PiMCPAdapter) == "" {
 		opts.PiMCPAdapter = defaultPiMCPAdapter
 	}
+	if opts.CouncilOutputLimitBytes == 0 {
+		opts.CouncilOutputLimitBytes = DefaultCouncilOutputLimitBytes
+	}
 	if strings.TrimSpace(opts.DockerMCPHost) == "" {
 		opts.DockerMCPHost = "host.docker.internal"
 	}
@@ -390,16 +436,16 @@ func applyDefaults(opts Options) Options {
 		opts.PodmanMCPHost = "127.0.0.1"
 	}
 	if strings.TrimSpace(opts.LawyerInstructionsPath) == "" {
-		opts.LawyerInstructionsPath = filepath.Join("agent-instructions", "openclaw-lawyer.md.tmpl")
+		opts.LawyerInstructionsPath = DefaultLawyerInstructionsPath()
 	}
 	if strings.TrimSpace(opts.RemoteLawyerSkillPath) == "" {
-		opts.RemoteLawyerSkillPath = filepath.Join("agent-instructions", "openclaw-remote-lawyer-skill.md.tmpl")
+		opts.RemoteLawyerSkillPath = DefaultRemoteLawyerSkillPath()
 	}
 	if strings.TrimSpace(opts.CouncilInstructionsPath) == "" {
-		opts.CouncilInstructionsPath = filepath.Join("agent-instructions", "pi-council.md.tmpl")
+		opts.CouncilInstructionsPath = DefaultCouncilInstructionsPath()
 	}
 	if strings.TrimSpace(opts.AutoLawyers) == "" {
-		opts.AutoLawyers = defaultAutoLawyers
+		opts.AutoLawyers = DefaultAutoLawyers
 	}
 	return opts
 }
@@ -419,6 +465,9 @@ func validateOptions(opts Options) error {
 	}
 	if _, err := autoLawyerRoles(opts.AutoLawyers); err != nil {
 		return err
+	}
+	if opts.CouncilOutputLimitBytes < 0 {
+		return fmt.Errorf("council output limit bytes must be non-negative")
 	}
 	for _, path := range []string{opts.LawyerInstructionsPath, opts.RemoteLawyerSkillPath, opts.CouncilInstructionsPath} {
 		if _, err := os.Stat(path); err != nil {
@@ -775,7 +824,7 @@ func effectiveLawyerTurnTimeoutSeconds(opts Options) int {
 	if opts.LawyerTimeoutSeconds > 0 {
 		return opts.LawyerTimeoutSeconds
 	}
-	return proceeding.DefaultRuntimeLimits().LawyerTurnTimeoutSeconds
+	return DefaultRunLawyerTimeoutSeconds
 }
 
 func openClawConfigPatchCommand(lawyerTimeoutSeconds int) (string, error) {
@@ -1170,11 +1219,13 @@ func writeJSONFile(path string, value any) error {
 }
 
 func (s *runState) startProcess(ctx context.Context, name string, kind string, command string, args []string, stopName string, councilTarget *councilProcessTarget) (*processRecord, error) {
-	stdout, err := os.Create(filepath.Join(s.logDir, name+".stdout"))
+	stdoutPath := filepath.Join(s.logDir, name+".stdout")
+	stderrPath := filepath.Join(s.logDir, name+".stderr")
+	stdout, err := os.Create(stdoutPath)
 	if err != nil {
 		return nil, fmt.Errorf("create %s stdout log: %w", name, err)
 	}
-	stderr, err := os.Create(filepath.Join(s.logDir, name+".stderr"))
+	stderr, err := os.Create(stderrPath)
 	if err != nil {
 		_ = stdout.Close()
 		return nil, fmt.Errorf("create %s stderr log: %w", name, err)
@@ -1188,15 +1239,22 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 	if err := os.WriteFile(filepath.Join(s.opts.OutputDir, name+".pid"), []byte(fmt.Sprintf("%d\n", cmd.Process.Pid)), 0o644); err != nil {
 		return nil, errors.Join(err, cmd.Process.Kill(), cmd.Wait(), stdout.Close(), stderr.Close())
 	}
-	record := &processRecord{name: name, kind: kind, command: cmd, done: make(chan error, 1), stopName: stopName}
+	record := &processRecord{
+		name:       name,
+		kind:       kind,
+		command:    cmd,
+		done:       make(chan error, 1),
+		stopName:   stopName,
+		stdoutPath: stdoutPath,
+		stderrPath: stderrPath,
+		finished:   make(chan struct{}),
+	}
 	go func() {
 		err := cmd.Wait()
 		closeOut := stdout.Close()
 		closeErr := stderr.Close()
 		waitErr := errors.Join(err, closeOut, closeErr)
-		record.mu.Lock()
-		record.exited = true
-		record.mu.Unlock()
+		record.markExited()
 		record.done <- waitErr
 		if ctx.Err() != nil {
 			return
@@ -1213,7 +1271,125 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 		}
 		s.agentErrs <- fmt.Errorf("%s process %s exited before case completion", kind, name)
 	}()
+	if councilTarget != nil {
+		go s.monitorCouncilOutput(ctx, record, *councilTarget, defaultCouncilOutputCheck)
+	}
 	return record, nil
+}
+
+func (p *processRecord) markExited() {
+	p.mu.Lock()
+	p.exited = true
+	close(p.finished)
+	p.mu.Unlock()
+}
+
+func (p *processRecord) isExited() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.exited
+}
+
+func (p *processRecord) setForcedFailure(reason string, message string, details map[string]any) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.forcedReason != "" {
+		return
+	}
+	p.forcedReason = strings.TrimSpace(reason)
+	p.forcedMessage = strings.TrimSpace(message)
+	p.forcedDetails = cloneLocalMap(details)
+}
+
+func (p *processRecord) forcedFailure() (string, string, map[string]any) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.forcedReason, p.forcedMessage, cloneLocalMap(p.forcedDetails)
+}
+
+func (s *runState) monitorCouncilOutput(ctx context.Context, proc *processRecord, target councilProcessTarget, interval time.Duration) {
+	if s.opts.CouncilOutputLimitBytes <= 0 {
+		return
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if proc.isExited() {
+				return
+			}
+			size, err := councilProcessOutputSize(proc)
+			if err != nil {
+				s.agentErrs <- fmt.Errorf("check council output for %s: %w", proc.name, err)
+				return
+			}
+			if size.Total <= s.opts.CouncilOutputLimitBytes {
+				continue
+			}
+			message, details := councilOutputLimitFailure(proc.name, target, size, s.opts.CouncilOutputLimitBytes)
+			proc.setForcedFailure(councilFailureOutputLimit, message, details)
+			if err := proc.command.Process.Kill(); err != nil {
+				if proc.isExited() {
+					return
+				}
+				s.agentErrs <- fmt.Errorf("kill %s after council output limit exceeded: %w", proc.name, err)
+			}
+			return
+		case <-proc.finished:
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func councilProcessOutputSize(proc *processRecord) (processOutputSize, error) {
+	stdoutInfo, err := os.Stat(proc.stdoutPath)
+	if err != nil {
+		return processOutputSize{}, fmt.Errorf("stat stdout log %s: %w", proc.stdoutPath, err)
+	}
+	stderrInfo, err := os.Stat(proc.stderrPath)
+	if err != nil {
+		return processOutputSize{}, fmt.Errorf("stat stderr log %s: %w", proc.stderrPath, err)
+	}
+	stdoutBytes := stdoutInfo.Size()
+	stderrBytes := stderrInfo.Size()
+	if stdoutBytes > int64(^uint64(0)>>1)-stderrBytes {
+		return processOutputSize{}, fmt.Errorf("process output size overflow for %s", proc.name)
+	}
+	return processOutputSize{
+		Stdout: stdoutBytes,
+		Stderr: stderrBytes,
+		Total:  stdoutBytes + stderrBytes,
+	}, nil
+}
+
+func councilOutputLimitFailure(procName string, target councilProcessTarget, size processOutputSize, limit int64) (string, map[string]any) {
+	message := fmt.Sprintf(
+		"Council member %s agent process exceeded the output limit before completing opportunity %s: %d bytes written, limit %d bytes.",
+		target.memberID,
+		target.opportunityID,
+		size.Total,
+		limit,
+	)
+	return message, map[string]any{
+		"process_name":       procName,
+		"output_bytes":       size.Total,
+		"stdout_bytes":       size.Stdout,
+		"stderr_bytes":       size.Stderr,
+		"output_limit_bytes": limit,
+	}
+}
+
+func cloneLocalMap(in map[string]any) map[string]any {
+	out := map[string]any{}
+	for key, value := range in {
+		if strings.TrimSpace(key) != "" && value != nil {
+			out[key] = value
+		}
+	}
+	return out
 }
 
 func (s *runState) handleCouncilProcessExit(ctx context.Context, proc *processRecord, target councilProcessTarget, waitErr error) error {
@@ -1230,22 +1406,35 @@ func (s *runState) handleCouncilProcessExit(ctx context.Context, proc *processRe
 	if strings.TrimSpace(status.Turn.OpportunityID) != strings.TrimSpace(target.opportunityID) {
 		return nil
 	}
+	reason, forcedMessage, forcedDetails := proc.forcedFailure()
+	if reason == "" {
+		reason = councilFailureAgentExited
+	}
 	message := fmt.Sprintf("Council member %s agent process exited before completing opportunity %s.", target.memberID, target.opportunityID)
 	details := map[string]any{
 		"process_name": proc.name,
 	}
+	for key, value := range forcedDetails {
+		details[key] = value
+	}
+	if forcedMessage != "" {
+		message = forcedMessage
+	}
 	if waitErr != nil {
-		message = fmt.Sprintf("Council member %s agent process failed before completing opportunity %s: %s.", target.memberID, target.opportunityID, waitErr.Error())
+		if forcedMessage == "" {
+			message = fmt.Sprintf("Council member %s agent process failed before completing opportunity %s: %s.", target.memberID, target.opportunityID, waitErr.Error())
+		}
 		details["process_error"] = waitErr.Error()
 	}
-	return s.reportCouncilFailure(ctx, target.memberID, target.opportunityID, message, details)
+	return s.reportCouncilFailure(ctx, target.memberID, target.opportunityID, reason, message, details)
 }
 
-func (s *runState) reportCouncilFailure(ctx context.Context, memberID string, opportunityID string, message string, details map[string]any) error {
+func (s *runState) reportCouncilFailure(ctx context.Context, memberID string, opportunityID string, reason string, message string, details map[string]any) error {
 	payload := map[string]any{
 		"case_id":        s.opts.CaseID,
 		"member_id":      memberID,
 		"opportunity_id": opportunityID,
+		"reason":         reason,
 		"message":        message,
 		"details":        details,
 	}
@@ -1342,6 +1531,7 @@ func writeRunSummary(outDir string, result proceeding.Result, opts Options) erro
 		"auto_lawyers":                        opts.AutoLawyers,
 		"mcp_public_base_url":                 opts.MCPPublicBaseURL,
 		"openclaw_lawyer_start_delay_seconds": opts.OpenClawStartDelaySeconds,
+		"council_output_limit_bytes":          opts.CouncilOutputLimitBytes,
 	})
 }
 

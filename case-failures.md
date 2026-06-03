@@ -4,13 +4,13 @@
 
 The AAR service owns the case.  A case owns the current opportunity, the phase, the deadline, remaining attempts, evidence state, filings, council state, votes, events, final result, and failure state.  Agents act against the case through HTTP or MCP, but agent processes, containers, scripts, and transport sessions do not decide arbitration consequences.
 
-An opportunity is the unit that can fail because a participant did not act correctly.  The service detects participant failures when the opportunity deadline expires, invalid tool calls exhaust the attempt budget, or the assigned agent process exits while AAR still reports the same opportunity as ready.  Those failures are procedural case facts, so AAR records them in case state rather than treating them as local process errors.
+An opportunity is the unit that can fail because a participant did not act correctly.  The service detects participant failures when the opportunity deadline expires, invalid tool calls exhaust the attempt budget, the assigned agent process exits while AAR still reports the same opportunity as ready, or a supervised council agent exceeds its output byte limit before completing the opportunity.  Those failures are procedural case facts, so AAR records them in case state rather than treating them as local process errors.
 
 ## Rules
 
 A lawyer opportunity failure fails the case.  This applies to plaintiff and defendant opportunities.  When the lawyer misses the deadline or exhausts attempts, AAR records the failed opportunity and sets the case to a terminal failed state.
 
-A council-member opportunity failure fails that member, not the whole case.  When a council member misses the deadline, exhausts attempts, or exits before completing the active opportunity, AAR records the failed opportunity, marks or removes that council member with failed status, and continues the case if the arbitration rules allow it.  That member's role API should report `status: "failed"` after the member can no longer act.
+A council-member opportunity failure fails that member, not the whole case.  When a council member misses the deadline, exhausts attempts, exits before completing the active opportunity, or exceeds the supervised output byte limit, AAR records the failed opportunity, marks or removes that council member with failed status, and continues the case if the arbitration rules allow it.  That member's role API should report `status: "failed"` after the member can no longer act.
 
 System failure is different from participant failure.  Storage failure, invalid internal state, Lean execution failure, API startup failure, and similar faults mean the process could not run AAR correctly.  Those failures should stop the process or put the case into a system-failed state, depending on where the failure occurs.
 
