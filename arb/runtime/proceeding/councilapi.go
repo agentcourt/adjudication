@@ -56,6 +56,14 @@ type councilDoRequest struct {
 	CallID        string         `json:"call_id,omitempty"`
 }
 
+type councilFailRequest struct {
+	CaseID        string         `json:"case_id"`
+	MemberID      string         `json:"member_id"`
+	OpportunityID string         `json:"opportunity_id"`
+	Message       string         `json:"message,omitempty"`
+	Details       map[string]any `json:"details,omitempty"`
+}
+
 func newCouncilAPIServer(rc *runContext) *councilAPIServer {
 	api := &councilAPIServer{
 		rc: rc,
@@ -68,6 +76,7 @@ func (api *councilAPIServer) register(mux *http.ServeMux) {
 	mux.HandleFunc(councilAPIBasePath+"/get", api.handleGet)
 	mux.HandleFunc(councilAPIBasePath+"/wait", api.handleWait)
 	mux.HandleFunc(councilAPIBasePath+"/do", api.handleDo)
+	mux.HandleFunc(councilAPIBasePath+"/fail", api.handleFail)
 }
 
 func (api *councilAPIServer) startTurn(turn *councilTurn) error {
@@ -328,6 +337,103 @@ func (api *councilAPIServer) handleDo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.handleCouncilDo(w, req)
+}
+
+func (api *councilAPIServer) handleFail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeCouncilJSON(w, http.StatusMethodNotAllowed, map[string]any{
+			"ok":    false,
+			"error": apiError("method_not_allowed", "use POST"),
+		})
+		return
+	}
+	var req councilFailRequest
+	body := http.MaxBytesReader(w, r.Body, int64(api.rc.cfg.Runtime.MaxResponseBytes))
+	if err := json.NewDecoder(body).Decode(&req); err != nil {
+		if errors.Is(err, io.EOF) {
+			err = fmt.Errorf("request body is required")
+		}
+		writeCouncilJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": apiError("bad_json", err.Error()),
+		})
+		return
+	}
+	req.CaseID = strings.TrimSpace(req.CaseID)
+	req.MemberID = strings.TrimSpace(req.MemberID)
+	req.OpportunityID = strings.TrimSpace(req.OpportunityID)
+	req.Message = strings.TrimSpace(req.Message)
+	if req.CaseID == "" {
+		writeCouncilJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": apiError("missing_case_id", "case_id is required"),
+		})
+		return
+	}
+	if !api.caseIDMatches(req.CaseID) {
+		api.writeCaseMismatch(w, req.CaseID, req.MemberID)
+		return
+	}
+	if req.MemberID == "" {
+		writeCouncilJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":      false,
+			"case_id": req.CaseID,
+			"error":   apiError("missing_member_id", "member_id is required"),
+		})
+		return
+	}
+	if req.OpportunityID == "" {
+		writeCouncilJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":        false,
+			"case_id":   req.CaseID,
+			"member_id": req.MemberID,
+			"error":     apiError("missing_opportunity_id", "opportunity_id is required"),
+		})
+		return
+	}
+	api.handleCouncilFail(w, req)
+}
+
+func (api *councilAPIServer) handleCouncilFail(w http.ResponseWriter, req councilFailRequest) {
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	turn := api.active
+	response := api.responseBaseLocked(req.CaseID, req.MemberID)
+	if turn == nil || turn.completed {
+		response["ok"] = false
+		response["error"] = apiError("no_active_turn", "no council turn is active")
+		writeCouncilJSON(w, http.StatusOK, response)
+		return
+	}
+	if turn.seat.MemberID != req.MemberID {
+		response["ok"] = false
+		response["error"] = apiError("not_current_turn", fmt.Sprintf("current council turn belongs to %s", turn.seat.MemberID))
+		writeCouncilJSON(w, http.StatusOK, response)
+		return
+	}
+	if req.OpportunityID != turn.opportunity.ID {
+		response["ok"] = false
+		response["error"] = apiError("stale_opportunity", fmt.Sprintf("request opportunity_id %q does not match active opportunity_id %q", req.OpportunityID, turn.opportunity.ID))
+		writeCouncilJSON(w, http.StatusOK, response)
+		return
+	}
+	details := cloneMap(req.Details)
+	details["member_id"] = turn.seat.MemberID
+	details["model"] = turn.seat.Model
+	if failErr := api.rc.failOpportunity(turn.opportunity, opportunityFailureAgentExited, req.Message, details); failErr != nil {
+		api.finishTurnLocked(turn, failErr)
+		response["ok"] = false
+		response["error"] = apiError("member_failure_failed", failErr.Error())
+		writeCouncilJSON(w, http.StatusOK, response)
+		return
+	}
+	api.finishTurnLocked(turn, nil)
+	response["ok"] = true
+	response["result"] = map[string]any{"text": "Council member failure recorded."}
+	if failure := api.failedCouncilMemberPayloadLocked(req.MemberID); failure != nil {
+		response["failure"] = failure
+	}
+	writeCouncilJSON(w, http.StatusOK, response)
 }
 
 func (api *councilAPIServer) handleCouncilDo(w http.ResponseWriter, req councilDoRequest) {

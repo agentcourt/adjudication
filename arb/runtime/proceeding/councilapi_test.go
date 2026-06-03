@@ -219,9 +219,98 @@ func TestCouncilSubmitVoteAcceptsCurrentOpportunity(t *testing.T) {
 	}
 }
 
+func TestCouncilFailRecordsMemberFailure(t *testing.T) {
+	api, turn := testCouncilAPIWithTurnFailureReason(t, opportunityFailureAgentExited)
+
+	status, got := callCouncilAPIFail(t, api, map[string]any{
+		"case_id":        "arb-1",
+		"member_id":      "C1",
+		"opportunity_id": "deliberation:1:C1",
+		"message":        "Council member C1 agent process exited before submitting a vote.",
+		"details":        map[string]any{"exit_status": "0"},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["ok"] != true {
+		t.Fatalf("ok = %#v, want true in %#v", got["ok"], got)
+	}
+	if !turn.completed {
+		t.Fatalf("turn.completed = false, want true")
+	}
+	caseObj := mapAny(api.rc.state["case"])
+	members := mapList(caseObj["council_members"])
+	if len(members) == 0 {
+		t.Fatalf("missing council members")
+	}
+	member := members[0]
+	if mapString(member["status"]) != "failed" {
+		t.Fatalf("member status = %#v, want failed", member["status"])
+	}
+	if mapString(member["failure_reason"]) != opportunityFailureAgentExited {
+		t.Fatalf("failure_reason = %#v, want %s", member["failure_reason"], opportunityFailureAgentExited)
+	}
+	if mapString(member["failure_opportunity_id"]) != "deliberation:1:C1" {
+		t.Fatalf("failure_opportunity_id = %#v", member["failure_opportunity_id"])
+	}
+	failure := mapAny(got["failure"])
+	if mapString(failure["member_id"]) != "C1" || mapString(failure["reason"]) != opportunityFailureAgentExited {
+		t.Fatalf("failure = %#v", got["failure"])
+	}
+}
+
+func TestCouncilFailRejectsWrongCurrentTurn(t *testing.T) {
+	api, turn := testCouncilAPIWithTurn(t)
+
+	status, got := callCouncilAPIFail(t, api, map[string]any{
+		"case_id":        "arb-1",
+		"member_id":      "C2",
+		"opportunity_id": "deliberation:1:C1",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["ok"] != false {
+		t.Fatalf("ok = %#v, want false", got["ok"])
+	}
+	if code := councilAPIErrorCode(t, got); code != "not_current_turn" {
+		t.Fatalf("error code = %q, want not_current_turn", code)
+	}
+	if turn.completed {
+		t.Fatalf("turn.completed = true, want false")
+	}
+}
+
+func TestCouncilFailRejectsStaleOpportunity(t *testing.T) {
+	api, turn := testCouncilAPIWithTurn(t)
+
+	status, got := callCouncilAPIFail(t, api, map[string]any{
+		"case_id":        "arb-1",
+		"member_id":      "C1",
+		"opportunity_id": "deliberation:1:C2",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["ok"] != false {
+		t.Fatalf("ok = %#v, want false", got["ok"])
+	}
+	if code := councilAPIErrorCode(t, got); code != "stale_opportunity" {
+		t.Fatalf("error code = %q, want stale_opportunity", code)
+	}
+	if turn.completed {
+		t.Fatalf("turn.completed = true, want false")
+	}
+}
+
 func testCouncilAPIWithTurn(t *testing.T) (*councilAPIServer, *councilTurn) {
 	t.Helper()
-	rc := newCouncilOpportunityTestContext(t, "")
+	return testCouncilAPIWithTurnFailureReason(t, "")
+}
+
+func testCouncilAPIWithTurnFailureReason(t *testing.T, failureReason string) (*councilAPIServer, *councilTurn) {
+	t.Helper()
+	rc := newCouncilOpportunityTestContext(t, failureReason)
 	turn := &councilTurn{
 		opportunity: Opportunity{
 			ID:           "deliberation:1:C1",
@@ -253,6 +342,23 @@ func callCouncilAPIDo(t *testing.T, api *councilAPIServer, body map[string]any) 
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	api.handleDo(rec, req)
+	var got map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return rec.Code, got
+}
+
+func callCouncilAPIFail(t *testing.T, api *councilAPIServer, body map[string]any) (int, map[string]any) {
+	t.Helper()
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, councilAPIBasePath+"/fail", bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	api.handleFail(rec, req)
 	var got map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode response: %v", err)

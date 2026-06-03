@@ -72,7 +72,7 @@ The observer can call read-only tools through `POST /do`, including `case_status
 
 The Council API is available only when a case starts with `council_backend: "councilapi"` or `--council-backend councilapi`.  The API is available at `/councilapi/v1` on either the private `aar case` listener or the public service proxy.  Calls require `case_id` and `member_id`.
 
-`GET /councilapi/v1/get?case_id={case_id}&member_id={member_id}` returns council-member status, prompt, tools, limits, and turn state.  `GET /councilapi/v1/wait?case_id={case_id}&member_id={member_id}` waits for a state change or timeout and returns the same response shape plus a `wait` object.  `POST /councilapi/v1/do` executes one council-member tool call.
+`GET /councilapi/v1/get?case_id={case_id}&member_id={member_id}` returns council-member status, prompt, tools, limits, and turn state.  `GET /councilapi/v1/wait?case_id={case_id}&member_id={member_id}` waits for a state change or timeout and returns the same response shape plus a `wait` object.  `POST /councilapi/v1/do` executes one council-member tool call.  `POST /councilapi/v1/fail` records that the assigned council agent process exited before completing the active council opportunity.
 
 `POST /councilapi/v1/do` must include `case_id`, `member_id`, `opportunity_id`, `tool`, and `arguments`.  The `opportunity_id` must match the active council opportunity for that member.  The server supplies the trusted member id to vote submission; a caller-provided member id inside `arguments` has no authority.
 
@@ -85,6 +85,8 @@ Invalid mutating council calls that count against the attempt budget reduce `att
 Council-member failure does not by itself fail the case.  AAR marks that member `status: "failed"` with failure reason, opportunity id, and message.  The case continues if the council rules allow another member or round to proceed; if the rules produce a terminal result, the final result reflects those rules.
 
 If a council member misses a deadline, AAR records the same kind of member failure.  The failed member's API reports `status: "failed"` and no tools.  Other members can still wait and act if the case remains active.
+
+If the process supervising a council agent sees that the agent exited while AAR still reports the same member and opportunity as ready, it should call `POST /councilapi/v1/fail` with `case_id`, `member_id`, `opportunity_id`, and a factual `message`.  AAR records that member failure with reason `agent_exited`, marks the member failed, and advances the case under the council rules.  If the opportunity already completed before the process exit was observed, the supervisor should not report a member failure.
 
 ## Terminal Results
 

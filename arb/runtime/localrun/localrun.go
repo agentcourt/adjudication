@@ -98,8 +98,24 @@ type processRecord struct {
 	exited bool
 }
 
+type councilProcessTarget struct {
+	memberID      string
+	opportunityID string
+}
+
 type councilRosterResponse struct {
 	CouncilRoster []councilRosterEntry `json:"council_roster"`
+}
+
+type councilStatusResponse struct {
+	Status string             `json:"status"`
+	Turn   *councilStatusTurn `json:"turn"`
+	Error  any                `json:"error"`
+}
+
+type councilStatusTurn struct {
+	MemberID      string `json:"member_id"`
+	OpportunityID string `json:"opportunity_id"`
 }
 
 type councilRosterEntry struct {
@@ -109,15 +125,16 @@ type councilRosterEntry struct {
 }
 
 type runState struct {
-	opts         Options
-	logDir       string
-	caseBase     string
-	mcpBase      string
-	token        string
-	openClawAuth openClawAuthConfig
-	processes    []*processRecord
-	secretDirs   []string
-	agentErrs    chan error
+	opts          Options
+	logDir        string
+	caseBase      string
+	mcpBase       string
+	token         string
+	openClawAuth  openClawAuthConfig
+	processes     []*processRecord
+	secretDirs    []string
+	councilStarts map[string]bool
+	agentErrs     chan error
 
 	mu sync.Mutex
 }
@@ -143,11 +160,12 @@ func Run(ctx context.Context, opts Options) (result proceeding.Result, err error
 		return proceeding.Result{}, fmt.Errorf("create output logs: %w", err)
 	}
 	state := &runState{
-		opts:         opts,
-		logDir:       filepath.Join(opts.OutputDir, "logs"),
-		token:        strings.TrimSpace(opts.MCPBearerToken),
-		openClawAuth: openClawAuth,
-		agentErrs:    make(chan error, 32),
+		opts:          opts,
+		logDir:        filepath.Join(opts.OutputDir, "logs"),
+		token:         strings.TrimSpace(opts.MCPBearerToken),
+		openClawAuth:  openClawAuth,
+		councilStarts: map[string]bool{},
+		agentErrs:     make(chan error, 32),
 	}
 	if state.token == "" {
 		token, err := randomToken()
@@ -245,35 +263,38 @@ func Run(ctx context.Context, opts Options) (result proceeding.Result, err error
 		cancel()
 		return proceeding.Result{}, err
 	}
-	for _, entry := range roster {
-		if err := state.startPiCouncil(runCtx, entry, mcpPort); err != nil {
-			cancel()
-			return proceeding.Result{}, err
-		}
-	}
+	councilTicker := time.NewTicker(time.Second)
+	defer councilTicker.Stop()
 
-	select {
-	case outcome := <-caseDone:
-		cancel()
-		if err := <-mcpDone; err != nil && !errors.Is(err, context.Canceled) {
-			return outcome.result, err
+	for {
+		select {
+		case outcome := <-caseDone:
+			cancel()
+			if err := <-mcpDone; err != nil && !errors.Is(err, context.Canceled) {
+				return outcome.result, err
+			}
+			if writeErr := writeRunSummary(opts.OutputDir, outcome.result); writeErr != nil {
+				return outcome.result, writeErr
+			}
+			return outcome.result, outcome.err
+		case err := <-mcpDone:
+			cancel()
+			if err == nil {
+				return proceeding.Result{}, fmt.Errorf("MCP server exited before case completion")
+			}
+			return proceeding.Result{}, fmt.Errorf("MCP server failed: %w", err)
+		case exit := <-state.agentErrs:
+			cancel()
+			return proceeding.Result{}, exit
+		case <-councilTicker.C:
+			if err := state.startReadyCouncil(runCtx, roster, mcpPort); err != nil {
+				cancel()
+				return proceeding.Result{}, err
+			}
+		case <-ctx.Done():
+			cancel()
+			return proceeding.Result{}, ctx.Err()
 		}
-		if writeErr := writeRunSummary(opts.OutputDir, outcome.result); writeErr != nil {
-			return outcome.result, writeErr
-		}
-		return outcome.result, outcome.err
-	case err := <-mcpDone:
-		cancel()
-		if err == nil {
-			return proceeding.Result{}, fmt.Errorf("MCP server exited before case completion")
-		}
-		return proceeding.Result{}, fmt.Errorf("MCP server failed: %w", err)
-	case exit := <-state.agentErrs:
-		cancel()
-		return proceeding.Result{}, exit
-	case <-ctx.Done():
-		cancel()
-		return proceeding.Result{}, ctx.Err()
 	}
 }
 
@@ -577,7 +598,7 @@ func (s *runState) startOpenClawLawyer(ctx context.Context, role string, mcpPort
 		"sh", "-lc",
 		fmt.Sprintf("set -u\n%sopenclaw mcp set \"$AAR_MCP_NAME\" \"$AAR_MCP_JSON\"\nexec openclaw agent --local --model %q --thinking %q --timeout %d --session-key \"$AAR_SESSION_KEY\" --message \"$AAR_ASSIGNMENT\" --json", commandPrefix, s.opts.OpenClawModel, s.opts.OpenClawThinking, s.opts.OpenClawTimeoutSeconds),
 	)
-	proc, err := s.startProcess(ctx, "openclaw-"+role, "docker", s.opts.DockerCommand, args, name)
+	proc, err := s.startProcess(ctx, "openclaw-"+role, "docker", s.opts.DockerCommand, args, name, nil)
 	if err != nil {
 		return err
 	}
@@ -607,7 +628,10 @@ func (s *runState) openClawAuthArgs(role string) ([]string, string, error) {
 }
 
 func (s *runState) stageOpenClawCodexAuth(role string) (string, error) {
-	home := filepath.Join(s.opts.OutputDir, "openclaw-"+role+"-codex")
+	home, err := outputSubdir(s.opts.OutputDir, "openclaw-"+role+"-codex")
+	if err != nil {
+		return "", fmt.Errorf("resolve OpenClaw Codex home path: %w", err)
+	}
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return "", fmt.Errorf("create OpenClaw Codex home: %w", err)
 	}
@@ -702,9 +726,72 @@ func (s *runState) pollCouncilRoster(ctx context.Context) ([]councilRosterEntry,
 	}
 }
 
-func (s *runState) startPiCouncil(ctx context.Context, entry councilRosterEntry, mcpPort string) error {
+func (s *runState) startReadyCouncil(ctx context.Context, roster []councilRosterEntry, mcpPort string) error {
+	for _, entry := range roster {
+		status, err := s.councilStatus(ctx, entry.MemberID)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(status.Status) != "ready" || status.Turn == nil {
+			continue
+		}
+		if strings.TrimSpace(status.Turn.MemberID) != strings.TrimSpace(entry.MemberID) {
+			continue
+		}
+		opportunityID := strings.TrimSpace(status.Turn.OpportunityID)
+		if opportunityID == "" {
+			return fmt.Errorf("council status for %s is ready without opportunity_id", entry.MemberID)
+		}
+		s.mu.Lock()
+		started := s.councilStarts[opportunityID]
+		if !started {
+			s.councilStarts[opportunityID] = true
+		}
+		s.mu.Unlock()
+		if started {
+			continue
+		}
+		if err := s.startPiCouncil(ctx, entry, mcpPort, opportunityID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *runState) councilStatus(ctx context.Context, memberID string) (councilStatusResponse, error) {
+	statusURL := s.caseBase + "/councilapi/v1/get?case_id=" + url.QueryEscape(s.opts.CaseID) + "&member_id=" + url.QueryEscape(memberID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
+	if err != nil {
+		return councilStatusResponse{}, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return councilStatusResponse{}, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return councilStatusResponse{}, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return councilStatusResponse{}, fmt.Errorf("council status for %s returned HTTP %d: %s", memberID, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var status councilStatusResponse
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber()
+	if err := dec.Decode(&status); err != nil {
+		return councilStatusResponse{}, err
+	}
+	return status, nil
+}
+
+func (s *runState) startPiCouncil(ctx context.Context, entry councilRosterEntry, mcpPort string, opportunityID string) error {
 	if strings.TrimSpace(entry.MemberID) == "" {
 		return fmt.Errorf("council roster entry has empty member_id")
+	}
+	opportunityID = strings.TrimSpace(opportunityID)
+	if opportunityID == "" {
+		return fmt.Errorf("council opportunity id is required for %s", entry.MemberID)
 	}
 	server := "aar-" + s.opts.CaseID + "-" + entry.MemberID
 	mcpURL := "http://" + net.JoinHostPort(s.opts.PodmanMCPHost, mcpPort) + "/mcp?case_id=" + url.QueryEscape(s.opts.CaseID) + "&member_id=" + url.QueryEscape(entry.MemberID)
@@ -717,7 +804,10 @@ func (s *runState) startPiCouncil(ctx context.Context, entry councilRosterEntry,
 	if err != nil {
 		return err
 	}
-	home := filepath.Join(s.opts.OutputDir, "pi-"+entry.MemberID)
+	home, err := outputSubdir(s.opts.OutputDir, "pi-"+entry.MemberID)
+	if err != nil {
+		return fmt.Errorf("resolve Pi home path: %w", err)
+	}
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		return fmt.Errorf("create Pi home: %w", err)
 	}
@@ -743,7 +833,10 @@ func (s *runState) startPiCouncil(ctx context.Context, entry councilRosterEntry,
 		"--mode", "json",
 		"-p", instructions,
 	}
-	proc, err := s.startProcess(ctx, "pi-"+entry.MemberID, "podman", s.opts.PodmanCommand, args, "")
+	proc, err := s.startProcess(ctx, "pi-"+entry.MemberID, "podman", s.opts.PodmanCommand, args, "", &councilProcessTarget{
+		memberID:      entry.MemberID,
+		opportunityID: opportunityID,
+	})
 	if err != nil {
 		return err
 	}
@@ -751,6 +844,10 @@ func (s *runState) startPiCouncil(ctx context.Context, entry councilRosterEntry,
 	s.processes = append(s.processes, proc)
 	s.mu.Unlock()
 	return nil
+}
+
+func outputSubdir(outputDir string, name string) (string, error) {
+	return filepath.Abs(filepath.Join(outputDir, name))
 }
 
 func renderInstructions(path string, data instructionData) (string, error) {
@@ -858,7 +955,7 @@ func writeJSONFile(path string, value any) error {
 	return nil
 }
 
-func (s *runState) startProcess(ctx context.Context, name string, kind string, command string, args []string, stopName string) (*processRecord, error) {
+func (s *runState) startProcess(ctx context.Context, name string, kind string, command string, args []string, stopName string, councilTarget *councilProcessTarget) (*processRecord, error) {
 	stdout, err := os.Create(filepath.Join(s.logDir, name+".stdout"))
 	if err != nil {
 		return nil, fmt.Errorf("create %s stdout log: %w", name, err)
@@ -887,6 +984,15 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 		record.exited = true
 		record.mu.Unlock()
 		record.done <- waitErr
+		if ctx.Err() != nil {
+			return
+		}
+		if councilTarget != nil {
+			if err := s.handleCouncilProcessExit(ctx, record, *councilTarget, waitErr); err != nil {
+				s.agentErrs <- err
+			}
+			return
+		}
 		if waitErr != nil {
 			s.agentErrs <- fmt.Errorf("%s process %s failed: %w", kind, name, waitErr)
 			return
@@ -894,6 +1000,80 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 		s.agentErrs <- fmt.Errorf("%s process %s exited before case completion", kind, name)
 	}()
 	return record, nil
+}
+
+func (s *runState) handleCouncilProcessExit(ctx context.Context, proc *processRecord, target councilProcessTarget, waitErr error) error {
+	status, err := s.councilStatus(ctx, target.memberID)
+	if err != nil {
+		return fmt.Errorf("check council status after %s exit: %w", proc.name, err)
+	}
+	if strings.TrimSpace(status.Status) != "ready" || status.Turn == nil {
+		return nil
+	}
+	if strings.TrimSpace(status.Turn.MemberID) != strings.TrimSpace(target.memberID) {
+		return nil
+	}
+	if strings.TrimSpace(status.Turn.OpportunityID) != strings.TrimSpace(target.opportunityID) {
+		return nil
+	}
+	message := fmt.Sprintf("Council member %s agent process exited before completing opportunity %s.", target.memberID, target.opportunityID)
+	details := map[string]any{
+		"process_name": proc.name,
+	}
+	if waitErr != nil {
+		message = fmt.Sprintf("Council member %s agent process failed before completing opportunity %s: %s.", target.memberID, target.opportunityID, waitErr.Error())
+		details["process_error"] = waitErr.Error()
+	}
+	return s.reportCouncilFailure(ctx, target.memberID, target.opportunityID, message, details)
+}
+
+func (s *runState) reportCouncilFailure(ctx context.Context, memberID string, opportunityID string, message string, details map[string]any) error {
+	payload := map[string]any{
+		"case_id":        s.opts.CaseID,
+		"member_id":      memberID,
+		"opportunity_id": opportunityID,
+		"message":        message,
+		"details":        details,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	failURL := s.caseBase + "/councilapi/v1/fail"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, failURL, bytes.NewReader(raw))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("report council failure for %s: %w", memberID, err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("report council failure for %s returned HTTP %d: %s", memberID, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var response map[string]any
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber()
+	if err := dec.Decode(&response); err != nil {
+		return fmt.Errorf("decode council failure response for %s: %w", memberID, err)
+	}
+	if ok, _ := response["ok"].(bool); !ok {
+		message := ""
+		if errObj, ok := response["error"].(map[string]any); ok {
+			message = fmt.Sprint(errObj["message"])
+		}
+		if strings.TrimSpace(message) == "" {
+			message = strings.TrimSpace(string(body))
+		}
+		return fmt.Errorf("report council failure for %s was rejected: %s", memberID, message)
+	}
+	return nil
 }
 
 func (s *runState) stopAgents() error {

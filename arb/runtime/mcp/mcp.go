@@ -976,6 +976,9 @@ func toolResultText(value map[string]any) string {
 		raw, _ := json.Marshal(value)
 		return string(raw)
 	}
+	raw, _ := json.Marshal(value)
+	b.WriteString("json: ")
+	b.Write(raw)
 	return strings.TrimSpace(b.String())
 }
 

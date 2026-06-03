@@ -9,6 +9,7 @@ const (
 	opportunityFailureDeadline          = "deadline_expired"
 	opportunityFailureAttemptsExhausted = "attempts_exhausted"
 	opportunityFailureRequestFailed     = "request_failed"
+	opportunityFailureAgentExited       = "agent_exited"
 )
 
 func (rc *runContext) failOpportunity(opportunity Opportunity, reason string, message string, details map[string]any) error {
@@ -93,6 +94,8 @@ func opportunityFailureMessage(opportunity Opportunity, reason string) string {
 		return fmt.Sprintf("%s opportunity %s failed because attempts were exhausted.", titleCase(role), opportunityID)
 	case opportunityFailureRequestFailed:
 		return fmt.Sprintf("%s opportunity %s failed because the request failed.", titleCase(role), opportunityID)
+	case opportunityFailureAgentExited:
+		return fmt.Sprintf("%s opportunity %s failed because the assigned agent process exited before completing the opportunity.", titleCase(role), opportunityID)
 	default:
 		return fmt.Sprintf("%s opportunity %s failed: %s.", titleCase(role), opportunityID, reason)
 	}

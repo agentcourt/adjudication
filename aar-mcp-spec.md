@@ -121,7 +121,7 @@ The adapter does not decide whether a legal act is timely, complete, or allowed 
 
 ## Error And Result Shape
 
-A successful `tools/call` JSON-RPC response contains an MCP tool result.  The result has text content for human-readable summaries, `structuredContent` containing the AAR or adapter JSON object, and `isError` indicating whether the adapter considered the tool call unsuccessful.  The text content is a compact summary of keys such as `ok`, `status`, `state`, `message`, `after_version`, `after_opportunity_id`, `role_id`, `member_id`, and `case_id`.
+A successful `tools/call` JSON-RPC response contains an MCP tool result.  The result has text content, `structuredContent` containing the AAR or adapter JSON object, and `isError` indicating whether the adapter considered the tool call unsuccessful.  The text content begins with a compact summary of keys such as `ok`, `status`, `state`, `message`, `after_version`, `after_opportunity_id`, `role_id`, `member_id`, and `case_id`, then includes the full JSON object so MCP clients that expose only text content still receive evidence lists, case records, read bytes, prompts, and tool results.
 
 HTTP errors from the AAR service become structured tool content where possible.  Non-2xx AAR responses are decoded as JSON when the service returns JSON, tagged with `ok: false`, and include `http_status`.  Transport failures, malformed JSON, and wait-tool failures produce `state: "error"` or an adapter error object.
 

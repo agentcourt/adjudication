@@ -298,6 +298,32 @@ func TestMCPProcessCouncilAPIAndErrorResults(t *testing.T) {
 	}
 }
 
+func TestToolResultTextIncludesNestedResult(t *testing.T) {
+	text := toolResultText(map[string]any{
+		"ok":        true,
+		"case_id":   "case-1",
+		"member_id": "C1",
+		"result": map[string]any{
+			"evidence": []any{
+				map[string]any{
+					"evidence_id": "ev_123",
+					"title":       "record.txt",
+				},
+			},
+		},
+		"turn": map[string]any{
+			"opportunity_id":     "deliberation:1:C1",
+			"remaining_ms":       json.Number("60000"),
+			"attempts_remaining": json.Number("3"),
+		},
+	})
+	for _, want := range []string{"ok: true", "case_id: case-1", "json:", `"evidence_id":"ev_123"`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("tool result text missing %q:\n%s", want, text)
+		}
+	}
+}
+
 func TestMCPProcessWaitStateNormalization(t *testing.T) {
 	fake := newFakeAARServer(t, "service-token")
 	defer fake.Close()

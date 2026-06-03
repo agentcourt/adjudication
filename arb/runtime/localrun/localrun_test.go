@@ -214,6 +214,59 @@ func TestOpenClawAuthArgsForCodex(t *testing.T) {
 	}
 }
 
+func TestOpenClawAuthArgsForCodexUsesAbsoluteMountPath(t *testing.T) {
+	oldCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get cwd: %v", err)
+	}
+	tmp := t.TempDir()
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldCwd); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	})
+
+	source := writeCodexAuth(t, t.TempDir())
+	state := &runState{
+		opts:         Options{OutputDir: "relative-out"},
+		openClawAuth: openClawAuthConfig{Mode: "codex", CodexAuthPath: source},
+	}
+	args, _, err := state.openClawAuthArgs("plaintiff")
+	if err != nil {
+		t.Fatalf("auth args: %v", err)
+	}
+	var mount string
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "-v" {
+			mount = args[i+1]
+			break
+		}
+	}
+	hostPath := strings.SplitN(mount, ":", 2)[0]
+	if !filepath.IsAbs(hostPath) {
+		t.Fatalf("mount host path is not absolute: %q", mount)
+	}
+	if err := state.cleanupSecrets(); err != nil {
+		t.Fatalf("cleanup secrets: %v", err)
+	}
+}
+
+func TestOutputSubdirReturnsAbsolutePath(t *testing.T) {
+	got, err := outputSubdir("relative-out", "pi-C1")
+	if err != nil {
+		t.Fatalf("output subdir: %v", err)
+	}
+	if !filepath.IsAbs(got) {
+		t.Fatalf("path is not absolute: %q", got)
+	}
+	if !strings.HasSuffix(got, filepath.Join("relative-out", "pi-C1")) {
+		t.Fatalf("path = %q", got)
+	}
+}
+
 func TestResolveListenAddrAllocatesPort(t *testing.T) {
 	addr, err := resolveListenAddr("0.0.0.0:0", "127.0.0.1")
 	if err != nil {
