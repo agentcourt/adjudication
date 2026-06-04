@@ -360,7 +360,7 @@ Important run flags:
 | `--docker-mcp-host` | Host name Docker containers use to reach MCP.  Default: `host.docker.internal`. |
 | `--podman-mcp-host` | Host name Podman containers use to reach MCP.  Default: `127.0.0.1`. |
 
-The council output limit is enforced by the local `aar run` process while it monitors Pi stdout and stderr byte counts.  A runaway council process can write more than the configured limit before the next monitor check kills it.  The failure event records the configured limit, actual bytes written, stdout bytes, stderr bytes, process name, process error, and failed council member.
+The council output limit is enforced by the local `aar run` process while it monitors Pi stdout and stderr byte counts.  A runaway council process can write more than the configured limit before the next monitor check kills it.  Pi stdout logs compact repeated accumulated `message_update` content fields when a new event contains the previous content as a prefix; the log line then keeps only the tail and adds `aar_log_filter.message: "earlier repeated message_update events dropped"`.  The failure event records the configured limit, actual bytes written, stdout bytes, stderr bytes, process name, process error, and failed council member.
 
 `aar run` writes one pid file per child process in the output directory.  It writes MCP logs under `logs/mcp.stderr`, lawyer and council process logs under `logs/`, final case artifacts in the output root, and `local-run.json` with run-level settings.  After completion, it prints one final JSON result to stdout.  The process exits when the case reaches a terminal state or when an agent/process error requires termination.
 

@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"text/template"
 	"time"
 
@@ -131,6 +132,8 @@ type processRecord struct {
 	stderrPath string
 	finished   chan struct{}
 
+	stdoutCounter *processOutputCounter
+
 	mu            sync.Mutex
 	exited        bool
 	forcedReason  string
@@ -162,6 +165,27 @@ type processOutputSize struct {
 	Stdout int64
 	Stderr int64
 	Total  int64
+}
+
+type processOutputCounter struct {
+	dst   io.Writer
+	count atomic.Int64
+}
+
+func newProcessOutputCounter(dst io.Writer) *processOutputCounter {
+	return &processOutputCounter{dst: dst}
+}
+
+func (w *processOutputCounter) Write(p []byte) (int, error) {
+	n, err := w.dst.Write(p)
+	if n > 0 {
+		w.count.Add(int64(n))
+	}
+	return n, err
+}
+
+func (w *processOutputCounter) Size() int64 {
+	return w.count.Load()
 }
 
 type councilRosterEntry struct {
@@ -1231,14 +1255,27 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 		_ = stdout.Close()
 		return nil, fmt.Errorf("create %s stderr log: %w", name, err)
 	}
+	stdoutWriter := io.Writer(stdout)
+	var stdoutFilter *piTailLogWriter
+	if councilTarget != nil && strings.HasPrefix(name, "pi-") {
+		stdoutFilter = newPiTailLogWriter(stdout)
+		stdoutWriter = stdoutFilter
+	}
+	stdoutCounter := newProcessOutputCounter(stdoutWriter)
+	closeStdout := func() error {
+		if stdoutFilter == nil {
+			return stdout.Close()
+		}
+		return errors.Join(stdoutFilter.Flush(), stdout.Close())
+	}
 	cmd := exec.CommandContext(ctx, command, args...)
-	cmd.Stdout = stdout
+	cmd.Stdout = stdoutCounter
 	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
-		return nil, errors.Join(fmt.Errorf("start %s: %w", name, err), stdout.Close(), stderr.Close())
+		return nil, errors.Join(fmt.Errorf("start %s: %w", name, err), closeStdout(), stderr.Close())
 	}
 	if err := os.WriteFile(filepath.Join(s.opts.OutputDir, name+".pid"), []byte(fmt.Sprintf("%d\n", cmd.Process.Pid)), 0o644); err != nil {
-		return nil, errors.Join(err, cmd.Process.Kill(), cmd.Wait(), stdout.Close(), stderr.Close())
+		return nil, errors.Join(err, cmd.Process.Kill(), cmd.Wait(), closeStdout(), stderr.Close())
 	}
 	record := &processRecord{
 		name:       name,
@@ -1249,10 +1286,12 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 		stdoutPath: stdoutPath,
 		stderrPath: stderrPath,
 		finished:   make(chan struct{}),
+
+		stdoutCounter: stdoutCounter,
 	}
 	go func() {
 		err := cmd.Wait()
-		closeOut := stdout.Close()
+		closeOut := closeStdout()
 		closeErr := stderr.Close()
 		waitErr := errors.Join(err, closeOut, closeErr)
 		record.markExited()
@@ -1356,6 +1395,9 @@ func councilProcessOutputSize(proc *processRecord) (processOutputSize, error) {
 	}
 	stdoutBytes := stdoutInfo.Size()
 	stderrBytes := stderrInfo.Size()
+	if proc.stdoutCounter != nil {
+		stdoutBytes = proc.stdoutCounter.Size()
+	}
 	if stdoutBytes > int64(^uint64(0)>>1)-stderrBytes {
 		return processOutputSize{}, fmt.Errorf("process output size overflow for %s", proc.name)
 	}

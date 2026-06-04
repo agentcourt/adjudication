@@ -2,6 +2,14 @@
 
 ## 2026-06-04
 
+### Pi message-update log filtering
+
+Reference: [AAR run options](manual.md#aar-run)
+
+The C5 Clerk run produced more than 140 MB of Pi stdout while the agent repeated accumulated `message_update` content without calling the council tools.  The stdout log filter now compacts only Pi council `message_update` lines whose active `thinking` or `text` content is a prefix extension of the previous event for the same response and content index.  The stored log line keeps the event metadata, replaces repeated accumulated content with the tail, and adds `aar_log_filter.message: "earlier repeated message_update events dropped"`.
+
+Invalid JSON, unrelated event types, missing content fields, and non-prefix changes remain unchanged.  The local run process still counts raw stdout bytes accepted from the Pi process for the council output limit, so compacted logs do not weaken the runaway-output cap.  This filter addresses log amplification from accumulated message fields; it does not classify the agent's reasoning quality or alter case state.
+
 ### Case-file scanner cleanup
 
 Reference: [Manual case-file scanning](manual.md#case-files-and-evidence)

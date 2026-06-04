@@ -1,6 +1,7 @@
 package localrun
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -437,6 +438,35 @@ func TestCouncilProcessOutputSizeCountsLogs(t *testing.T) {
 	}
 }
 
+func TestCouncilProcessOutputSizeUsesStdoutCounter(t *testing.T) {
+	dir := t.TempDir()
+	stdoutPath := filepath.Join(dir, "pi-C1.stdout")
+	stderrPath := filepath.Join(dir, "pi-C1.stderr")
+	if err := os.WriteFile(stdoutPath, []byte("abc"), 0o644); err != nil {
+		t.Fatalf("write stdout: %v", err)
+	}
+	if err := os.WriteFile(stderrPath, []byte("xy"), 0o644); err != nil {
+		t.Fatalf("write stderr: %v", err)
+	}
+	var out bytes.Buffer
+	counter := newProcessOutputCounter(&out)
+	if _, err := counter.Write([]byte("abcdef")); err != nil {
+		t.Fatalf("write counter: %v", err)
+	}
+	size, err := councilProcessOutputSize(&processRecord{
+		name:          "pi-C1",
+		stdoutPath:    stdoutPath,
+		stderrPath:    stderrPath,
+		stdoutCounter: counter,
+	})
+	if err != nil {
+		t.Fatalf("council process output size: %v", err)
+	}
+	if size.Stdout != 6 || size.Stderr != 2 || size.Total != 8 {
+		t.Fatalf("size = %#v", size)
+	}
+}
+
 func TestMonitorCouncilOutputKillsProcessOverLimit(t *testing.T) {
 	dir := t.TempDir()
 	stdoutPath := filepath.Join(dir, "pi-C1.stdout")
@@ -505,6 +535,92 @@ func TestMonitorCouncilOutputKillsProcessOverLimit(t *testing.T) {
 	}
 	if details["output_bytes"] != int64(6) || details["output_limit_bytes"] != int64(5) {
 		t.Fatalf("details = %#v", details)
+	}
+}
+
+func TestPiMessageUpdateTailFilterCompactsAccumulatedThinking(t *testing.T) {
+	var filter piMessageUpdateTailFilter
+	first := []byte(`{"type":"message_update","assistantMessageEvent":{"type":"thinking_start","contentIndex":0,"partial":{"responseId":"r1","content":[{"type":"thinking","thinking":"abc","thinkingSignature":"reasoning"}]}},"message":{"responseId":"r1","content":[{"type":"thinking","thinking":"abc","thinkingSignature":"reasoning"}]}}`)
+	if got := filter.filterLine(first); string(got) != string(first) {
+		t.Fatalf("first update changed:\n%s", got)
+	}
+	second := []byte(`{"type":"message_update","assistantMessageEvent":{"type":"thinking_delta","contentIndex":0,"delta":"def","partial":{"responseId":"r1","content":[{"type":"thinking","thinking":"abcdef","thinkingSignature":"reasoning"}]}},"message":{"responseId":"r1","content":[{"type":"thinking","thinking":"abcdef","thinkingSignature":"reasoning"}]}}`)
+	got := filter.filterLine(second)
+	if string(got) == string(second) {
+		t.Fatalf("second update was not compacted")
+	}
+
+	var event map[string]any
+	if err := json.Unmarshal(got, &event); err != nil {
+		t.Fatalf("unmarshal filtered event: %v", err)
+	}
+	logFilter, ok := event["aar_log_filter"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing aar_log_filter: %#v", event)
+	}
+	if logFilter["message"] != repeatedMessageUpdateLogFilterMessage {
+		t.Fatalf("filter message = %#v", logFilter["message"])
+	}
+	if logFilter["dropped_prefix_bytes"] != float64(3) || logFilter["tail_bytes"] != float64(3) {
+		t.Fatalf("filter details = %#v", logFilter)
+	}
+
+	assistantEvent, ok := piMapValue(event["assistantMessageEvent"])
+	if !ok {
+		t.Fatalf("missing assistantMessageEvent")
+	}
+	partial, ok := piMapValue(assistantEvent["partial"])
+	if !ok {
+		t.Fatalf("missing partial")
+	}
+	_, value, ok := piContentString(partial, 0)
+	if !ok || value != "def" {
+		t.Fatalf("partial content = %q, %v", value, ok)
+	}
+	message, ok := piMapValue(event["message"])
+	if !ok {
+		t.Fatalf("missing message")
+	}
+	_, value, ok = piContentString(message, 0)
+	if !ok || value != "def" {
+		t.Fatalf("message content = %q, %v", value, ok)
+	}
+}
+
+func TestPiMessageUpdateTailFilterLeavesNonPrefixUpdate(t *testing.T) {
+	var filter piMessageUpdateTailFilter
+	first := []byte(`{"type":"message_update","assistantMessageEvent":{"type":"thinking_start","contentIndex":0,"partial":{"responseId":"r1","content":[{"type":"thinking","thinking":"abc"}]}}}`)
+	second := []byte(`{"type":"message_update","assistantMessageEvent":{"type":"thinking_delta","contentIndex":0,"partial":{"responseId":"r1","content":[{"type":"thinking","thinking":"zabc"}]}}}`)
+	_ = filter.filterLine(first)
+	if got := filter.filterLine(second); string(got) != string(second) {
+		t.Fatalf("non-prefix update changed:\n%s", got)
+	}
+}
+
+func TestPiTailLogWriterHandlesChunkedLines(t *testing.T) {
+	var out bytes.Buffer
+	writer := newPiTailLogWriter(&out)
+	first := `{"type":"message_update","assistantMessageEvent":{"type":"thinking_start","contentIndex":0,"partial":{"responseId":"r1","content":[{"type":"thinking","thinking":"abc"}]}}}`
+	second := `{"type":"message_update","assistantMessageEvent":{"type":"thinking_delta","contentIndex":0,"partial":{"responseId":"r1","content":[{"type":"thinking","thinking":"abcdef"}]}}}`
+	raw := []byte(first + "\n" + second + "\n")
+	if _, err := writer.Write(raw[:17]); err != nil {
+		t.Fatalf("write first chunk: %v", err)
+	}
+	if _, err := writer.Write(raw[17:]); err != nil {
+		t.Fatalf("write second chunk: %v", err)
+	}
+	if err := writer.Flush(); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, repeatedMessageUpdateLogFilterMessage) {
+		t.Fatalf("filtered log missing marker:\n%s", got)
+	}
+	if !strings.Contains(got, `"thinking":"def"`) {
+		t.Fatalf("filtered log missing tail content:\n%s", got)
+	}
+	if !strings.Contains(got, first) {
+		t.Fatalf("first line changed:\n%s", got)
 	}
 }
 
