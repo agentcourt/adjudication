@@ -37,26 +37,27 @@ state.json
 
 Initial case materials are registered as `case_packet` evidence. Accepted attorney submissions are registered as `submitted_evidence` evidence.
 
-## Attorney methods
+## Lawyer API Methods
 
-AARD exposes these methods over the existing ACP custom-method channel during arguments and rebuttals:
+AARD exposes evidence tools through the Lawyer API and, through `aard mcp`, as MCP tools.  The case process supplies the current tool list for each opportunity.  Evidence-reading tools are available in openings, arguments, rebuttals, surrebuttals, and closings; evidence-submission tools are available in arguments, rebuttals, and surrebuttals.
 
-- `aar_get_case` returns the visible arbitration record.
-- `aar_list_evidence` lists visible evidence metadata. It returns metadata only, not bytes.
-- `aar_stat_evidence` returns metadata, allowed operations, and remaining limits for one evidence.
-- `aar_read_evidence_range` returns a bounded byte range as base64. It never mutates the record. Successful reads are logged as `evidence_read` events.
-- `aar_materialize_evidence` copies exact evidence bytes into the managed attorney workspace and returns a workspace path. The returned path is not the record identity. Successful materializations are logged as `evidence_materialized` events.
-- `aar_submit_evidence` submits small source evidence in one JSON request using `content` or `content_base64`.
-- `aar_submit_decision` submits the legal act for the current opportunity.
+- `get_case` returns the visible arbitration record.
+- `list_evidence` lists visible evidence metadata. It returns metadata only, not bytes.
+- `stat_evidence` returns metadata, allowed operations, and remaining limits for one evidence item.
+- `read_evidence_range` returns a bounded byte range as base64. It never mutates the record. Successful reads are logged as `evidence_read` events.
+- `submit_evidence` submits small source evidence in one JSON request using `content` or `content_base64`.
+- `submit_decision` submits the legal act for the current opportunity.
+- `case_status` reports the current case phase and active turn.
+- `send_work_notes` records off-record lawyer work notes for outside analysis.
 
 
 ## Chunked upload methods
 
-Chunked upload is for evidence too large or unsuitable for single-request `aar_submit_evidence`.
+Chunked upload is for evidence too large or unsuitable for single-request `submit_evidence`.
 
-- `aar_begin_evidence_upload` starts an upload session. It requires title, MIME type, expected size, relevance, and either source URL or source description. Nothing is admitted at this step.
-- `aar_write_evidence_chunk` writes one base64 chunk at the next expected offset. Chunks must be sequential. The runtime enforces chunk and total upload limits.
-- `aar_commit_evidence_upload` verifies size and SHA-256, admits the evidence through the Lean `submit_evidence` state transition, moves the uploaded bytes into `submitted-evidence/`, registers the evidence in `evidence-store/`, and returns `evidence_id`.
+- `begin_evidence_upload` starts an upload session. It requires title, MIME type, expected size, relevance, and either source URL or source description. Nothing is admitted at this step.
+- `write_evidence_chunk` writes one base64 chunk at the next expected offset. Chunks must be sequential. The runtime enforces chunk and total upload limits.
+- `commit_evidence_upload` verifies size and SHA-256, admits the evidence through the Lean `submit_evidence` state transition, moves the uploaded bytes into `submitted-evidence/`, registers the evidence in `evidence-store/`, and returns `evidence_id`.
 
 A failed or incomplete upload session is not evidence. A completed upload becomes record evidence only after commit succeeds and the Lean engine accepts the corresponding `submit_evidence` action.
 
@@ -66,7 +67,7 @@ The policy has three evidence-size limits:
 
 - `max_submitted_evidence_bytes` is the authoritative record limit enforced by the Lean engine for each submitted evidence.
 - `max_exhibit_bytes` caps an offered evidence item. The default matches `max_submitted_evidence_bytes` so chunked evidence accepted into the record can be offered as an exhibit.
-- `max_direct_submitted_evidence_bytes` is the smaller direct JSON/base64 limit for `aar_submit_evidence`.
+- `max_direct_submitted_evidence_bytes` is the smaller direct JSON/base64 limit for `submit_evidence`.
 - `max_evidence_upload_bytes` is the chunked-upload limit. It must not exceed `max_submitted_evidence_bytes`.
 
 Evidence read policy:
@@ -76,7 +77,7 @@ Evidence read policy:
 - `max_evidence_reads_per_opportunity` caps read count per opportunity.
 - `max_evidence_read_bytes_per_opportunity` caps returned evidence bytes per opportunity.
 
-The runtime rejects invalid policies at startup. Evidence access is enforced server-side by phase; it is allowed only during arguments and rebuttals.
+The runtime rejects invalid policies at startup. Evidence access is enforced server-side by phase. Evidence reads are allowed throughout the lawyer merits sequence, and evidence submissions are allowed during arguments, rebuttals, and surrebuttals.
 
 ## Custody invariants
 
@@ -86,7 +87,7 @@ The implementation must preserve these invariants:
 2. `evidence_id` and SHA-256 identify record bytes. Paths do not.
 3. Upload commit does not bypass the Lean `submit_evidence` transition.
 4. `offered_evidence` uses visible `evidence_id` values.
-5. Evidence reads and materializations are logged.
+5. Evidence reads are logged.
 6. AARD remains media-agnostic. Agents examine bytes with their own tools.
 
 ## Inspection checklist

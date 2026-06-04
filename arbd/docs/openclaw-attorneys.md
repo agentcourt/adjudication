@@ -1,48 +1,32 @@
-# OpenClaw Degree Attorneys
+# OpenClaw Degree Lawyers
 
-This note describes the `arbd` side of OpenClaw-backed plaintiff and defendant attorneys.  `aard case` talks to attorneys through ACP endpoints.  The OpenClaw path uses `tools/openclaw-acp-tcp-bridge.js` to expose `.bin/aard-openclaw-attorney` as a TCP ACP endpoint, and the adapter source lives under `tools/aard-openclaw-attorney`.
+This note describes the `arbd` side of OpenClaw-backed plaintiff and defendant lawyers.  AARD uses the Lawyer API as its case interface and uses MCP as the adapter that OpenClaw can consume.  `aard run` starts the case process, starts `aard mcp`, starts local OpenClaw containers when requested, and gives each lawyer instructions for one role in one case.
 
-## Architecture
+## Local Lawyers
 
-`aard case` sends each lawyer opportunity to the role's TCP ACP endpoint.  The bridge starts one `aard-openclaw-attorney` process for each ACP connection.  The adapter receives the degree-attorney instructions, visible case view, readable case files, and AARD client tools, then asks OpenClaw for one filing JSON and submits that filing through AARD ACP methods.
+`aard run` is the local OpenClaw path.  It starts OpenClaw containers for the selected lawyer roles, configures the AARD MCP server inside each container, and gives each lawyer the generated instructions from `agent-instructions/openclaw-lawyer.md.tmpl`.  The lawyer then waits for opportunities, reads the current prompt and tools through MCP, submits work notes, inspects and submits evidence when appropriate, and files the required degree act before the turn deadline.
 
-OpenClaw owns the lawyer model, OpenClaw agent configuration, and any native OpenClaw tools.  AARD owns the degree case record, evidence access, score-filing validation, invalid-attempt feedback, transcripts, and Lean state transitions.  A role using `--plaintiff-acp-endpoint` or `--defendant-acp-endpoint` cannot also set the matching role-specific attorney model flag, because endpoint attorneys select their own models outside AARD.
-
-## Closed-Record Run
-
-Build AARD and the OpenClaw attorney adapter from `arbd/`:
+OpenClaw authentication can use either `OPENAI_API_KEY` or a Codex `auth.json` file.  The preferred local form uses `--openclaw-auth codex --openclaw-codex-auth PATH`, because that lets the container use the same OpenAI subscription credentials used by Codex.  The lawyer model and thinking settings come from the `aard run` flags unless the caller leaves them at their defaults.
 
 ```bash
-make build
+.bin/aard run ex1 \
+  --openclaw-auth codex \
+  --openclaw-codex-auth ~/src/auth.json \
+  --council-pool pool.jsonl
 ```
 
-Start a bridge for each role:
+## Remote Lawyers
 
-```bash
-tools/openclaw-acp-tcp-bridge.js --host 127.0.0.1 --port 19711
-tools/openclaw-acp-tcp-bridge.js --host 127.0.0.1 --port 19713
-```
+Remote lawyers use the same MCP tools, but `aard run` does not start the remote OpenClaw.  Use `--auto-lawyers plaintiff` to start only the plaintiff locally, `--auto-lawyers defendant` to start only the defendant locally, or an equivalent setting when one side belongs to an independently running OpenClaw.  Provide `--mcp-public-base-url` when the remote machine needs a URL different from the local MCP listen address.
 
-Run a case against those endpoints:
+`aard run` writes a role-specific remote lawyer instruction file from `agent-instructions/openclaw-remote-lawyer-skill.md.tmpl`.  The instruction tells the remote OpenClaw the case id, role id, MCP URL, and working procedure.  The remote lawyer should create an MCP session for that case and role, keep calling the wait tool until a turn is ready or the case is done, and use the tools returned for the current turn.
 
-```bash
-.bin/aard case \
-  --complaint examples/ex1/complaint.md \
-  --out-dir out/ex1-openclaw-closed \
-  --plaintiff-acp-endpoint tcp://127.0.0.1:19711 \
-  --defendant-acp-endpoint tcp://127.0.0.1:19713 \
-  --acp-timeout-seconds 900 \
-  --invalid-attempt-limit 5
-```
+## Evidence And Work Notes
 
-The OpenClaw lawyer receives the AARD attorney prompt, the visible case view, and readable evidence.  It should submit the required degree filing through the adapter.  In a closed-record run, the response should contain only the filing.
+AARD owns the case record, evidence custody, filing validation, invalid-attempt feedback, transcript, and Lean state transitions.  OpenClaw owns its own model, browser or search access, local programs, and analysis work.  Source material enters the case through `submit_evidence` or chunked evidence upload before a lawyer cites the returned `evidence_id` in `offered_evidence`.
 
-## Open-Record Evidence
-
-An open-record degree run uses the same bridge and adapter.  Configure the OpenClaw lawyer agents with the native tools they need, and provide extra role instructions through `AARD_OPENCLAW_AGENT_EXTRA_PROMPT` when starting each bridge.  AARD does not grant search capability to an endpoint lawyer; it supplies case access, evidence handling, and filing tools for the current opportunity.
-
-When AARD exposes source-evidence tools, OpenClaw can submit source material before the merits filing.  Accepted items are stored by AARD, recorded in state with provenance, added to the visible evidence set, and cited in later filings by `evidence_id` through `offered_evidence`.  Technical reports should contain attorney analysis, measurements, or synthesized work product rather than source content.
+Lawyers should send work notes during every turn.  `send_work_notes` records private work notes outside the case record, so those notes do not become evidence, argument, technical reports, or case events.  The notes are for later review of search strategy, evidence analysis, local tool use, and filing decisions.
 
 ## Inspection
 
-After an open-record run, inspect whether attorneys preserved source evidence and cited accepted evidence ids.  Source material submitted through AARD evidence tools appears in `submitted-evidence/`, `evidence-store/`, `evidence-manifest.json`, `state.json`, and `digest.md`.  The final degree answers remain in the AARD run summary and final state.
+After a run, inspect the submitted evidence, evidence reads, work notes, filings, and final answer map.  Source material submitted through AARD evidence tools appears in `submitted-evidence/`, `evidence-store/`, `evidence-manifest.json`, `state.json`, and `digest.md`.  Work notes appear in `work-notes.ndjson`, and final degree answers appear in `run.json`, `council.json`, `digest.md`, and the final-result API response.

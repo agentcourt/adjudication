@@ -2,7 +2,7 @@
 
 `arbd` separates three classes of input that serve different purposes: procedural policy, complaint content, and runtime limits.  Procedural policy determines what the arbitration procedure allows and how council members are instructed to answer.  Complaint content states the question for one case.  Runtime limits constrain the infrastructure that runs the case, not the legal procedure itself.
 
-The current implementation already keeps those classes separate in the code and in the run record.  [The case CLI](../runtime/cli/case.go) loads the complaint and the policy independently.  [The Go runner](../runtime/runner/policy.go) validates procedural policy, evidence custody limits, and runtime limits before case initialization, and [the Lean engine](../engine/Main.lean) carries the procedural policy into the legal state.
+The current implementation already keeps those classes separate in the code and in the run record.  [The `aard case` command](../runtime/cmd/aard/case.go) loads the complaint and policy independently, then builds [the proceeding options](../runtime/proceeding/options.go).  [The proceeding policy layer](../runtime/proceeding/policy.go) validates procedural policy, evidence custody limits, and runtime limits before case initialization, and [the Lean engine](../engine/Main.lean) carries the procedural policy into the legal state.
 
 ## Parameter Groups
 
@@ -31,10 +31,10 @@ The current implementation already keeps those classes separate in the code and 
 | Procedure | `max_report_title_bytes` | Maximum title size for one report | policy | Lean and Go |
 | Procedure | `max_report_summary_bytes` | Maximum summary size for one report | policy | Lean and Go |
 | Complaint | `question` | The disputed quantitative question | complaint | complaint parser |
-| Runtime | `council_llm_timeout_seconds` | Timeout for council turns | runner config | Go |
-| Runtime | `attorney_acp_timeout_seconds` | Timeout for attorney ACP turns | runner config | Go |
-| Runtime | `max_response_bytes` | Maximum raw model response size accepted from a turn | runner config | Go |
-| Runtime | `invalid_attempt_limit` | Maximum invalid attempts before a turn fails | runner config | Go |
+| Runtime | `council_llm_timeout_seconds` | Timeout for council turns | proceeding config | Go |
+| Runtime | `lawyer_turn_timeout_seconds` | Timeout for lawyer turns | proceeding config | Go |
+| Runtime | `max_response_bytes` | Maximum raw model response size accepted from a turn | proceeding config | Go |
+| Runtime | `invalid_attempt_limit` | Maximum invalid attempts before a turn fails | proceeding config | Go |
 
 `judgment_standard` belongs in policy, not in the complaint.  It is a case parameter no different in kind from `council_size` or a filing limit.  The complaint should state only the disputed question, and the policy or case configuration should supply the standard the council applies to that question.
 
@@ -42,13 +42,13 @@ The current implementation already keeps those classes separate in the code and 
 
 The case closes when every seated council member has answered once in the current round, and the result is the answer map itself.  The current implementation therefore needs only complete-answering rules and the answer map in state.  It does not need a vote threshold, a substantive outcome label, or an aggregate-answer field.
 
-That closure rule is part of the procedural surface, even though it is not currently configurable.  If a later version adds aggregation or multi-round convergence, that change belongs in policy and in the Lean engine rather than in complaint parsing or runtime transport.  The present code keeps the simpler rule visible by leaving those omitted fields out of both [the policy type](../runtime/runner/policy.go) and [the case state](../engine/Main.lean).
+That closure rule is part of the procedural surface, even though it is not currently configurable.  If a later version adds aggregation or multi-round convergence, that change belongs in policy and in the Lean engine rather than in complaint parsing or runtime transport.  The present code keeps the simpler rule visible by leaving those omitted fields out of both [the policy type](../runtime/proceeding/policy.go) and [the case state](../engine/Main.lean).
 
 ## Enforcement Split
 
-Lean should continue to enforce procedural rules that affect the legal state: phase ordering, text limits, counts of exhibits, submitted evidence, technical reports, bounded council answers, and closure on complete answering.  Go should enforce byte-based custody limits and transport limits before material reaches the engine.  A byte limit is about what the runner will carry and persist.  A phase rule is about what the procedure allows.  They are different constraints and should stay in different layers.
+Lean should continue to enforce procedural rules that affect the legal state: phase ordering, text limits, counts of exhibits, submitted evidence, technical reports, bounded council answers, and closure on complete answering.  Go should enforce byte-based custody limits and transport limits before material reaches the engine.  A byte limit is about what the runtime will carry and persist.  A phase rule is about what the procedure allows.  They are different constraints and should stay in different layers.
 
-This split also determines persistence.  Policy values that affect the legal case are written into the arbitration state and therefore into record artifacts such as `run.json`, `state.json`, `evidence-manifest.json`, and the event log.  Runtime limits stay in runner config and appear in `runtime.json` rather than in the legal state.
+This split also determines persistence.  Policy values that affect the legal case are written into the arbitration state and therefore into record artifacts such as `run.json`, `state.json`, `evidence-manifest.json`, and the event log.  Runtime limits stay in proceeding config and appear in `runtime.json` rather than in the legal state.
 
 ## Configuration Surface
 

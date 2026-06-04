@@ -7,6 +7,9 @@ structure CouncilMember where
   model : String := ""
   persona_filename : String := ""
   status : String := "seated"
+  failure_reason : String := ""
+  failure_opportunity_id : String := ""
+  failure_message : String := ""
   deriving Inhabited, ToJson, FromJson, DecidableEq
 
 structure Filing where
@@ -50,6 +53,17 @@ structure CouncilAnswer where
   rationale : String := ""
   deriving Inhabited, ToJson, FromJson, DecidableEq
 
+structure OpportunityFailure where
+  failure_type : String := "opportunity_failed"
+  role : String
+  phase : String
+  opportunity_id : String
+  reason : String
+  message : String := ""
+  member_id : String := ""
+  model : String := ""
+  deriving Inhabited, ToJson, FromJson, DecidableEq
+
 structure ArbitrationCase where
   case_id : String
   caption : String
@@ -67,6 +81,7 @@ structure ArbitrationCase where
   submitted_evidence : List SubmittedEvidence := []
   deliberation_round : Nat := 1
   council_answers : List CouncilAnswer := []
+  failure : Option OpportunityFailure := none
   deriving Inhabited, ToJson, FromJson, DecidableEq
 
 structure ArbitrationPolicy where
@@ -299,6 +314,12 @@ def nextOpportunity (s : ArbitrationState) : NextOpportunityOk :=
   let c := s.case
   if c.status = "closed" then
     { terminal := true, reason := "answers_complete", state_version := s.state_version }
+  else if c.status = "failed" then
+    match c.failure with
+    | some failure =>
+        { terminal := true, reason := if failure.reason = "" then "case_failed" else failure.reason, state_version := s.state_version }
+    | none =>
+        { terminal := true, reason := "case_failed", state_version := s.state_version }
   else
     nextOpportunityForPhase s
 
@@ -605,6 +626,79 @@ def removeCouncilMember (s : ArbitrationState) (memberId status : String) : Exce
   }
   continueDeliberation s c1
 
+def failCouncilMemberOpportunity
+  (s : ArbitrationState)
+  (memberId reason opportunityId message : String) : Except String ArbitrationState := do
+  let c := s.case
+  if c.phase != "deliberation" then
+    throw "council opportunity failure is allowed only in deliberation"
+  if memberId = "" then
+    throw "council opportunity failure requires member_id"
+  if reason = "" then
+    throw "opportunity failure requires reason"
+  if !(c.council_members.any (fun member => member.member_id = memberId)) then
+    throw s!"unknown council member: {memberId}"
+  if !(c.council_members.any (fun member => member.member_id = memberId && memberIsSeated member)) then
+    throw s!"council member is not seated: {memberId}"
+  let answers := currentRoundAnswers c
+  if answers.any (fun answer => answer.member_id = memberId) then
+    throw s!"cannot fail council member after current-round answer: {memberId}"
+  let c1 := {
+    c with council_members := c.council_members.map (fun member =>
+      if member.member_id = memberId then
+        { member with
+          status := "failed"
+          failure_reason := reason
+          failure_opportunity_id := opportunityId
+          failure_message := message
+        }
+      else
+        member)
+  }
+  continueDeliberation s c1
+
+def failOpportunity (s : ArbitrationState) (payload : Json) : Except String ArbitrationState := do
+  let opportunityId := trimString (← getString payload "opportunity_id")
+  let role := trimString (← getString payload "role")
+  let phase := trimString (← getString payload "phase")
+  let reason := trimString (← getString payload "reason")
+  let message := getOptionalString payload "message"
+  let memberId := getOptionalString payload "member_id"
+  let model := getOptionalString payload "model"
+  if opportunityId = "" then
+    throw "opportunity failure requires opportunity_id"
+  if role = "" then
+    throw "opportunity failure requires role"
+  if phase = "" then
+    throw "opportunity failure requires phase"
+  if reason = "" then
+    throw "opportunity failure requires reason"
+  match (nextOpportunity s).opportunity with
+  | none => throw "no active opportunity can fail"
+  | some opportunity =>
+      if opportunity.opportunity_id != opportunityId then
+        throw s!"opportunity_id {opportunityId} does not match current opportunity {opportunity.opportunity_id}"
+      if opportunity.role != role then
+        throw s!"opportunity role {role} does not match current role {opportunity.role}"
+      if opportunity.phase != phase then
+        throw s!"opportunity phase {phase} does not match current phase {opportunity.phase}"
+      if role = "council" then
+        failCouncilMemberOpportunity s memberId reason opportunityId message
+      else if role = "plaintiff" || role = "defendant" then
+        let failure : OpportunityFailure := {
+          failure_type := "opportunity_failed"
+          role := role
+          phase := phase
+          opportunity_id := opportunityId
+          reason := reason
+          message := message
+          member_id := memberId
+          model := model
+        }
+        pure <| stateWithCase s { s.case with status := "failed", failure := some failure }
+      else
+        throw s!"unsupported opportunity failure role: {role}"
+
 def initializeCase (req : InitializeCaseRequest) : Except String ArbitrationState := do
   let question := trimString req.question
   let standard := trimString req.state.policy.judgment_standard
@@ -634,6 +728,7 @@ def initializeCase (req : InitializeCaseRequest) : Except String ArbitrationStat
     submitted_evidence := []
     deliberation_round := 1
     council_answers := []
+    failure := none
   }
   pure <| stateWithCase req.state c
 
@@ -712,6 +807,9 @@ def step (req : StepRequest) : Except String ArbitrationState := do
       let memberId := trimString (← getString req.action.payload "member_id")
       let status := (← getString req.action.payload "status")
       removeCouncilMember req.state memberId status
+  | "fail_opportunity" =>
+      requireRole req.action.actor_role "system"
+      failOpportunity req.state req.action.payload
   | _ => throw s!"unknown action type: {req.action.action_type}"
 
 def parseJsonInput (input : String) : Except String Json := do

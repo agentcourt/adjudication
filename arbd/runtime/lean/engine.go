@@ -23,19 +23,19 @@ func (e Engine) Call(request map[string]any) (map[string]any, error) {
 	if len(e.Command) == 0 {
 		return nil, fmt.Errorf("lean command is empty")
 	}
-	wire, err := json.Marshal(request)
+	requestRaw, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	cmd := exec.Command(e.Command[0], e.Command[1:]...)
-	cmd.Stdin = bytes.NewReader(wire)
+	cmd.Stdin = bytes.NewReader(requestRaw)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	runErr := cmd.Run()
-	raw := bytes.TrimSpace(stdout.Bytes())
-	if len(raw) == 0 {
+	responseRaw := bytes.TrimSpace(stdout.Bytes())
+	if len(responseRaw) == 0 {
 		reqLabel := requestLabel(request)
 		if runErr != nil {
 			return nil, fmt.Errorf("lean process failed for %s: %w stderr=%s", reqLabel, runErr, bytes.TrimSpace(stderr.Bytes()))
@@ -43,7 +43,7 @@ func (e Engine) Call(request map[string]any) (map[string]any, error) {
 		return nil, fmt.Errorf("lean returned empty response for %s", reqLabel)
 	}
 	var out map[string]any
-	if err := json.Unmarshal(raw, &out); err != nil {
+	if err := json.Unmarshal(responseRaw, &out); err != nil {
 		return nil, fmt.Errorf("parse lean json: %w", err)
 	}
 	if runErr != nil {

@@ -1,55 +1,20 @@
 # Development Notes
 
-## 2026-05-31
+## 2026-06-04
 
-### OpenClaw client-tool metadata
+### Service and agent runtime migration
 
-Reference: [OpenClaw degree attorney notes](docs/openclaw-attorneys.md)
+Reference: [AARD service and agent update plan](update-plan.md)
 
-The current OpenClaw path now uses per-prompt ACP metadata instead of a process-startup environment variable for lawyer client tools.  `attorneyPromptMeta` sends the opportunity tool specs as `_meta.clientTools`, so an ACP server can see the exact tool set for the current opening, argument, rebuttal, surrebuttal, or closing.  The old `PI_ACP_CLIENT_TOOLS` path remains for the Pi wrapper because it still registers extension tools at process startup.
+`arbd` now has the same current runtime shape as `arb`: a direct `aard` command with `case`, `mcp`, `service`, and `run` subcommands; a private case HTTP API; role-bound Lawyer API and Council API endpoints; an MCP adapter over those APIs; a Clerk service; and a local run path that starts OpenClaw lawyers and Pi council agents.  The implementation keeps AARD degree semantics.  Lawyers argue for numeric answers or answer ranges, council members call `submit_council_answer` with an integer from `0` through `100`, and final result data exposes the answer map rather than a binary resolution.
 
-The current checked-in bridge is `tools/openclaw-acp-tcp-bridge.js`.  It exposes `.bin/aard-openclaw-attorney` as a TCP ACP endpoint, and the adapter lives under `tools/aard-openclaw-attorney`.  The adapter keeps AARD filing semantics in the existing ACP client methods.
+The Lean engine now represents opportunity failure directly.  A lawyer failure marks the case status as `failed` with a stored reason, while a council member failure marks that member as failed and continues deliberation with the remaining seated members.  The process-level API test started `aard case`, drove both lawyer roles through HTTP, submitted three council answers through the Council API, and produced a successful answer map.
 
-- [x] Send lawyer client tools in `_meta.clientTools`.
-- [x] Keep the OpenClaw attorney adapter under `tools/aard-openclaw-attorney`.
-- [x] Keep the TCP ACP bridge under `tools/openclaw-acp-tcp-bridge.js`.
-- [x] Document the checked-in OpenClaw endpoint path.
-
-## 2026-05-20
-
-### OpenClaw degree attorney adapter
-
-Reference: [OpenClaw Degree Attorneys](docs/openclaw-attorneys.md), [OpenClaw adapter](tools/aard-openclaw-attorney/internal/openclawattorney/server.go), [TCP bridge](tools/openclaw-acp-tcp-bridge.js)
-
-`arbd` now has an OpenClaw-backed attorney adapter matching the current `arb` transport pattern.  The adapter speaks stdio ACP to AARD, obtains one filing JSON from either an OpenClaw command or `openclaw agent`, and submits the result through the existing `_aar/*` host methods.  The TCP bridge starts a fresh `aard-openclaw-attorney` process for each connection so `aard case` can use `--plaintiff-acp-endpoint` and `--defendant-acp-endpoint`.
-
-The adapter prompt is degree-specific.  It presents the AARD attorney prompt, visible case view, and readable case files, and it tells the lawyer to advocate a concrete score or bounded range when that fits the phase.  Structured evidence bundles are supported, so open-record degree runs can submit source evidence before filing the merits decision.
-
-- [x] Add `tools/aard-openclaw-attorney/internal/openclawattorney`.
-- [x] Add `.bin/aard-openclaw-attorney` build target.
-- [x] Add `tools/openclaw-acp-tcp-bridge.js`.
-- [x] Document closed-record and open-record endpoint runs.
-- [x] Cover parsing, command execution, retries, and evidence-bundle submission in adapter tests.
-
-### Submitted source evidence and remote endpoint ownership
-
-Reference: [Degree runner ACP implementation](runtime/runner/acp.go), [Degree Lean engine](engine/Main.lean), [Degree policy](etc/policy.json)
-
-`arbd` now follows the current `arb` split between source evidence and attorney analysis.  During arguments and claimant rebuttal, an attorney may call `aar_submit_evidence` with source content and provenance.  The Go runner hashes the bytes, stores them under `submitted-evidence/` and `evidence-store/`, records the metadata in the Lean state through `submit_evidence`, and adds the accepted item to the visible evidence set so later filings can cite its `evidence_id` in `offered_evidence`.
-
-The policy now carries `max_submitted_evidence_per_side` and `max_submitted_evidence_bytes`.  Lean enforces the procedural count and byte limits in state, while Go enforces byte storage and creates the visible file.  The digest, transcript, attorney view, and council record distinguish submitted source evidence from exhibits and technical reports.
-
-Remote ACP endpoints also now own their model selection.  A role using `--plaintiff-acp-endpoint` or `--defendant-acp-endpoint` cannot also set the matching role-specific attorney model flag.  The run packet leaves local model and search-capability metadata empty for remote endpoints, because that information belongs to the remote ACP attorney environment.
-
-- [x] Reject role-specific model overrides when a remote ACP endpoint is set.
-- [x] Add submitted-evidence policy fields.
-- [x] Add Lean `SubmittedEvidence` state and `submit_evidence` action.
-- [x] Add proof-suite coverage for the submitted-evidence transition.
-- [x] Add Go evidence preparation, hashing, storage, event recording, and visible-file conversion.
-- [x] Update prompts, rendering, council record text, README, ARAP, parameter docs, and practice docs.
-- [x] Cover endpoint ownership, ACP evidence tool exposure, and evidence storage in tests.
-- [x] Run `go test ./...` under `arbd/runtime`.
-- [x] Run `lake build Proofs` under `arbd/engine`.
+- [x] Add `runtime/proceeding` with private Case API, Lawyer API, Council API, result reporting, work notes, and degree-specific council answers.
+- [x] Add `runtime/mcp`, `runtime/service`, `runtime/localrun`, and `agent-instructions`.
+- [x] Replace the old `runtime/cmd/aard` dispatcher with direct subcommands.
+- [x] Update `Makefile` and `README.md` for the supported API and local-run path.
+- [x] Run `go test ./...`, `lake build Proofs`, `lake build aardengine`, a direct case API process test, and a service API process test.
 
 ## 2026-05-02
 
@@ -71,15 +36,11 @@ This first version keeps the new tree small on purpose.  It has one example, one
 
 The first example now uses two sonnets rather than the earlier placeholder novelty prompt.  The record states that one sonnet was written in 2024 and that a very similar but not identical sonnet was written in 2025.  That makes the example fit the degree model directly, because the council has to answer how much of the later text was really the earlier text.
 
-### Attorney image prerequisite
-
-The first live `arbd` case run exposed a missing local prerequisite rather than an engine defect.  The ACP attorney wrapper expects the shared Podman image `agentcourt-pi-sandbox`, and `arbd` now exposes that requirement directly through a `build-image` target and a `build: build-image` dependency.  That keeps the local setup in line with the shared `common/pi-container` path instead of relying on a prebuilt image to happen to exist.
-
 ### Council answer transport
 
 The first live council runs exposed a transport mismatch with the shared council pool, not a Lean defect.  `arb` asks council models for a string-valued tool argument, while the first `arbd` draft asked the same mixed pool for a JSON integer.  That difference was enough to trigger repeated invalid council submissions under the normal `make demo` path.
 
-`arbd` now matches `arb` at the tool boundary: the council tool asks for digit-only string input, and the Go runner normalizes that input to an integer before it calls the Lean engine.  The engine and the final run evidence still store numeric answers.  After that change, `make demo` completed successfully on the sonnet example with final answers `{"C1":82,"C2":82,"C3":82,"C4":82,"C5":87}`.
+The current Council API accepts a numeric `answer` for `submit_council_answer` and stores the value as an integer before it calls the Lean engine.  `aard run` now gives Pi council agents full request-spec model configs and a degree-specific MCP instruction.  The engine and final run evidence still store numeric answers.
 
 ### Documentation set
 
@@ -91,19 +52,19 @@ The proof-oriented `arb/docs/` files were omitted on purpose.  `arbd` has a smal
 
 `arbd/examples/ex2/` now follows the same narrow pattern as `ex1`, but with two short stories instead of two sonnets.  The 2024 story, `first-story.md`, describes a near-future city whose civic AI assigns small mercies.  The 2025 story, `second-story.md`, tracks the same plot, scene order, and motifs with paraphrastic substitutions and relabeled set-pieces.
 
-`arbd/Makefile` now has an `ex2` target that mirrors `arb`'s named example targets.  Running `make ex2` rebuilt the tools, drafted `examples/ex2/complaint.md`, and completed a full live case at `out/ex2-demo`.  The final answer map was `{"C1":79,"C2":90,"C3":87,"C4":86,"C5":94}`.
+`arbd/Makefile` now has an `ex2` target that prints the supported local command path.  The live path is `aard run ex2`, because `aard case` waits for Lawyer API and Council API clients.  Earlier live runs on this example produced a high answer spread consistent with its close textual overlap.
 
 ### Example 3
 
 `arbd/examples/ex3/` reuses the same 2024 base story as `ex2`, but pairs it with a 2025 story that is only loosely related.  The second story keeps some of the same named places and people, along with the same near-future municipal-AI setting, but changes the conflict, the central mechanism, the scene sequence, and most of the phrasing.  The point was to give `arbd` a case where common world-building and cast should not by themselves force a high score.
 
-`arbd/Makefile` now has an `ex3` target as well.  Running `make ex3` drafted `examples/ex3/complaint.md` and completed a full live case at `out/ex3-demo`.  The final answer map was `{"C1":42,"C2":62,"C3":55,"C4":52,"C5":60}`, which is materially lower than `ex2` and fits the intended design of the example.
+`arbd/Makefile` now has an `ex3` target as well.  The live path is `aard run ex3`, because the direct case process waits for external clients.  Earlier live runs on this example produced lower answers than `ex2`, which fits the intended design of the example.
 
 ### Evidence fidelity and explicit file filtering
 
 The first review pass found two runtime issues worth fixing.  First, the exported `council.json`, `run.json`, digest, and transcript used the initially sampled council list even after the Lean state had marked a member `timed_out` or otherwise removed.  That made the packet misleading in exactly the cases where a reader most needs the status history.
 
-`arbd` now derives the exported council list from the final Lean state.  That keeps the packet aligned with the source of truth and carries each member's final `status` into JSON and the rendered markdown reports.  The runner still keeps the sampled council list in memory for persona text during live execution.
+`arbd` now derives the exported council list from the final Lean state.  That keeps the packet aligned with the source of truth and carries each member's final `status` into JSON and the rendered markdown reports.  The runtime still keeps the sampled council list in memory for persona text during live execution.
 
 The same review found that `--file .gitignore` slipped past `validateExplicitCaseFilePath`, because `filepath.Ext(".gitignore")` is empty.  The validator now rejects `.gitignore` by basename before it checks ordinary extensions.  That change affects only the explicit `--file` path, which is where the gap existed.
 
