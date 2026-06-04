@@ -366,7 +366,7 @@ The council output limit is enforced by the local `aar run` process while it mon
 
 ## OpenClaw Lawyer Auth
 
-Codex auth mode copies only `auth.json` into a per-lawyer temporary Codex home, mounts that directory into the OpenClaw container as `/aar-codex`, and sets `CODEX_HOME=/aar-codex`.  The container command unsets `OPENAI_API_KEY` in Codex mode.  AAR removes the staged Codex homes when the run ends.
+Codex auth mode copies only `auth.json` into a per-lawyer Codex home under the run output directory, mounts that directory into the OpenClaw container as `/aar-codex`, and sets `CODEX_HOME=/aar-codex`.  The container command unsets `OPENAI_API_KEY` in Codex mode.  Those copied auth files remain in the run output directory after completion, including Clerk-started runs.
 
 Use this command shape for local runs:
 
@@ -384,7 +384,7 @@ API-key mode is supported by the code.  It requires `OPENAI_API_KEY` and passes 
 
 ## Secrets And Access
 
-Treat Codex `auth.json`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, service bearer tokens, MCP bearer tokens, and generated remote-lawyer skill files as secrets.  The generated remote-lawyer skill contains an MCP server JSON object with a bearer token for one case role.  Give that file only to the OpenClaw instance assigned to that role.
+Treat Codex `auth.json`, copied per-lawyer Codex homes, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, service bearer tokens, MCP bearer tokens, and generated remote-lawyer skill files as secrets.  The generated remote-lawyer skill contains an MCP server JSON object with a bearer token for one case role.  Give that file only to the OpenClaw instance assigned to that role.
 
 Run packets can contain case evidence, filings, private lawyer work notes, and process logs.  They should be handled as case material.  The command examples use placeholder environment files and hostnames so the manual can be copied without exposing local credentials or machine names.
 
