@@ -1,5 +1,25 @@
 # Development Notes
 
+## 2026-06-04
+
+### Case-file scanner cleanup
+
+Reference: [Manual case-file scanning](manual.md#case-files-and-evidence)
+
+The first Clerk `ex4` run exposed a stale backup-file problem in automatic case-file scanning.  The example directory contained `README.md~`, and the scanner admitted it as initial evidence because it skipped `README.md` but not editor backup files ending in `~`.  The scanner now skips those backup files, the proceeding test covers that rule, and `examples/ex4/market-rules.md` carries the market rule text as an intentional case-packet file.
+
+### Live-run wall-clock timestamps
+
+The Clerk `ex6` and `ex1` runs showed event timestamps that appeared to exceed 900-second turn deadlines.  The live shell polling also showed `date -u` jumping forward by several minutes during a 30-second tool wait, and MCP responses still reported substantial `remaining_ms` on accepted turns.  AAR creates turn deadlines with `time.Now().Add(...)` and enforces them with timers and deadline comparisons, so the artifact pattern points to host wall-clock adjustment rather than a timeout-enforcement defect.
+
+## 2026-06-03
+
+### Pi council completion
+
+Reference: [Pi council instructions](agent-instructions/pi-council.md.tmpl)
+
+The Clerk `ex2` run showed C3 voting successfully and then continuing to call `wait_for_opportunity`.  That extra loop later reached C5's opportunity and produced a rejected tool call, though the case still closed correctly because C5 submitted its own vote.  The Pi council instruction template now states that a member must stop after `submit_council_vote` returns `ok: true`, and the localrun template test checks for that stop rule.
+
 ## 2026-06-02
 
 ### OpenClaw lawyer authentication

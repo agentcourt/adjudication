@@ -1,5 +1,23 @@
 # Observations For Ex6
 
+## Clerk API Run, 2026-06-04
+
+The Clerk API run completed at `arb/out/clerk-api-ex-runs-20260604042542/arb-20260604042542-970d2ea4`.  AAR closed the case as `not_demonstrated` after a 5-0 council vote.  The selected Pi seats used `pool.jsonl` request specs with provider restrictions, quantization where specified, and persona files preserved in the run artifacts.
+
+The case started with no usable automatic case files, so the lawyers had to build the record from outside sources.  This run differs from the older run below because plaintiff successfully submitted five evidence items during arguments, and defendant submitted two.  The source-heavy path therefore worked for both roles.
+
+Plaintiff found the right source classes but did not always preserve the strongest form of the evidence.  The White House Rubio release and the OMB statement of administration policy were strong official sources for physical entry, timing, combat capacity, and official characterization.  The GlobalSecurity Pentagon News mirror carried the strongest transition and oversight facts, while the official Defense report entered the record mainly as an endnote and source-chain extract rather than full body text.
+
+Defendant submitted stronger official-source extracts from the same White House and EOP materials.  Those extracts emphasized the two-hour ground presence, capture, arrest, prosecution framing, denial of invasion or extended operation, and the statement that Maduro was not the head of state.  The defense evidence narrowed the dispute to objective rather than physical entry or military capacity.
+
+The advocacy was focused.  Plaintiff argued that the record proved physical entry in combat capacity and that the operation removed the sitting government or produced U.S.-directed transition oversight.  Defendant argued that the proposition's edge case controlled because the official sources described a capture and arrest operation without territorial occupation or city control.
+
+The process behavior was mostly clean.  There was one rejected plaintiff `submit_decision` call during rebuttal in `logs/mcp.stderr`, after which plaintiff submitted the rebuttal successfully.  Both lawyers submitted work notes for all turns, and those notes show source searches, official-source prioritization, adverse checks, evidence reads, and filing decisions.
+
+Council review was uneven.  C2 and C4 read admitted evidence during deliberation, while C1, C3, and C5 had no recorded evidence-read events and appear to have relied on the prompt's case record and lawyer filings.  The final result is supported by the record, but direct evidence reads should be more consistent across council members.
+
+The event timestamps show large wall-clock gaps, including gaps that at first made some accepted turns look as though they exceeded the 900-second turn timeout.  I checked `runtime.json`, the Lawyer API timeout code, and MCP responses with `remaining_ms`; this run does not establish an AAR timeout failure.  The evidence points to host wall-clock jumps during the live command, so these event timestamps should be treated as wall-time labels rather than proof of turn-budget behavior.
+
 ## Run
 
 The OpenClaw-lawyer run completed at `out/ex6-openclaw-lawyers-20260602052518`.  AAR exited with status 0 and returned `not_demonstrated`, with a 4-1 council vote.  Both OpenClaw containers exited with status 0 after completing all assigned filings.

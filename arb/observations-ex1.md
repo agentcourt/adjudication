@@ -1,5 +1,23 @@
 # Observations For Ex1
 
+## Clerk API Run, 2026-06-04
+
+The Clerk API run completed at `arb/out/clerk-api-ex-runs-20260604064719/arb-20260604064719-c49a36fd`.  AAR closed the case as `demonstrated` after four accepted council votes, all in favor.  The selected Pi seats used `pool.jsonl` request specs with provider restrictions, quantization where specified, and persona files preserved in the run artifacts.
+
+The record contained eleven initial case-packet files and no submitted outside evidence.  That was the right shape for this example because the dispute turns on private packet materials: the deadline thread, assignment instructions, confession, signature, public key, printer records, distribution work order, session summary, damages breakdown, and time log.  Both lawyers read all eleven packet files during openings.
+
+Plaintiff made the strongest technical use of the record.  It offered nine exhibits and a technical report explaining that it decoded the confession signature, verified `confession.txt` against `samantha_public.pem` with OpenSSL, and matched the local hashes to the packet identities.  The report handled the attribution limit correctly by distinguishing signature integrity against the packet public key from independent proof that the public key belonged to Samantha.
+
+Defendant made a serious burden argument from the same packet.  It offered six exhibits and a technical report identifying missing private-case material: complete communications, draft or workspace timestamps, final handoff evidence, printer cancellation or payment terms, distribution deposit terms, and mitigation records.  That was the right defense frame because the admitted confession proves a reading-related deception more directly than it proves completion-date falsity or objective reliance.
+
+The advocacy stayed close to the proposition.  Plaintiff treated Samantha's deadline assurance as a composite readiness representation tied to the false claim that she had read Stephenson.  Defendant tried to keep reading deception separate from a material misrepresentation about when the essay would be complete and pressed the commercial-reliance gaps.
+
+The council review was strong through C4.  C1 through C4 all read admitted evidence and voted `demonstrated`, reasoning that the signed confession made the deadline assurance materially misleading because the assignment required reading before drafting and Peter asked direct go/no-go questions before preserving the rush print plan.  The result followed the majority reasoning in the older ex1 runs but with cleaner post-case behavior for the lawyers.
+
+C5 failed before voting because the Pi process exceeded the council output limit.  The failure event reports `143846986` stdout-plus-stderr bytes written against a configured `134217728` byte limit, after which AAR killed `pi-C5`, recorded `agent_output_limit_exceeded`, marked C5 `failed`, and continued under the council rules.  This did not affect the result because the four earlier votes had already made the final resolution clear under the current deliberation path.
+
+The process behavior was otherwise clean.  The MCP log has no `ok=false` lawyer or council tool calls, both lawyers submitted work notes for every turn, and the final run exited with code 0.  The live polling again showed large wall-clock jumps during a 30-second shell wait, consistent with the timestamp artifact noted in `devnotes.md`.
+
 ## Run
 
 The OpenClaw-lawyer run completed at `out/ex1-openclaw-lawyers-20260602042739`.  AAR exited with status 0 and returned `demonstrated`, with a 4-1 council vote.  The defendant container exited with status 0, while the plaintiff container exited with status 1 after all plaintiff filings were accepted because OpenClaw reported a compaction failure.

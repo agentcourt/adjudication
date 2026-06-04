@@ -64,6 +64,11 @@ func TestPiCouncilInstructionsUseProxyToolNames(t *testing.T) {
 			t.Fatalf("rendered instructions missing %q:\n%s", want, got)
 		}
 	}
+	for _, want := range []string{"After `aar_submit_council_vote` returns `ok: true`", "Do not call `aar_wait_for_opportunity` again after your vote is accepted"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rendered instructions missing stop rule %q:\n%s", want, got)
+		}
+	}
 }
 
 func TestRemoteLawyerSkillIncludesConnectionAndWorkLoop(t *testing.T) {
@@ -139,6 +144,29 @@ func TestWritePiConfigFromRosterEntry(t *testing.T) {
 	headers := server["headers"].(map[string]any)
 	if headers["Authorization"] != "Bearer token-1" {
 		t.Fatalf("headers = %#v", headers)
+	}
+}
+
+func TestWritePiConfigAddsDefaultMaxTokens(t *testing.T) {
+	home := t.TempDir()
+	_, err := writePiConfig(home, councilRosterEntry{
+		MemberID: "C1",
+		RequestSpec: &modelrequest.Spec{
+			Endpoint: "openrouter",
+			Model:    "anthropic/claude-opus-4.6-fast",
+		},
+	}, "aar-case-C1", "http://127.0.0.1:19780/mcp?case_id=case-1&member_id=C1", "token-1")
+	if err != nil {
+		t.Fatalf("write Pi config: %v", err)
+	}
+	models := readJSONMap(t, filepath.Join(home, ".pi", "agent", "models.json"))
+	providers := models["providers"].(map[string]any)
+	openrouter := providers["openrouter"].(map[string]any)
+	modelList := openrouter["models"].([]any)
+	modelEntry := modelList[0].(map[string]any)
+	want := float64(proceeding.DefaultRuntimeLimits().CouncilMaxOutputTokens)
+	if modelEntry["maxTokens"] != want {
+		t.Fatalf("model entry maxTokens = %#v, want %#v", modelEntry["maxTokens"], want)
 	}
 }
 

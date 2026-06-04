@@ -87,7 +87,7 @@ An environment file used by examples should export `OPENROUTER_API_KEY`.  It may
 export OPENROUTER_API_KEY=REPLACE_WITH_KEY
 ```
 
-The council pool is a JSONL file with request-spec records.  A local `pool.jsonl` in `arb/` takes precedence when `--council-pool` is omitted; otherwise AAR looks under the shared common root.  Persona paths in pool records are resolved from the pool base directory.  The sampled council roster is written into the run packet so the final output records which members, provider settings, quantization, and personas were used.
+The council pool is a JSONL file with request-spec records.  A local `pool.jsonl` in `arb/` takes precedence when `--council-pool` is omitted.  If `--council-pool` or Clerk `council_pool_path` is set, use an absolute path unless the intended pool lives under the shared common root.  Persona paths in pool records are resolved from the pool base directory.  The sampled council roster is written into the run packet so the final output records which members, provider settings, quantization, and personas were used.
 
 ## Complaint Files
 
@@ -119,7 +119,7 @@ On success, `aar complain` prints the output path.
 
 ## Initial Evidence
 
-When `aar case` or `aar run` starts without `--file`, the case runner scans the complaint directory for initial case files.  It skips the complaint file, a situation file, `README.md`, signing evidence, and directories.  Text-like files such as `.txt`, `.md`, `.pem`, and `.b64` are loaded as readable text evidence; other file types are stored as byte-bearing evidence.
+When `aar case` or `aar run` starts without `--file`, the case runner scans the complaint directory for initial case files.  It skips the complaint file, a situation file, `README.md`, editor backup files ending in `~`, signing evidence, and directories.  Text-like files such as `.txt`, `.md`, `.pem`, and `.b64` are loaded as readable text evidence; other file types are stored as byte-bearing evidence.
 
 Use `--file` to provide explicit initial evidence.  The flag may be repeated.  Supplying any `--file` value replaces automatic complaint-directory scanning, so list every initial evidence file that belongs in the starting packet.
 
@@ -177,7 +177,7 @@ Important flags:
 | `--attorney-arguments-prompt` | Attorney arguments prompt file override. |
 | `--attorney-rebuttals-prompt` | Attorney rebuttals prompt file override. |
 | `--common-root` | Shared `common/` tree for council pool and personas. |
-| `--council-pool` | Council JSONL request-spec pool. |
+| `--council-pool` | Council JSONL request-spec pool.  Use an absolute path unless the pool lives under the common root. |
 | `--caseapi-addr` | Private Case API listen address.  Default: `127.0.0.1:0`. |
 | `--council-backend` | `direct` or `councilapi`. |
 | `--timeout-seconds` | Council LLM timeout override for direct council. |
@@ -254,7 +254,7 @@ Observer tools include `case_status`, `get_case`, `get_turn`, `list_events`, `li
 
 The Council API is available when a case starts with `--council-backend councilapi`.  Calls go to `/councilapi/v1` and include `case_id` and `member_id`.  A council member uses `GET /councilapi/v1/wait` or `GET /councilapi/v1/get` to receive its deliberation opportunity, reads the record through evidence tools, and submits one vote through `POST /councilapi/v1/do`.
 
-Council tools include `get_case`, `list_evidence`, `stat_evidence`, `read_evidence_range`, and `submit_council_vote`.  A council vote payload has `vote` and `rationale`.  The vote must be `demonstrated` or `not_demonstrated`, and the rationale should explain the vote from the admitted record.
+Council tools include `get_case`, `list_evidence`, `stat_evidence`, `read_evidence_range`, and `submit_council_vote`.  A council vote payload has `vote` and `rationale`.  The vote must be `demonstrated` or `not_demonstrated`, and the rationale should explain the vote from the admitted record.  After `submit_council_vote` succeeds, that council member is finished and should stop; it should not wait for later council opportunities assigned to other members.
 
 The `POST /councilapi/v1/fail` endpoint lets a supervising process report council-member failure for an active opportunity.  `aar run` uses this endpoint when a Pi council process exits before completing its opportunity or exceeds the configured output byte limit.  A council member failure dismisses that member and the case continues under the council rules.
 
@@ -294,7 +294,7 @@ The MCP tool set is stable during a session.  Tools that are not allowed for the
 | Observer | `wait_for_opportunity`, `get_current_opportunity`, `case_status`, `get_case`, `get_case_result`, `get_turn`, `list_events`, and evidence readers. |
 | Council member | `wait_for_opportunity`, `get_current_opportunity`, `get_case`, evidence readers, and `submit_council_vote`. |
 
-The first MCP tool call should be `wait_for_opportunity`.  If it returns `state: waiting`, call it again with `after_version`; if it returns `state: ready`, complete that opportunity; if it returns `done`, `failed`, or `error`, stop.  MCP adds the active `opportunity_id` to forwarded mutating calls, so the client usually needs to copy the opportunity id only when using the HTTP APIs directly.
+The first MCP tool call should be `wait_for_opportunity`.  If it returns `state: waiting`, call it again with `after_version`; if it returns `state: ready`, complete that opportunity; if it returns `done`, `failed`, or `error`, stop.  A council member should stop after an accepted `submit_council_vote` call.  MCP adds the active `opportunity_id` to forwarded mutating calls, so the client usually needs to copy the opportunity id only when using the HTTP APIs directly.
 
 ## `aar run`
 
@@ -307,10 +307,12 @@ set -a
 . path/to/aar-env.sh
 set +a
 
+pool="$(pwd)/pool.jsonl"
+
 .bin/aar run \
   --openclaw-auth codex \
   --openclaw-codex-auth "$HOME/.codex/auth.json" \
-  --council-pool pool.jsonl \
+  --council-pool "$pool" \
   ex1
 ```
 
@@ -327,7 +329,7 @@ Important run flags:
 | `--council-size` | Override council size. |
 | `--evidence-standard` | Override evidence standard. |
 | `--common-root` | Shared `common/` tree. |
-| `--council-pool` | Council JSONL request-spec pool. |
+| `--council-pool` | Council JSONL request-spec pool.  Use an absolute path unless the pool lives under the common root. |
 | `--caseapi-addr` | Private Case API address. |
 | `--mcp-listen` | MCP listen address.  Default: `0.0.0.0:0`. |
 | `--mcp-bearer-token` | MCP bearer token.  Default: generated. |
@@ -358,6 +360,8 @@ Important run flags:
 | `--docker-mcp-host` | Host name Docker containers use to reach MCP.  Default: `host.docker.internal`. |
 | `--podman-mcp-host` | Host name Podman containers use to reach MCP.  Default: `127.0.0.1`. |
 
+The council output limit is enforced by the local `aar run` process while it monitors Pi stdout and stderr byte counts.  A runaway council process can write more than the configured limit before the next monitor check kills it.  The failure event records the configured limit, actual bytes written, stdout bytes, stderr bytes, process name, process error, and failed council member.
+
 `aar run` writes one pid file per child process in the output directory.  It writes MCP logs under `logs/mcp.stderr`, lawyer and council process logs under `logs/`, final case artifacts in the output root, and `local-run.json` with run-level settings.  After completion, it prints one final JSON result to stdout.  The process exits when the case reaches a terminal state or when an agent/process error requires termination.
 
 ## OpenClaw Lawyer Auth
@@ -367,10 +371,12 @@ Codex auth mode copies only `auth.json` into a per-lawyer temporary Codex home, 
 Use this command shape for local runs:
 
 ```bash
+pool="$(pwd)/pool.jsonl"
+
 .bin/aar run \
   --openclaw-auth codex \
   --openclaw-codex-auth "$HOME/.codex/auth.json" \
-  --council-pool pool.jsonl \
+  --council-pool "$pool" \
   ex4
 ```
 
@@ -395,6 +401,7 @@ When the remote OpenClaw can reach the AAR host directly, bind MCP on the AAR ho
 ```bash
 out="out/ex1-remote-plaintiff-$(date -u +%Y%m%d%H%M%S)"
 AAR_HOST=aar-host.example
+pool="$(pwd)/pool.jsonl"
 
 .bin/aar run \
   --out-dir "$out" \
@@ -403,7 +410,7 @@ AAR_HOST=aar-host.example
   --mcp-public-base-url "http://${AAR_HOST}:8001" \
   --openclaw-auth codex \
   --openclaw-codex-auth "$HOME/.codex/auth.json" \
-  --council-pool pool.jsonl \
+  --council-pool "$pool" \
   ex1
 ```
 
@@ -461,6 +468,8 @@ The service role proxy routes are for direct `/api/v1/cases` records.  A Clerk-s
 Create a case:
 
 ```bash
+pool="$(pwd)/pool.jsonl"
+
 curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases \
   -H 'content-type: application/json' \
   --data @- <<EOF
@@ -468,7 +477,7 @@ curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases \
     "example": "ex1",
     "openclaw_auth": "codex",
     "openclaw_codex_auth_path": "$HOME/.codex/auth.json",
-    "council_pool_path": "pool.jsonl"
+    "council_pool_path": "$pool"
 }
 EOF
 ```
@@ -476,6 +485,8 @@ EOF
 Create a case from an explicit complaint:
 
 ```bash
+pool="$(pwd)/pool.jsonl"
+
 curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases \
   -H 'content-type: application/json' \
   --data @- <<EOF
@@ -486,7 +497,7 @@ curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases \
     "out_dir": "arb-custom-20260603123000",
     "openclaw_auth": "codex",
     "openclaw_codex_auth_path": "$HOME/.codex/auth.json",
-    "council_pool_path": "pool.jsonl"
+    "council_pool_path": "$pool"
 }
 EOF
 ```
@@ -628,7 +639,7 @@ Use `transcript.md` when reading the full procedural record.  Use `digest.md` wh
 
 The default policy has five council members, a preponderance evidence standard, and three required votes for a decision.  It allows three deliberation rounds, limits lawyer filing character counts by phase, limits offered exhibits and technical reports, and sets evidence upload and evidence-read limits.  A policy JSON file can override those fields.
 
-Important default runtime limits are 900 seconds per lawyer turn for `aar run`, 900 seconds per council turn for `aar run`, 128 KiB parsed response size for direct model responses, three invalid attempts per opportunity, and 1200 council output tokens for direct council model calls.  `aar case` direct council timeout defaults to 240 seconds unless overridden.  `aar run` gives lawyers and council members longer turn windows because OpenClaw and Pi agents may search, analyze, and call several tools.
+Important default runtime limits are 900 seconds per lawyer turn for `aar run`, 900 seconds per council turn for `aar run`, 128 KiB parsed response size for direct model responses, three invalid attempts per opportunity, and 4096 council output tokens.  `aar case` uses that token cap for direct council model calls.  `aar run` also writes that cap into Pi model configuration when the selected `pool.jsonl` entry does not specify `max_tokens` or `max_output_tokens`.  `aar case` direct council timeout defaults to 240 seconds unless overridden.  `aar run` gives lawyers and council members longer turn windows because OpenClaw and Pi agents may search, analyze, and call several tools.
 
 A lawyer failure fails the case.  Examples include deadline expiration and exhausting invalid attempts.  A council member failure dismisses that member, records the failure, and lets the case continue under council rules.
 
@@ -655,10 +666,12 @@ set -a
 . path/to/aar-env.sh
 set +a
 
+pool="$(pwd)/pool.jsonl"
+
 .bin/aar run \
   --openclaw-auth codex \
   --openclaw-codex-auth "$HOME/.codex/auth.json" \
-  --council-pool pool.jsonl \
+  --council-pool "$pool" \
   ex1
 ```
 
@@ -666,12 +679,13 @@ Run `ex4` with a dedicated output directory:
 
 ```bash
 out="out/ex4-$(date -u +%Y%m%d%H%M%S)"
+pool="$(pwd)/pool.jsonl"
 
 .bin/aar run \
   --out-dir "$out" \
   --openclaw-auth codex \
   --openclaw-codex-auth "$HOME/.codex/auth.json" \
-  --council-pool pool.jsonl \
+  --council-pool "$pool" \
   ex4
 ```
 
@@ -694,7 +708,7 @@ curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases \
     "example": "ex1",
     "openclaw_auth": "codex",
     "openclaw_codex_auth_path": "$HOME/.codex/auth.json",
-    "council_pool_path": "pool.jsonl"
+    "council_pool_path": "$(pwd)/pool.jsonl"
 }
 EOF
 ```

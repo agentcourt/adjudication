@@ -1164,6 +1164,7 @@ func writePiConfig(home string, entry councilRosterEntry, server string, mcpURL 
 		"id":   model,
 		"name": "AAR " + entry.MemberID + " " + model,
 	}
+	spec = spec.WithFallbackMaxOutputTokens(proceeding.DefaultRuntimeLimits().CouncilMaxOutputTokens)
 	if maxTokens := spec.MaxOutputTokens(); maxTokens != nil {
 		modelEntry["maxTokens"] = *maxTokens
 	}

@@ -459,6 +459,9 @@ func TestLoadCaseFilesAllowsNoUsableFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("note\n"), 0o644); err != nil {
 		t.Fatalf("write readme: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md~"), []byte("backup\n"), 0o644); err != nil {
+		t.Fatalf("write readme backup: %v", err)
+	}
 
 	files, err := loadCaseFiles(dir)
 	if err != nil {

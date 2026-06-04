@@ -1,5 +1,21 @@
 # Observations For Ex5
 
+## Clerk API Run, 2026-06-04
+
+The Clerk API run completed at `arb/out/clerk-api-ex-runs-20260604041215/arb-20260604041215-e319bf5e`.  AAR closed the case as `demonstrated` after a 3-2 council vote.  The council members used `pool.jsonl` entries with the selected model, provider restriction, quantization where specified, and persona file preserved in `council.json`.
+
+The case started with no usable automatic case files.  That was expected after the scanner fix because `complaint.md`, `README.md`, and `complaint.md~` are excluded from the initial evidence packet.  The run therefore tested the intended source-heavy path: lawyers had to find, read, and submit outside evidence before arguing from it.
+
+The lawyers did that work.  Plaintiff submitted an official OMB statement of administration policy, a Reuters report republished by Investing.com, and an NPR/KPBS article.  Defendant submitted two official White House materials: a Rubio release describing the operation as a short law-enforcement-related capture action, and a fact sheet treating Venezuelan oil revenue as Treasury-held sovereign funds rather than land occupation.
+
+I checked the five evidence URLs after the run, and they resolve to pages or a PDF matching the admitted summaries.  The OMB PDF confirms targeted and limited military strikes within Venezuela on January 3, 2026, in support of apprehending Maduro and Cilia Flores.  The Reuters and NPR/KPBS reports contain the strongest control-intent material, while the Rubio release and White House fact sheet provide the strongest defense framing.
+
+The lawyers made good use of adverse evidence.  Plaintiff admitted the official OMB source even though it characterized the operation as law-enforcement-related, and defendant admitted sources that confirmed a U.S. military operation while arguing against territorial-control intent.  The later filings focused on the right dispute: whether a raid, strikes, capture of Maduro, and immediate statements about running Venezuela satisfied the market's requirement for a military offensive intended to establish control over any portion of Venezuela.
+
+The process behavior was clean.  The event stream contains initialization, five submitted evidence items, eight attorney actions, eighteen evidence reads, and five council votes, with no rejected calls or failure events.  Both lawyers submitted work notes for every turn, and those notes include plans, source searches, source-selection reasoning, evidence reads, adverse checks, and filing decisions.
+
+The council quality was mixed.  C1, C3, and C5 used evidence-read tools during deliberation, and C1 and C3 voted `not_demonstrated` based on the absence of continuing territorial control.  C2 and C4 voted `demonstrated` without recorded evidence-read events, apparently relying on the record prompt and lawyer filings; the votes were accepted, but this is weaker than reading the admitted evidence directly.
+
 ## Run
 
 The OpenClaw-lawyer run completed at `out/ex5-openclaw-lawyers-20260602051309`.  AAR exited with status 0 and returned `demonstrated`, with a 4-1 council vote.  Both OpenClaw containers exited with status 0 after completing their assigned filings.

@@ -1,5 +1,19 @@
 # Observations For Ex4
 
+## Clerk API Run, 2026-06-04
+
+The corrected Clerk API run completed at `arb/out/clerk-api-ex-runs-20260604035455/arb-20260604035455-b8ffa17e`.  AAR closed the case as `demonstrated` after a 5-0 council vote.  The council members used `pool.jsonl` request specs, including provider restrictions and quantization where the selected pool entry specified it.
+
+The case-packet problem from the prior attempt was fixed before this run.  Automatic case-file scanning admitted `market-rules.md` and did not admit the stale `README.md~` editor backup.  The example now has a real case-packet evidence file for the market rules, while `README.md` remains a documentation file outside the automatic record.
+
+Both lawyers found and submitted material evidence during arguments.  Plaintiff submitted AP, Reuters, UN Geneva/UN News, and Jerusalem Post captures supporting the Syrian Mount Hermon and separation-zone control theory.  Defendant submitted an official IDF page and three source captures emphasizing defensive, temporary, and security-vacuum framing: a Jerusalem Post report on Israel's UN Security Council letter, a JNS report on PMO and Foreign Ministry statements, and an Anadolu report quoting the U.S. State Department.
+
+The advocacy was materially better than the stale-packet attempt because both sides argued from admitted source captures rather than from the README summary.  Plaintiff preserved adverse context by acknowledging that Israel described the move as limited, temporary, and defensive.  Defendant conceded the incursion and focused on the proposition's intent language, which made the dispute a real interpretation question rather than a source-quality failure.
+
+The council behavior looked clean.  The event stream contains initialization, evidence reads, attorney actions, submitted evidence, and five votes, with no rejected tool calls or council-member failure events.  C2 and C4 read all admitted evidence before voting; C1, C3, and C5 relied on the record and submitted concise rationales, which may be acceptable here because the lawyers had already built a compact record.
+
+All lawyer turns submitted work notes.  The notes contain planning, source search, record reads, evidence choices, adverse-source checks, and filing decisions.  They are useful enough for post-run audit, and they confirm that the lawyers scanned the record at each opportunity.
+
 ## Run
 
 The OpenClaw-lawyer run completed at `out/ex4-openclaw-lawyers-20260602132824`.  AAR exited with status 0 and closed the case as `demonstrated`.  The council vote was 3-2: C1, C3, and C4 voted `demonstrated`, while C2 and C5 voted `not_demonstrated`.

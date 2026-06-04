@@ -55,3 +55,29 @@ The work notes were complete and valuable.  The record contains nine work-note e
 One lawyer-action problem remains.  Defendant's first surrebuttal attempt included offered evidence, and AAR rejected it because offered evidence is allowed only in arguments and rebuttals.  Defendant corrected the filing on the next attempt, so the case was not harmed, but the prompt or tool response should make phase limits unmistakable at the moment of filing.
 
 The council decision tracked the record.  All five members voted `not_demonstrated` because the rules named the official English FIFA stream and excluded comments outside the scheduled event, while the Ronaldo mentions came from a red-carpet transcript that identified the exchange as before the FIFA event.  The result was not caused by weak advocacy; both lawyers found and used the evidence needed to put the real issue before the council.
+
+## Clerk API Run 2026-06-03
+
+The Clerk API run completed at `out/clerk-api-ex-runs-20260603202508/arb-20260603202508-0a98d531`.  The service started a full `aar run` child, used Codex `auth.json` for both OpenClaw lawyers, and used the local `arb/pool.jsonl` through an absolute path for Pi council members.  The case closed with status `ok`, resolution `not_demonstrated`, and a 4-1 council vote.
+
+Plaintiff performed real outside-source work during argument.  It submitted a GovInfo Daily Compilation transcript excerpt proving that Trump said `Ronaldo`, a Kalshi PRESMENTION/NEWMENTION terms excerpt, and a market-page capture identifying the Kalshi Ronaldo strike.  The plaintiff work notes recorded the search path, source choices, adverse Polymarket lead, and the remaining gap that no official FIFA stream clip had been captured.
+
+Defendant answered with stronger timing and scope evidence.  It submitted an American Presidency Project transcript page that labeled the Ronaldo exchange as prior to the FIFA World Cup Draw and fixed the time at 11:13 a.m.  It also submitted a FIFA official announcement capture showing the Final Draw scheduled for 12:00 ET at the Kennedy Center, which gave the council a concrete before-versus-during boundary.
+
+The advocacy was sound on both sides.  Plaintiff conceded the adverse timing record and argued that the market used an event/context period rather than a noon-only formal-program boundary.  Defendant conceded occurrence and focused on burden, the `prior to` transcript label, the 47-minute gap before the scheduled draw, the formal-program no-Ronaldo point, and the absence of market-specific inclusion language for pre-event reporter exchanges.
+
+The council decision tracked the admitted record.  Four members voted `not_demonstrated` because the plaintiff proved occurrence but did not prove that pre-event remarks counted as occurring during the draw.  One member voted `demonstrated` because it gave more weight to the same-venue public-event context and the flexible Kalshi event-period language.
+
+The process also exposed a Pi council instruction defect.  Council member C3 voted successfully, then kept polling and later attempted a C5 opportunity, which AAR rejected.  The case outcome was unaffected because C5 voted correctly, but the Pi council instruction template now tells a member to stop after an accepted `submit_council_vote` call.
+
+## Clerk API Rerun 2026-06-03
+
+The rerun completed at `out/clerk-api-ex-runs-20260603204530/arb-20260603204530-119262f1`.  It used the same Clerk path, Codex-auth OpenClaw lawyers, and Pi council pool configuration.  The case closed with status `ok`, resolution `not_demonstrated`, and a unanimous council vote.
+
+The evidence record again showed real lawyer search.  Plaintiff submitted a Polymarket Gamma API record with the governing Ronaldo market rule, a Senate transcript of reporter-facing remarks containing the Ronaldo statements, and a Senate transcript of the formal ceremony that did not contain Ronaldo.  Defendant submitted an official GovInfo/Daily Compilation transcript showing the Ronaldo exchange occurred at 11:13 a.m. and was titled as prior to the FIFA World Cup Draw.
+
+The rerun improved the issue framing.  The admitted Polymarket rule made the scheduled event and official English-language FIFA stream central, so the council did not have to decide from a generic Kalshi event-period record.  Plaintiff still searched for an official FIFA-stream/red-carpet capture during rebuttal and recorded that it did not find one, which made the unresolved source gap explicit.
+
+The council process behaved correctly after the Pi instruction change.  The MCP log contained no rejected council calls, and `events.ndjson` contained no `opportunity_failed` or `council_member_removed` events.  Each Pi model config contained `maxTokens: 4096` and preserved the selected provider and quantization fields from the pool entry.
+
+Two council preflight replacements occurred before the case initialized because initial selected models timed out during availability checks.  The replacements were recorded in the run initialization events and the final roster used concrete provider constraints from `pool.jsonl`.  The final deliberation proceeded without council-agent failure.

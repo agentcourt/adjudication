@@ -112,6 +112,9 @@ func caseFileKind(name string) (string, bool) {
 }
 
 func skipCaseFile(name string) bool {
+	if strings.HasSuffix(name, "~") {
+		return true
+	}
 	switch name {
 	case ".gitignore", "README.md", "complaint.md", "situation.md", "sign.sh", "confession.sig", "samantha_private.pem":
 		return true

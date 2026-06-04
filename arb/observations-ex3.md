@@ -33,3 +33,17 @@ The work notes also show improved evidence discipline.  Lawyers did not cite out
 The evidence tools worked for reading, metadata checks, offered evidence, and work notes.  I found no rejected legal filings in this run.  The record contains no submitted-evidence entries because neither lawyer found new source material that justified admission beyond the already strong packet.
 
 The post-closure wait problem remains.  Defendant reported a Lawyer API connection refusal after its closing was accepted, and plaintiff exited nonzero from an OpenClaw compaction failure.  AAR closed cleanly and produced the digest, but remote lawyers still do not reliably observe a clean terminal state.
+
+## Clerk API Run 2026-06-04
+
+The Clerk API run completed at `out/clerk-api-ex-runs-20260604032626/arb-20260604032626-48e89f15`.  The run used Codex-auth OpenClaw lawyers and Pi council members from `arb/pool.jsonl`.  It closed with status `ok`, resolution `not_demonstrated`, and a 3-2 council vote.
+
+The starting packet was already substantial: market page, pre-event reporter-exchange transcript, PRESMENTION terms, and the formal-draw archive note.  Both lawyers read the packet during opening.  Plaintiff also submitted two outside evidence items during argument: an American Presidency Project extract for the reporter exchange and a FIFA media-release extract confirming the date and Kennedy Center venue.  Defendant submitted three outside evidence items: a Senate formal-draw transcript extract with no Ronaldo match in accessible text, a Senate reporter-exchange extract describing the red-carpet setting before the FIFA event, and a Roll Call / Factba.se formal-drawing extract.
+
+The evidence work was strong.  Plaintiff strengthened occurrence, venue, and event context rather than relying only on the packet.  Defendant filled the formal-draw archive gap with accessible transcript material and added source-chain detail showing the Ronaldo utterance came from a separate pre-event red-carpet exchange.  That turned the case into a clean boundary dispute rather than a source-custody dispute.
+
+The advocacy reflected that record.  Plaintiff argued that the governing terms did not create a formal-program-only rule and that public red-carpet event coverage was materially different from rehearsals, sound checks, or backstage material.  Defendant argued that plaintiff bore the burden to prove inclusion, and that the admitted sources repeatedly described the Ronaldo exchange as prior to or before the FIFA event while the formal drawing extracts lacked the strike.
+
+The council split tracked the evidence.  Three members voted `not_demonstrated`, treating the `Prior to` and red-carpet-before-event sources as dispositive under the preponderance burden.  Two members voted `demonstrated`, giving more weight to the public same-venue event context and the absence of a clear market exclusion.
+
+The process was clean.  The run recorded five submitted-evidence events, thirteen evidence-read events, eight attorney actions, and five council votes.  `logs/mcp.stderr` showed no rejected MCP calls, and the case recorded no `opportunity_failed` or `council_member_removed` events.  Work notes were present for every lawyer phase.  Each Pi model config preserved the selected provider constraints and wrote `maxTokens: 4096`.

@@ -45,7 +45,7 @@ func DefaultRuntimeLimits() RuntimeLimits {
 		LawyerTurnTimeoutSeconds: 900,
 		MaxResponseBytes:         128 * 1024,
 		InvalidAttemptLimit:      3,
-		CouncilMaxOutputTokens:   1200,
+		CouncilMaxOutputTokens:   4096,
 	}
 }
 
