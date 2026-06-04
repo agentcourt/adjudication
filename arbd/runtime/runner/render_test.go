@@ -26,7 +26,7 @@ func TestRenderDigestShowsAnswerMap(t *testing.T) {
 				"rebuttals":         []any{},
 				"surrebuttals":      []any{},
 				"closings":          []any{},
-				"offered_files":     []any{},
+				"offered_evidence":  []any{},
 				"technical_reports": []any{},
 				"council_answers": []any{
 					map[string]any{"round": 1, "member_id": "C1", "answer": 72, "rationale": "R1"},

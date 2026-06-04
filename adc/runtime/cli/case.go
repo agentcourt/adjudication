@@ -29,7 +29,7 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	})
 	complaintPath := fs.String("complaint", "", "Path to complaint markdown")
 	courtRef := fs.String("court", courts.DefaultCourtName, "Court profile name or JSON path")
-	outDir := fs.String("out-dir", "out/case", "Output directory for staged inputs and run artifacts")
+	outDir := fs.String("out-dir", "out/case", "Output directory for staged inputs and run evidence")
 	model := fs.String("model", casegen.DefaultRuntimeModel(), "Runtime model for litigation agents")
 	nonJurorModel := fs.String("non-juror-model", casegen.DefaultNonJurorModel(), "Runtime model for judge, lawyers, and clerk")
 	plaintiffModel := fs.String("plaintiff-model", "", "Runtime model for plaintiff counsel. Default: --non-juror-model")

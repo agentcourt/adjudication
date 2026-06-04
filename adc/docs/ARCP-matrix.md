@@ -89,7 +89,7 @@ Most open work remains in discovery depth, deposition stack, jury-instruction wo
 | 51 | Gap | Soon | Jury instruction/objection package not modeled. |
 | 52 | Partial | Soon | Bench findings/conclusions/opinion exist; full Rule 52 practice is limited. |
 | 53 | Gap | TBD | Masters not modeled. |
-| 54 | Partial | Later | Judgment artifacts exist; costs/multi-claim judgment details are limited. |
+| 54 | Partial | Later | Judgment evidence exist; costs/multi-claim judgment details are limited. |
 | 55 | Done |  | Default entry and default judgment. |
 | 56 | Done |  | Motion, opposition, reply, and judicial decision path. |
 | 57 | Gap | TBD | Declaratory judgment process not modeled separately. |

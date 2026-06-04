@@ -9,7 +9,7 @@ build: build-image
 	cd engine && lake build aardengine
 	install -m 755 engine/.lake/build/bin/aardengine $(BIN_DIR)/aardengine
 	cd runtime && $(GO_ENV) go build -o ../$(BIN_DIR)/aard ./cmd/aard
-	cd runtime && $(GO_ENV) go build -o ../$(BIN_DIR)/aard-openclaw-attorney ./cmd/aard-openclaw-attorney
+	$(GO_ENV) go build -o $(BIN_DIR)/aard-openclaw-attorney ./tools/aard-openclaw-attorney
 
 build-image:
 	../common/pi-container/build-image.sh

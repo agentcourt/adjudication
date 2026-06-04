@@ -16,7 +16,7 @@ flowchart TD
 
     J --> K[Lean next_opportunity]
     K --> L{terminal?}
-    L -- yes --> W[write artifacts\nrun db, events,\ntranscript, digest]
+    L -- yes --> W[write evidence\nrun db, events,\ntranscript, digest]
     L -- no --> M[Lean role_view]
     M --> N[runner prompt assembly\nrole preamble,\nvisible case,\ntool cards]
     N --> O{local role or ACP role}

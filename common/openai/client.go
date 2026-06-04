@@ -5,11 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"adjudication/common/modelrequest"
 
 	openai "github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -26,13 +31,18 @@ type ToolCall struct {
 }
 
 type Response struct {
-	Text       string
-	ToolCalls  []ToolCall
-	ResponseID string
+	Text                      string
+	ToolCalls                 []ToolCall
+	ResponseID                string
+	RawJSON                   string
+	OpenRouterMetadata        map[string]any
+	OpenRouterGeneration      map[string]any
+	OpenRouterGenerationError string
 }
 
 type Client struct {
 	client             openai.Client
+	baseURL            string
 	online             bool
 	defaultTemperature *float64
 	retryDelays        []time.Duration
@@ -74,6 +84,7 @@ func New(apiKey string, baseURL string, online bool, timeout time.Duration) (*Cl
 	}
 	return &Client{
 		client:             openai.NewClient(opts...),
+		baseURL:            baseURL,
 		online:             online,
 		defaultTemperature: defaultTemperature,
 		retryDelays:        []time.Duration{0, 5 * time.Second, 30 * time.Second},
@@ -101,6 +112,29 @@ func NewFromEnv(online bool, timeout time.Duration) (*Client, error) {
 	return New(apiKey, baseURL, online, timeout)
 }
 
+func NewForEndpoint(endpoint string, online bool, timeout time.Duration) (*Client, error) {
+	switch strings.ToLower(strings.TrimSpace(endpoint)) {
+	case "openai":
+		apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+		if apiKey == "" {
+			return nil, fmt.Errorf("OPENAI_API_KEY is required for openai models")
+		}
+		baseURL := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
+		if baseURL == "" {
+			baseURL = "https://api.openai.com/v1"
+		}
+		return New(apiKey, baseURL, online, timeout)
+	case "openrouter":
+		apiKey := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
+		if apiKey == "" {
+			return nil, fmt.Errorf("OPENROUTER_API_KEY is required for openrouter models")
+		}
+		return New(apiKey, "https://openrouter.ai/api/v1", online, timeout)
+	default:
+		return nil, fmt.Errorf("unsupported model endpoint %q", endpoint)
+	}
+}
+
 func (c *Client) CreateResponse(
 	ctx context.Context,
 	model string,
@@ -121,6 +155,29 @@ func (c *Client) CreateResponseWithMaxOutputTokens(
 	temperature *float64,
 	maxOutputTokens *int64,
 ) (Response, error) {
+	return c.createResponse(ctx, model, nil, inputItems, tools, previousResponseID, temperature, maxOutputTokens)
+}
+
+func (c *Client) CreateResponseWithRequestSpec(
+	ctx context.Context,
+	spec modelrequest.Spec,
+	inputItems []map[string]any,
+	tools []map[string]any,
+	previousResponseID string,
+) (Response, error) {
+	return c.createResponse(ctx, modelForClient(spec, c.baseURL), &spec, inputItems, tools, previousResponseID, spec.Request.Temperature, spec.MaxOutputTokens())
+}
+
+func (c *Client) createResponse(
+	ctx context.Context,
+	model string,
+	spec *modelrequest.Spec,
+	inputItems []map[string]any,
+	tools []map[string]any,
+	previousResponseID string,
+	temperature *float64,
+	maxOutputTokens *int64,
+) (Response, error) {
 	convertedInput, err := convertInputItems(inputItems)
 	if err != nil {
 		return Response{}, err
@@ -129,14 +186,22 @@ func (c *Client) CreateResponseWithMaxOutputTokens(
 	if err != nil {
 		return Response{}, err
 	}
-	params := responseParams(model, convertedInput, convertedTools, previousResponseID, temperature, c.defaultTemperature, maxOutputTokens)
+	params := responseParams(model, convertedInput, convertedTools, previousResponseID, temperature, c.defaultTemperature, maxOutputTokens, spec)
+	reqOpts := requestOptions(spec)
 
 	maxAttempts := 1 + len(c.retryDelays)
 	var lastErr error
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		res, err := c.client.Responses.New(ctx, params)
+		res, err := c.client.Responses.New(ctx, params, reqOpts...)
 		if err == nil {
-			return parseResponse(res)
+			parsed, err := parseResponse(res)
+			if err != nil {
+				return Response{}, err
+			}
+			if spec != nil && strings.EqualFold(spec.Endpoint, "openrouter") {
+				c.attachOpenRouterGeneration(ctx, &parsed)
+			}
+			return parsed, nil
 		}
 		lastErr = err
 		if c.shouldRetry(err, attempt, maxAttempts) {
@@ -171,6 +236,7 @@ func responseParams(
 	temperature *float64,
 	defaultTemperature *float64,
 	maxOutputTokens *int64,
+	spec *modelrequest.Spec,
 ) responses.ResponseNewParams {
 	params := responses.ResponseNewParams{
 		Model: shared.ResponsesModel(model),
@@ -186,13 +252,85 @@ func responseParams(
 	if effectiveTemperature != nil {
 		params.Temperature = openai.Float(*effectiveTemperature)
 	}
+	if spec != nil && spec.Request.TopP != nil {
+		params.TopP = openai.Float(*spec.Request.TopP)
+	}
 	if previousResponseID != "" {
 		params.PreviousResponseID = openai.String(previousResponseID)
 	}
 	if maxOutputTokens != nil && *maxOutputTokens > 0 {
 		params.MaxOutputTokens = openai.Int(*maxOutputTokens)
 	}
+	if spec != nil {
+		extra := map[string]any{}
+		if provider := spec.ProviderBody(); provider != nil {
+			extra["provider"] = provider
+		}
+		if len(extra) > 0 {
+			params.SetExtraFields(extra)
+		}
+	}
 	return params
+}
+
+func requestOptions(spec *modelrequest.Spec) []option.RequestOption {
+	if spec == nil || len(spec.Headers) == 0 {
+		return nil
+	}
+	out := make([]option.RequestOption, 0, len(spec.Headers))
+	for key, value := range spec.Headers {
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key != "" && value != "" {
+			out = append(out, option.WithHeader(key, value))
+		}
+	}
+	return out
+}
+
+func modelForClient(spec modelrequest.Spec, baseURL string) string {
+	return spec.UpstreamModel()
+}
+
+func (c *Client) attachOpenRouterGeneration(ctx context.Context, resp *Response) {
+	if resp == nil || strings.TrimSpace(resp.ResponseID) == "" {
+		return
+	}
+	apiKey := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
+	if apiKey == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	endpoint := "https://openrouter.ai/api/v1/generation?id=" + url.QueryEscape(resp.ResponseID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		resp.OpenRouterGenerationError = err.Error()
+		return
+	}
+	req.Header.Set("authorization", "Bearer "+apiKey)
+	req.Header.Set("accept", "application/json")
+	httpResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		resp.OpenRouterGenerationError = err.Error()
+		return
+	}
+	defer httpResp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(httpResp.Body, 2*1024*1024))
+	if err != nil {
+		resp.OpenRouterGenerationError = err.Error()
+		return
+	}
+	if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
+		resp.OpenRouterGenerationError = fmt.Sprintf("OpenRouter generation metadata HTTP %d: %s", httpResp.StatusCode, strings.TrimSpace(string(body)))
+		return
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		resp.OpenRouterGenerationError = err.Error()
+		return
+	}
+	resp.OpenRouterGeneration = payload
 }
 
 func parseResponse(res *responses.Response) (Response, error) {
@@ -202,6 +340,15 @@ func parseResponse(res *responses.Response) (Response, error) {
 	out := Response{
 		ResponseID: res.ID,
 		Text:       res.OutputText(),
+		RawJSON:    res.RawJSON(),
+	}
+	if out.RawJSON != "" {
+		var raw map[string]any
+		if err := json.Unmarshal([]byte(out.RawJSON), &raw); err == nil {
+			if metadata, ok := raw["openrouter_metadata"].(map[string]any); ok {
+				out.OpenRouterMetadata = metadata
+			}
+		}
 	}
 	calls := make([]ToolCall, 0)
 	for _, item := range res.Output {

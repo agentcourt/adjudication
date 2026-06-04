@@ -1,16 +1,31 @@
 # Development Notes
 
+## 2026-05-31
+
+### OpenClaw client-tool metadata
+
+Reference: [OpenClaw degree attorney notes](docs/openclaw-attorneys.md)
+
+The current OpenClaw path now uses per-prompt ACP metadata instead of a process-startup environment variable for lawyer client tools.  `attorneyPromptMeta` sends the opportunity tool specs as `_meta.clientTools`, so an ACP server can see the exact tool set for the current opening, argument, rebuttal, surrebuttal, or closing.  The old `PI_ACP_CLIENT_TOOLS` path remains for the Pi wrapper because it still registers extension tools at process startup.
+
+The current checked-in bridge is `tools/openclaw-acp-tcp-bridge.js`.  It exposes `.bin/aard-openclaw-attorney` as a TCP ACP endpoint, and the adapter lives under `tools/aard-openclaw-attorney`.  The adapter keeps AARD filing semantics in the existing ACP client methods.
+
+- [x] Send lawyer client tools in `_meta.clientTools`.
+- [x] Keep the OpenClaw attorney adapter under `tools/aard-openclaw-attorney`.
+- [x] Keep the TCP ACP bridge under `tools/openclaw-acp-tcp-bridge.js`.
+- [x] Document the checked-in OpenClaw endpoint path.
+
 ## 2026-05-20
 
 ### OpenClaw degree attorney adapter
 
-Reference: [OpenClaw Degree Attorneys](docs/openclaw-attorneys.md), [OpenClaw adapter](runtime/openclawattorney/server.go), [TCP bridge](tools/openclaw-acp-tcp-bridge.js)
+Reference: [OpenClaw Degree Attorneys](docs/openclaw-attorneys.md), [OpenClaw adapter](tools/aard-openclaw-attorney/internal/openclawattorney/server.go), [TCP bridge](tools/openclaw-acp-tcp-bridge.js)
 
 `arbd` now has an OpenClaw-backed attorney adapter matching the current `arb` transport pattern.  The adapter speaks stdio ACP to AARD, obtains one filing JSON from either an OpenClaw command or `openclaw agent`, and submits the result through the existing `_aar/*` host methods.  The TCP bridge starts a fresh `aard-openclaw-attorney` process for each connection so `aard case` can use `--plaintiff-acp-endpoint` and `--defendant-acp-endpoint`.
 
 The adapter prompt is degree-specific.  It presents the AARD attorney prompt, visible case view, and readable case files, and it tells the lawyer to advocate a concrete score or bounded range when that fits the phase.  Structured evidence bundles are supported, so open-record degree runs can submit source evidence before filing the merits decision.
 
-- [x] Add `runtime/openclawattorney`.
+- [x] Add `tools/aard-openclaw-attorney/internal/openclawattorney`.
 - [x] Add `.bin/aard-openclaw-attorney` build target.
 - [x] Add `tools/openclaw-acp-tcp-bridge.js`.
 - [x] Document closed-record and open-record endpoint runs.
@@ -20,7 +35,7 @@ The adapter prompt is degree-specific.  It presents the AARD attorney prompt, vi
 
 Reference: [Degree runner ACP implementation](runtime/runner/acp.go), [Degree Lean engine](engine/Main.lean), [Degree policy](etc/policy.json)
 
-`arbd` now follows the current `arb` split between source evidence and attorney analysis.  During arguments and claimant rebuttal, an attorney may call `aar_submit_evidence` with source content and provenance.  The Go runner hashes the bytes, stores them under `submitted-evidence/`, records the metadata in the Lean state through `submit_evidence`, and adds the accepted item to the visible case-file set so later filings can cite its `file_id` in `offered_files`.
+`arbd` now follows the current `arb` split between source evidence and attorney analysis.  During arguments and claimant rebuttal, an attorney may call `aar_submit_evidence` with source content and provenance.  The Go runner hashes the bytes, stores them under `submitted-evidence/` and `evidence-store/`, records the metadata in the Lean state through `submit_evidence`, and adds the accepted item to the visible evidence set so later filings can cite its `evidence_id` in `offered_evidence`.
 
 The policy now carries `max_submitted_evidence_per_side` and `max_submitted_evidence_bytes`.  Lean enforces the procedural count and byte limits in state, while Go enforces byte storage and creates the visible file.  The digest, transcript, attorney view, and council record distinguish submitted source evidence from exhibits and technical reports.
 
@@ -64,7 +79,7 @@ The first live `arbd` case run exposed a missing local prerequisite rather than 
 
 The first live council runs exposed a transport mismatch with the shared council pool, not a Lean defect.  `arb` asks council models for a string-valued tool argument, while the first `arbd` draft asked the same mixed pool for a JSON integer.  That difference was enough to trigger repeated invalid council submissions under the normal `make demo` path.
 
-`arbd` now matches `arb` at the tool boundary: the council tool asks for digit-only string input, and the Go runner normalizes that input to an integer before it calls the Lean engine.  The engine and the final run artifacts still store numeric answers.  After that change, `make demo` completed successfully on the sonnet example with final answers `{"C1":82,"C2":82,"C3":82,"C4":82,"C5":87}`.
+`arbd` now matches `arb` at the tool boundary: the council tool asks for digit-only string input, and the Go runner normalizes that input to an integer before it calls the Lean engine.  The engine and the final run evidence still store numeric answers.  After that change, `make demo` completed successfully on the sonnet example with final answers `{"C1":82,"C2":82,"C3":82,"C4":82,"C5":87}`.
 
 ### Documentation set
 
@@ -84,7 +99,7 @@ The proof-oriented `arb/docs/` files were omitted on purpose.  `arbd` has a smal
 
 `arbd/Makefile` now has an `ex3` target as well.  Running `make ex3` drafted `examples/ex3/complaint.md` and completed a full live case at `out/ex3-demo`.  The final answer map was `{"C1":42,"C2":62,"C3":55,"C4":52,"C5":60}`, which is materially lower than `ex2` and fits the intended design of the example.
 
-### Artifact fidelity and explicit file filtering
+### Evidence fidelity and explicit file filtering
 
 The first review pass found two runtime issues worth fixing.  First, the exported `council.json`, `run.json`, digest, and transcript used the initially sampled council list even after the Lean state had marked a member `timed_out` or otherwise removed.  That made the packet misleading in exactly the cases where a reader most needs the status history.
 

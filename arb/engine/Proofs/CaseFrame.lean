@@ -132,14 +132,14 @@ theorem addFiling_preserves_councilMemberIds
 
 theorem appendSupplementalMaterials_preserves_proposition
     (c : ArbitrationCase)
-    (offered : List OfferedFile)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     (appendSupplementalMaterials c offered reports).proposition = c.proposition := by
   simp [appendSupplementalMaterials]
 
 theorem appendSupplementalMaterials_preserves_councilMemberIds
     (c : ArbitrationCase)
-    (offered : List OfferedFile)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     councilMemberIds (appendSupplementalMaterials c offered reports).council_members =
       councilMemberIds c.council_members := by

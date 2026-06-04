@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"adjudication/common/modelrequest"
+
 	openaisdk "github.com/openai/openai-go"
 	"github.com/openai/openai-go/responses"
 )
@@ -65,7 +67,7 @@ func TestNewFromEnv(t *testing.T) {
 		},
 		{
 			name: "explicit base url",
-			env:  map[string]string{"OPENAI_API_KEY": "oa-key", "OPENAI_BASE_URL": "https://xproxy.local/v1"},
+			env:  map[string]string{"OPENAI_API_KEY": "oa-key", "OPENAI_BASE_URL": "https://proxy.local/v1"},
 		},
 	}
 
@@ -94,6 +96,19 @@ func TestNewFromEnv(t *testing.T) {
 				t.Fatalf("NewFromEnv returned nil client")
 			}
 		})
+	}
+}
+
+func TestNewForEndpointUsesOpenAIBaseURL(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "oa-key")
+	t.Setenv("OPENAI_BASE_URL", "https://proxy.local/v1")
+
+	client, err := NewForEndpoint("openai", false, time.Second)
+	if err != nil {
+		t.Fatalf("NewForEndpoint error = %v", err)
+	}
+	if client.baseURL != "https://proxy.local/v1" {
+		t.Fatalf("baseURL = %q, want explicit OPENAI_BASE_URL", client.baseURL)
 	}
 }
 
@@ -292,7 +307,7 @@ func TestResponseParamsSetsMaxOutputTokens(t *testing.T) {
 	t.Parallel()
 
 	maxOutputTokens := int64(800)
-	params := responseParams("openai://gpt-5", nil, nil, "", nil, nil, &maxOutputTokens)
+	params := responseParams("openai://gpt-5", nil, nil, "", nil, nil, &maxOutputTokens, nil)
 	wire, err := json.Marshal(params)
 	if err != nil {
 		t.Fatalf("json.Marshal error = %v", err)
@@ -300,6 +315,42 @@ func TestResponseParamsSetsMaxOutputTokens(t *testing.T) {
 	text := string(wire)
 	if !strings.Contains(text, `"max_output_tokens":800`) {
 		t.Fatalf("responseParams JSON missing max_output_tokens:\n%s", text)
+	}
+}
+
+func TestResponseParamsAddsOpenRouterProviderSpec(t *testing.T) {
+	t.Parallel()
+
+	spec, err := modelrequest.ParseJSON([]byte(`{
+		"openrouter_model_id":"deepseek/deepseek-v4-flash",
+		"endpoint_tag":"deepinfra/fp4",
+		"quantization":"fp4",
+		"request":{"temperature":0,"top_p":1,"max_tokens":32},
+		"persona":"p.txt"
+	}`))
+	if err != nil {
+		t.Fatalf("ParseJSON error = %v", err)
+	}
+	params := responseParams(spec.RuntimeModel(), nil, nil, "", spec.Request.Temperature, nil, spec.MaxOutputTokens(), &spec)
+	wire, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("json.Marshal error = %v", err)
+	}
+	text := string(wire)
+	for _, needle := range []string{
+		`"model":"openrouter://deepseek/deepseek-v4-flash"`,
+		`"temperature":0`,
+		`"top_p":1`,
+		`"max_output_tokens":32`,
+		`"provider"`,
+		`"only":["deepinfra/fp4"]`,
+		`"allow_fallbacks":false`,
+		`"require_parameters":true`,
+		`"quantizations":["fp4"]`,
+	} {
+		if !strings.Contains(text, needle) {
+			t.Fatalf("responseParams JSON missing %q:\n%s", needle, text)
+		}
 	}
 }
 

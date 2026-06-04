@@ -2,7 +2,7 @@
 
 A merits graph records the argumentative content of one arbitration run.  It separates documentary sources, source-backed facts, interpretive claims, complaint rules, and council vote rationales.  It does not try to preserve procedural order except where role or phase matters to attribution.
 
-The canonical artifact is JSON.  Mermaid is a projection of that JSON into one readable view.  One graph should support several views without changing the underlying propositions: an issue map, a source-to-fact map, and a vote-adoption map are the first useful ones.
+The canonical evidence is JSON.  Mermaid is a projection of that JSON into one readable view.  One graph should support several views without changing the underlying propositions: an issue map, a source-to-fact map, and a vote-adoption map are the first useful ones.
 
 ## Schema
 
@@ -25,7 +25,7 @@ Each node represents one proposition or one documentary source.  A node is not a
 | `kind` | `proposition`, `issue`, `rule`, `source`, `fact`, `claim`, or `vote` |
 | `label` | Short display label |
 | `text` | One complete proposition or one source description |
-| `mentions` | Optional array of packet-local attributions such as role, phase, member id, or artifact |
+| `mentions` | Optional array of packet-local attributions such as role, phase, member id, or evidence |
 | `sources` | Optional array of source-node ids for fact nodes |
 | `vote` | Optional final vote value for vote nodes |
 
@@ -50,6 +50,6 @@ The graph should not infer more than the packet supports.  If a filing gestures 
 
 ## Placement
 
-Merits-graph files belong in the run packet under `out/`, not in the example source directory.  The packet already contains the materials from which the graph is derived: `run.json`, `digest.md`, and `transcript.md`.  The derived files should sit beside those packet artifacts as `out/<run>/merits-graph.json`, `out/<run>/merits-graph.mmd`, and, when rendered for inspection, `out/<run>/merits-graph.png`.
+Merits-graph files belong in the run packet under `out/`, not in the example source directory.  The packet already contains the materials from which the graph is derived: `run.json`, `digest.md`, and `transcript.md`.  The derived files should sit beside those packet evidence as `out/<run>/merits-graph.json`, `out/<run>/merits-graph.mmd`, and, when rendered for inspection, `out/<run>/merits-graph.png`.
 
 This placement matters because the graph is a property of one run, not of the static example inputs.  A regenerated run can change the filings, the vote split, or the decisive claims.  Storing the graph under `examples/` makes it look like source material for the case rather than derived analysis of one packet.

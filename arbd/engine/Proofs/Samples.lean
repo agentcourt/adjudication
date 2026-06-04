@@ -131,7 +131,7 @@ def textPayload (text : String) : Json :=
 def meritsPayload (text : String) : Json :=
   Json.mkObj
     [ ("text", Json.str text)
-    , ("offered_files", Json.arr #[])
+    , ("offered_evidence", Json.arr #[])
     , ("technical_reports", Json.arr #[])
     ]
 
@@ -151,7 +151,7 @@ def submittedEvidenceAction (role : String) : CourtAction :=
   { action_type := "submit_evidence"
   , actor_role := role
   , payload := Json.mkObj
-      [ ("file_id", Json.str "submitted-evidence-01-plaintiff.txt")
+      [ ("evidence_id", Json.str "ev_abc123_submitted-evidence-01-plaintiff")
       , ("title", Json.str "Source text")
       , ("source_url", Json.str "https://example.test/source")
       , ("mime_type", Json.str "text/plain")

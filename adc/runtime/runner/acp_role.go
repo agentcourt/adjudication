@@ -199,7 +199,7 @@ func (r *Runner) RunACPRoleExperiment(ctx context.Context, cfg ACPRoleConfig) (R
 		TurnLogs:   turnLogs,
 		FinalState: r.state,
 	}
-	if err := r.writeArtifacts(result); err != nil {
+	if err := r.writeEvidence(result); err != nil {
 		if cleanupErr := r.closeACPSessions(); cleanupErr != nil {
 			return Result{}, errors.Join(err, cleanupErr)
 		}
@@ -215,11 +215,11 @@ func (r *Runner) RunACPRoleExperiment(ctx context.Context, cfg ACPRoleConfig) (R
 			break
 		}
 	}
-	artifactMap := map[string]any{}
+	evidenceMap := map[string]any{}
 	if raw, err := json.Marshal(result); err == nil {
-		_ = json.Unmarshal(raw, &artifactMap)
+		_ = json.Unmarshal(raw, &evidenceMap)
 	}
-	if err := r.store.FinishRun(r.cfg.RunID, status, r.state, artifactMap); err != nil {
+	if err := r.store.FinishRun(r.cfg.RunID, status, r.state, evidenceMap); err != nil {
 		return Result{}, err
 	}
 	return result, nil

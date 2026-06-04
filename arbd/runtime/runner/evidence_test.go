@@ -43,7 +43,7 @@ func TestPrepareSubmittedEvidencePreservesContentAndBuildsVisibleFile(t *testing
 	if err != nil {
 		t.Fatalf("writeSubmittedEvidenceFile returned error: %v", err)
 	}
-	if file.FileID != meta.FileID || !file.TextReadable || file.Text != content {
+	if file.EvidenceID != meta.EvidenceID || !file.TextReadable || file.Text != content {
 		t.Fatalf("written file metadata = %#v", file)
 	}
 	written, err := os.ReadFile(file.Path)
@@ -60,23 +60,9 @@ func TestACPToolSpecsExposeEvidenceOnlyInRecordBuildingPhases(t *testing.T) {
 	if !slices.Contains(argumentTools, "aar_submit_evidence") {
 		t.Fatalf("argument tools = %#v, want aar_submit_evidence", argumentTools)
 	}
-	if !slices.Contains(argumentTools, "aar_write_case_file") {
-		t.Fatalf("argument tools = %#v, want workspace writer", argumentTools)
-	}
 
 	closingTools := toolNames(acpToolSpecs(Opportunity{Phase: "closings"}, true))
 	if slices.Contains(closingTools, "aar_submit_evidence") {
 		t.Fatalf("closing tools = %#v, do not want aar_submit_evidence", closingTools)
 	}
-	if slices.Contains(closingTools, "aar_write_case_file") {
-		t.Fatalf("closing tools = %#v, do not want workspace writer", closingTools)
-	}
-}
-
-func toolNames(specs []map[string]any) []string {
-	out := make([]string, 0, len(specs))
-	for _, spec := range specs {
-		out = append(out, mapString(spec["toolName"]))
-	}
-	return out
 }

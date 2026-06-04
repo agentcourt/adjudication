@@ -10,22 +10,28 @@ import (
 
 func DefaultPolicy() Policy {
 	return Policy{
-		CouncilSize:                 5,
-		JudgmentStandard:            "Answer with one integer from 0 through 100. Base the answer on the record. Explain the score briefly.",
-		MaxOpeningChars:             5000,
-		MaxArgumentChars:            6000,
-		MaxRebuttalChars:            4000,
-		MaxSurrebuttalChars:         4000,
-		MaxClosingChars:             5000,
-		MaxExhibitsPerFiling:        9,
-		MaxExhibitsPerSide:          12,
-		MaxExhibitBytes:             128 * 1024,
-		MaxReportsPerFiling:         3,
-		MaxReportsPerSide:           4,
-		MaxReportTitleBytes:         256,
-		MaxReportSummaryBytes:       8192,
-		MaxSubmittedEvidencePerSide: 8,
-		MaxSubmittedEvidenceBytes:   128 * 1024,
+		CouncilSize:                        5,
+		JudgmentStandard:                   "Answer with one integer from 0 through 100. Base the answer on the record. Explain the score briefly.",
+		MaxOpeningChars:                    5000,
+		MaxArgumentChars:                   6000,
+		MaxRebuttalChars:                   4000,
+		MaxSurrebuttalChars:                4000,
+		MaxClosingChars:                    5000,
+		MaxExhibitsPerFiling:               9,
+		MaxExhibitsPerSide:                 12,
+		MaxExhibitBytes:                    64 * 1024 * 1024,
+		MaxReportsPerFiling:                3,
+		MaxReportsPerSide:                  4,
+		MaxReportTitleBytes:                256,
+		MaxReportSummaryBytes:              8192,
+		MaxSubmittedEvidencePerSide:        8,
+		MaxSubmittedEvidenceBytes:          64 * 1024 * 1024,
+		MaxDirectSubmittedEvidenceBytes:    128 * 1024,
+		MaxEvidenceUploadBytes:             64 * 1024 * 1024,
+		MaxEvidenceChunkBytes:              64 * 1024,
+		MaxEvidenceReadBytes:               64 * 1024,
+		MaxEvidenceReadsPerOpportunity:     32,
+		MaxEvidenceReadBytesPerOpportunity: 512 * 1024,
 	}
 }
 
@@ -92,6 +98,26 @@ func ValidatePolicy(policy Policy) error {
 		return fmt.Errorf("policy.max_submitted_evidence_per_side must be non-negative")
 	case policy.MaxSubmittedEvidenceBytes <= 0:
 		return fmt.Errorf("policy.max_submitted_evidence_bytes must be positive")
+	case policy.MaxDirectSubmittedEvidenceBytes <= 0:
+		return fmt.Errorf("policy.max_direct_submitted_evidence_bytes must be positive")
+	case policy.MaxDirectSubmittedEvidenceBytes > policy.MaxSubmittedEvidenceBytes:
+		return fmt.Errorf("policy.max_direct_submitted_evidence_bytes %d exceeds max_submitted_evidence_bytes %d", policy.MaxDirectSubmittedEvidenceBytes, policy.MaxSubmittedEvidenceBytes)
+	case policy.MaxEvidenceUploadBytes <= 0:
+		return fmt.Errorf("policy.max_evidence_upload_bytes must be positive")
+	case policy.MaxEvidenceChunkBytes <= 0:
+		return fmt.Errorf("policy.max_evidence_chunk_bytes must be positive")
+	case policy.MaxEvidenceUploadBytes > policy.MaxSubmittedEvidenceBytes:
+		return fmt.Errorf("policy.max_evidence_upload_bytes %d exceeds max_submitted_evidence_bytes %d", policy.MaxEvidenceUploadBytes, policy.MaxSubmittedEvidenceBytes)
+	case policy.MaxEvidenceChunkBytes > policy.MaxEvidenceUploadBytes:
+		return fmt.Errorf("policy.max_evidence_chunk_bytes %d exceeds max_evidence_upload_bytes %d", policy.MaxEvidenceChunkBytes, policy.MaxEvidenceUploadBytes)
+	case policy.MaxEvidenceReadBytes <= 0:
+		return fmt.Errorf("policy.max_evidence_read_bytes must be positive")
+	case policy.MaxEvidenceReadsPerOpportunity <= 0:
+		return fmt.Errorf("policy.max_evidence_reads_per_opportunity must be positive")
+	case policy.MaxEvidenceReadBytesPerOpportunity <= 0:
+		return fmt.Errorf("policy.max_evidence_read_bytes_per_opportunity must be positive")
+	case policy.MaxEvidenceReadBytes > policy.MaxEvidenceReadBytesPerOpportunity:
+		return fmt.Errorf("policy.max_evidence_read_bytes %d exceeds max_evidence_read_bytes_per_opportunity %d", policy.MaxEvidenceReadBytes, policy.MaxEvidenceReadBytesPerOpportunity)
 	default:
 		return nil
 	}
@@ -132,21 +158,27 @@ func (limits RuntimeLimits) AttorneyACPTimeout() time.Duration {
 
 func (policy Policy) StateMap() map[string]any {
 	return map[string]any{
-		"council_size":                    policy.CouncilSize,
-		"judgment_standard":               strings.TrimSpace(policy.JudgmentStandard),
-		"max_opening_chars":               policy.MaxOpeningChars,
-		"max_argument_chars":              policy.MaxArgumentChars,
-		"max_rebuttal_chars":              policy.MaxRebuttalChars,
-		"max_surrebuttal_chars":           policy.MaxSurrebuttalChars,
-		"max_closing_chars":               policy.MaxClosingChars,
-		"max_exhibits_per_filing":         policy.MaxExhibitsPerFiling,
-		"max_exhibits_per_side":           policy.MaxExhibitsPerSide,
-		"max_exhibit_bytes":               policy.MaxExhibitBytes,
-		"max_reports_per_filing":          policy.MaxReportsPerFiling,
-		"max_reports_per_side":            policy.MaxReportsPerSide,
-		"max_report_title_bytes":          policy.MaxReportTitleBytes,
-		"max_report_summary_bytes":        policy.MaxReportSummaryBytes,
-		"max_submitted_evidence_per_side": policy.MaxSubmittedEvidencePerSide,
-		"max_submitted_evidence_bytes":    policy.MaxSubmittedEvidenceBytes,
+		"council_size":                            policy.CouncilSize,
+		"judgment_standard":                       strings.TrimSpace(policy.JudgmentStandard),
+		"max_opening_chars":                       policy.MaxOpeningChars,
+		"max_argument_chars":                      policy.MaxArgumentChars,
+		"max_rebuttal_chars":                      policy.MaxRebuttalChars,
+		"max_surrebuttal_chars":                   policy.MaxSurrebuttalChars,
+		"max_closing_chars":                       policy.MaxClosingChars,
+		"max_exhibits_per_filing":                 policy.MaxExhibitsPerFiling,
+		"max_exhibits_per_side":                   policy.MaxExhibitsPerSide,
+		"max_exhibit_bytes":                       policy.MaxExhibitBytes,
+		"max_reports_per_filing":                  policy.MaxReportsPerFiling,
+		"max_reports_per_side":                    policy.MaxReportsPerSide,
+		"max_report_title_bytes":                  policy.MaxReportTitleBytes,
+		"max_report_summary_bytes":                policy.MaxReportSummaryBytes,
+		"max_submitted_evidence_per_side":         policy.MaxSubmittedEvidencePerSide,
+		"max_submitted_evidence_bytes":            policy.MaxSubmittedEvidenceBytes,
+		"max_direct_submitted_evidence_bytes":     policy.MaxDirectSubmittedEvidenceBytes,
+		"max_evidence_upload_bytes":               policy.MaxEvidenceUploadBytes,
+		"max_evidence_chunk_bytes":                policy.MaxEvidenceChunkBytes,
+		"max_evidence_read_bytes":                 policy.MaxEvidenceReadBytes,
+		"max_evidence_reads_per_opportunity":      policy.MaxEvidenceReadsPerOpportunity,
+		"max_evidence_read_bytes_per_opportunity": policy.MaxEvidenceReadBytesPerOpportunity,
 	}
 }

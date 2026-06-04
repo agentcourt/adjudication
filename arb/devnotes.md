@@ -1,5 +1,160 @@
 # Development Notes
 
+## 2026-06-04
+
+### Pi message-update log filtering
+
+Reference: [AAR run options](manual.md#aar-run)
+
+The C5 Clerk run produced more than 140 MB of Pi stdout while the agent repeated accumulated `message_update` content without calling the council tools.  The stdout log filter now compacts only Pi council `message_update` lines whose active `thinking` or `text` content is a prefix extension of the previous event for the same response and content index.  The stored log line keeps the event metadata, replaces repeated accumulated content with the tail, and adds `aar_log_filter.message: "earlier repeated message_update events dropped"`.
+
+Invalid JSON, unrelated event types, missing content fields, and non-prefix changes remain unchanged.  The local run process still counts raw stdout bytes accepted from the Pi process for the council output limit, so compacted logs do not weaken the runaway-output cap.  This filter addresses log amplification from accumulated message fields; it does not classify the agent's reasoning quality or alter case state.
+
+### Case-file scanner cleanup
+
+Reference: [Manual case-file scanning](manual.md#case-files-and-evidence)
+
+The first Clerk `ex04` run exposed a stale backup-file problem in automatic case-file scanning.  The example directory contained `README.md~`, and the scanner admitted it as initial evidence because it skipped `README.md` but not editor backup files ending in `~`.  The scanner now skips those backup files, the proceeding test covers that rule, and `examples/ex04/market-rules.md` carries the market rule text as an intentional case-packet file.
+
+### Live-run wall-clock timestamps
+
+The Clerk `ex06` and `ex01` runs showed event timestamps that appeared to exceed 900-second turn deadlines.  The live shell polling also showed `date -u` jumping forward by several minutes during a 30-second tool wait, and MCP responses still reported substantial `remaining_ms` on accepted turns.  AAR creates turn deadlines with `time.Now().Add(...)` and enforces them with timers and deadline comparisons, so the artifact pattern points to host wall-clock adjustment rather than a timeout-enforcement defect.
+
+## 2026-06-03
+
+### Pi council completion
+
+Reference: [Pi council instructions](agent-instructions/pi-council.md.tmpl)
+
+The Clerk `ex02` run showed C3 voting successfully and then continuing to call `wait_for_opportunity`.  That extra loop later reached C5's opportunity and produced a rejected tool call, though the case still closed correctly because C5 submitted its own vote.  The Pi council instruction template now states that a member must stop after `submit_council_vote` returns `ok: true`, and the localrun template test checks for that stop rule.
+
+## 2026-06-02
+
+### OpenClaw lawyer authentication
+
+Reference: [OpenClaw OAuth-Derived Codex Auth](openclaw-oauth.md)
+
+`aar run` now supports both OpenClaw lawyer authentication paths.  Automatic mode prefers a readable Codex `auth.json`, stages one copied Codex home per lawyer container, mounts it as `/aar-codex`, and sets `CODEX_HOME=/aar-codex`.  If no readable Codex auth file exists, automatic mode uses `OPENAI_API_KEY`.  Explicit `codex` and `api-key` modes force either path.
+
+The staged Codex homes are deleted when the run exits because `auth.json` contains bearer and refresh credentials.  The implementation does not mount the operator's whole `~/.codex` directory into OpenClaw containers.  The API-key path still passes only the `OPENAI_API_KEY` environment variable into the OpenClaw container.
+
+`aar run` now patches the in-container OpenClaw config before starting each lawyer.  The patch sets `plugins.entries.codex.config.appServer.turnCompletionIdleTimeoutMs` and `postToolRawAssistantCompletionIdleTimeoutMs` to the effective AAR lawyer turn timeout.  The ex01 OpenClaw/Pi run on 2026-06-03 failed before this change because the embedded Codex app server abandoned a provider turn after about 120 seconds during plaintiff opening.  The rerun passed that point, completed all lawyer filings, and closed the case.
+
+`aar run --auto-lawyers` controls which OpenClaw lawyers the local process starts.  The default `both` starts plaintiff and defendant.  `plaintiff` starts only the plaintiff and writes `openclaw-defendant-lawyer-skill.md` for a remote defendant; `defendant` starts only the defendant and writes `openclaw-plaintiff-lawyer-skill.md` for a remote plaintiff.  Manual lawyer mode requires a reachable MCP URL.  Use `--mcp-public-base-url` when `--mcp-listen` binds to a wildcard address.
+
+### AAR opportunity failure
+
+Reference: [AAR Case Failures](../case-failures.md)
+
+AAR now treats participant failure as case state.  The Lean engine exposes one procedural action, `fail_opportunity`, which validates the active opportunity before changing state.  Plaintiff or defendant failure sets `case.status` to `failed` and records a typed failure object.  Council-member failure sets that member's status to `failed`, records the reason fields on the member, and lets deliberation continue under the existing council rules.
+
+The Go role APIs detect deadlines and invalid-attempt exhaustion, then call `fail_opportunity`.  Lawyer failure now produces a terminal `Result` with `status: "failed"` and process exit `0`; service/runtime faults still use process errors.  The Lawyer API, Council API, service result endpoint, and MCP `wait_for_opportunity` now report failed case or failed-member states directly.
+
+Verification status: `make build` passes, and focused Go tests for runner, service, CLI, and MCP pass.  `lake build Proofs` still fails in `Proofs.StepPreservation` on existing surrebuttal evidence proof obligations: the proof expects old text-only surrebuttal behavior, while the executable now allows surrebuttal evidence.  That proof repair is separate from the `fail_opportunity` runtime path.
+
+The process and HTTP black-box tests now cover the external AAR failure boundary.  They start `aar case` and `aar service`, drive lawyer and council roles over HTTP, and assert process exit status, stdout summaries, service case records, result endpoints, `run.json`, and event logs for attempt exhaustion and deadline expiration.  The service startup path now binds its listener before printing the readiness line, and the service waits for stdout capture to finish before classifying a child process from its final JSON summary.
+
+The failure specification now distinguishes direct `aar case` terminal artifacts from completed service-backed role reads.  The black-box tests retain per-test process logs and HTTP exchange logs on failure, and service-managed cases assert child exit code, parsed stdout summary, stdout log path, stderr log path, and final service status.
+
+### AAR MCP specification
+
+Reference: [AAR MCP Specification](../aar-mcp-spec.md), [AAR MCP Test Plan](../aar-mcp-test.md)
+
+The MCP behavior now has separate root-level specification and test-plan documents.  The spec treats `aar mcp` as a transport adapter that binds each MCP session to one case-role or case-member assignment, exposes stable assignment tool sets, normalizes wait responses, injects the active opportunity id, and forwards calls to the service role APIs.  AAR remains the authority for case state, role validation, member validation, deadlines, attempts, and terminal case status.
+
+The test plan separates unit, process, and service tests.  It covers session binding, authentication, origin checks, tool lists, wait normalization, opportunity-id injection, forwarding, error propagation, process health, logs, and service-backed lawyer, observer, and council assignments.  OpenClaw and Pi runs remain outside the minimum passing set for this adapter boundary.
+
+The first executable pass now starts `aar mcp` as a subprocess, drives `/mcp` with JSON-RPC over HTTP, and uses fake Lawyer and Council role APIs behind the adapter.  The tests cover invalid startup, health readiness, bearer authentication, origin checks, missing and deleted sessions, lawyer, observer, and council tool sets, wait-state normalization, opportunity-id injection, AAR `ok:false` and non-2xx propagation, outbound service authorization, and log redaction.  Idle-session expiry remains a direct unit test because testing it through the process would depend on wall-clock timing rather than the expiry rule.
+
+### Provider and transport cleanup
+
+Reference: [Council API](../councilapi.md), [OpenClaw service runbook](running.md), [Pi container README](../common/pi-container/README.md)
+
+AAR council calls now use direct provider clients for the `direct` backend.  Council seats carry JSON request specs with endpoint, model, provider, quantization, request parameters, and persona information.  The case runner no longer starts a local provider proxy, and the CLI no longer accepts provider-proxy or removed council-agent flags.
+
+Local service examples now run OpenClaw containers for lawyers and Pi containers for council members.  Council members receive their model and routing configuration through the mounted Pi home and reach the case through the Council API-backed MCP service.  Shared persona-generation tools now probe OpenRouter directly and keep OpenAI embeddings direct.
+
+### Lawyer case results
+
+Reference: [Lawyer HTTP API](../lawyerapi.md), [OpenClaw service runbook](running.md)
+
+The Lawyer API now exposes `GET /lawyerapi/v1/result`.  The request uses the same `case_id` and `role_id` shape as the rest of the API.  While the case remains open, the response reports `status: "pending"` and returns the live turn envelope.  After the case closes, it returns the resolution, final reason when known, deliberation round, every stored council vote with rationale, and vote counts by round.
+
+The unified MCP server exposes the same data through the read-only `get_case_result` tool.  This keeps final-result inspection available to lawyers and observers without adding another polling loop or reading output files from the operator's filesystem.  The MCP server does not interpret the vote data; it forwards the case-result JSON returned by AAR.
+
+### Lawyer case status
+
+Reference: [Lawyer HTTP API](../lawyerapi.md), [OpenClaw service runbook](running.md)
+
+The Lawyer API now exposes `GET /lawyerapi/v1/status` and the read-only `case_status` tool.  The response reports the role's current status, case phase, case status, active turn, current opportunity details, state version, and compact counts for evidence, filings, events, and council votes.  The unified MCP server exposes `case_status` through the stable tool set and calls the status endpoint directly, so a waiting lawyer can inspect case status without an active `opportunity_id`.
+
+### Lawyer Evidence Tools
+
+Reference: [Evidence Handling](docs/evidence-handling.md), [OpenClaw lawyer runbook](running.md)
+
+The Lawyer API now separates read access from evidence submission.  Read-only evidence tools are available in every active lawyer phase, so a remote lawyer can inspect case-packet files before an opening or closing.  Evidence-submission tools remain limited to arguments, rebuttals, and surrebuttals.
+
+Surrebuttals now use the same exhibit and technical-report validation path as arguments and rebuttals.  This keeps surrebuttal narrow as a response phase while allowing the defendant to preserve and cite targeted source material when the plaintiff's rebuttal makes that necessary.  Openings and closings still file text-only legal acts through `submit_decision`.
+
+Lawyer prompts now tell counsel to inspect the current record, scan the evidence list at each opportunity, analyze relevant evidence before advocating from it, and use targeted search when the record leaves a material gap.  They distinguish AAR court tools from native OpenClaw investigation tools, so a clawyer should use web, browser, file, shell, OCR, PDF, image, audio, video, metadata, hash, signature, archive, and local analysis tools when those tools can find or test material sources.  They require source-page retrieval after search results, adverse-source checks, and a search ledger when material evidence cannot be found or captured.  Counsel must submit material outside sources through AAR evidence tools before relying on them when evidence submission is available.  Remote clawyers receive case-packet files and later submissions through AAR evidence tools rather than local filesystem access.
+
+`buildAttorneyPrompt` now adds the evidence-read reminder in every lawyer phase.  A test renders openings, arguments, rebuttals, surrebuttals, and closings through the single prompt directory, and checks that each generated prompt includes instructions for work notes, evidence scans, evidence analysis, native tools, browser work, local programs, and evidence-reading tools.
+
+The Lawyer API now exposes `send_work_notes` in every active lawyer turn.  It writes the complete notes string to `work-notes.ndjson` with role, phase, turn, opportunity id, timestamp, and optional call id.  The prompts now describe those notes as a working journal: plans, issue outlines, work logs, sources checked, scripts or programs written, packages installed, browser work, OCR and extraction work, adverse checks, errors, analysis, decisions, and unresolved gaps.  The notes log is outside the record: it does not enter Lean state, `events.ndjson`, transcript output, digest output, evidence manifests, or observer event tools.  The MCP adapter exposes the tool as part of the stable lawyer transport tool set.
+
+The removed OpenClaw attorney adapter no longer belongs to the runtime.  The supported OpenClaw path is now `aar service` plus `aar mcp`, with lawyers and council members acting through service-backed MCP tools.
+
+Repeated OpenClaw runs showed plaintiff finding useful sources but attempting to submit them by calling `submit_decision` with `tool_name: submit_evidence`.  Defendant could submit evidence directly in the same service, so the failure was prompt and schema ambiguity rather than a server-wide submission failure.  The lawyer prompts and runbook assignment text now say that evidence admission uses the direct `submit_evidence` tool, or the direct chunked-upload tools, before the final filing.  They also state that `submit_decision` is only for the final legal act and must not wrap `submit_evidence`.  The `submit_decision` schema now filters the engine action list to final filing actions, so `submit_evidence` is no longer advertised as a valid `submit_decision.tool_name`.
+
+## 2026-06-01
+
+### Council API and MCP adapter
+
+Reference: [Council HTTP API](../councilapi.md)
+
+The Council API follows the Lawyer API architecture but binds each active client to `case_id` and `member_id`.  The HTTP server exposes `get`, `wait`, and `do`, and the MCP adapter only brokers those calls over Streamable HTTP.  The API keeps vote validation, deadlines, attempts, and evidence read budgets in AAR rather than moving that state into an agent adapter.
+
+The adapter uses one MCP session per case-member.  A failed or expired MCP session can be re-created with the same URL because AAR remains the source of the active opportunity and turn budget.  The council tool set is small enough to expose dynamically from the current Council API status without adding adapter-side arbitration rules.
+
+## 2026-06-01
+
+### Lawyer API
+
+Reference: [Lawyer HTTP API](../lawyerapi.md)
+
+The lawyer side now uses one HTTP API owned by `aar case`.  The runner starts `/lawyerapi/v1`, publishes one active turn at a time, and blocks until the active lawyer submits a valid `submit_decision` call, exhausts attempts, or reaches the turn deadline.  Plaintiff and defendant integrations now sit outside the runtime and can use curl, a CLI, an MCP server, or another client that speaks this API.
+
+The old local lawyer agent path has been removed from the AAR runtime.  Council support now uses direct provider calls or the Council API.  Shared evidence validation, filing validation, and prompt construction remain in the runner and are called by the HTTP API.
+
+The Lawyer API now treats `opportunity_id` as a per-turn guard on plaintiff and defendant `POST /do` calls.  A lawyer receives the current value from `GET /get` in `turn.opportunity_id` and must send it back with every lawyer tool call for that turn.  Missing or stale values fail before tool execution and do not consume the turn's invalid-attempt budget.
+
+The lawyer prompt templates now match that API.  They distinguish HTTP tools from legal acts submitted through `submit_decision`, state the current opportunity id, and remove old local-agent wording.  The single prompt set now contains the evidence-focused source retrieval, preservation, and work-note guidance that previously lived in a separate prompt override directory.
+
+The handbook now gives remote clawyers one procedural and technical reference.  It treats the Lawyer HTTP API as the governing interface and describes MCP as one shared service process with one MCP session per case-role.  The handbook covers phase order, filing rules, evidence custody, turn budgets, observer use, MCP tool mapping, reconnection, and error handling.
+
+The unified MCP server implements the MCP path described in the handbook.  It serves Streamable HTTP at `/mcp`, binds each MCP session from `case_id` and either `role_id` or `member_id` query parameters, exposes assignment-specific tools, and forwards `tools/call` requests to the service role APIs.  It fetches the live opportunity before every forwarded mutating tool call, injects the active `opportunity_id`, and returns AAR failures as MCP tool results with structured content.  The runner remains the phase authority.
+
+OpenClaw onboarding now uses assignment text plus an MCP server definition.  The remote-user flow is the same for lawyers and council members: the operator gives OpenClaw the case id, assignment id, MCP URL, and token; the claw records the MCP server definition, verifies `wait_for_opportunity`, and enters the wait-tool operating loop.  The claw does not need a scheduled Gateway job to discover turns.
+
+The Lawyer HTTP API now has `/lawyerapi/v1/wait`.  It returns the same status shape as `/get`, but it blocks until a role has work, case state changes, or the request timeout expires.  The response includes `wait.version`, so a runner can call the endpoint again with `after_version` and avoid choosing its own sleep interval.
+
+The unified MCP server exposes `wait_for_opportunity` as an always-available read-only tool.  The server maps that tool to `/wait`, caps each call at 30 seconds, and normalizes the result to `state: ready`, `state: waiting`, `state: done`, or `state: error`.  The OpenClaw-facing instructions tell a clawyer or council member to call `wait_for_opportunity` repeatedly until it receives work, completion, or an error.
+
+`aar mcp` runs as a shared service for many case-role and case-member sessions.  Each MCP session stores the binding for `case_id` plus one principal id; it does not own case state.  Idle-session expiry can delete stale MCP session records without changing an arb.  A clawyer or council member that loses a session can initialize a new MCP session with the same URL and recover current status from the service role APIs.  The server has a default 30-minute idle TTL, a configurable cleanup interval, and `--session-ttl 0` for deployments that want to disable expiry.
+
+- [x] Add the HTTP Lawyer API server to `aar case`.
+- [x] Replace local lawyer execution with turn blocking on HTTP tool calls.
+- [x] Remove lawyer model, lawyer agent command, lawyer endpoint, and bridge CLI flags.
+- [x] Delete the old OpenClaw lawyer adapter and bridge files.
+- [x] Update prompt text to use HTTP tool names.
+- [x] Require active opportunity ids on lawyer tool calls.
+- [x] Clean up default and evidence-rich lawyer prompt templates.
+- [x] Draft the arbitration handbook for remote clawyers.
+- [x] Add the shared MCP adapter for OpenClaw lawyer sessions.
+- [x] Draft the OpenClaw `arb` skill for self-service clawyer assignment.
+- [x] Add `/wait` and MCP `wait_for_opportunity` for bounded turn waits.
+- [x] Expire idle MCP sessions in the shared adapter.
+
 ## 2026-04-01
 
 ### Literate Lean proof pass
@@ -124,27 +279,26 @@ reported-error type so the JSON object remains the only case-result payload on
 standard output and the binary does not add a second plain-text error line for
 that path.
 
-### Attorney web search in ACP runs
+### Attorney web search in removed local-agent runs
 
-The attorney prompts already instruct the model to use native web search when
-public investigation matters.  `arb` had not been staging a search-enabled
-model into the temporary PI home for ACP sessions, so the attorneys were told
-to do work that the runtime had not enabled.
+The attorney prompts already instructed the model to use native web search when
+public investigation mattered, but the old local-agent path did not stage a
+search-enabled model into the temporary Pi home.  The attorneys were told to do
+work that the runtime had not enabled.
 
-The PI-home staging path now overrides the temporary ACP default model to
-`openai://gpt-5?tools=search` and adds that model to the staged PI catalog.
-That keeps the shared PI configuration unchanged while making the `arb`
-attorney sessions match the prompt surface and the xproxy capability surface.
+That path has since been deleted.  The current lawyer design puts model
+selection outside AAR and keeps AAR responsible for case access, evidence
+validation, filing validation, and turn budgets.  The lawyer prompt still
+requires source retrieval, evidence preservation, analysis, and a work log.
 
-The old attorney timeout also became too short once that search path was real.
-`arb` had been giving ACP attorney turns 480 seconds.  In `ex4`, the plaintiff
-arguments turn now uses public-source investigation heavily enough to exceed
-that limit before filing.  The default ACP attorney timeout is now 900
-seconds.
+The old attorney timeout also became too short once public-source
+investigation was enabled.  In `ex04`, the plaintiff arguments turn used enough
+public-source investigation to exceed 480 seconds before filing.  The default
+attorney timeout is now 900 seconds.
 
 ### Attorney filing limits in prompts
 
-`ex4` exposed a second prompt defect after web search was enabled.  The
+`ex04` exposed a second prompt defect after web search was enabled.  The
 attorneys could now gather the needed material, but the prompt still left key
 filing constraints implicit.  The plaintiff rebuttal then burned its retries on
  three avoidable mistakes: a rebuttal that exceeded the text limit, too many
@@ -158,87 +312,41 @@ current side, and the remaining capacity.  The prompt now also states the real
 record rule: `offered_files` may name only visible case files by `file_id`;
 outside material enters through `technical_reports`.
 
-The ACP-side validation errors now carry the attempted count and the remaining
+Attorney validation errors now carry the attempted count and the remaining
 side capacity.  That keeps the model close to the actual engine rule and avoids
 wasting retries on blind correction attempts.
 
-### Configurable attorney model and capability-aware prompts
+### Retired lawyer model configuration
 
-`aar case` now accepts `--attorney-model`.  The value is an explicit xproxy
-model id such as `openai://gpt-5` or `openai://gpt-5?tools=search`.  The
-runner validates that model id up front, stages it into the temporary PI home,
-and records the effective attorney model and search flag in the run metadata.
+Older revisions allowed `aar case` to configure lawyer models and local or
+remote lawyer agent commands.  The `lawyerapi` branch removed that path and
+left lawyer model selection to clients outside the runtime.
 
-The attorney prompts no longer hardcode web-search availability.  They render
-one capability section from the configured model and one phase-specific
-investigation section that changes when native search is unavailable.  That
-keeps one prompt family while making the runtime state explicit.  It also
-removes the earlier mismatch where the prompt told counsel to use native search
-even when the configured model lacked it.
-
-The `arb` Makefile now chooses attorney models explicitly by example.  `demo`,
-`ex2`, and `ex3` use `openai://gpt-5` without native search.  `ex4` keeps
-`openai://gpt-5?tools=search`, because that example depends on public-source
-investigation.
-
-### Per-role ACP configuration and remote endpoints
-
-ACP still centers on stdio.  The ACP transport page says the protocol defines
-stdio today and lists streamable HTTP as draft work in progress.  It also
-permits custom transports.  The current `pi-acp` adapter in this repository
-documents only JSON-RPC 2.0 over stdio.  Those sources matter here:
-
-- ACP transports: https://agentclientprotocol.com/protocol/transports
-- ACP introduction: https://agentclientprotocol.com/get-started/introduction
-- `pi-acp` README: ../common/submodules/pi-acp/README.md
-- `pi-acp` engineering notes: ../common/submodules/pi-acp/AGENTS.md
-- GitHub Copilot CLI ACP server reference, which documents a TCP mode as a custom remote transport: https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server
-
-`arb` now resolves attorney configuration per role.  The global
-`--attorney-model` and `--acp-command` flags remain the defaults.  The CLI also
-accepts plaintiff and defendant overrides for model, ACP command, ACP endpoint,
-and ACP session cwd.  That allows one side to stay on the local wrapper while
-the other side points at a different ACP server.
-
-The remote path uses a custom TCP transport.  The client opens a persistent TCP
-connection and exchanges newline-delimited ACP JSON-RPC messages over that
-stream.  This is a deliberate custom transport, not an implementation of the
-draft streamable-HTTP work.  The runner records the resolved attorney
-configuration for each side in `run.json` and in the `run_initialized` event.
-
-The runner still depends on `_aar/*` client methods for case access and filing.
-`pi-acp` learns those methods from environment staging in the local wrapper
-path.  A remote ACP server must already know how to use the current `_aar/*`
-method contract.  The new transport path does not make an arbitrary ACP server
-usable as an `arb` attorney by itself.
-
-### Proxy-backed plaintiff demo
-
-The proxy demo now stages the backend PI home through the same code path that
-ordinary attorney runs use.  `aar` exposes two helper commands for that
-purpose: one stages the PI home into a supplied directory, and one prints the
-current `_aar/*` tool catalog as JSON.  The demo script now uses those helpers
+The removed plaintiff demo staged a backend Pi home through the same code path
+that ordinary attorney runs used.  `aar` exposed two helper commands for that
+purpose: one staged the Pi home into a supplied directory, and one printed the
+current lawyer tool catalog as JSON.  The demo script used those helpers
 instead of carrying its own copies of `settings.json`, `models.json`, and the
 tool schema.
 
 ## 2026-04-30
 
-### Ignore regenerated signing artifacts in `ex1`
+### Ignore regenerated signing evidence in `ex01`
 
-Reference: [Example signer](examples/ex1/sign.sh)
+Reference: [Example signer](examples/ex01/sign.sh)
 
-`examples/ex1` regenerates `samantha_public.pem` and `confession.sig.b64` from
+`examples/ex01` regenerates `samantha_public.pem` and `confession.sig.b64` from
 the ignored source inputs `samantha_private.pem` and `confession.sig`.  Keeping
 the derived files tracked leaves the worktree dirty after an ordinary example
 run.
 
-The local `.gitignore` in `examples/ex1` now ignores those derived outputs as
+The local `.gitignore` in `examples/ex01` now ignores those derived outputs as
 well.  The repository index must also stop tracking them, because ignore rules
 do not apply to files that Git already tracks.
 
 ### Invalid-attempt limit errors now preserve reasons
 
-Reference: [ACP runner](runtime/runner/acp.go), [Council runner](runtime/runner/council.go)
+Reference: [Attorney tool helpers](runtime/runner/attorney_tools.go), [Council runner](runtime/runner/council.go)
 
 The attorney and council runners previously replaced the decisive validation
 message with a generic invalid-attempt ceiling error on the final failed
@@ -253,9 +361,9 @@ hiding it behind a generic summary.
 
 ### Invalid submission feedback now explains the next step
 
-Reference: [ACP runner](runtime/runner/acp.go)
+Reference: [Attorney tool helpers](runtime/runner/attorney_tools.go)
 
-The ACP attorney path previously returned only the bare validation error on
+The attorney tool path previously returned only the bare validation error on
 each rejected submission.  That told the model what failed, but it did not say
 how many invalid submissions remained or what another miss would do to the
 run.  The handler now returns structured rejection text with the current
@@ -268,12 +376,12 @@ the hard cap.  Final exhausted attempts switch to terminal language and state
 that the opportunity has failed and the run is ending with an error.  The
 terminal message still includes the ordered invalid-submission history.
 
-That change fixed a real mismatch.  The earlier script omitted
-`_aar/write_case_file` and hand-built the PI configuration.  After the change,
-the proxy-backed plaintiff opening matched the ordinary local path closely
-enough to complete: note file write, opening submission, accepted filing.
+That change fixed a real mismatch.  The earlier script omitted the write-file
+tool and hand-built the Pi configuration.  After the change, the external
+plaintiff opening matched the ordinary local path closely enough to complete:
+note file write, opening submission, accepted filing.
 
-It did not fix the plaintiff arguments failure in `ex6`.  The plaintiff still
+It did not fix the plaintiff arguments failure in `ex06`.  The plaintiff still
 stalled in the arguments phase.  The failure mode changed, which narrows the
 cause.  The old run spent its time rewriting notes around citation formatting
 and source packaging.  The new run used the full tool surface and reached the
@@ -283,7 +391,7 @@ record supports ground entry but likely not the territorial-objective element,
 and that the plaintiff's best colorable `YES` theory runs into the explicit
 edge-case carveout.  That points to a prompt or role-interface problem about
 how plaintiff advocacy should proceed when truthful investigation turns the case
-against the assigned side.  It does not point to ACP transport or PI-home
+against the assigned side.  It does not point to agent transport or Pi-home
 staging any longer.
 
 ## 2026-04-08
@@ -560,7 +668,7 @@ The attorney guidance now states that tool errors are authoritative host
 feedback and that counsel must change the request before retrying the same
 tool.  I added that rule to both the standing attorney instructions and the
 always-sent attorney court prompt.  The duplication is deliberate because the
-standing file does not travel over a remote TCP ACP endpoint, while the common
+standing file does not travel over every remote client path, while the common
 court prompt always does.
 
 ### Opening cap and target margin
@@ -593,3 +701,58 @@ proposition.
 - [x] Accept plain text as complaint input.
 - [x] Reject blank complaints and blank explicit sections.
 - [x] Cover parser behavior in tests.
+
+## 2026-06-02
+
+### Public service startup
+
+Reference: [AAR service](runtime/service/service.go)
+
+The first `ex01` service run failed during case creation because the public
+service waited only thirty seconds for the child runner to announce private
+lawyer and council APIs.  The child runner starts those private APIs after
+council preflight, and council preflight can spend more than thirty seconds on
+external model availability checks.  The public service now returns an accepted
+case once the child process starts, keeps the case in `starting`, and lets
+public role `wait` calls block within the API wait limit until the private role
+API appears.
+
+The corrected path was tested with `ex01` and `ex04` through the public service,
+the AAR MCP adapter, OpenClaw lawyer containers, and council members using the
+council API.  `ex01` closed as demonstrated with a 4-1 council vote, and `ex04`
+closed as demonstrated with a 5-0 council vote.  The searched MCP logs for both
+runs showed no HTTP 4xx or 5xx tool calls and no MCP error states.
+
+### Agent lifecycle
+
+The `ex01` OpenClaw/Pi run showed repeated C4 MCP sessions because the example
+runner restarted agents and used them to check for work.  That lifecycle was
+wrong.  The example runner now starts each lawyer or council agent once and
+lets `set -e` fail the run when a command fails.
+
+### Private case API startup
+
+Reference: [Service runner](runtime/service/service.go)
+
+The public service no longer reads child API URLs from child stderr.  It chooses
+one local private address before it starts `aar case`, passes that address as
+`--caseapi-addr`, records `caseapi_base`, and polls `GET /health` on that base
+until startup succeeds or the configured startup timeout expires.  The child
+case API serves `/health`, `/lawyerapi/v1/...`, and `/councilapi/v1/...` on the
+same private listener when the Council API backend is active.
+
+The subprocess tests also exposed invalid stdout-pipe ordering.  Both the
+service child watcher and the black-box process test code now wait for stdout
+capture to finish before calling `cmd.Wait()`, matching Go's `StdoutPipe`
+requirements and preserving the final JSON summary for service status.
+
+### Service-backed MCP process test
+
+Reference: [MCP process test](runtime/cmd/aar/mcp_blackbox_test.go)
+
+The external MCP test now starts `aar service`, starts `aar mcp`, creates a
+real service-managed case with the Council API backend, and drives plaintiff,
+defendant, observer, and council assignments through MCP JSON-RPC.  The test
+checks tool lists, observer rejection of mutating tools, work-note recording,
+evidence reading, lawyer filings, council votes, service final result data, and
+the case artifacts written under the output directory.

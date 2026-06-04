@@ -2,7 +2,7 @@
 
 `arbd` separates three classes of input that serve different purposes: procedural policy, complaint content, and runtime limits.  Procedural policy determines what the arbitration procedure allows and how council members are instructed to answer.  Complaint content states the question for one case.  Runtime limits constrain the infrastructure that runs the case, not the legal procedure itself.
 
-The current implementation already keeps those classes separate in the code and in the run artifacts.  [The case CLI](../runtime/cli/case.go) loads the complaint and the policy independently.  [The Go runner](../runtime/runner/policy.go) validates both procedural policy and runtime limits before case initialization, and [the Lean engine](../engine/Main.lean) carries the procedural policy into the legal state.
+The current implementation already keeps those classes separate in the code and in the run record.  [The case CLI](../runtime/cli/case.go) loads the complaint and the policy independently.  [The Go runner](../runtime/runner/policy.go) validates procedural policy, evidence custody limits, and runtime limits before case initialization, and [the Lean engine](../engine/Main.lean) carries the procedural policy into the legal state.
 
 ## Parameter Groups
 
@@ -15,15 +15,21 @@ The current implementation already keeps those classes separate in the code and 
 | Procedure | `max_rebuttal_chars` | Rebuttal text limit | policy | Lean |
 | Procedure | `max_surrebuttal_chars` | Surrebuttal text limit | policy | Lean |
 | Procedure | `max_closing_chars` | Closing text limit | policy | Lean |
-| Procedure | `max_exhibits_per_filing` | Maximum offered files in one filing | policy | Lean and Go |
-| Procedure | `max_exhibits_per_side` | Maximum offered files by one side across the whole case | policy | Lean |
-| Procedure | `max_exhibit_bytes` | Maximum bytes for one offered file | policy | Go before submission |
+| Procedure | `max_exhibits_per_filing` | Maximum offered evidence in one filing | policy | Lean and Go |
+| Procedure | `max_exhibits_per_side` | Maximum offered evidence by one side across the whole case | policy | Lean |
+| Procedure | `max_exhibit_bytes` | Maximum bytes for one offered evidence item. The default matches the submitted-evidence upload limit. | policy | Go before submission |
+| Procedure | `max_submitted_evidence_per_side` | Maximum submitted evidence admitted by one side across the whole case | policy | Lean and Go |
+| Procedure | `max_submitted_evidence_bytes` | Maximum bytes for one admitted submitted evidence item | policy | Lean and Go |
+| Procedure | `max_direct_submitted_evidence_bytes` | Maximum bytes for direct JSON/base64 evidence submission | policy | Go |
+| Procedure | `max_evidence_upload_bytes` | Maximum bytes for chunked evidence upload | policy | Go |
+| Runtime | `max_evidence_chunk_bytes` | Maximum bytes in one upload chunk | policy | Go |
+| Runtime | `max_evidence_read_bytes` | Maximum bytes returned by one evidence range read | policy | Go |
+| Runtime | `max_evidence_reads_per_opportunity` | Maximum evidence reads in one attorney opportunity | policy | Go |
+| Runtime | `max_evidence_read_bytes_per_opportunity` | Maximum total evidence bytes returned in one attorney opportunity | policy | Go |
 | Procedure | `max_reports_per_filing` | Maximum technical reports in one filing | policy | Lean and Go |
 | Procedure | `max_reports_per_side` | Maximum technical reports by one side across the whole case | policy | Lean |
 | Procedure | `max_report_title_bytes` | Maximum title size for one report | policy | Lean and Go |
 | Procedure | `max_report_summary_bytes` | Maximum summary size for one report | policy | Lean and Go |
-| Procedure | `max_submitted_evidence_per_side` | Maximum source-evidence items submitted by one side across the case | policy | Lean and Go |
-| Procedure | `max_submitted_evidence_bytes` | Maximum bytes for one submitted source-evidence item | policy | Lean and Go |
 | Complaint | `question` | The disputed quantitative question | complaint | complaint parser |
 | Runtime | `council_llm_timeout_seconds` | Timeout for council turns | runner config | Go |
 | Runtime | `attorney_acp_timeout_seconds` | Timeout for attorney ACP turns | runner config | Go |
@@ -40,9 +46,9 @@ That closure rule is part of the procedural surface, even though it is not curre
 
 ## Enforcement Split
 
-Lean should continue to enforce procedural rules that affect the legal state: phase ordering, text limits, counts of exhibits, technical reports, submitted evidence, bounded council answers, and closure on complete answering.  Go should enforce byte-based limits and transport limits before material reaches the engine.  A file-size limit is about what the runner will carry and persist.  A phase rule is about what the procedure allows.  They are different constraints and should stay in different layers.
+Lean should continue to enforce procedural rules that affect the legal state: phase ordering, text limits, counts of exhibits, submitted evidence, technical reports, bounded council answers, and closure on complete answering.  Go should enforce byte-based custody limits and transport limits before material reaches the engine.  A byte limit is about what the runner will carry and persist.  A phase rule is about what the procedure allows.  They are different constraints and should stay in different layers.
 
-This split also determines persistence.  Policy values that affect the legal case are written into the arbitration state and therefore into artifacts such as `run.json`, `state.json`, and the event log.  Runtime limits stay in runner config and appear in `runtime.json` rather than in the legal state.
+This split also determines persistence.  Policy values that affect the legal case are written into the arbitration state and therefore into record artifacts such as `run.json`, `state.json`, `evidence-manifest.json`, and the event log.  Runtime limits stay in runner config and appear in `runtime.json` rather than in the legal state.
 
 ## Configuration Surface
 
@@ -52,4 +58,4 @@ That separation matters because the same complaint should be able to run under d
 
 ## Defaults
 
-The initial defaults should preserve the current implementation's working behavior.  That means a five-member council, the checked-in judgment standard from [`etc/policy.json`](../etc/policy.json), and the current filing-size and material-limit fields.  It also means source evidence is capped by item count and byte size before it becomes a visible case file.  The engine still closes after the first complete set of seated-member answers.
+The initial defaults should preserve the current implementation's working behavior.  That means a five-member council, the checked-in judgment standard from [`etc/policy.json`](../etc/policy.json), and the current filing-size and material-limit fields.  It also means one deliberation round in practice, because the engine closes after the first complete set of seated-member answers.

@@ -3,33 +3,30 @@
 #
 # Usage:
 #
-#   ./arbitrate.sh [INPUT_DIR] [OUTPUT_DIR] [ATTORNEY_MODEL]
+#   ./arbitrate.sh [INPUT_DIR] [OUTPUT_DIR] [CASEAPI_ADDR]
 #
 # Arguments:
 #
 #   INPUT_DIR       Directory containing the arbitration input files.
-#                   Default: examples/ex1
+#                   Default: examples/ex01
 #
 #   OUTPUT_DIR      Directory where the run output should be written.
-#                   Default: out/ex1-demo
+#                   Default: out/ex01-demo
 #
-#   ATTORNEY_MODEL  xproxy model id used for attorney ACP turns.
-#                   Default: openai://gpt-5
-#                   Use openai://gpt-5?tools=search to enable web search.
+#   CASEAPI_ADDR    Address for the private case API listener.
+#                   Default: 127.0.0.1:0
 #
 # If the input directory contains an executable `sign.sh`, this script runs it.
 # If the input directory contains `situation.md`, this script generates
 # `complaint.md` in the input directory. Otherwise, the input directory must
 # already contain `complaint.md`. The script removes the output directory and
-# then runs `.bin/aar case` with the selected attorney model and a fixed invalid
-# attempt limit of 5.
+# then runs `.bin/aar case` with a fixed invalid attempt limit of 5.
 #
 # The script assumes `.bin/aar` and `.bin/aarengine` have already been built. It
 # does not run the Makefile build target.
 #
-# If `$HOME/keys.txt` exists, the script sources it. The run requires
-# `OPENAI_API_KEY` for attorney model calls and `OPENROUTER_API_KEY` for council
-# model calls.
+# If `$HOME/keys.txt` exists, the script sources it. The direct council backend
+# requires provider keys for the selected council models.
 set -euo pipefail
 
 cd -- "$(dirname "$0")"
@@ -41,24 +38,16 @@ if [[ -f "$HOME/keys.txt" ]]; then
   source "$HOME/keys.txt"
 fi
 
-: "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"
 : "${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required}"
 
-# Containerized Pi reaches host-side xproxy through Podman's host alias on this Mac.
-export AGENTCOURT_PI_XPROXY_BASE_URL="http://host.containers.internal:18459/v1"
-
-INPUT_DIR="${1:-examples/ex1}"
-OUTPUT_DIR="${2:-out/ex1-demo}"
-ATTORNEY_MODEL="${3:-openai://gpt-5}"
+INPUT_DIR="${1:-examples/ex01}"
+OUTPUT_DIR="${2:-out/ex01-demo}"
+CASEAPI_ADDR="${3:-127.0.0.1:0}"
 INVALID_ATTEMPT_LIMIT=5
 
 SIGN_SCRIPT="$INPUT_DIR/sign.sh"
 SITUATION_FILE="$INPUT_DIR/situation.md"
 COMPLAINT_FILE="$INPUT_DIR/complaint.md"
-
-if ! podman info >/dev/null 2>&1; then
-  podman machine start podman-machine-default
-fi
 
 rm -rf "$OUTPUT_DIR"
 
@@ -80,5 +69,5 @@ fi
 .bin/aar case \
   --complaint "$COMPLAINT_FILE" \
   --out-dir "$OUTPUT_DIR" \
-  --attorney-model "$ATTORNEY_MODEL" \
+  --caseapi-addr "$CASEAPI_ADDR" \
   --invalid-attempt-limit "$INVALID_ATTEMPT_LIMIT"

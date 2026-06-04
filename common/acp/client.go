@@ -64,8 +64,9 @@ type TextBlock struct {
 }
 
 type PromptRequest struct {
-	SessionID string      `json:"sessionId"`
-	Prompt    []TextBlock `json:"prompt"`
+	SessionID string         `json:"sessionId"`
+	Prompt    []TextBlock    `json:"prompt"`
+	Meta      map[string]any `json:"_meta,omitempty"`
 }
 
 type Notification struct {

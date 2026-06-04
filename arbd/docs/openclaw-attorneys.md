@@ -1,95 +1,48 @@
 # OpenClaw Degree Attorneys
 
-This note describes how to run `arbd` with OpenClaw-backed plaintiff and defendant attorneys.  `aard case` talks to attorneys through ACP.  The ordinary local path starts a Pi ACP wrapper, while the OpenClaw path connects each role to a remote ACP endpoint backed by the `aard-openclaw-attorney` adapter.
+This note describes the `arbd` side of OpenClaw-backed plaintiff and defendant attorneys.  `aard case` talks to attorneys through ACP endpoints.  The OpenClaw path uses `tools/openclaw-acp-tcp-bridge.js` to expose `.bin/aard-openclaw-attorney` as a TCP ACP endpoint, and the adapter source lives under `tools/aard-openclaw-attorney`.
 
-## Components
+## Architecture
 
-`aard-openclaw-attorney` is a stdio ACP adapter.  It receives AARD `session/prompt` requests, asks AARD for the visible case through `_aar/get_case`, reads visible text files through `_aar/list_case_files` and `_aar/read_case_text_file`, obtains one JSON filing from an OpenClaw command or OpenClaw agent, and submits that filing through `_aar/submit_decision`.  If the OpenClaw response contains source-evidence submissions, the adapter submits them through `_aar/submit_evidence` before filing the decision.
+`aard case` sends each lawyer opportunity to the role's TCP ACP endpoint.  The bridge starts one `aard-openclaw-attorney` process for each ACP connection.  The adapter receives the degree-attorney instructions, visible case view, readable case files, and AARD client tools, then asks OpenClaw for one filing JSON and submits that filing through AARD ACP methods.
 
-`tools/openclaw-acp-tcp-bridge.js` exposes that stdio adapter as a TCP ACP endpoint.  One bridge process starts a fresh adapter for each ACP connection.  `aard case` then connects the plaintiff and defendant roles with `--plaintiff-acp-endpoint` and `--defendant-acp-endpoint`.
-
-## Model Ownership
-
-AARD does not select the OpenClaw model for an endpoint attorney.  Model selection and native tool availability belong to the OpenClaw agent or command behind the endpoint.  For that reason, a role using `--plaintiff-acp-endpoint` or `--defendant-acp-endpoint` cannot also set the matching role-specific attorney model flag.
-
-This rule matters for reproducibility.  A closed-record run should use an OpenClaw agent that stays inside the record provided by AARD.  An open-record run should use an OpenClaw agent with the needed search, browser, fetch, transcript, or equivalent tools, and the run notes should identify that environment.
-
-## Build and Check
-
-Run these commands from `arbd/`:
-
-```bash
-make build
-node --check tools/openclaw-acp-tcp-bridge.js
-```
-
-The build creates `.bin/aard-openclaw-attorney`.  The node check verifies the TCP bridge syntax.  The bridge requires Node.js, an OpenClaw CLI on `PATH` or `AARD_OPENCLAW_CLI`, and a dedicated OpenClaw lawyer agent when `AARD_OPENCLAW_AGENT=1`.
-
-## Environment
-
-| Variable | Meaning |
-| --- | --- |
-| `AARD_OPENCLAW_AGENT` | Set to `1` to ask the adapter to call `openclaw agent`. |
-| `AARD_OPENCLAW_AGENT_ID` | Dedicated OpenClaw lawyer agent id. |
-| `AARD_OPENCLAW_CLI` | OpenClaw CLI path.  Defaults to `openclaw`. |
-| `AARD_OPENCLAW_AGENT_SESSION_ID` | Optional fixed OpenClaw session id. |
-| `AARD_OPENCLAW_AGENT_THINKING` | Optional OpenClaw thinking setting. |
-| `AARD_OPENCLAW_AGENT_LOCAL` | Set to `1` to pass `--local` to `openclaw agent`. |
-| `AARD_OPENCLAW_AGENT_EXTRA_PROMPT` | Extra instruction text appended to the adapter prompt. |
-| `AARD_OPENCLAW_ATTORNEY_COMMAND` | Command that reads the adapter job JSON on stdin and writes one filing JSON on stdout. |
-| `AARD_OPENCLAW_ATTORNEY_DECISION_JSON` | Fixed filing JSON for tests or scripted runs. |
-| `AARD_OPENCLAW_ATTORNEY_TIMEOUT_SECONDS` | Adapter command timeout. |
-
-Use `AARD_OPENCLAW_AGENT_ID` rather than a personal default agent.  Degree arbitration work should run in the intended lawyer context.  The bridge removes `AARD_OPENCLAW_AGENT_MODEL` from the adapter environment, because endpoint attorneys own model selection outside AARD.
+OpenClaw owns the lawyer model, OpenClaw agent configuration, and any native OpenClaw tools.  AARD owns the degree case record, evidence access, score-filing validation, invalid-attempt feedback, transcripts, and Lean state transitions.  A role using `--plaintiff-acp-endpoint` or `--defendant-acp-endpoint` cannot also set the matching role-specific attorney model flag, because endpoint attorneys select their own models outside AARD.
 
 ## Closed-Record Run
 
-Start the bridge in one terminal:
+Build AARD and the OpenClaw attorney adapter from `arbd/`:
 
 ```bash
-tools/openclaw-acp-tcp-bridge.js --host 127.0.0.1 --port 19801
+make build
 ```
 
-Run a case in another terminal:
+Start a bridge for each role:
+
+```bash
+tools/openclaw-acp-tcp-bridge.js --host 127.0.0.1 --port 19711
+tools/openclaw-acp-tcp-bridge.js --host 127.0.0.1 --port 19713
+```
+
+Run a case against those endpoints:
 
 ```bash
 .bin/aard case \
   --complaint examples/ex1/complaint.md \
   --out-dir out/ex1-openclaw-closed \
-  --plaintiff-acp-endpoint tcp://127.0.0.1:19801 \
-  --defendant-acp-endpoint tcp://127.0.0.1:19801
+  --plaintiff-acp-endpoint tcp://127.0.0.1:19711 \
+  --defendant-acp-endpoint tcp://127.0.0.1:19713 \
+  --acp-timeout-seconds 900 \
+  --invalid-attempt-limit 5
 ```
 
-The OpenClaw attorney receives the AARD attorney prompt, the visible case view, and visible text case files.  It must return either an ordinary `aar_submit_decision` object or a structured bundle with `evidence_submissions` and `decision`.  In a closed-record run, the response should normally contain only the decision.
+The OpenClaw lawyer receives the AARD attorney prompt, the visible case view, and readable evidence.  It should submit the required degree filing through the adapter.  In a closed-record run, the response should contain only the filing.
 
 ## Open-Record Evidence
 
-An open-record run can submit source material through the structured bundle form:
+An open-record degree run uses the same bridge and adapter.  Configure the OpenClaw lawyer agents with the native tools they need, and provide extra role instructions through `AARD_OPENCLAW_AGENT_EXTRA_PROMPT` when starting each bridge.  AARD does not grant search capability to an endpoint lawyer; it supplies case access, evidence handling, and filing tools for the current opportunity.
 
-```json
-{
-  "evidence_submissions": [
-    {
-      "title": "Source page",
-      "source_url": "https://example.test/source",
-      "mime_type": "text/plain",
-      "retrieval_timestamp": "2026-05-20T00:00:00Z",
-      "relevance": "Shows the source text used for the similarity score.",
-      "content": "source text",
-      "preferred_filename_ext": "txt",
-      "offer_label": "PX-new",
-      "offer_as_exhibit": true
-    }
-  ],
-  "decision": {
-    "kind": "tool",
-    "tool_name": "submit_argument",
-    "payload": {
-      "text": "Argument text.",
-      "technical_reports": []
-    }
-  }
-}
-```
+When AARD exposes source-evidence tools, OpenClaw can submit source material before the merits filing.  Accepted items are stored by AARD, recorded in state with provenance, added to the visible evidence set, and cited in later filings by `evidence_id` through `offered_evidence`.  Technical reports should contain attorney analysis, measurements, or synthesized work product rather than source content.
 
-The adapter submits each evidence item first.  Accepted items are stored by AARD under `submitted-evidence/`, recorded in state with provenance, added to the visible case-file set, and cited in `offered_files` when `offer_as_exhibit` is true.  Technical reports should contain attorney analysis, measurements, or synthesized work product rather than source content.
+## Inspection
+
+After an open-record run, inspect whether attorneys preserved source evidence and cited accepted evidence ids.  Source material submitted through AARD evidence tools appears in `submitted-evidence/`, `evidence-store/`, `evidence-manifest.json`, `state.json`, and `digest.md`.  The final degree answers remain in the AARD run summary and final state.

@@ -122,7 +122,7 @@ theorem addFiling_phaseRank_mono
 
 theorem appendSupplementalMaterials_preserves_phaseRank
     (c : ArbitrationCase)
-    (offered : List OfferedFile)
+    (offered : List OfferedEvidence)
     (reports : List TechnicalReport) :
     phaseRank (appendSupplementalMaterials c offered reports).phase = phaseRank c.phase := by
   simp [appendSupplementalMaterials, phaseRank]

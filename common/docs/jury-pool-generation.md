@@ -1,48 +1,131 @@
 # Jury Pool Generation
 
-This manual describes how to build the files that feed jury and council sampling.  The runtimes consume [the active runtime pool](../data/personas/pool.csv) by default.  The broader candidate corpus lives in [the source pool](../etc/personas.csv), together with the persona texts and the intermediate clustering data.
+This document describes the older CSV pipeline that produced selected council files from OpenRouter model metadata, live tool-probe results, checked-in persona texts, clustering output, and PCA coordinates. Runtime council pools now use JSONL request-spec records, because provider endpoint and quantization constraints must remain attached to each sampled council member.
 
-This process has two stages.  The first stage builds [the source pool](../etc/personas.csv) directly from a model list and the checked-in persona files.  The second stage, if you choose to use it, measures behavioral variation over a prompt set, records cluster assignments, and samples [the active runtime pool](../data/personas/pool.csv) from those assignments.
+The runtime no longer uses the CSV files described here as its default council pool. A current pool record must carry the OpenRouter model id, provider endpoint tag, quantization when known, and persona path in JSONL form.
 
-## Files And Working Directories
+Run the commands below from the repository root unless the command says otherwise. Use `uv run --script` for Python scripts with PEP 723 metadata.
 
-The commands in this manual assume two working directories.  Run the shared tools from the repository root, `/home/somebody/src/adjudication`.  Run `adc pool` from `/home/somebody/src/adjudication/adc`, because that command reads `../common/data/personas/persona-clusters.csv` relative to the current working directory.  The tools use the working directory for their default paths.
-
-These files matter in the current pipeline:
+## Files
 
 | File | Role |
 |---|---|
-| [Source pool](../etc/personas.csv) | Cross-product candidate pool used as clustering input |
-| [Persona files](../etc/personas/persons) | Checked-in persona texts used in the pool |
-| [Candidate models](../data/personas/models.csv) | One model id per line after filtering |
-| [Latency and tool support](../data/personas/model-latency.csv) | `MODEL,ELAPSED_MS,TOOLS_SUPPORTED` records from [`model-speed.sh`](../tools/model-speed.sh) |
-| [Gene prompts](../data/personas/genes.json) | Prompt set used for clustering |
-| [Cluster assignments](../data/personas/persona-clusters.csv) | `MODEL,PERSONA_FILE,GENE,CLUSTER` rows from the clustering run |
-| [PCA rows](../data/personas/personas-pca.csv) | Per-sample projected coordinates written by [`cluster-personas.py`](../tools/cluster-personas.py) |
-| [Active runtime pool](../data/personas/pool.csv) | Sampled pool consumed by `adc` and `arb` |
-| [Optional sampled subset](../data/personas/some-personas.csv) | Smaller input file for exploratory clustering runs |
+| `common/data/personas/openrouter-models.json` | Raw OpenRouter model metadata used by the metadata filter and `select-council.py` |
+| `common/tools/filter-models.py` | Conservative metadata prefilter for OpenRouter models |
+| `common/data/personas/models-prefiltered.csv` | Intermediate model list after metadata prefilter |
+| `common/data/personas/model-filter-decisions.csv` | Audit file explaining prefilter decisions |
+| `common/tools/model-speed.sh` | Live probe for latency and `submit_juror_vote` tool support |
+| `common/data/personas/model-latency.csv` | `MODEL,ELAPSED_MS,TOOLS_SUPPORTED` records from the live probe |
+| `common/data/personas/models.csv` | Model ids retained after latency and tool-support filtering |
+| `common/data/personas/cluster-input.csv` | Deterministic sampled model/persona input for clustering when using `generate-council.py` |
+| `common/etc/personas/persons/` | Checked-in persona text files |
+| `common/etc/personas.csv` | Cross product of retained models and persona files |
+| `common/data/personas/genes.json` | Gene prompts used for clustering |
+| `common/tools/cluster-personas.py` | Samples completions, embeds them, clusters per gene, and writes PCA rows |
+| `common/data/personas/clusters.csv` | `MODEL,PERSONA_FILE,GENE,CLUSTER` rows from `cluster-personas.py` |
+| `common/data/personas/pca-cluster.csv` | `MODEL,PERSONA_FILE,GENE,PC1,PC2,PC3,CLUSTER` rows from `cluster-personas.py` |
+| `common/data/personas/model-operational-failures.csv` | Manual exclusion ledger for known model failures |
+| `common/tools/select-council.py` | Selects a behaviorally diverse council from cluster/PCA data |
+| `common/data/personas/council.csv` | Historical selected council rows, written as `MODEL,personas/persons/....txt` |
+| `common/data/personas/council-report.md` | Default selection report from `generate-council.py` |
+| `common/data/personas/pool.csv` | Historical CSV pool file; not a current runtime council pool |
 
-Each row in [the source pool](../etc/personas.csv) and [the active runtime pool](../data/personas/pool.csv) has two columns: an xproxy model id and a persona path relative to `common/etc`.  A valid row looks like `openrouter://openai/gpt-4o,personas/persons/d715074-0.txt`.  The runtime reads the file as written, so malformed rows break the pool instead of being repaired on load.
+Rows in `common/etc/personas.csv`, `common/data/personas/council.csv`, and `common/data/personas/pool.csv` have two columns:
 
-## Baseline Generation
-
-The baseline path starts with a candidate model list, filters that list for tool support and response time, and then forms the cross product with the checked-in persona files.
-
-Build `adc` first, because [`model-speed.sh`](../tools/model-speed.sh) calls `adc/.bin/adc llm --tool-check`.  Start local xproxy from the repository root before you run [`model-speed.sh`](../tools/model-speed.sh) or [`cluster-personas.py`](../tools/cluster-personas.py).  Both steps depend on that service path.  From the repository root, run:
-
-```bash
-adc/.bin/adc xproxy
+```text
+MODEL,PERSONA_PATH
 ```
 
-In another shell, still from the repository root, probe candidate models.  This example uses the checked-in OpenRouter snapshot in [OpenRouter models](../../adc/openrouter-models.txt) as the candidate list and one checked-in persona file as the probe persona.  Provider inventories change, so this file is only one possible input set.  From the repository root, run:
+`PERSONA_PATH` must be relative to `common/etc`, for example:
+
+```text
+openrouter://openai/gpt-4.1-mini,personas/persons/d715074-6.txt
+```
+
+Do not check in absolute local home-directory paths in council or pool files.
+
+## End-To-End Driver
+
+`common/tools/generate-council.py` runs the full pipeline described below:
+
+```bash
+uv run --script common/tools/generate-council.py
+```
+
+A full run fetches OpenRouter metadata, filters models, probes tool support and latency, rebuilds `models.csv`, rebuilds `common/etc/personas.csv`, samples a clustering input, runs `cluster-personas.py`, and runs `select-council.py`.
+
+The full run requires:
+
+- `OPENROUTER_API_KEY` for OpenRouter model probing and clustering.
+- `OPENAI_API_KEY` for embeddings during clustering.
+- enough time for live model probing and clustering.
+
+For a selection-only verification using existing metadata, latency, clusters, and PCA rows, run:
+
+```bash
+uv run --script common/tools/generate-council.py \
+  --use-existing-metadata \
+  --use-existing-latency \
+  --use-existing-clusters
+```
+
+The driver defaults to a deterministic 512-row clustering input sample (`--sample-size 512 --sample-seed 0`) and writes `common/data/personas/council.csv`. Its default selection report is `common/data/personas/council-report.md`, beside the other council-generation evidence. It does not modify `pool.csv`.
+
+By default, the driver reuses intermediate files younger than seven days. Control that cache window with `--expires DAYS`:
+
+```bash
+uv run --script common/tools/generate-council.py --expires 7
+```
+
+Use `--expires 0` to regenerate all intermediates. The cache applies to intermediate outputs such as metadata, metadata-filter outputs, `model-latency.csv`, `models.csv`, `common/etc/personas.csv`, `cluster-input.csv`, `clusters.csv`, and `pca-cluster.csv`. The final `council.csv` and `council-report.md` are regenerated from the selected inputs. For paired outputs, such as `clusters.csv` and `pca-cluster.csv`, the driver refuses to mix a fresh file with a stale or missing paired file.
+
+## Stage 1: Fetch OpenRouter Metadata
+
+Fetch the current OpenRouter model metadata and save it as `openrouter-models.json`:
+
+```bash
+curl -fsSL https://openrouter.ai/api/v1/models \
+  > common/data/personas/openrouter-models.json
+```
+
+`select-council.py` accepts either the raw OpenRouter object with a `data` array or a raw list of model records.
+
+## Stage 2: Metadata Prefilter
+
+The metadata prefilter removes models only when OpenRouter metadata proves the model cannot satisfy the juror path. It excludes models without text input, without text output, or without advertised function-tool support. Unknowns remain eligible for the live probe.
+
+```bash
+uv run --script common/tools/filter-models.py \
+  --metadata common/data/personas/openrouter-models.json \
+  --out common/data/personas/models-prefiltered.csv \
+  --decisions common/data/personas/model-filter-decisions.csv
+```
+
+`models-prefiltered.csv` is an intermediate input to the live probe. `model-filter-decisions.csv` is an audit file.
+
+## Stage 3: Live Tool And Latency Probe
+
+Run the live probe against the prefiltered model list:
 
 ```bash
 common/tools/model-speed.sh common/etc/personas/persons/d715074-0.txt \
-  < adc/openrouter-models.txt \
+  < common/data/personas/models-prefiltered.csv \
   > common/data/personas/model-latency.csv
 ```
 
-That command writes `MODEL,ELAPSED,TOOLS_SUPPORTED` rows.  The repository currently keeps models with `TOOLS_SUPPORTED=true` and latency at or below `8000` milliseconds.  If you choose a different threshold, record the reason.  From the repository root, run:
+The output format is:
+
+```text
+MODEL,ELAPSED_MS,TOOLS_SUPPORTED
+```
+
+`TOOLS_SUPPORTED=true` means the model successfully called the `submit_council_vote` tool in a direct OpenRouter request. `ELAPSED_MS` is used later to exclude slow models. The default council-selection threshold is 8000 milliseconds unless `--max-elapsed-ms` changes it.
+
+A stale or partial `model-latency.csv` changes the eligible set. For example, a short 35-row latency file will exclude most clustered candidates as `latency_missing`. The 490/198/20 pipeline described below requires the full latency file used for the clustering run.
+
+## Stage 4: Build The Retained Model List
+
+Derive `models.csv` from the latency probe:
 
 ```bash
 awk -F, '$2 != "timeout" && ($2 + 0) <= 8000 && $3 == "true" { print $1 }' \
@@ -51,7 +134,11 @@ awk -F, '$2 != "timeout" && ($2 + 0) <= 8000 && $3 == "true" { print $1 }' \
   > common/data/personas/models.csv
 ```
 
-Once [Candidate models](../data/personas/models.csv) is in place, generate [the source pool](../etc/personas.csv) as the cross product of those models and the checked-in persona texts under [Persona files](../etc/personas/persons).  The persona paths in the output must stay relative to `common/etc`.  The command below writes the full file in one pass, and it does not depend on any hidden path discovery.  From the repository root, run:
+Record any threshold change. Changing this filter changes the model/persona candidate corpus.
+
+## Stage 5: Build The Model/Persona Cross Product
+
+Create `common/etc/personas.csv` from the retained model list and the checked-in persona files:
 
 ```bash
 while IFS= read -r model; do
@@ -65,60 +152,111 @@ while IFS= read -r model; do
 done < common/data/personas/models.csv > common/etc/personas.csv
 ```
 
-At that point the candidate corpus exists in [the source pool](../etc/personas.csv).  You can stop there if you only need the full cross product, or continue to the clustering stage and derive [the active runtime pool](../data/personas/pool.csv).
+This file is the broad source pool. It is larger than `council.csv` and `pool.csv`.
 
-## Optional Clustering
+## Stage 6: Choose The Clustering Input
 
-Clustering gives you a second selection stage.  It samples completions for model and persona pairs over the prompt set in [Gene prompts](../data/personas/genes.json), embeds those completions, reduces them with PCA, assigns a cluster label within each gene, and writes both the cluster rows and the PCA rows.  The runtime does not read those files.  They exist to support a smaller or more behaviorally varied pool.
+Clustering the full cross product can be expensive. Use a deliberate sampled input when refreshing the clustered candidate universe. The current clustering data was produced from sampled model/persona inputs, not from the 20-row council file.
 
-You can cluster the full source pool, but that is expensive.  The checked-in workflow uses a smaller input file when exploring or refreshing the clustered sample.  The simplest way to create that subset is to sample rows from [the source pool](../etc/personas.csv).  From the repository root, run:
+A simple sampling pattern is:
 
 ```bash
 shuf -n 100 common/etc/personas.csv > common/data/personas/some-personas.csv
 ```
 
-Now run [`cluster-personas.py`](../tools/cluster-personas.py).  This example uses the sampled subset, writes PCA rows to [PCA rows](../data/personas/personas-pca.csv), and writes cluster assignments to [Cluster assignments](../data/personas/persona-clusters.csv).  The script must run from the repository root unless you pass every path explicitly.  From the repository root, run:
+`generate-council.py` writes the sampled clustering input to `common/data/personas/cluster-input.csv`. Because `cluster-personas.py` resolves persona paths relative to the input CSV, persona references in `cluster-input.csv` are written relative to `common/data/personas`, for example `../../etc/personas/persons/d715074-6.txt`.
+
+## Stage 7: Generate Clusters And PCA Rows
+
+Run `cluster-personas.py` over the sampled model/persona input and gene prompts:
 
 ```bash
 uv run --script common/tools/cluster-personas.py \
-  --personas-file common/data/personas/some-personas.csv \
+  --personas-file common/data/personas/cluster-input.csv \
   --genes-file common/data/personas/genes.json \
-  --pca-out common/data/personas/personas-pca.csv \
+  --pca-out common/data/personas/pca-cluster.csv \
   --num-personas all \
   --num-samples 3 \
   --num-genes 3 \
-  > common/data/personas/persona-clusters.csv
+  > common/data/personas/clusters.csv
 ```
 
-If you want to inspect the projected data before sampling a reduced pool, render the facet graph with [`clusters-graph.py`](../tools/clusters-graph.py) from the repository root.  [`cluster-personas.py`](../tools/cluster-personas.py) already wrote the PCA rows.  The runtime does not read the graph.  From the repository root, run:
+`clusters.csv` is headerless and has four columns:
+
+```text
+MODEL,PERSONA_FILE,GENE,CLUSTER
+```
+
+`pca-cluster.csv` is headerless and has seven columns:
+
+```text
+MODEL,PERSONA_FILE,GENE,PC1,PC2,PC3,CLUSTER
+```
+
+`cluster-personas.py` samples completions for each selected model/persona pair over the selected gene prompts, embeds those completions, reduces each gene's embedding set with PCA, assigns a cluster label, writes cluster assignments to stdout, and writes PCA rows to `--pca-out`.
+
+The current `clusters.csv` contains 3921 rows representing 490 unique `(MODEL, PERSONA_FILE)` pairs. `select-council.py` treats those 490 unique pairs as the candidate universe.
+
+## Stage 8: Select `council.csv`
+
+Run `select-council.py` with the cluster rows, PCA rows, OpenRouter metadata, latency data, and operational-failure ledger:
 
 ```bash
-uv run --script common/tools/clusters-graph.py \
-  --pca common/data/personas/personas-pca.csv \
-  --out clusters.png
+uv run --script common/tools/select-council.py \
+  --clusters common/data/personas/clusters.csv \
+  --pca common/data/personas/pca-cluster.csv \
+  --metadata common/data/personas/openrouter-models.json \
+  --latency-csv common/data/personas/model-latency.csv \
+  --failures common/data/personas/model-operational-failures.csv \
+  --min-context 200000 \
+  --size 20 \
+  --out common/data/personas/council.csv \
+  --report common/data/personas/council-report.md
 ```
 
-## Sampling A Reduced Pool
+Selection works in four steps:
 
-Once [Cluster assignments](../data/personas/persona-clusters.csv) exists, `adc pool` can sample a smaller set of model and persona pairs from it.  The command collapses repeated `MODEL,PERSONA_FILE,GENE,CLUSTER` rows into per-pair cluster membership, applies a random sequence of gene and cluster filters, and then chooses a surviving pair.  The sampler uses replacement, so deduplicate the output if you want a unique file.
+1. Group `clusters.csv` by `(MODEL, PERSONA_FILE)`.
+2. Exclude candidates that lack full coverage, fail metadata requirements, fall below the context threshold, fail latency/tool-support requirements, or appear in the operational-failure ledger.
+3. Build a diversity vector for each eligible candidate. With `--pca`, this is the mean PCA vector per gene. Without `--pca`, the script falls back to cluster-frequency signatures.
+4. Select `--size` rows by deterministic farthest-first selection with provider caps.
 
-Run `adc pool` from `adc/`.  The command expects `../common/data/personas/persona-clusters.csv` to exist relative to that directory.  The checked-in `pool` Makefile target already writes its output to [the active runtime pool](../data/personas/pool.csv).  From `adc/`, run:
+For the current cluster data and the restored full latency file, the expected result is:
 
-```bash
-.bin/adc pool --size 50 | sort | uniq > ../common/data/personas/pool.csv
-wc -l ../common/data/personas/pool.csv
+```text
+candidates=490 eligible=198 selected=20 out=common/data/personas/council.csv
 ```
 
-`adc` and `arb` both read [the active runtime pool](../data/personas/pool.csv) by default.  Regenerating that file changes the default sampled pool for both systems.
+`council.csv` is a historical selected council candidate set. It is not a current runtime pool, because it omits provider endpoint and quantization constraints.
+
+## Stage 9: Runtime Pool Decision
+
+`aar`/`arb` read JSONL request-spec pools. When `--council-pool` is not supplied, the runtime checks `./pool.jsonl`, then `<common-root>/data/personas/pool.jsonl`. The runtime does not read `clusters.csv`, `pca-cluster.csv`, `model-latency.csv`, `pool.csv`, or the council-selection report.
+
+Do not promote a CSV file into a runtime pool. A runtime pool entry must preserve the request-spec fields needed for provider routing.
 
 ## Verification
 
-After any regeneration, inspect [the active runtime pool](../data/personas/pool.csv) directly.  A valid pool file has no blank lines, no comment lines, and no malformed rows.  The fastest useful checks are line count, uniqueness, and a small visual inspection of the first few rows.  Those checks do not prove quality, but they catch broken files immediately.  From the repository root, run:
+After regenerating `council.csv`, check line count, path form, and uniqueness:
 
 ```bash
-wc -l common/data/personas/pool.csv
-sort common/data/personas/pool.csv | uniq | wc -l
-sed -n '1,20p' common/data/personas/pool.csv
+wc -l common/data/personas/council.csv
+sort common/data/personas/council.csv | uniq | wc -l
+awk -F, '{ if ($2 ~ /^\//) abs++; else rel++; if ($2 !~ /^personas\/persons\//) bad++; } END { printf "absolute=%d relative=%d bad_relative=%d total=%d\n", abs+0, rel+0, bad+0, NR }' common/data/personas/council.csv
+sed -n '1,20p' common/data/personas/council.csv
 ```
 
-If you used clustering, inspect the auxiliary files as well.  [Cluster assignments](../data/personas/persona-clusters.csv) should have four columns.  [PCA rows](../data/personas/personas-pca.csv) should have model, persona file, gene index, projected coordinates, and a final cluster number.  [The active runtime pool](../data/personas/pool.csv) should have the same two-column format as [the source pool](../etc/personas.csv).
+Expected path-form check for a repository-clean `council.csv`:
+
+```text
+absolute=0 relative=20 bad_relative=0 total=20
+```
+
+Validate the selector and inspect the council-selection report if needed:
+
+```bash
+python3 -m py_compile common/tools/select-council.py
+sed -n '1,120p' common/data/personas/council-report.md
+```
+
+Use the current JSONL pool workflow for runtime council pools.

@@ -19,7 +19,7 @@ func TestParseRecordLoadsRelativeFile(t *testing.T) {
 		t.Fatalf("WriteFile error = %v", err)
 	}
 
-	spec, err := ParseRecord("openrouter://openai/gpt-5, personas/j1.txt", baseDir)
+	spec, err := ParseRecord(`{"openrouter_model_id":"openai/gpt-5","endpoint_tag":"openai","persona":{"path":"personas/j1.txt"}}`, baseDir)
 	if err != nil {
 		t.Fatalf("ParseRecord error = %v", err)
 	}
@@ -35,6 +35,9 @@ func TestParseRecordLoadsRelativeFile(t *testing.T) {
 	if spec.FilePath != filepath.Clean(personaPath) {
 		t.Fatalf("FilePath = %q, want %q", spec.FilePath, personaPath)
 	}
+	if spec.RequestSpec == nil {
+		t.Fatalf("RequestSpec = nil")
+	}
 }
 
 func TestParseRecordLoadsAbsoluteFile(t *testing.T) {
@@ -46,7 +49,7 @@ func TestParseRecordLoadsAbsoluteFile(t *testing.T) {
 		t.Fatalf("WriteFile error = %v", err)
 	}
 
-	spec, err := ParseRecord("openai://gpt-5-mini,"+personaPath, baseDir)
+	spec, err := ParseRecord(`{"endpoint":"openai","model":"gpt-5-mini","persona":"`+personaPath+`"}`, baseDir)
 	if err != nil {
 		t.Fatalf("ParseRecord error = %v", err)
 	}
@@ -72,8 +75,8 @@ func TestLoadRecordsFile(t *testing.T) {
 	content := strings.Join([]string{
 		"# comment",
 		"",
-		"openrouter://openai/gpt-5,personas/a.txt",
-		"openrouter://openai/gpt-5-mini,personas/b.txt",
+		`{"openrouter_model_id":"openai/gpt-5","endpoint_tag":"openai","persona":"personas/a.txt"}`,
+		`{"openrouter_model_id":"deepseek/deepseek-v4-flash","endpoint_tag":"deepinfra/fp4","quantization":"fp4","persona":"personas/b.txt"}`,
 		"",
 	}, "\n")
 	if err := os.WriteFile(recordsPath, []byte(content), 0o644); err != nil {
@@ -89,6 +92,16 @@ func TestLoadRecordsFile(t *testing.T) {
 	}
 	if specs[0].File != "personas/a.txt" || specs[1].File != "personas/b.txt" {
 		t.Fatalf("LoadRecordsFile files = %q, %q", specs[0].File, specs[1].File)
+	}
+	if specs[0].RequestSpec == nil || specs[1].RequestSpec == nil {
+		t.Fatalf("RequestSpec values = %#v, %#v", specs[0].RequestSpec, specs[1].RequestSpec)
+	}
+	if specs[1].Model != "openrouter://deepseek/deepseek-v4-flash" {
+		t.Fatalf("JSON record model = %q", specs[1].Model)
+	}
+	provider := specs[1].RequestSpec.ProviderBody()
+	if provider["only"].([]string)[0] != "deepinfra/fp4" {
+		t.Fatalf("JSON record provider = %#v", provider)
 	}
 }
 
@@ -108,8 +121,8 @@ func TestLoadRecordsFileResolvesSharedDataPoolPaths(t *testing.T) {
 	if err := os.WriteFile(personaPath, []byte("shared persona"), 0o644); err != nil {
 		t.Fatalf("WriteFile persona error = %v", err)
 	}
-	recordsPath := filepath.Join(dataDir, "pool.csv")
-	if err := os.WriteFile(recordsPath, []byte("openrouter://openai/gpt-5,personas/a.txt\n"), 0o644); err != nil {
+	recordsPath := filepath.Join(dataDir, "pool.jsonl")
+	if err := os.WriteFile(recordsPath, []byte(`{"openrouter_model_id":"openai/gpt-5","endpoint_tag":"openai","persona":"personas/a.txt"}`+"\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile records error = %v", err)
 	}
 
@@ -135,7 +148,7 @@ func TestSampleRecordFileSingle(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(baseDir, "personas", "only.txt"), []byte("only persona"), 0o644); err != nil {
 		t.Fatalf("WriteFile error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(baseDir, "personas.csv"), []byte("openrouter://openai/gpt-5,personas/only.txt\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(baseDir, "personas.csv"), []byte(`{"openrouter_model_id":"openai/gpt-5","endpoint_tag":"openai","persona":"personas/only.txt"}`+"\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile error = %v", err)
 	}
 
@@ -165,8 +178,10 @@ func TestParseRecordRejectsBadInput(t *testing.T) {
 		{name: "missing comma", record: "openai://gpt-5-mini", want: "invalid persona record"},
 		{name: "blank model", record: ",persona.txt", want: "invalid persona record"},
 		{name: "invalid model", record: "openai/gpt-5-mini,persona.txt", want: "invalid persona model"},
-		{name: "missing file", record: "openai://gpt-5-mini,missing.txt", want: "read persona text"},
-		{name: "empty file", record: "openai://gpt-5-mini," + emptyPath, want: "empty persona text"},
+		{name: "missing endpoint", record: `{"model":"openai/gpt-5-mini","persona":"persona.txt"}`, want: "request spec endpoint is required"},
+		{name: "endpoint-prefixed model", record: `{"endpoint":"openai","model":"openai://gpt-5-mini","persona":"persona.txt"}`, want: "request spec model must not include endpoint:// prefix"},
+		{name: "missing file", record: `{"endpoint":"openai","model":"gpt-5-mini","persona":"missing.txt"}`, want: "read persona text"},
+		{name: "empty file", record: `{"endpoint":"openai","model":"gpt-5-mini","persona":"` + emptyPath + `"}`, want: "empty persona text"},
 	}
 
 	for _, tt := range tests {

@@ -16,12 +16,6 @@ shared data files.
 
 Usage:
 
-1. Start local xproxy from the repository root:
-
-   adc/.bin/adc xproxy
-
-2. Run the script:
-
    uv run common/tools/cluster-personas.py --personas-file common/data/personas/some-personas.csv --num-samples 3 --num-genes 5 --num-personas 25
 
 The shared persona pool is `common/etc/personas.csv`.  The checked-in sampled
@@ -29,10 +23,8 @@ subset is `common/data/personas/some-personas.csv`.
 
 Design:
 
-- Completions go through local xproxy because the personas file stores xproxy
-  model ids, and this repository already routes provider access through xproxy.
-- Embeddings go directly through the OpenAI Python SDK because the local xproxy
-  implementation exposes `/v1/responses` but not an embeddings endpoint.
+- Completions go directly to the provider named by each runtime model id.
+- Embeddings go through the OpenAI Python SDK.
 - Embeddings run one sampled response at a time.  That avoids oversized batch
   requests and keeps one bad embedding response from aborting the whole run.
 - PCA runs once per gene over the full embedding set for that gene, across all
@@ -51,10 +43,9 @@ Design:
 - `--num-personas` controls how many model/persona pairs are sampled from the
   personas file without replacement.  The default is `25`.  `all` uses the
   entire file.
-- The task asks for `N` samples per model/persona pair and notes that multiple
-  completions in one request would be preferable.  This script issues repeated
-  Responses API calls instead.  That is the direct and reliable path through the
-  current xproxy surface.
+- The task asks for `N` samples per model/persona pair.  This script issues
+  repeated chat-completion calls because that keeps timing and failure
+  accounting per sample.
 - If a model times out or returns an unusable response, the script logs that
   failure to stderr, removes that model from the remaining run, and continues
   with the remaining models.
@@ -68,8 +59,8 @@ Operational requirements:
 
 - Run from the repository root unless you pass explicit paths.  The default
   file paths are resolved against the current working directory.
-- xproxy must already be running and reachable on `127.0.0.1`.
-- `OPENAI_API_KEY` must be set for embeddings.
+- `OPENROUTER_API_KEY` must be set for `openrouter://...` models.
+- `OPENAI_API_KEY` must be set for `openai://...` models and embeddings.
 - The script resolves relative persona paths relative to the personas CSV file,
   matching the existing Go runtime behavior.
 """
@@ -87,8 +78,6 @@ from pathlib import Path
 import sys
 import time
 from typing import Any
-from urllib.error import URLError
-from urllib.request import urlopen
 
 import numpy as np
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
@@ -97,10 +86,13 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 
 
-DEFAULT_XPROXY_PORT = 18459
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_EMBEDDING_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_TIMEOUT_SECONDS = 120.0
+PROVIDER_BASE_URLS = {
+    "openai": "https://api.openai.com/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+}
 
 
 @dataclass(frozen=True)
@@ -108,6 +100,12 @@ class PersonaSpec:
     model: str
     file_ref: str
     text: str
+
+
+@dataclass(frozen=True)
+class ModelRef:
+    endpoint: str
+    model: str
 
 
 @dataclass(frozen=True)
@@ -243,12 +241,17 @@ def resolve_path(path_text: str) -> Path:
     return (Path.cwd() / path).resolve()
 
 
-def parse_xproxy_model(model: str) -> None:
+def parse_model_ref(model: str) -> ModelRef:
     if "://" not in model:
         raise SystemExit(f"invalid persona model {model!r}: expected ENDPOINT://MODEL")
     endpoint, rest = model.split("://", 1)
-    if not endpoint.strip() or not rest.strip():
+    endpoint = endpoint.strip().lower()
+    model_id = rest.split("?", 1)[0].strip()
+    if not endpoint or not model_id:
         raise SystemExit(f"invalid persona model {model!r}: expected ENDPOINT://MODEL")
+    if endpoint not in PROVIDER_BASE_URLS:
+        raise SystemExit(f"unsupported persona model endpoint {endpoint!r}")
+    return ModelRef(endpoint=endpoint, model=model_id)
 
 
 def juror_prompt(persona_text: str) -> str:
@@ -281,7 +284,7 @@ def load_personas(path_text: str) -> list[PersonaSpec]:
         file_ref = file_ref.strip()
         if not model or not file_ref:
             raise SystemExit(f"invalid persona record: {line}")
-        parse_xproxy_model(model)
+        parse_model_ref(model)
         file_path = Path(file_ref)
         if not file_path.is_absolute():
             file_path = (path.parent / file_ref).resolve()
@@ -340,19 +343,6 @@ def select_personas(
     return random.sample(personas, num_personas)
 
 
-def resolve_xproxy_port() -> int:
-    raw = os.environ.get("PI_CONTAINER_XPROXY_PORT", "").strip()
-    if not raw:
-        return DEFAULT_XPROXY_PORT
-    try:
-        port = int(raw)
-    except ValueError as exc:
-        raise SystemExit("PI_CONTAINER_XPROXY_PORT must be a positive integer") from exc
-    if port <= 0:
-        raise SystemExit("PI_CONTAINER_XPROXY_PORT must be a positive integer")
-    return port
-
-
 def resolve_timeout_seconds() -> float:
     raw = os.environ.get("PERSONA_SAMPLE_TIMEOUT_SECONDS", "").strip()
     if not raw:
@@ -366,27 +356,26 @@ def resolve_timeout_seconds() -> float:
     return value
 
 
-def ensure_xproxy_healthy(port: int, timeout_seconds: float) -> None:
-    url = f"http://127.0.0.1:{port}/healthz"
-    try:
-        with urlopen(url, timeout=min(timeout_seconds, 2.0)) as response:
-            if response.status != 200:
-                raise SystemExit(
-                    f"xproxy health check failed at {url}: status {response.status}"
-                )
-    except URLError as exc:
-        raise SystemExit(
-            f"xproxy is not reachable at {url}. Run `adc/.bin/adc xproxy` first."
-        ) from exc
-
-
-def build_xproxy_client(port: int, timeout_seconds: float) -> OpenAI:
+def build_provider_client(endpoint: str, timeout_seconds: float) -> OpenAI:
+    endpoint = endpoint.strip().lower()
+    base_url = PROVIDER_BASE_URLS.get(endpoint)
+    if base_url is None:
+        raise SystemExit(f"unsupported model endpoint {endpoint!r}")
+    key_env = "OPENAI_API_KEY" if endpoint == "openai" else "OPENROUTER_API_KEY"
+    api_key = os.environ.get(key_env, "").strip()
+    if not api_key:
+        raise SystemExit(f"{key_env} is required for {endpoint} completions")
     return OpenAI(
-        api_key=os.environ.get("PERSONA_SAMPLE_XPROXY_API_KEY", "xproxy"),
-        base_url=f"http://127.0.0.1:{port}/v1",
+        api_key=api_key,
+        base_url=base_url,
         timeout=timeout_seconds,
         max_retries=0,
     )
+
+
+def build_provider_clients(personas: list[PersonaSpec], timeout_seconds: float) -> dict[str, OpenAI]:
+    endpoints = sorted({parse_model_ref(spec.model).endpoint for spec in personas})
+    return {endpoint: build_provider_client(endpoint, timeout_seconds) for endpoint in endpoints}
 
 
 def build_embeddings_client(timeout_seconds: float) -> OpenAI:
@@ -415,15 +404,34 @@ def log_gene_error(gene_index: int, message: str) -> None:
     print(f"gene {gene_index}: {message}", file=sys.stderr)
 
 
-def sample_completion(client: OpenAI, spec: PersonaSpec, gene: str) -> CompletionSample:
+def chat_content_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    if not isinstance(content, list):
+        return str(content or "").strip()
+    parts: list[str] = []
+    for item in content:
+        if isinstance(item, dict):
+            value = item.get("text")
+        else:
+            value = getattr(item, "text", "")
+        if value:
+            parts.append(str(value))
+    return "\n".join(parts).strip()
+
+
+def sample_completion(clients: dict[str, OpenAI], spec: PersonaSpec, gene: str) -> CompletionSample:
+    ref = parse_model_ref(spec.model)
+    client = clients[ref.endpoint]
     started = time.monotonic()
     try:
-        response = client.responses.create(
-            model=spec.model,
-            input=[
+        response = client.chat.completions.create(
+            model=ref.model,
+            messages=[
                 {"role": "system", "content": juror_prompt(spec.text)},
                 {"role": "user", "content": gene},
             ],
+            temperature=0.7,
         )
     except APITimeoutError as exc:
         raise ModelFailure(spec.model, "timeout") from exc
@@ -435,7 +443,10 @@ def sample_completion(client: OpenAI, spec: PersonaSpec, gene: str) -> Completio
         raise ModelFailure(spec.model, f"invalid JSON response: {exc}") from exc
     except Exception as exc:
         raise ModelFailure(spec.model, f"unexpected error: {exc}") from exc
-    text = (response.output_text or "").strip()
+    if not response.choices:
+        raise ModelFailure(spec.model, "empty response choices")
+    message = response.choices[0].message
+    text = chat_content_text(message.content)
     if not text:
         raise ModelFailure(spec.model, "empty response text")
     return CompletionSample(
@@ -502,7 +513,7 @@ def cluster_gene_vectors(matrix: np.ndarray) -> np.ndarray:
 
 
 def collect_gene_samples(
-    client: OpenAI,
+    clients: dict[str, OpenAI],
     personas: list[PersonaSpec],
     gene: str,
     gene_index: int,
@@ -515,7 +526,7 @@ def collect_gene_samples(
             continue
         for _ in range(num_samples):
             try:
-                completion = sample_completion(client, spec, gene)
+                completion = sample_completion(clients, spec, gene)
             except ModelFailure as exc:
                 marker = "timeout" if exc.reason == "timeout" else "error"
                 log_completion_attempt(exc.model, gene_index, marker, marker)
@@ -546,13 +557,12 @@ def collect_gene_rows(
     num_samples: int,
     gene_dim: int,
     timeout_seconds: float,
-    xproxy_port: int,
 ) -> list[ClusteredSample]:
-    responses_client = build_xproxy_client(xproxy_port, timeout_seconds)
+    completion_clients = build_provider_clients(personas, timeout_seconds)
     embeddings_client = build_embeddings_client(timeout_seconds)
     disabled_models: set[str] = set()
     gene_samples = collect_gene_samples(
-        responses_client,
+        completion_clients,
         personas,
         gene,
         gene_index,
@@ -638,8 +648,6 @@ def main(argv: list[str]) -> int:
     genes = load_genes(args.genes_file)
     selected_genes = select_genes(genes, num_genes)
     timeout_seconds = resolve_timeout_seconds()
-    xproxy_port = resolve_xproxy_port()
-    ensure_xproxy_healthy(xproxy_port, timeout_seconds)
     rows: list[ClusteredSample] = []
     gene_rows: dict[int, list[ClusteredSample]] = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(selected_genes)) as executor:
@@ -652,7 +660,6 @@ def main(argv: list[str]) -> int:
                 args.num_samples,
                 args.gene_dim,
                 timeout_seconds,
-                xproxy_port,
             ): gene_index
             for gene_index, gene in selected_genes
         }
