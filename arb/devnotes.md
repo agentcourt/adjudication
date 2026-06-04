@@ -14,11 +14,11 @@ Invalid JSON, unrelated event types, missing content fields, and non-prefix chan
 
 Reference: [Manual case-file scanning](manual.md#case-files-and-evidence)
 
-The first Clerk `ex4` run exposed a stale backup-file problem in automatic case-file scanning.  The example directory contained `README.md~`, and the scanner admitted it as initial evidence because it skipped `README.md` but not editor backup files ending in `~`.  The scanner now skips those backup files, the proceeding test covers that rule, and `examples/ex4/market-rules.md` carries the market rule text as an intentional case-packet file.
+The first Clerk `ex04` run exposed a stale backup-file problem in automatic case-file scanning.  The example directory contained `README.md~`, and the scanner admitted it as initial evidence because it skipped `README.md` but not editor backup files ending in `~`.  The scanner now skips those backup files, the proceeding test covers that rule, and `examples/ex04/market-rules.md` carries the market rule text as an intentional case-packet file.
 
 ### Live-run wall-clock timestamps
 
-The Clerk `ex6` and `ex1` runs showed event timestamps that appeared to exceed 900-second turn deadlines.  The live shell polling also showed `date -u` jumping forward by several minutes during a 30-second tool wait, and MCP responses still reported substantial `remaining_ms` on accepted turns.  AAR creates turn deadlines with `time.Now().Add(...)` and enforces them with timers and deadline comparisons, so the artifact pattern points to host wall-clock adjustment rather than a timeout-enforcement defect.
+The Clerk `ex06` and `ex01` runs showed event timestamps that appeared to exceed 900-second turn deadlines.  The live shell polling also showed `date -u` jumping forward by several minutes during a 30-second tool wait, and MCP responses still reported substantial `remaining_ms` on accepted turns.  AAR creates turn deadlines with `time.Now().Add(...)` and enforces them with timers and deadline comparisons, so the artifact pattern points to host wall-clock adjustment rather than a timeout-enforcement defect.
 
 ## 2026-06-03
 
@@ -26,7 +26,7 @@ The Clerk `ex6` and `ex1` runs showed event timestamps that appeared to exceed 9
 
 Reference: [Pi council instructions](agent-instructions/pi-council.md.tmpl)
 
-The Clerk `ex2` run showed C3 voting successfully and then continuing to call `wait_for_opportunity`.  That extra loop later reached C5's opportunity and produced a rejected tool call, though the case still closed correctly because C5 submitted its own vote.  The Pi council instruction template now states that a member must stop after `submit_council_vote` returns `ok: true`, and the localrun template test checks for that stop rule.
+The Clerk `ex02` run showed C3 voting successfully and then continuing to call `wait_for_opportunity`.  That extra loop later reached C5's opportunity and produced a rejected tool call, though the case still closed correctly because C5 submitted its own vote.  The Pi council instruction template now states that a member must stop after `submit_council_vote` returns `ok: true`, and the localrun template test checks for that stop rule.
 
 ## 2026-06-02
 
@@ -38,7 +38,7 @@ Reference: [OpenClaw OAuth-Derived Codex Auth](openclaw-oauth.md)
 
 The staged Codex homes are deleted when the run exits because `auth.json` contains bearer and refresh credentials.  The implementation does not mount the operator's whole `~/.codex` directory into OpenClaw containers.  The API-key path still passes only the `OPENAI_API_KEY` environment variable into the OpenClaw container.
 
-`aar run` now patches the in-container OpenClaw config before starting each lawyer.  The patch sets `plugins.entries.codex.config.appServer.turnCompletionIdleTimeoutMs` and `postToolRawAssistantCompletionIdleTimeoutMs` to the effective AAR lawyer turn timeout.  The ex1 OpenClaw/Pi run on 2026-06-03 failed before this change because the embedded Codex app server abandoned a provider turn after about 120 seconds during plaintiff opening.  The rerun passed that point, completed all lawyer filings, and closed the case.
+`aar run` now patches the in-container OpenClaw config before starting each lawyer.  The patch sets `plugins.entries.codex.config.appServer.turnCompletionIdleTimeoutMs` and `postToolRawAssistantCompletionIdleTimeoutMs` to the effective AAR lawyer turn timeout.  The ex01 OpenClaw/Pi run on 2026-06-03 failed before this change because the embedded Codex app server abandoned a provider turn after about 120 seconds during plaintiff opening.  The rerun passed that point, completed all lawyer filings, and closed the case.
 
 `aar run --auto-lawyers` controls which OpenClaw lawyers the local process starts.  The default `both` starts plaintiff and defendant.  `plaintiff` starts only the plaintiff and writes `openclaw-defendant-lawyer-skill.md` for a remote defendant; `defendant` starts only the defendant and writes `openclaw-plaintiff-lawyer-skill.md` for a remote plaintiff.  Manual lawyer mode requires a reachable MCP URL.  Use `--mcp-public-base-url` when `--mcp-listen` binds to a wildcard address.
 
@@ -292,13 +292,13 @@ validation, filing validation, and turn budgets.  The lawyer prompt still
 requires source retrieval, evidence preservation, analysis, and a work log.
 
 The old attorney timeout also became too short once public-source
-investigation was enabled.  In `ex4`, the plaintiff arguments turn used enough
+investigation was enabled.  In `ex04`, the plaintiff arguments turn used enough
 public-source investigation to exceed 480 seconds before filing.  The default
 attorney timeout is now 900 seconds.
 
 ### Attorney filing limits in prompts
 
-`ex4` exposed a second prompt defect after web search was enabled.  The
+`ex04` exposed a second prompt defect after web search was enabled.  The
 attorneys could now gather the needed material, but the prompt still left key
 filing constraints implicit.  The plaintiff rebuttal then burned its retries on
  three avoidable mistakes: a rebuttal that exceeded the text limit, too many
@@ -331,16 +331,16 @@ tool schema.
 
 ## 2026-04-30
 
-### Ignore regenerated signing evidence in `ex1`
+### Ignore regenerated signing evidence in `ex01`
 
-Reference: [Example signer](examples/ex1/sign.sh)
+Reference: [Example signer](examples/ex01/sign.sh)
 
-`examples/ex1` regenerates `samantha_public.pem` and `confession.sig.b64` from
+`examples/ex01` regenerates `samantha_public.pem` and `confession.sig.b64` from
 the ignored source inputs `samantha_private.pem` and `confession.sig`.  Keeping
 the derived files tracked leaves the worktree dirty after an ordinary example
 run.
 
-The local `.gitignore` in `examples/ex1` now ignores those derived outputs as
+The local `.gitignore` in `examples/ex01` now ignores those derived outputs as
 well.  The repository index must also stop tracking them, because ignore rules
 do not apply to files that Git already tracks.
 
@@ -381,7 +381,7 @@ tool and hand-built the Pi configuration.  After the change, the external
 plaintiff opening matched the ordinary local path closely enough to complete:
 note file write, opening submission, accepted filing.
 
-It did not fix the plaintiff arguments failure in `ex6`.  The plaintiff still
+It did not fix the plaintiff arguments failure in `ex06`.  The plaintiff still
 stalled in the arguments phase.  The failure mode changed, which narrows the
 cause.  The old run spent its time rewriting notes around citation formatting
 and source packaging.  The new run used the full tool surface and reached the
@@ -708,7 +708,7 @@ proposition.
 
 Reference: [AAR service](runtime/service/service.go)
 
-The first `ex1` service run failed during case creation because the public
+The first `ex01` service run failed during case creation because the public
 service waited only thirty seconds for the child runner to announce private
 lawyer and council APIs.  The child runner starts those private APIs after
 council preflight, and council preflight can spend more than thirty seconds on
@@ -717,15 +717,15 @@ case once the child process starts, keeps the case in `starting`, and lets
 public role `wait` calls block within the API wait limit until the private role
 API appears.
 
-The corrected path was tested with `ex1` and `ex4` through the public service,
+The corrected path was tested with `ex01` and `ex04` through the public service,
 the AAR MCP adapter, OpenClaw lawyer containers, and council members using the
-council API.  `ex1` closed as demonstrated with a 4-1 council vote, and `ex4`
+council API.  `ex01` closed as demonstrated with a 4-1 council vote, and `ex04`
 closed as demonstrated with a 5-0 council vote.  The searched MCP logs for both
 runs showed no HTTP 4xx or 5xx tool calls and no MCP error states.
 
 ### Agent lifecycle
 
-The `ex1` OpenClaw/Pi run showed repeated C4 MCP sessions because the example
+The `ex01` OpenClaw/Pi run showed repeated C4 MCP sessions because the example
 runner restarted agents and used them to check for work.  That lifecycle was
 wrong.  The example runner now starts each lawyer or council agent once and
 lets `set -e` fail the run when a command fails.

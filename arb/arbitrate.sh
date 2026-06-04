@@ -8,10 +8,10 @@
 # Arguments:
 #
 #   INPUT_DIR       Directory containing the arbitration input files.
-#                   Default: examples/ex1
+#                   Default: examples/ex01
 #
 #   OUTPUT_DIR      Directory where the run output should be written.
-#                   Default: out/ex1-demo
+#                   Default: out/ex01-demo
 #
 #   CASEAPI_ADDR    Address for the private case API listener.
 #                   Default: 127.0.0.1:0
@@ -40,8 +40,8 @@ fi
 
 : "${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required}"
 
-INPUT_DIR="${1:-examples/ex1}"
-OUTPUT_DIR="${2:-out/ex1-demo}"
+INPUT_DIR="${1:-examples/ex01}"
+OUTPUT_DIR="${2:-out/ex01-demo}"
 CASEAPI_ADDR="${3:-127.0.0.1:0}"
 INVALID_ATTEMPT_LIMIT=5
 

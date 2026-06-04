@@ -70,8 +70,8 @@ POST /api/v1/cases
 
 ```json
 {
-  "complaint_path": "examples/ex1/complaint.md",
-  "case_files": ["examples/ex1/*.txt"],
+  "complaint_path": "examples/ex01/complaint.md",
+  "case_files": ["examples/ex01/*.txt"],
   "policy_path": "etc/policy.json",
   "out_dir": "out/service/arb-20260602-0001",
   "council_backend": "councilapi",
@@ -231,7 +231,7 @@ The implementation should proceed in phases that keep the runner as the arbitrat
 | 7 | Add artifact endpoints scoped to the registered output directory: listing, `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, and evidence reads by `evidence_id`. | Artifact tests for path traversal rejection, symlink escape rejection, evidence manifest lookup, byte ranges, MIME type reporting, and missing-file errors. |
 | 8 | Build `aar mcp` from shared transport code and separate assignment providers.  One MCP session binds to one `case_id` plus either `role_id` or `member_id`; all assignments use `wait_for_opportunity` and `get_current_opportunity`, and provider-specific tools remain separated by assignment type. | MCP tests for session initialization, invalid mixed principals, bearer-token rejection, lawyer tool authority, council tool authority, opportunity-id injection, runner error propagation, and session expiry. |
 | 9 | Remove the split MCP adapter commands and update build targets, runbooks, skills, and example scripts to use `aar service` and `aar mcp`. | Build tests proving only supported commands are generated, documentation checks for stale adapter names, and example-run tests through the service manager. |
-| 10 | Run end-to-end examples through the service topology with OpenClaw lawyers and council API members where applicable. | `examples/ex1` through `examples/ex6` should complete or fail with diagnosable service errors; review should confirm evidence submission, evidence reads, work notes, final results, and clean terminal `done` responses. |
+| 10 | Run end-to-end examples through the service topology with OpenClaw lawyers and council API members where applicable. | `examples/ex01` through `examples/ex06` should complete or fail with diagnosable service errors; review should confirm evidence submission, evidence reads, work notes, final results, and clean terminal `done` responses. |
 
 ## Open Design Decisions
 

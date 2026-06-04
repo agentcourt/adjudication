@@ -65,7 +65,7 @@ For a direct connection, replace `127.0.0.1:9001` with the direct AAR host and p
 
 ## Start The Case
 
-This example runs `ex1` with a remote plaintiff and a local defendant.  It starts MCP on port `8001`, tells the generated plaintiff skill to use `http://127.0.0.1:9001`, uses Codex auth for the local OpenClaw lawyer, and uses `pool.jsonl` for the Pi council:
+This example runs `ex01` with a remote plaintiff and a local defendant.  It starts MCP on port `8001`, tells the generated plaintiff skill to use `http://127.0.0.1:9001`, uses Codex auth for the local OpenClaw lawyer, and uses `pool.jsonl` for the Pi council:
 
 ```bash
 KEYS_FILE=keys.txt
@@ -77,7 +77,7 @@ set +a
 
 go build -o .bin/aar ./runtime/cmd/aar
 
-out="out/ex1-remote-plaintiff-$(date -u +%Y%m%d%H%M%S)"
+out="out/ex01-remote-plaintiff-$(date -u +%Y%m%d%H%M%S)"
 mkdir -p "$out"
 
 .bin/aar run \
@@ -88,7 +88,7 @@ mkdir -p "$out"
   --openclaw-auth codex \
   --openclaw-codex-auth "$CODEX_AUTH_JSON" \
   --council-pool pool.jsonl \
-  ex1 \
+  ex01 \
   >"$out/aar-run.log" 2>&1
 ```
 
@@ -170,7 +170,7 @@ If the remote lawyer is slow, check the active opportunity deadline in `logs/mcp
 
 If the council phase appears slow, check for `assignment_type=council` sessions and `councilapi_do` calls in `logs/mcp.stderr`.  Pi council members are separate from the remote lawyer, and the case can continue after all lawyer filings have completed.  The final `run.json` is written only after the case reaches a terminal state.
 
-If the remote OpenClaw says the last known status was deliberation active and the MCP health endpoint no longer responds, check whether `aar run` has already exited and written `run.json`.  In the successful `ex1` reference run, the remote lawyer last saw the case during deliberation; after the council completed, `aar run` shut down the MCP service, so the remote OpenClaw could not retrieve the final result through MCP.  The final result was still available in the local run packet.
+If the remote OpenClaw says the last known status was deliberation active and the MCP health endpoint no longer responds, check whether `aar run` has already exited and written `run.json`.  In the successful `ex01` reference run, the remote lawyer last saw the case during deliberation; after the council completed, `aar run` shut down the MCP service, so the remote OpenClaw could not retrieve the final result through MCP.  The final result was still available in the local run packet.
 
 If a local child process remains after completion, inspect the PID files and container names:
 
@@ -188,8 +188,8 @@ podman ps --format '{{.Names}}' | grep "pi-" || true
 
 If an old process is still running, diagnose why before stopping it.  A completed successful run should leave final output files and no live child process for that case.
 
-## Successful ex1 Reference
+## Successful ex01 Reference
 
-The tested `ex1` remote-plaintiff run completed from `2026-06-03T14:58:08Z` to `2026-06-03T15:15:09Z`.  The remote plaintiff connected through MCP, read all 11 case-packet evidence items during opening, sent work notes for every plaintiff turn, verified the confession signature, filed opening, argument, rebuttal, and closing, and stayed inside the lawyer deadlines.  The local defendant completed all opposing lawyer turns.
+The tested `ex01` remote-plaintiff run completed from `2026-06-03T14:58:08Z` to `2026-06-03T15:15:09Z`.  The remote plaintiff connected through MCP, read all 11 case-packet evidence items during opening, sent work notes for every plaintiff turn, verified the confession signature, filed opening, argument, rebuttal, and closing, and stayed inside the lawyer deadlines.  The local defendant completed all opposing lawyer turns.
 
 The Pi council voted 5-0 for `demonstrated`.  The final result was `status: ok`, `phase: closed`, `resolution: demonstrated`, and `final_reason: demonstrated`.  The narrow failure check found no failed API calls, rejected submissions, exhausted attempts, or process-failure messages.

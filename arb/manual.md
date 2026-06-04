@@ -102,7 +102,7 @@ The defendant sent the signed confession attached to the case packet.
 Use `aar validate` before running a case if the complaint was written or transformed by another tool:
 
 ```bash
-.bin/aar validate --complaint examples/ex1/complaint.md
+.bin/aar validate --complaint examples/ex01/complaint.md
 ```
 
 On success, `aar validate` prints `ok`.
@@ -157,8 +157,8 @@ Basic command:
 
 ```bash
 .bin/aar case \
-  --complaint examples/ex1/complaint.md \
-  --out-dir out/ex1-direct
+  --complaint examples/ex01/complaint.md \
+  --out-dir out/ex01-direct
 ```
 
 Important flags:
@@ -313,10 +313,10 @@ pool="$(pwd)/pool.jsonl"
   --openclaw-auth codex \
   --openclaw-codex-auth "$HOME/.codex/auth.json" \
   --council-pool "$pool" \
-  ex1
+  ex01
 ```
 
-`aar run` accepts at most one example name.  When the example name is present, it uses `examples/EXAMPLE/complaint.md`, creates a case id like `arb-ex1-YYYYMMDDHHMMSS`, and writes output under `out/EXAMPLE-openclaw-pi-YYYYMMDDHHMMSS` unless `--out-dir` is set.  Without an example name, it requires an explicit complaint path and uses a generated case id like `arb-YYYYMMDDHHMMSS`.
+`aar run` accepts at most one example name.  When the example name is present, it uses `examples/EXAMPLE/complaint.md`, creates a case id like `arb-ex01-YYYYMMDDHHMMSS`, and writes output under `out/EXAMPLE-openclaw-pi-YYYYMMDDHHMMSS` unless `--out-dir` is set.  Without an example name, it requires an explicit complaint path and uses a generated case id like `arb-YYYYMMDDHHMMSS`.
 
 Important run flags:
 
@@ -377,7 +377,7 @@ pool="$(pwd)/pool.jsonl"
   --openclaw-auth codex \
   --openclaw-codex-auth "$HOME/.codex/auth.json" \
   --council-pool "$pool" \
-  ex4
+  ex04
 ```
 
 API-key mode is supported by the code.  It requires `OPENAI_API_KEY` and passes that variable into the OpenClaw container.  Use it only when the deployment intentionally uses Platform API billing for OpenClaw lawyers.
@@ -399,7 +399,7 @@ Remote runs need a public MCP base URL that the remote OpenClaw process can reac
 When the remote OpenClaw can reach the AAR host directly, bind MCP on the AAR host and use the reachable host name or IP address as the public base URL:
 
 ```bash
-out="out/ex1-remote-plaintiff-$(date -u +%Y%m%d%H%M%S)"
+out="out/ex01-remote-plaintiff-$(date -u +%Y%m%d%H%M%S)"
 AAR_HOST=aar-host.example
 pool="$(pwd)/pool.jsonl"
 
@@ -411,7 +411,7 @@ pool="$(pwd)/pool.jsonl"
   --openclaw-auth codex \
   --openclaw-codex-auth "$HOME/.codex/auth.json" \
   --council-pool "$pool" \
-  ex1
+  ex01
 ```
 
 If the remote OpenClaw can reach only localhost, run a TCP forward on the remote machine and set `--mcp-public-base-url` to that local forwarded URL.  The forward target must be a host and port that can reach the AAR MCP listener.
@@ -474,7 +474,7 @@ curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases \
   -H 'content-type: application/json' \
   --data @- <<EOF
 {
-    "example": "ex1",
+    "example": "ex01",
     "openclaw_auth": "codex",
     "openclaw_codex_auth_path": "$HOME/.codex/auth.json",
     "council_pool_path": "$pool"
@@ -580,7 +580,7 @@ curl -sS -X POST http://127.0.0.1:19770/api/v1/cases \
   -H 'content-type: application/json' \
   --data '{
     "case_id": "api-case-1",
-    "complaint_path": "examples/ex1/complaint.md",
+    "complaint_path": "examples/ex01/complaint.md",
     "out_dir": "out/service/api-case-1",
     "council_backend": "councilapi"
   }'
@@ -659,7 +659,7 @@ List available examples:
 find examples -maxdepth 2 -name complaint.md -printf '%h\n' | sort
 ```
 
-Run `ex1` with local OpenClaw lawyers and Pi council:
+Run `ex01` with local OpenClaw lawyers and Pi council:
 
 ```bash
 set -a
@@ -672,13 +672,13 @@ pool="$(pwd)/pool.jsonl"
   --openclaw-auth codex \
   --openclaw-codex-auth "$HOME/.codex/auth.json" \
   --council-pool "$pool" \
-  ex1
+  ex01
 ```
 
-Run `ex4` with a dedicated output directory:
+Run `ex04` with a dedicated output directory:
 
 ```bash
-out="out/ex4-$(date -u +%Y%m%d%H%M%S)"
+out="out/ex04-$(date -u +%Y%m%d%H%M%S)"
 pool="$(pwd)/pool.jsonl"
 
 .bin/aar run \
@@ -686,10 +686,10 @@ pool="$(pwd)/pool.jsonl"
   --openclaw-auth codex \
   --openclaw-codex-auth "$HOME/.codex/auth.json" \
   --council-pool "$pool" \
-  ex4
+  ex04
 ```
 
-Run `ex1` through Clerk:
+Run `ex01` through Clerk:
 
 ```bash
 .bin/aar service \
@@ -705,7 +705,7 @@ curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases \
   -H 'content-type: application/json' \
   --data @- <<EOF
 {
-    "example": "ex1",
+    "example": "ex01",
     "openclaw_auth": "codex",
     "openclaw_codex_auth_path": "$HOME/.codex/auth.json",
     "council_pool_path": "$(pwd)/pool.jsonl"

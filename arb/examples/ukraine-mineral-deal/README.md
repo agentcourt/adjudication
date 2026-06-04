@@ -12,7 +12,7 @@ The market asked whether Ukraine would agree to Trump's mineral deal before Apri
 - contemporary reporting said the market resolved Yes despite no official agreement having been reached;
 - later official U.S. source material identifies April 30, 2025 as the date of the agreement.
 
-The directory follows the `examples/ex3` pattern: `situation.md` states the proposition, and the remaining `.txt` files provide the starting record. `arbitrate.sh` will generate `complaint.md` from `situation.md` before running a case.
+The directory follows the `examples/ex03` pattern: `situation.md` states the proposition, and the remaining `.txt` files provide the starting record. `arbitrate.sh` will generate `complaint.md` from `situation.md` before running a case.
 
 Suggested run command from `arb/`, if a run is authorized:
 

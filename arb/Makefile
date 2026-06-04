@@ -1,4 +1,4 @@
-.PHONY: build test prove install demo ex2 ex3 ex4 ex5 ex6 clean
+.PHONY: build test prove install demo ex02 ex03 ex04 ex05 ex06 clean
 
 BIN_DIR := .bin
 GO_ENV := CGO_ENABLED=0 GOCACHE=$(CURDIR)/.cache/go-build
@@ -20,20 +20,20 @@ install: build
 demo: build
 	@echo "aar case waits for Lawyer API clients. See ../lawyerapi.md and ../clawyers-ex1.md."
 
-ex2: build
+ex02: build
 	@echo "aar case waits for Lawyer API clients. See ../lawyerapi.md."
 
-ex3: build
+ex03: build
 	@echo "aar case waits for Lawyer API clients. See ../lawyerapi.md."
 
-ex4: build
+ex04: build
 	@echo "aar case waits for Lawyer API clients. See ../lawyerapi.md."
 
-ex5: build
+ex05: build
 	@echo "aar case waits for Lawyer API clients. See ../lawyerapi.md."
 
-ex6: build
+ex06: build
 	@echo "aar case waits for Lawyer API clients. See ../lawyerapi.md."
 
 clean:
-	rm -rf $(BIN_DIR) engine/.lake/build out/ex1-demo out/ex2-demo out/ex3-demo out/ex4-demo out/ex5-demo out/ex6-demo
+	rm -rf $(BIN_DIR) engine/.lake/build out/ex01-demo out/ex02-demo out/ex03-demo out/ex04-demo out/ex05-demo out/ex06-demo

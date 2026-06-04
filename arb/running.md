@@ -41,7 +41,7 @@ This builds `.bin/aar` and the Lean engine used by the runtime.  The split MCP a
 Run an example directly:
 
 ```bash
-.bin/aar run ex1
+.bin/aar run ex01
 ```
 
 The command starts the case runtime and MCP server, starts OpenClaw containers for plaintiff and defendant, starts Pi council members from the AAR roster, and writes final artifacts under the output directory.  Each OpenClaw container keeps one session key for the whole lawyer assignment.  Each Pi member receives one mounted home directory under the output directory, so its session files, MCP config, settings, and model config remain available for review.
@@ -55,7 +55,7 @@ Use `--openclaw-auth codex` to require the Codex auth-file path.  Use `--opencla
 The service commands remain available for multi-case service work.  They are separate from `aar run`.  The service starts first:
 
 ```bash
-OUT=out/ex1-service-openclaw-$(date -u +%Y%m%d%H%M%S)
+OUT=out/ex01-service-openclaw-$(date -u +%Y%m%d%H%M%S)
 TOKEN=aar-local-test-token
 mkdir -p "$OUT/logs"
 
@@ -91,8 +91,8 @@ curl -fsS \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "case_id": "arb-ex1-local",
-    "complaint_path": "examples/ex1/complaint.md",
+    "case_id": "arb-ex01-local",
+    "complaint_path": "examples/ex01/complaint.md",
     "out_dir": "'"$OUT"'/case",
     "council_backend": "councilapi",
     "lawyer_timeout_seconds": 900,
@@ -105,7 +105,7 @@ An OpenClaw lawyer receives one MCP server definition and one assignment prompt.
 
 ```json
 {
-  "url": "http://host.docker.internal:19780/mcp?case_id=arb-ex1-local&role_id=plaintiff",
+  "url": "http://host.docker.internal:19780/mcp?case_id=arb-ex01-local&role_id=plaintiff",
   "transport": "streamable-http",
   "headers": {
     "Authorization": "Bearer aar-local-test-token"
@@ -117,7 +117,7 @@ Council members use the same MCP endpoint with `member_id` instead of `role_id`.
 
 ```json
 {
-  "url": "http://host.docker.internal:19780/mcp?case_id=arb-ex1-local&member_id=C1",
+  "url": "http://host.docker.internal:19780/mcp?case_id=arb-ex01-local&member_id=C1",
   "transport": "streamable-http",
   "headers": {
     "Authorization": "Bearer aar-local-test-token"
@@ -140,7 +140,7 @@ The service result endpoint returns pending status while the case runs and final
 ```bash
 curl -fsS \
   -H "Authorization: Bearer $TOKEN" \
-  http://127.0.0.1:19770/api/v1/cases/arb-ex1-local/result
+  http://127.0.0.1:19770/api/v1/cases/arb-ex01-local/result
 ```
 
 The output directory contains the AAR record and process logs.  Review `case/digest.md`, `case/transcript.md`, `case/events.ndjson`, `case/work-notes.ndjson`, `case/evidence-manifest.json`, `case/run.json`, and `logs/openclaw-*.stdout`.  Evidence review should check whether lawyers read case-packet evidence, admitted outside sources before relying on them, used `evidence_id` values in filings, and explained what the evidence proved.
