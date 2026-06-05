@@ -193,12 +193,15 @@ type EvidenceMeta struct {
 }
 
 type CouncilSeat struct {
-	MemberID    string             `json:"member_id"`
-	Model       string             `json:"model"`
-	PersonaFile string             `json:"persona_file"`
-	Status      string             `json:"status"`
-	RequestSpec *modelrequest.Spec `json:"request_spec,omitempty"`
-	PersonaText string             `json:"-"`
+	MemberID             string             `json:"member_id"`
+	Model                string             `json:"model"`
+	PersonaFile          string             `json:"persona_file"`
+	Status               string             `json:"status"`
+	FailureReason        string             `json:"failure_reason,omitempty"`
+	FailureOpportunityID string             `json:"failure_opportunity_id,omitempty"`
+	FailureMessage       string             `json:"failure_message,omitempty"`
+	RequestSpec          *modelrequest.Spec `json:"request_spec,omitempty"`
+	PersonaText          string             `json:"-"`
 }
 
 type Opportunity struct {

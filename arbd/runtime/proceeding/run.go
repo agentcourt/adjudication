@@ -166,7 +166,7 @@ func runConfigured(ctx context.Context, cfg Config, complaint spec.Complaint) (r
 				CaseFiles:         caseFileMetas(rc.caseFiles),
 				SubmittedEvidence: rc.submittedEvidence,
 				Evidence:          rc.listVisibleEvidence(),
-				Council:           council,
+				Council:           finalCouncil(council, rc.state),
 				Events:            rc.events,
 				FinalState:        rc.state,
 				FinalReason:       reason,

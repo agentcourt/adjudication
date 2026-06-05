@@ -185,10 +185,18 @@ func appendCouncilSection(b *strings.Builder, result Result, includePersona bool
 			status = "seated"
 		}
 		if includePersona {
-			b.WriteString(fmt.Sprintf("- %s: %s (%s), status: %s\n", seat.MemberID, seat.Model, seat.PersonaFile, status))
+			b.WriteString(fmt.Sprintf("- %s: %s (%s), status: %s", seat.MemberID, seat.Model, seat.PersonaFile, status))
+			if status == "failed" && strings.TrimSpace(seat.FailureReason) != "" {
+				b.WriteString(fmt.Sprintf(", failure: %s", seat.FailureReason))
+			}
+			b.WriteString("\n")
 			continue
 		}
-		b.WriteString(fmt.Sprintf("- %s: %s, status: %s\n", seat.MemberID, seat.Model, status))
+		b.WriteString(fmt.Sprintf("- %s: %s, status: %s", seat.MemberID, seat.Model, status))
+		if status == "failed" && strings.TrimSpace(seat.FailureReason) != "" {
+			b.WriteString(fmt.Sprintf(", failure: %s", seat.FailureReason))
+		}
+		b.WriteString("\n")
 	}
 }
 

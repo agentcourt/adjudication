@@ -112,6 +112,9 @@ func caseFileKind(name string) (string, bool) {
 }
 
 func skipCaseFile(name string) bool {
+	if strings.HasSuffix(name, "~") {
+		return true
+	}
 	switch name {
 	case ".gitignore", "README.md", "complaint.md", "situation.md", "sign.sh", "confession.sig", "samantha_private.pem":
 		return true
@@ -124,6 +127,11 @@ func councilPoolMeta(path string, baseDir string) ([]persona.Spec, error) {
 	specs, err := persona.LoadRecordsFile(path, baseDir)
 	if err != nil {
 		return nil, err
+	}
+	for index, spec := range specs {
+		if spec.RequestSpec == nil {
+			return nil, fmt.Errorf("council pool record %d has no request_spec; JSONL request-spec records are required", index+1)
+		}
 	}
 	return specs, nil
 }
@@ -157,6 +165,7 @@ func sampleCouncil(path string, baseDir string, count int) ([]CouncilSeat, error
 			Model:       spec.Model,
 			PersonaFile: spec.File,
 			Status:      "seated",
+			RequestSpec: spec.RequestSpec,
 			PersonaText: spec.Text,
 		})
 	}
@@ -253,20 +262,53 @@ func caseFileMetas(files []CaseFile) []CaseFileMeta {
 	return out
 }
 
-func finalCouncil(state map[string]any) []CouncilSeat {
+func finalCouncil(council []CouncilSeat, state map[string]any) []CouncilSeat {
 	caseObj := mapAny(state["case"])
 	rawCouncil := mapList(caseObj["council_members"])
-	out := make([]CouncilSeat, 0, len(rawCouncil))
+	byID := map[string]map[string]any{}
 	for _, raw := range rawCouncil {
+		memberID := mapString(raw["member_id"])
+		if memberID != "" {
+			byID[memberID] = raw
+		}
+	}
+	out := make([]CouncilSeat, 0, len(council))
+	seen := map[string]bool{}
+	for _, seat := range council {
+		raw := byID[seat.MemberID]
+		status := mapString(raw["status"])
+		if status == "" {
+			status = seat.Status
+		}
+		if status == "" {
+			status = "seated"
+		}
+		seat.Status = status
+		if status == "failed" {
+			seat.FailureReason = mapString(raw["failure_reason"])
+			seat.FailureOpportunityID = mapString(raw["failure_opportunity_id"])
+			seat.FailureMessage = mapString(raw["failure_message"])
+		}
+		out = append(out, seat)
+		seen[seat.MemberID] = true
+	}
+	for _, raw := range rawCouncil {
+		memberID := mapString(raw["member_id"])
+		if memberID == "" || seen[memberID] {
+			continue
+		}
 		status := mapString(raw["status"])
 		if status == "" {
 			status = "seated"
 		}
 		out = append(out, CouncilSeat{
-			MemberID:    mapString(raw["member_id"]),
-			Model:       mapString(raw["model"]),
-			PersonaFile: mapString(raw["persona_filename"]),
-			Status:      status,
+			MemberID:             memberID,
+			Model:                mapString(raw["model"]),
+			PersonaFile:          mapString(raw["persona_filename"]),
+			Status:               status,
+			FailureReason:        mapString(raw["failure_reason"]),
+			FailureOpportunityID: mapString(raw["failure_opportunity_id"]),
+			FailureMessage:       mapString(raw["failure_message"]),
 		})
 	}
 	return out

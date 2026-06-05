@@ -42,7 +42,7 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client coun
 				"type": "object",
 				"properties": map[string]any{
 					"member_id": map[string]any{"type": "string"},
-					"answer":    map[string]any{"type": "string"},
+					"answer":    map[string]any{"type": "integer", "minimum": 0, "maximum": 100},
 					"rationale": map[string]any{"type": "string"},
 				},
 				"required":             []string{"member_id", "answer", "rationale"},

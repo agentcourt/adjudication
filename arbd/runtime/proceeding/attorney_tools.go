@@ -340,6 +340,7 @@ func (rc *runContext) buildAttorneyPrompt(opportunity Opportunity) (string, erro
 		"WORKSPACE_SECTION":          workspaceSection,
 		"WORK_PRODUCT_SECTION":       workProductSection,
 		"ALLOWED_TOOLS":              strings.Join(decisionToolEnum(opportunity.AllowedTools), ", "),
+		"DECISION_TOOLS":             strings.Join(decisionToolEnum(opportunity.AllowedTools), ", "),
 	})
 	if err != nil {
 		return "", err
