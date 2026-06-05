@@ -104,8 +104,25 @@ func (s *Server) handleClerkCase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	caseID := parts[0]
+	if len(parts) == 1 && r.Method == http.MethodGet {
+		s.handleGetClerkCase(w, caseID)
+		return
+	}
 	if len(parts) == 2 && parts[1] == "kill" && r.Method == http.MethodPost {
 		s.handleKillClerkCase(w, caseID)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "result" && r.Method == http.MethodGet {
+		s.handleClerkCaseResult(w, caseID)
+		return
+	}
+	if len(parts) >= 2 && parts[1] == "artifacts" && r.Method == http.MethodGet {
+		name := strings.Join(parts[2:], "/")
+		s.handleClerkArtifact(w, r, caseID, name)
+		return
+	}
+	if len(parts) == 3 && parts[1] == "evidence" && r.Method == http.MethodGet {
+		s.handleClerkEvidence(w, r, caseID, parts[2])
 		return
 	}
 	writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("not_found", "unknown clerk route")})
@@ -470,11 +487,76 @@ func (s *Server) handleKillClerkCase(w http.ResponseWriter, caseID string) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "case": out})
 }
 
+func (s *Server) handleGetClerkCase(w http.ResponseWriter, caseID string) {
+	rec, ok := s.getClerkRecord(caseID)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_case", "unknown case_id")})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "case": rec})
+}
+
+func (s *Server) handleClerkCaseResult(w http.ResponseWriter, caseID string) {
+	rec, ok := s.getClerkRecord(caseID)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_case", "unknown case_id")})
+		return
+	}
+	run, err := readRunJSONFromDir(rec.OutDir)
+	if err != nil {
+		if rec.Status == "failed" {
+			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "case_id": caseID, "status": "failed", "error": rec.Error})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "case_id": caseID, "status": rec.Status, "message": "The case is still pending or has no final result."})
+		return
+	}
+	writeJSON(w, http.StatusOK, finalResultResponse(caseID, "observer", run))
+}
+
+func (s *Server) handleClerkArtifact(w http.ResponseWriter, r *http.Request, caseID string, name string) {
+	rec, ok := s.getClerkRecord(caseID)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_case", "unknown case_id")})
+		return
+	}
+	if name == "" {
+		files, err := listArtifacts(rec.OutDir)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "case_id": caseID, "error": apiError("artifact_list_failed", err.Error())})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "case_id": caseID, "artifacts": files})
+		return
+	}
+	serveListedArtifactFile(w, r, caseID, rec.OutDir, name)
+}
+
+func (s *Server) handleClerkEvidence(w http.ResponseWriter, r *http.Request, caseID string, evidenceID string) {
+	rec, ok := s.getClerkRecord(caseID)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_case", "unknown case_id")})
+		return
+	}
+	serveEvidenceFile(w, r, caseID, rec.OutDir, evidenceID)
+}
+
 func (s *Server) getClerkRecordPtr(caseID string) (*ClerkRecord, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rec := s.clerkCases[caseID]
 	return rec, rec != nil
+}
+
+func (s *Server) getClerkRecord(caseID string) (ClerkRecord, bool) {
+	if rec, ok := s.getClerkRecordPtr(caseID); ok {
+		return publicClerkRecord(rec), true
+	}
+	disk, err := s.readClerkRecordByCaseID(caseID)
+	if err != nil {
+		return ClerkRecord{}, false
+	}
+	return disk, true
 }
 
 func (s *Server) markClerkFailed(rec *ClerkRecord, message string) {
@@ -585,9 +667,8 @@ func resolveClerkOutDir(outputRoot string, caseID string, requested string) (str
 	}
 	out := strings.TrimSpace(requested)
 	if out == "" {
-		return filepath.Join(rootAbs, caseID), nil
-	}
-	if !filepath.IsAbs(out) {
+		out = filepath.Join(rootAbs, caseID)
+	} else if !filepath.IsAbs(out) {
 		out = filepath.Join(rootAbs, out)
 	}
 	outAbs, err := filepath.Abs(out)

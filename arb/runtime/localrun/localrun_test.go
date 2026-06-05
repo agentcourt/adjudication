@@ -265,8 +265,16 @@ func TestOpenClawAuthArgsForCodex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("auth args: %v", err)
 	}
-	if prefix != "unset OPENAI_API_KEY\n" {
-		t.Fatalf("prefix = %q", prefix)
+	for _, want := range []string{
+		"unset OPENAI_API_KEY",
+		"CODEX_HOME",
+		"tokens.access_token",
+		"openclaw models auth paste-token --provider openai --profile-id openai:codex",
+		"unset codex_token",
+	} {
+		if !strings.Contains(prefix, want) {
+			t.Fatalf("prefix missing %q:\n%s", want, prefix)
+		}
 	}
 	joined := strings.Join(args, "\n")
 	if strings.Contains(joined, "OPENAI_API_KEY") {

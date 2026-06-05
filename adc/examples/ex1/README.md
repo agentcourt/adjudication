@@ -78,7 +78,7 @@ curl -sS -X POST http://127.0.0.1:19870/clerk/v1/cases \
     "complaint_path": "examples/ex1/complaint.md",
     "out_dir": "out/adc-service/adc-ex1",
     "openclaw_auth": "codex",
-    "openclaw_codex_auth": "PATH/TO/auth.json",
+    "openclaw_codex_auth_path": "PATH/TO/auth.json",
     "juror_personas": "../common/data/personas/pool.jsonl"
   }'
 ```

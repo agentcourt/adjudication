@@ -271,7 +271,7 @@ Start a standalone MCP server:
 ```bash
 .bin/aard mcp \
   --caseapi-base http://127.0.0.1:21345 \
-  --listen 127.0.0.1:19780
+  --listen 127.0.0.1:19800
 ```
 
 `aard mcp` prints `aard mcp listening on http://HOST:PORT/mcp` to stderr after binding the listener.  It also serves `/health`, which returns HTTP `204` when the MCP server is accepting requests.
@@ -281,7 +281,7 @@ Important flags:
 | Flag | Meaning |
 | --- | --- |
 | `--caseapi-base` | Base URL for the Case API or service API.  Required. |
-| `--listen` | MCP listen address.  Default: `127.0.0.1:19780`. |
+| `--listen` | MCP listen address.  Default: `127.0.0.1:19800`. |
 | `--bearer-token` | Optional bearer token required for MCP requests. |
 | `--api-bearer-token` | Optional bearer token sent from MCP to the Case API or service. |
 | `--session-ttl` | Idle session lifetime.  `0` disables expiry. |
@@ -370,7 +370,7 @@ The council output limit is enforced by the local `aard run` process while it mo
 
 ## OpenClaw Lawyer Auth
 
-Codex auth mode copies only `auth.json` into a per-lawyer Codex home under the run output directory, mounts that directory into the OpenClaw container as `/aard-codex`, and sets `CODEX_HOME=/aard-codex`.  The container command unsets `OPENAI_API_KEY` in Codex mode.  `aard run` removes those staged Codex homes during normal cleanup; an interrupted process can leave a staged copy behind and should be checked before preserving or sharing the run directory.
+Codex auth mode copies only `auth.json` into a per-lawyer Codex home under the run output directory, mounts that directory into the OpenClaw container as `/aard-codex`, and sets `CODEX_HOME=/aard-codex`.  The container command unsets `OPENAI_API_KEY`, reads the staged access token, and imports it into OpenClaw with `openclaw models auth paste-token --provider openai --profile-id openai:codex`.  `aard run` removes those staged Codex homes during normal cleanup; an interrupted process can leave a staged copy behind and should be checked before preserving or sharing the run directory.
 
 Use this command shape for local runs:
 
@@ -439,7 +439,7 @@ Start the service:
 
 ```bash
 .bin/aard service \
-  --listen 127.0.0.1:19770 \
+  --listen 127.0.0.1:19790 \
   --out-root out/service \
   --aard-bin .bin/aard
 ```
@@ -450,7 +450,7 @@ Important flags:
 
 | Flag | Meaning |
 | --- | --- |
-| `--listen` | Service listen address.  Default: `127.0.0.1:19770`. |
+| `--listen` | Service listen address.  Default: `127.0.0.1:19790`. |
 | `--registry-dir` | Directory for `/api/v1/cases` records.  Defaults to `<out-root>/registry`. |
 | `--out-root` | Parent output directory for service-managed cases.  Default: `out/service`. |
 | `--aard-bin` | Path to the `aard` binary used for child processes.  Default: current executable. |
@@ -465,12 +465,14 @@ If `--bearer-token` is set, every service request must include `Authorization: B
 
 The Clerk API starts and tracks full `aard run` child processes.  It stores one record in each run output directory as `clerk.json`.  Listing scans immediate child directories under `--out-root` and reads those records.  There is no separate Clerk index.
 
+The service role proxy routes are for direct `/api/v1/cases` records.  A Clerk-started run has its own case process and MCP server inside the child `aard run` process.  Remote lawyers use the MCP URL and generated skill from that run, while operators use Clerk routes to inspect the run record, final result, primary artifacts, and submitted evidence.
+
 Create a case:
 
 ```bash
 pool="$(pwd)/pool.jsonl"
 
-curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases \
+curl -sS -X POST http://127.0.0.1:19790/clerk/v1/cases \
   -H 'content-type: application/json' \
   --data @- <<EOF
 {
@@ -487,7 +489,7 @@ Create a case from an explicit complaint:
 ```bash
 pool="$(pwd)/pool.jsonl"
 
-curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases \
+curl -sS -X POST http://127.0.0.1:19790/clerk/v1/cases \
   -H 'content-type: application/json' \
   --data @- <<EOF
 {
@@ -507,17 +509,44 @@ The `out_dir` field, when present, must name an immediate child of the service o
 List Clerk cases:
 
 ```bash
-curl -sS http://127.0.0.1:19770/clerk/v1/cases
-curl -sS 'http://127.0.0.1:19770/clerk/v1/cases?status=running'
+curl -sS http://127.0.0.1:19790/clerk/v1/cases
+curl -sS 'http://127.0.0.1:19790/clerk/v1/cases?status=running'
+```
+
+Inspect one Clerk case:
+
+```bash
+curl -sS http://127.0.0.1:19790/clerk/v1/cases/arbd-custom-20260603123000
+```
+
+Read final result or pending status:
+
+```bash
+curl -sS http://127.0.0.1:19790/clerk/v1/cases/arbd-custom-20260603123000/result
+```
+
+List and read output artifacts:
+
+```bash
+curl -sS http://127.0.0.1:19790/clerk/v1/cases/arbd-custom-20260603123000/artifacts
+curl -sS http://127.0.0.1:19790/clerk/v1/cases/arbd-custom-20260603123000/artifacts/digest.md
+```
+
+Read submitted evidence by evidence id:
+
+```bash
+curl -sS http://127.0.0.1:19790/clerk/v1/cases/arbd-custom-20260603123000/evidence/EVIDENCE_ID
 ```
 
 Kill a Clerk case:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases/arbd-custom-20260603123000/kill
+curl -sS -X POST http://127.0.0.1:19790/clerk/v1/cases/arbd-custom-20260603123000/kill
 ```
 
 Kill sends interrupt, waits 10 seconds, and then kills the child process if it has not exited.  If the case record is active on disk but the current service process has no process handle, the endpoint returns HTTP `409` with error code `case_not_attached`.  Terminal disk-only records return unchanged because there is no live process to kill.
+
+Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, and `evidence-manifest.json`.  They do not serve arbitrary output files, process logs, generated remote-lawyer skill files, or staged Codex auth directories.  The evidence route reads `evidence-manifest.json` and serves submitted evidence by evidence id when the manifest maps that id to a readable file.
 
 Clerk create request fields mirror `aard run` options in structured JSON:
 
@@ -571,12 +600,12 @@ Clerk create request fields mirror `aard run` options in structured JSON:
 
 ## Direct Case Service API
 
-The `/api/v1/cases` API starts `aard case` children instead of full `aard run` children.  It is useful when the lawyers or council members will be driven through HTTP directly, without the local OpenClaw and Pi agents that `aard run` starts.  It stores case records under `--registry-dir` and can proxy `/lawyerapi/v1` and `/councilapi/v1` calls to the active child by `case_id`.
+The `/api/v1/cases` API starts `aard case` children instead of full `aard run` children.  It is useful when the lawyers or council members will be driven through HTTP directly, without the local OpenClaw and Pi agents that `aard run` starts.  It stores case records under `--registry-dir` and can proxy `/lawyerapi/v1` and `/councilapi/v1` calls to the active child by `case_id`.  If the request supplies `out_dir`, that directory must be an immediate child of the service output root.
 
 Create a direct service case:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:19770/api/v1/cases \
+curl -sS -X POST http://127.0.0.1:19790/api/v1/cases \
   -H 'content-type: application/json' \
   --data '{
     "case_id": "api-case-1",
@@ -589,18 +618,18 @@ curl -sS -X POST http://127.0.0.1:19770/api/v1/cases \
 List and inspect:
 
 ```bash
-curl -sS http://127.0.0.1:19770/api/v1/cases
-curl -sS http://127.0.0.1:19770/api/v1/cases/api-case-1
-curl -sS http://127.0.0.1:19770/api/v1/cases/api-case-1/result
+curl -sS http://127.0.0.1:19790/api/v1/cases
+curl -sS http://127.0.0.1:19790/api/v1/cases/api-case-1
+curl -sS http://127.0.0.1:19790/api/v1/cases/api-case-1/result
 ```
 
 Cancel:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:19770/api/v1/cases/api-case-1/cancel
+curl -sS -X POST http://127.0.0.1:19790/api/v1/cases/api-case-1/cancel
 ```
 
-Artifact routes expose selected files from a case output directory.  `GET /api/v1/cases/{case_id}/artifacts` lists known artifacts, and `GET /api/v1/cases/{case_id}/artifacts/{name}` serves one artifact.  `GET /api/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted evidence by evidence id when the manifest contains a readable file name.
+Artifact routes serve only listed artifact names from a case output directory.  `GET /api/v1/cases/{case_id}/artifacts` lists known artifacts, and `GET /api/v1/cases/{case_id}/artifacts/{name}` serves one exact listed artifact name.  `GET /api/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted evidence by evidence id when the manifest contains a readable file name.
 
 ## Output Packet
 
@@ -693,7 +722,7 @@ Run `ex1` through Clerk:
 
 ```bash
 .bin/aard service \
-  --listen 127.0.0.1:19770 \
+  --listen 127.0.0.1:19790 \
   --out-root out/service \
   --aard-bin .bin/aard
 ```
@@ -701,7 +730,7 @@ Run `ex1` through Clerk:
 In another terminal:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases \
+curl -sS -X POST http://127.0.0.1:19790/clerk/v1/cases \
   -H 'content-type: application/json' \
   --data @- <<EOF
 {

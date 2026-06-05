@@ -107,6 +107,7 @@ func TestRoleAPIProxyForwardsGetAndPost(t *testing.T) {
 
 func TestCaseProcessArgsDefaultsToRun(t *testing.T) {
 	s := &Server{cfg: Config{EnginePath: "lake exe adc-engine"}}
+	startDelay := 15
 	args := s.caseProcessArgs("", CaseCreateRequest{
 		Model:                     "model-1",
 		JurorPersonas:             "pool.jsonl",
@@ -114,8 +115,8 @@ func TestCaseProcessArgsDefaultsToRun(t *testing.T) {
 		MCPListenAddr:             "127.0.0.1:8001",
 		AutoLawyers:               "defendant",
 		OpenClawAuth:              "codex",
-		OpenClawCodexAuth:         "auth.json",
-		OpenClawStartDelaySeconds: 15,
+		OpenClawCodexAuthPath:     "auth.json",
+		OpenClawStartDelaySeconds: &startDelay,
 		PiImage:                   "pi-image",
 		JurorOutputLimitBytes:     4096,
 		ExternalRoles:             []string{"plaintiff"},
@@ -134,6 +135,25 @@ func TestCaseProcessArgsDefaultsToRun(t *testing.T) {
 			t.Fatalf("run args contain direct-mode value %q: %#v", forbidden, args)
 		}
 	}
+}
+
+func TestCaseProcessArgsKeepsExplicitZeroOpenClawStartDelay(t *testing.T) {
+	s := &Server{cfg: Config{EnginePath: "lake exe adc-engine"}}
+	startDelay := 0
+	args := s.caseProcessArgs("", CaseCreateRequest{
+		ScenarioPath:              "/tmp/scenario.json",
+		OpenClawStartDelaySeconds: &startDelay,
+	}, "case-1", "run-case-1", "/tmp/out", "127.0.0.1:9001", "", "/tmp/scenario.json")
+
+	for i, arg := range args {
+		if arg == "--openclaw-lawyer-start-delay-seconds" {
+			if i+1 >= len(args) || args[i+1] != "0" {
+				t.Fatalf("delay args = %#v", args)
+			}
+			return
+		}
+	}
+	t.Fatalf("missing explicit zero delay in %#v", args)
 }
 
 func TestStartCaseRejectsOfflineComplaintSetup(t *testing.T) {
@@ -177,10 +197,96 @@ func TestStartCaseRejectsOutputDirOutsideOutputRoot(t *testing.T) {
 	}
 }
 
+func TestStartCaseRejectsPathCaseIDs(t *testing.T) {
+	root := t.TempDir()
+	scenario := filepath.Join(root, "scenario.json")
+	if err := os.WriteFile(scenario, []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write scenario: %v", err)
+	}
+	s, err := New(Config{OutputRoot: filepath.Join(root, "service"), ADCBin: "/bin/false"})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	for _, caseID := range []string{".", ".."} {
+		_, err := s.startCase(context.Background(), CaseCreateRequest{
+			CaseID:       caseID,
+			ScenarioPath: scenario,
+		})
+		if err == nil || !strings.Contains(err.Error(), "case_id is invalid") {
+			t.Fatalf("case_id %q error = %v", caseID, err)
+		}
+	}
+}
+
 func TestValidateServiceOutputDirAcceptsImmediateChild(t *testing.T) {
 	root := t.TempDir()
 	if err := validateServiceOutputDir(root, filepath.Join(root, "case-1")); err != nil {
 		t.Fatalf("validate immediate child: %v", err)
+	}
+}
+
+func TestListedArtifactNameRequiresExactName(t *testing.T) {
+	if !listedArtifactName("digest.md") {
+		t.Fatalf("digest.md should be listed")
+	}
+	for _, name := range []string{"/digest.md", "logs/../digest.md", "digest.md/", " digest.md"} {
+		if listedArtifactName(name) {
+			t.Fatalf("%q should not be listed", name)
+		}
+	}
+}
+
+func TestArtifactRouteServesOnlyListedArtifacts(t *testing.T) {
+	outDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(outDir, "logs"), 0o755); err != nil {
+		t.Fatalf("mkdir logs: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "digest.md"), []byte("digest text\n"), 0o644); err != nil {
+		t.Fatalf("write digest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "logs", "mcp.stderr"), []byte("secret log\n"), 0o644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "openclaw-plaintiff-lawyer-skill.md"), []byte("bearer token\n"), 0o600); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	if err := os.WriteFile(outside, []byte("outside\n"), 0o644); err != nil {
+		t.Fatalf("write outside: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(outDir, "transcript.md")); err != nil {
+		t.Fatalf("symlink transcript: %v", err)
+	}
+	s := testServiceWithCase(t, CaseRecord{
+		CaseID:    "case-1",
+		RunID:     "run-case-1",
+		Status:    "completed",
+		OutputDir: outDir,
+	})
+
+	status, body := serviceRawGet(t, s, "/api/v1/cases/case-1/artifacts/digest.md")
+	if status != http.StatusOK || string(body) != "digest text\n" {
+		t.Fatalf("digest status = %d body = %q", status, string(body))
+	}
+	status, got := serviceGet(t, s, "/api/v1/cases/case-1/artifacts")
+	if status != http.StatusOK {
+		t.Fatalf("artifacts status = %d body = %#v", status, got)
+	}
+	if !artifactListContains(got["artifacts"], "digest.md") || artifactListContains(got["artifacts"], "transcript.md") {
+		t.Fatalf("artifacts = %#v", got["artifacts"])
+	}
+	for _, path := range []string{
+		"/api/v1/cases/case-1/artifacts/logs/mcp.stderr",
+		"/api/v1/cases/case-1/artifacts/openclaw-plaintiff-lawyer-skill.md",
+	} {
+		status, got := serviceGet(t, s, path)
+		if status != http.StatusNotFound {
+			t.Fatalf("%s status = %d body = %#v", path, status, got)
+		}
+	}
+	status, got = serviceGet(t, s, "/api/v1/cases/case-1/artifacts/transcript.md")
+	if status != http.StatusBadRequest {
+		t.Fatalf("transcript symlink status = %d body = %#v", status, got)
 	}
 }
 
@@ -302,6 +408,14 @@ func serviceGet(t *testing.T, s *Server, path string) (int, map[string]any) {
 	return decodeServiceResponse(t, rec)
 }
 
+func serviceRawGet(t *testing.T, s *Server, path string) (int, []byte) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	return rec.Code, rec.Body.Bytes()
+}
+
 func servicePost(t *testing.T, s *Server, path string, body map[string]any) (int, map[string]any) {
 	t.Helper()
 	raw, err := json.Marshal(body)
@@ -324,6 +438,20 @@ func decodeServiceResponse(t *testing.T, rec *httptest.ResponseRecorder) (int, m
 		t.Fatalf("decode response status=%d body=%q: %v", rec.Code, rec.Body.String(), err)
 	}
 	return rec.Code, got
+}
+
+func artifactListContains(value any, name string) bool {
+	items, ok := value.([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range items {
+		obj, ok := item.(map[string]any)
+		if ok && obj["name"] == name {
+			return true
+		}
+	}
+	return false
 }
 
 func writeServiceRecord(t *testing.T, outDir string, rec CaseRecord) {

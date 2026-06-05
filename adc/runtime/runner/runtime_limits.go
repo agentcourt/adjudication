@@ -5,6 +5,7 @@ const (
 	DefaultRoleAPITimeoutSeconds = 480
 	DefaultMaxResponseBytes      = 128 * 1024
 	DefaultInvalidAttemptLimit   = 3
+	DefaultJurorMaxOutputTokens  = 4096
 )
 
 type RuntimeLimits struct {
@@ -12,6 +13,7 @@ type RuntimeLimits struct {
 	RoleAPITimeoutSeconds int `json:"roleapi_timeout_seconds"`
 	MaxResponseBytes      int `json:"max_response_bytes"`
 	InvalidAttemptLimit   int `json:"invalid_attempt_limit"`
+	JurorMaxOutputTokens  int `json:"juror_max_output_tokens"`
 }
 
 func (limits RuntimeLimits) Normalized() RuntimeLimits {
@@ -26,6 +28,9 @@ func (limits RuntimeLimits) Normalized() RuntimeLimits {
 	}
 	if limits.InvalidAttemptLimit <= 0 {
 		limits.InvalidAttemptLimit = DefaultInvalidAttemptLimit
+	}
+	if limits.JurorMaxOutputTokens <= 0 {
+		limits.JurorMaxOutputTokens = DefaultJurorMaxOutputTokens
 	}
 	return limits
 }

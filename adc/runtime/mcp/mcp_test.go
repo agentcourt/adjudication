@@ -46,7 +46,7 @@ func TestInitializeToolsAndRoleAPIForwarding(t *testing.T) {
 	server := testServer(fakeCaseAPI.URL)
 	sessionID := initializeTestSession(t, server, "case_id=case-1&role_id=juror&principal_id=J1")
 	tools := listTestTools(t, server, sessionID)
-	for _, name := range []string{"wait_for_opportunity", "get_current_opportunity", "send_work_notes", "submit_decision", "get_juror_context"} {
+	for _, name := range []string{"wait_for_opportunity", "get_current_opportunity", "get_case_result", "send_work_notes", "submit_decision", "get_juror_context"} {
 		if !hasTool(tools, name) {
 			t.Fatalf("missing tool %s: %#v", name, tools)
 		}
@@ -90,6 +90,32 @@ func TestObserverToolsAreReadOnly(t *testing.T) {
 		if hasTool(tools, name) {
 			t.Fatalf("observer received mutating or role-specific tool %s: %#v", name, tools)
 		}
+	}
+}
+
+func TestObserverCannotCallUnlistedTool(t *testing.T) {
+	caseAPICalls := 0
+	fakeCaseAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		caseAPICalls++
+		writeTestJSON(w, map[string]any{"ok": true})
+	}))
+	defer fakeCaseAPI.Close()
+
+	server := testServer(fakeCaseAPI.URL)
+	sessionID := initializeTestSession(t, server, "case_id=case-1&role_id=observer")
+	result := callTestTool(t, server, sessionID, "submit_decision", map[string]any{
+		"kind":   "pass",
+		"reason": "observer should not be able to act",
+	})
+	content := structuredContent(t, result)
+	if content["ok"] != false || content["status"] != "forbidden" {
+		t.Fatalf("observer unlisted tool content = %#v", content)
+	}
+	if isError, _ := result["isError"].(bool); !isError {
+		t.Fatalf("observer unlisted tool result isError = %#v", result["isError"])
+	}
+	if caseAPICalls != 0 {
+		t.Fatalf("observer unlisted tool reached Role API %d times", caseAPICalls)
 	}
 }
 

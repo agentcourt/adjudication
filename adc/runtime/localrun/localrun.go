@@ -44,7 +44,6 @@ const (
 	defaultCaseAPIStartupWait     = 10 * time.Minute
 	defaultMCPStartupWait         = 30 * time.Second
 	defaultJurorOutputCheck       = 5 * time.Second
-	defaultPiMaxOutputTokens      = 4096
 	jurorFailureAgentExited       = "agent_exited"
 	jurorFailureOutputLimit       = "agent_output_limit_exceeded"
 	openClawCodexContainerHome    = "/adc-codex"
@@ -1232,7 +1231,7 @@ func writePiConfig(home string, active activeJurorOpportunity, server string, mc
 		"id":   model,
 		"name": "ADC " + active.principalID + " " + model,
 	}
-	spec = spec.WithFallbackMaxOutputTokens(defaultPiMaxOutputTokens)
+	spec = spec.WithFallbackMaxOutputTokens(runner.DefaultJurorMaxOutputTokens)
 	if maxTokens := spec.MaxOutputTokens(); maxTokens != nil {
 		modelEntry["maxTokens"] = *maxTokens
 	}
@@ -1605,7 +1604,7 @@ func writeRunSummary(outDir string, result runner.Result, opts Options) error {
 		"mcp_public_base_url":                 opts.MCPPublicBaseURL,
 		"openclaw_lawyer_start_delay_seconds": opts.OpenClawStartDelaySeconds,
 		"juror_output_limit_bytes":            opts.JurorOutputLimitBytes,
-		"juror_default_max_output_tokens":     defaultPiMaxOutputTokens,
+		"juror_default_max_output_tokens":     runner.DefaultJurorMaxOutputTokens,
 		"assertion_count":                     len(result.Assertions),
 		"turn_count":                          len(result.TurnLogs),
 	})

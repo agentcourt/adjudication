@@ -39,7 +39,7 @@ The active opportunity response names the legal tools currently allowed by Lean.
 
 The MCP tool list remains stable during the session.  Each opportunity response tells the agent which legal tools are allowed for that turn.  A lawyer or juror should call `wait_for_opportunity`, inspect the returned opportunity when it is ready, use support tools as needed, send work notes, submit one decision, and repeat until the case reports `done` or `failed`.
 
-Standard MCP tools include `wait_for_opportunity`, `get_current_opportunity`, `case_status`, `get_case`, `explain_decisions`, `list_case_files`, `read_case_text_file`, `request_case_file`, `read_case_file_bytes`, `get_juror_context`, `send_work_notes`, `submit_decision`, and `report_failure`.  Observer sessions also get `get_case_result`.  Support tools enforce the same role visibility rules as the prompt.
+Standard MCP tools include `wait_for_opportunity`, `get_current_opportunity`, `case_status`, and `get_case_result`.  Non-observer sessions also get `get_case`, `explain_decisions`, `list_case_files`, `read_case_text_file`, `request_case_file`, `read_case_file_bytes`, `get_juror_context`, `send_work_notes`, `submit_decision`, and `report_failure`.  Support tools enforce the same role visibility rules as the prompt.
 
 ## Legal Acts
 

@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	DefaultListenAddr      = "127.0.0.1:19770"
+	DefaultListenAddr      = "127.0.0.1:19790"
 	DefaultCaseStartupWait = 30 * time.Second
 
 	defaultMaxProxyBodyBytes = 32 << 20
@@ -321,6 +321,9 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 	outDir := strings.TrimSpace(req.OutputDir)
 	if outDir == "" {
 		outDir = filepath.Join(s.cfg.OutputRoot, caseID)
+	}
+	if err := validateServiceOutputDir(s.cfg.OutputRoot, outDir); err != nil {
+		return CaseRecord{}, err
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return CaseRecord{}, fmt.Errorf("create case output dir: %w", err)
@@ -1029,7 +1032,11 @@ func (s *Server) handleCaseResult(w http.ResponseWriter, caseID string) {
 }
 
 func readRunJSON(rec *CaseRecord) (map[string]any, error) {
-	raw, err := os.ReadFile(filepath.Join(rec.OutputDir, "run.json"))
+	return readRunJSONFromDir(rec.OutputDir)
+}
+
+func readRunJSONFromDir(outDir string) (map[string]any, error) {
+	raw, err := os.ReadFile(filepath.Join(outDir, "run.json"))
 	if err != nil {
 		return nil, err
 	}
@@ -1055,7 +1062,7 @@ func (s *Server) handleArtifact(w http.ResponseWriter, r *http.Request, caseID s
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "case_id": caseID, "artifacts": files})
 		return
 	}
-	s.serveCaseFile(w, r, rec, name)
+	serveListedArtifactFile(w, r, caseID, rec.OutputDir, name)
 }
 
 func (s *Server) handleEvidence(w http.ResponseWriter, r *http.Request, caseID string, evidenceID string) {
@@ -1064,7 +1071,11 @@ func (s *Server) handleEvidence(w http.ResponseWriter, r *http.Request, caseID s
 		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_case", "unknown case_id")})
 		return
 	}
-	raw, err := os.ReadFile(filepath.Join(rec.OutputDir, "evidence-manifest.json"))
+	serveEvidenceFile(w, r, caseID, rec.OutputDir, evidenceID)
+}
+
+func serveEvidenceFile(w http.ResponseWriter, r *http.Request, caseID string, outDir string, evidenceID string) {
+	raw, err := os.ReadFile(filepath.Join(outDir, "evidence-manifest.json"))
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("manifest_missing", err.Error())})
 		return
@@ -1084,7 +1095,7 @@ func (s *Server) handleEvidence(w http.ResponseWriter, r *http.Request, caseID s
 				writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "evidence_id": evidenceID, "error": apiError("evidence_path_missing", "manifest item has no readable file name")})
 				return
 			}
-			s.serveCaseFile(w, r, rec, filepath.Join("submitted-evidence", name))
+			serveOutputFile(w, r, caseID, outDir, filepath.Join("submitted-evidence", name))
 			return
 		}
 	}
@@ -1092,12 +1103,24 @@ func (s *Server) handleEvidence(w http.ResponseWriter, r *http.Request, caseID s
 }
 
 func (s *Server) serveCaseFile(w http.ResponseWriter, r *http.Request, rec *CaseRecord, name string) {
-	path, err := safeArtifactPath(rec.OutputDir, name)
+	serveOutputFile(w, r, rec.CaseID, rec.OutputDir, name)
+}
+
+func serveOutputFile(w http.ResponseWriter, r *http.Request, caseID string, outDir string, name string) {
+	path, err := safeArtifactPath(outDir, name)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "case_id": rec.CaseID, "error": apiError("bad_artifact_path", err.Error())})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "case_id": caseID, "error": apiError("bad_artifact_path", err.Error())})
 		return
 	}
 	http.ServeFile(w, r, path)
+}
+
+func serveListedArtifactFile(w http.ResponseWriter, r *http.Request, caseID string, outDir string, name string) {
+	if !listedArtifactName(name) {
+		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_artifact", "unknown artifact")})
+		return
+	}
+	serveOutputFile(w, r, caseID, outDir, name)
 }
 
 func safeArtifactPath(root string, name string) (string, error) {
@@ -1122,8 +1145,11 @@ func safeArtifactPath(root string, name string) (string, error) {
 
 func listArtifacts(root string) ([]map[string]any, error) {
 	var out []map[string]any
-	for _, name := range []string{"run.json", "digest.md", "transcript.md", "work-notes.ndjson", "events.ndjson", "evidence-manifest.json"} {
-		path := filepath.Join(root, name)
+	for _, name := range listedArtifactNames() {
+		path, err := safeArtifactPath(root, name)
+		if err != nil {
+			continue
+		}
 		st, err := os.Stat(path)
 		if err != nil {
 			continue
@@ -1131,6 +1157,19 @@ func listArtifacts(root string) ([]map[string]any, error) {
 		out = append(out, map[string]any{"name": name, "size_bytes": st.Size()})
 	}
 	return out, nil
+}
+
+func listedArtifactNames() []string {
+	return []string{"run.json", "digest.md", "transcript.md", "work-notes.ndjson", "events.ndjson", "evidence-manifest.json"}
+}
+
+func listedArtifactName(name string) bool {
+	for _, allowed := range listedArtifactNames() {
+		if name == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) getCase(caseID string) (CaseRecord, bool) {
@@ -1228,11 +1267,32 @@ func validateID(value string, name string) error {
 	if value == "" {
 		return fmt.Errorf("%s is required", name)
 	}
+	if value == "." || value == ".." {
+		return fmt.Errorf("%s is invalid", name)
+	}
 	for _, r := range value {
 		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
 			continue
 		}
 		return fmt.Errorf("%s contains invalid character %q", name, r)
+	}
+	return nil
+}
+
+func validateServiceOutputDir(outputRoot string, outDir string) error {
+	rootAbs, err := filepath.Abs(strings.TrimSpace(outputRoot))
+	if err != nil {
+		return fmt.Errorf("resolve output root: %w", err)
+	}
+	outAbs, err := filepath.Abs(strings.TrimSpace(outDir))
+	if err != nil {
+		return fmt.Errorf("resolve out_dir: %w", err)
+	}
+	if filepath.Dir(outAbs) != rootAbs {
+		return fmt.Errorf("out_dir must be an immediate child of the service output root")
+	}
+	if filepath.Base(outAbs) == "." || filepath.Base(outAbs) == string(os.PathSeparator) {
+		return fmt.Errorf("out_dir is invalid")
 	}
 	return nil
 }

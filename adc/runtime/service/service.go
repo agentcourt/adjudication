@@ -87,15 +87,15 @@ type CaseCreateRequest struct {
 	RemoteLawyerSkill         string   `json:"remote_lawyer_skill,omitempty"`
 	JurorInstructions         string   `json:"juror_instructions,omitempty"`
 	AutoLawyers               string   `json:"auto_lawyers,omitempty"`
-	DockerCommand             string   `json:"docker,omitempty"`
-	PodmanCommand             string   `json:"podman,omitempty"`
+	DockerCommand             string   `json:"docker_command,omitempty"`
+	PodmanCommand             string   `json:"podman_command,omitempty"`
 	OpenClawImage             string   `json:"openclaw_image,omitempty"`
 	OpenClawModel             string   `json:"openclaw_model,omitempty"`
 	OpenClawThinking          string   `json:"openclaw_thinking,omitempty"`
 	OpenClawTimeoutSeconds    int      `json:"openclaw_timeout_seconds,omitempty"`
 	OpenClawAuth              string   `json:"openclaw_auth,omitempty"`
-	OpenClawCodexAuth         string   `json:"openclaw_codex_auth,omitempty"`
-	OpenClawStartDelaySeconds int      `json:"openclaw_lawyer_start_delay_seconds,omitempty"`
+	OpenClawCodexAuthPath     string   `json:"openclaw_codex_auth_path,omitempty"`
+	OpenClawStartDelaySeconds *int     `json:"openclaw_lawyer_start_delay_seconds,omitempty"`
 	PiImage                   string   `json:"pi_image,omitempty"`
 	PiMCPAdapter              string   `json:"pi_mcp_adapter,omitempty"`
 	JurorOutputLimitBytes     int64    `json:"juror_output_limit_bytes,omitempty"`
@@ -334,6 +334,9 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 	if mode != "run" && mode != "direct" {
 		return CaseRecord{}, fmt.Errorf("mode must be run or direct")
 	}
+	if req.OpenClawStartDelaySeconds != nil && *req.OpenClawStartDelaySeconds < 0 {
+		return CaseRecord{}, fmt.Errorf("openclaw_lawyer_start_delay_seconds must be non-negative")
+	}
 	caseID := strings.TrimSpace(req.CaseID)
 	if caseID == "" {
 		caseID = "adc-" + time.Now().UTC().Format("20060102150405") + "-" + randomHex(4)
@@ -369,7 +372,8 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 	outDir := strings.TrimSpace(req.OutputDir)
 	if outDir == "" {
 		outDir = filepath.Join(s.cfg.OutputRoot, caseID)
-	} else if err := validateServiceOutputDir(s.cfg.OutputRoot, outDir); err != nil {
+	}
+	if err := validateServiceOutputDir(s.cfg.OutputRoot, outDir); err != nil {
 		return CaseRecord{}, err
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
@@ -564,8 +568,10 @@ func (s *Server) caseProcessArgs(mode string, req CaseCreateRequest, caseID stri
 		args = addString(args, "--openclaw-thinking", req.OpenClawThinking)
 		args = addInt(args, "--openclaw-timeout-seconds", req.OpenClawTimeoutSeconds)
 		args = addString(args, "--openclaw-auth", req.OpenClawAuth)
-		args = addString(args, "--openclaw-codex-auth", req.OpenClawCodexAuth)
-		args = addInt(args, "--openclaw-lawyer-start-delay-seconds", req.OpenClawStartDelaySeconds)
+		args = addString(args, "--openclaw-codex-auth", req.OpenClawCodexAuthPath)
+		if req.OpenClawStartDelaySeconds != nil {
+			args = append(args, "--openclaw-lawyer-start-delay-seconds", fmt.Sprintf("%d", *req.OpenClawStartDelaySeconds))
+		}
 		args = addString(args, "--pi-image", req.PiImage)
 		args = addString(args, "--pi-mcp-adapter", req.PiMCPAdapter)
 		args = addInt64(args, "--juror-output-limit-bytes", req.JurorOutputLimitBytes)
@@ -1059,7 +1065,7 @@ func (s *Server) handleArtifact(w http.ResponseWriter, r *http.Request, caseID s
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "case_id": caseID, "artifacts": files})
 		return
 	}
-	s.serveCaseFile(w, r, rec, name)
+	serveListedArtifactFile(w, r, caseID, rec.OutputDir, name)
 }
 
 func (s *Server) handleEvidence(w http.ResponseWriter, r *http.Request, caseID string, evidenceID string) {
@@ -1104,6 +1110,19 @@ func (s *Server) serveCaseFile(w http.ResponseWriter, r *http.Request, rec *Case
 	http.ServeFile(w, r, path)
 }
 
+func serveListedArtifactFile(w http.ResponseWriter, r *http.Request, caseID string, outDir string, name string) {
+	if !listedArtifactName(name) {
+		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_artifact", "unknown artifact")})
+		return
+	}
+	path, err := safeArtifactPath(outDir, name)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "case_id": caseID, "error": apiError("bad_artifact_path", err.Error())})
+		return
+	}
+	http.ServeFile(w, r, path)
+}
+
 func safeArtifactPath(root string, name string) (string, error) {
 	name = strings.TrimPrefix(filepath.Clean("/"+name), "/")
 	if name == "" || strings.HasPrefix(name, "..") {
@@ -1126,8 +1145,11 @@ func safeArtifactPath(root string, name string) (string, error) {
 
 func listArtifacts(root string) ([]map[string]any, error) {
 	var out []map[string]any
-	for _, name := range []string{"run.json", "digest.md", "transcript.md", "work-notes.ndjson", "events.ndjson", "evidence-manifest.json"} {
-		path := filepath.Join(root, name)
+	for _, name := range listedArtifactNames() {
+		path, err := safeArtifactPath(root, name)
+		if err != nil {
+			continue
+		}
 		st, err := os.Stat(path)
 		if err != nil {
 			continue
@@ -1135,6 +1157,19 @@ func listArtifacts(root string) ([]map[string]any, error) {
 		out = append(out, map[string]any{"name": name, "size_bytes": st.Size()})
 	}
 	return out, nil
+}
+
+func listedArtifactNames() []string {
+	return []string{"run.json", "digest.md", "transcript.md", "work-notes.ndjson", "events.ndjson", "evidence-manifest.json"}
+}
+
+func listedArtifactName(name string) bool {
+	for _, allowed := range listedArtifactNames() {
+		if name == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) getCase(caseID string) (CaseRecord, bool) {
@@ -1311,6 +1346,9 @@ func stopProcess(cmd *exec.Cmd, grace time.Duration) error {
 func validateID(value string, name string) error {
 	if value == "" {
 		return fmt.Errorf("%s is required", name)
+	}
+	if value == "." || value == ".." {
+		return fmt.Errorf("%s is invalid", name)
 	}
 	for _, r := range value {
 		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {

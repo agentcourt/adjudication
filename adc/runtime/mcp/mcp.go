@@ -457,6 +457,7 @@ func stableToolSpecs(session *session) []map[string]any {
 	}
 	return append(tools,
 		toolSpec("get_case", "Fetch the current visible case view.", emptySchema(), true),
+		toolSpec("get_case_result", "Return final case results, or pending status if the case is still running.", emptySchema(), true),
 		toolSpec("explain_decisions", "Fetch decision traces visible to this role.", emptySchema(), true),
 		toolSpec("list_case_files", "List visible case file identifiers and metadata.", emptySchema(), true),
 		toolSpec("read_case_text_file", "Read a visible text case file by file_id.", fileIDSchema(), true),
@@ -542,6 +543,15 @@ func (s *server) callTool(ctx context.Context, session *session, params json.Raw
 	if call.Arguments == nil {
 		call.Arguments = map[string]any{}
 	}
+	if session.RoleID == "observer" && !observerToolAllowed(call.Name) {
+		return toolResult(map[string]any{
+			"ok":      false,
+			"status":  "forbidden",
+			"case_id": session.CaseID,
+			"role_id": session.RoleID,
+			"error":   map[string]any{"code": "tool_not_available", "message": "tool is not available for observer"},
+		}, nil), nil
+	}
 	switch call.Name {
 	case "get_current_opportunity":
 		result, err := s.postRoleAPI(ctx, "/get", session.baseBody())
@@ -568,6 +578,15 @@ func (s *server) callTool(ctx context.Context, session *session, params json.Raw
 		opportunityID := currentOpportunityID(status)
 		result, err := s.callRoleTool(ctx, session, opportunityID, call.Name, call.Arguments)
 		return toolResult(result, err), nil
+	}
+}
+
+func observerToolAllowed(name string) bool {
+	switch strings.TrimSpace(name) {
+	case "get_current_opportunity", waitToolName, "case_status", "get_case_result":
+		return true
+	default:
+		return false
 	}
 }
 

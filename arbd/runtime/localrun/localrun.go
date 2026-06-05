@@ -908,10 +908,18 @@ func (s *runState) openClawAuthArgs(role string) ([]string, string, error) {
 			"-v", home + ":" + openClawCodexContainerHome + ":rw",
 			"-e", "CODEX_HOME=" + openClawCodexContainerHome,
 		}
-		return args, "unset OPENAI_API_KEY\n", nil
+		return args, openClawCodexAuthCommand(), nil
 	default:
 		return nil, "", fmt.Errorf("unsupported OpenClaw auth mode %q", s.openClawAuth.Mode)
 	}
+}
+
+func openClawCodexAuthCommand() string {
+	return `unset OPENAI_API_KEY
+codex_token="$(node -e 'const fs=require("fs"); const home=process.env.CODEX_HOME; if (!home) process.exit(2); const d=JSON.parse(fs.readFileSync(home + "/auth.json", "utf8")); const t=d.tokens && d.tokens.access_token; if (!t) process.exit(3); process.stdout.write(t);')"
+printf '%s\n' "$codex_token" | openclaw models auth paste-token --provider openai --profile-id openai:codex >/dev/null
+unset codex_token
+`
 }
 
 func (s *runState) stageOpenClawCodexAuth(role string) (string, error) {

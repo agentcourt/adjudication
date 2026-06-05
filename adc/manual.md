@@ -326,7 +326,7 @@ http://HOST:8001/mcp?case_id=adc-CASE&role_id=observer
 
 After `initialize`, the client must include the returned `Mcp-Session-Id` header on later requests.  Idle sessions expire after 30 minutes by default; `adc run` disables session expiry for its embedded MCP server.  `DELETE /mcp` with `Mcp-Session-Id` deletes a session.
 
-The MCP tools are stable.  Every session has `get_current_opportunity`, `wait_for_opportunity`, and `case_status`.  Non-observer sessions also have `get_case`, `explain_decisions`, `list_case_files`, `read_case_text_file`, `request_case_file`, `read_case_file_bytes`, `get_juror_context`, `send_work_notes`, `submit_decision`, and `report_failure`.  Observer sessions also have `get_case_result`.
+The MCP tools are stable.  Every session has `get_current_opportunity`, `wait_for_opportunity`, `case_status`, and `get_case_result`.  Non-observer sessions also have `get_case`, `explain_decisions`, `list_case_files`, `read_case_text_file`, `request_case_file`, `read_case_file_bytes`, `get_juror_context`, `send_work_notes`, `submit_decision`, and `report_failure`.
 
 The agent loop is mechanical.  Call `wait_for_opportunity` with a timeout of at most 30000 milliseconds.  If it returns `state=waiting`, call it again.  If it returns `state=ready`, read the prompt and opportunity, use support tools as needed, send work notes, and submit one decision.  If it returns `state=done` or `state=failed`, stop acting for that role.
 
@@ -378,15 +378,17 @@ Endpoints:
 | `POST` | `/clerk/v1/cases/{case_id}/kill` | Stop a child process. |
 | `GET` | `/clerk/v1/cases/{case_id}/result` | Return final result, failed status, or pending status. |
 | `GET` | `/clerk/v1/cases/{case_id}/artifacts` | List primary artifacts. |
-| `GET` | `/clerk/v1/cases/{case_id}/artifacts/{name}` | Fetch one artifact from the case output directory. |
+| `GET` | `/clerk/v1/cases/{case_id}/artifacts/{name}` | Fetch one listed artifact from the case output directory. |
 | `GET` | `/clerk/v1/cases/{case_id}/evidence/{evidence_id}` | Fetch submitted evidence by evidence id when the manifest maps it to a file. |
 | any | `/roleapi/v1/...` | Proxy Role API calls based on `case_id`. |
 
 The `/api/v1/cases` paths use the same implementation as `/clerk/v1/cases`.  They exist as service API aliases.  A bearer token can protect all service routes when `--bearer-token` is set.
 
+Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, and `evidence-manifest.json`.  They do not serve arbitrary output files, process logs, generated remote-lawyer instruction files, or staged Codex auth directories.  The evidence route reads `evidence-manifest.json` and serves submitted evidence by evidence id when the manifest maps that id to a readable file.
+
 The create request is structured JSON.  Common fields include `case_id`, `run_id`, exactly one of `complaint_path` or `scenario_path`, `out_dir`, `model`, `juror_personas`, `engine_path`, `timeout_seconds`, `invalid_attempt_limit`, and `max_response_bytes`.  If `out_dir` is supplied, it must be an immediate child of the service `--output-root`; when it is omitted, the service uses `OUTPUT_ROOT/CASE_ID`.  Complaint-based runs also accept setup fields such as `court`, `non_juror_model`, `plaintiff_model`, `defendant_model`, `judge_model`, `clerk_model`, `planner_model`, `report_model`, `trial_mode`, and `skip_voir_dire`.
 
-For `mode: "run"`, the create request also accepts the local-agent fields used by `adc run`: `mcp_listen`, `mcp_public_base_url`, `mcp_bearer_token`, `lawyer_instructions`, `remote_lawyer_skill`, `juror_instructions`, `auto_lawyers`, `docker`, `podman`, `openclaw_auth`, `openclaw_codex_auth`, `openclaw_image`, `openclaw_model`, `openclaw_thinking`, `openclaw_timeout_seconds`, `openclaw_lawyer_start_delay_seconds`, `pi_image`, `pi_mcp_adapter`, `juror_output_limit_bytes`, `docker_mcp_host`, and `podman_mcp_host`.  `roleapi_timeout_seconds` can set both lawyer and juror opportunity timeouts unless `lawyer_timeout_seconds` or `juror_timeout_seconds` is provided.
+For `mode: "run"`, the create request also accepts the local-agent fields used by `adc run`: `mcp_listen`, `mcp_public_base_url`, `mcp_bearer_token`, `lawyer_instructions`, `remote_lawyer_skill`, `juror_instructions`, `auto_lawyers`, `docker_command`, `podman_command`, `openclaw_auth`, `openclaw_codex_auth_path`, `openclaw_image`, `openclaw_model`, `openclaw_thinking`, `openclaw_timeout_seconds`, `openclaw_lawyer_start_delay_seconds`, `pi_image`, `pi_mcp_adapter`, `juror_output_limit_bytes`, `docker_mcp_host`, and `podman_mcp_host`.  `roleapi_timeout_seconds` can set both lawyer and juror opportunity timeouts unless `lawyer_timeout_seconds` or `juror_timeout_seconds` is provided.
 
 For `mode: "direct"`, the create request accepts `external_roles` to expose selected roles through the Role API while leaving agent startup to the caller.  Direct mode uses `roleapi_timeout_seconds` for external opportunities.  It does not start MCP, OpenClaw, or Pi processes.
 
@@ -402,7 +404,7 @@ curl -sS -X POST http://127.0.0.1:19870/clerk/v1/cases \
     "complaint_path": "examples/ex1/complaint.md",
     "out_dir": "out/adc-service/adc-service-ex1",
     "openclaw_auth": "codex",
-    "openclaw_codex_auth": "PATH/TO/auth.json",
+    "openclaw_codex_auth_path": "PATH/TO/auth.json",
     "juror_personas": "../common/data/personas/pool.jsonl"
   }'
 ```
@@ -500,7 +502,7 @@ In another process, start MCP for those external roles:
 
 If `adc run` exits before starting agents, first check the required files and credentials.  It requires a scenario path or complaint path, an output directory, a case id, a juror pool path, `OPENROUTER_API_KEY`, instruction templates, and either Codex auth or `OPENAI_API_KEY` for OpenClaw.  Manual lawyer mode also requires an MCP public base URL when MCP listens on a wildcard host.
 
-If an OpenClaw container fails before a lawyer turn, inspect that lawyer's stderr log and its staged Codex auth directory under the output directory.  In Codex auth mode, ADC must be able to read and decode the host `auth.json`, write the staged copy, and mount that directory as the container's `CODEX_HOME`.  In API-key mode, `OPENAI_API_KEY` must be present in the environment used to start `adc run`.
+If an OpenClaw container fails before a lawyer turn, inspect that lawyer's stderr log and its staged Codex auth directory under the output directory.  In Codex auth mode, ADC must be able to read and decode the host `auth.json`, write the staged copy, mount that directory as the container's `CODEX_HOME`, and import the staged access token into OpenClaw with `openclaw models auth paste-token --provider openai --profile-id openai:codex`.  In API-key mode, `OPENAI_API_KEY` must be present in the environment used to start `adc run`.
 
 If a remote OpenClaw cannot connect, check the MCP health endpoint from the remote machine.  The URL is `http://HOST:PORT/health`, and it should return HTTP `204`.  Also check that the MCP URL given to the remote OpenClaw includes the correct `case_id`, `role_id`, and bearer token.
 

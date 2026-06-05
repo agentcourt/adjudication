@@ -217,6 +217,65 @@ func TestClerkCreateRejectsMissingComplaintWithoutExample(t *testing.T) {
 	}
 }
 
+func TestDirectCreateRejectsOutputDirOutsideOutputRoot(t *testing.T) {
+	root := t.TempDir()
+	aardBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
+	s := newClerkTestServer(t, root, aardBin)
+	complaint := filepath.Join(t.TempDir(), "complaint.md")
+	if err := os.WriteFile(complaint, []byte("# Complaint\n"), 0o644); err != nil {
+		t.Fatalf("write complaint: %v", err)
+	}
+
+	status, got := servicePost(t, s, "/api/v1/cases", map[string]any{
+		"case_id":        "direct-outside",
+		"complaint_path": complaint,
+		"out_dir":        filepath.Join(t.TempDir(), "outside"),
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusBadRequest, got)
+	}
+	errObj, ok := got["error"].(map[string]any)
+	if !ok || !strings.Contains(mapString(errObj["message"]), "out_dir must be an immediate child") {
+		t.Fatalf("error = %#v", got["error"])
+	}
+}
+
+func TestCreateRejectsPathCaseIDs(t *testing.T) {
+	root := t.TempDir()
+	aardBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
+	s := newClerkTestServer(t, root, aardBin)
+	complaint := filepath.Join(t.TempDir(), "complaint.md")
+	if err := os.WriteFile(complaint, []byte("# Complaint\n"), 0o644); err != nil {
+		t.Fatalf("write complaint: %v", err)
+	}
+	for _, route := range []string{"/api/v1/cases", "/clerk/v1/cases"} {
+		for _, caseID := range []string{".", ".."} {
+			status, got := servicePost(t, s, route, map[string]any{
+				"case_id":        caseID,
+				"complaint_path": complaint,
+			})
+			if status != http.StatusBadRequest {
+				t.Fatalf("%s case_id %q status = %d, body = %#v", route, caseID, status, got)
+			}
+			errObj, ok := got["error"].(map[string]any)
+			if !ok || !strings.Contains(mapString(errObj["message"]), "case_id is invalid") {
+				t.Fatalf("%s case_id %q error = %#v", route, caseID, got["error"])
+			}
+		}
+	}
+}
+
+func TestListedArtifactNameRequiresExactName(t *testing.T) {
+	if !listedArtifactName("digest.md") {
+		t.Fatalf("digest.md should be listed")
+	}
+	for _, name := range []string{"/digest.md", "logs/../digest.md", "digest.md/", " digest.md"} {
+		if listedArtifactName(name) {
+			t.Fatalf("%q should not be listed", name)
+		}
+	}
+}
+
 func TestClerkKillTerminatesActiveRun(t *testing.T) {
 	root := t.TempDir()
 	aarBin := writeFakeAAR(t, `#!/bin/sh
@@ -281,6 +340,115 @@ func TestClerkListReadsExistingRecordsFromOutputRoot(t *testing.T) {
 	listed, ok := cases[0].(map[string]any)
 	if !ok || listed["case_id"] != "existing" || listed["status"] != "completed" {
 		t.Fatalf("listed = %#v", cases[0])
+	}
+}
+
+func TestClerkRoutesReadOutputArtifacts(t *testing.T) {
+	root := t.TempDir()
+	aardBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
+	outDir := filepath.Join(root, "clerk-rich")
+	if err := os.MkdirAll(filepath.Join(outDir, "submitted-evidence"), 0o755); err != nil {
+		t.Fatalf("mkdir out dir: %v", err)
+	}
+	rec := ClerkRecord{
+		CaseID:    "clerk-rich",
+		RunID:     "run-clerk-rich",
+		Status:    "completed",
+		OutDir:    outDir,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	writeClerkRecord(t, outDir, rec)
+	writeJSONFile(t, filepath.Join(outDir, "run.json"), map[string]any{
+		"status":       "completed",
+		"phase":        "complete",
+		"answers":      map[string]any{"degree": 2},
+		"final_reason": "test result",
+		"final_state": map[string]any{
+			"case": map[string]any{
+				"status":             "completed",
+				"deliberation_round": 1,
+				"council_answers": []map[string]any{
+					{"member_id": "C1", "round": 1, "answer": 2},
+				},
+			},
+		},
+	})
+	if err := os.WriteFile(filepath.Join(outDir, "digest.md"), []byte("digest text\n"), 0o644); err != nil {
+		t.Fatalf("write digest: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(outDir, "logs"), 0o755); err != nil {
+		t.Fatalf("mkdir logs: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "logs", "mcp.stderr"), []byte("secret log\n"), 0o644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "openclaw-plaintiff-lawyer-skill.md"), []byte("bearer token\n"), 0o600); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+	writeJSONFile(t, filepath.Join(outDir, "evidence-manifest.json"), []map[string]any{
+		{"evidence_id": "EV1", "name": "ev1.txt"},
+	})
+	if err := os.WriteFile(filepath.Join(outDir, "submitted-evidence", "ev1.txt"), []byte("evidence text\n"), 0o644); err != nil {
+		t.Fatalf("write evidence: %v", err)
+	}
+	outside := filepath.Join(root, "outside.txt")
+	if err := os.WriteFile(outside, []byte("outside\n"), 0o644); err != nil {
+		t.Fatalf("write outside: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(outDir, "transcript.md")); err != nil {
+		t.Fatalf("symlink transcript: %v", err)
+	}
+	s := newClerkTestServer(t, root, aardBin)
+
+	status, got := serviceGet(t, s, "/clerk/v1/cases/clerk-rich")
+	if status != http.StatusOK {
+		t.Fatalf("inspect status = %d, body = %#v", status, got)
+	}
+	caseObj, ok := got["case"].(map[string]any)
+	if !ok || caseObj["case_id"] != "clerk-rich" || caseObj["status"] != "completed" {
+		t.Fatalf("case = %#v", got["case"])
+	}
+
+	status, got = serviceGet(t, s, "/clerk/v1/cases/clerk-rich/result")
+	if status != http.StatusOK || got["status"] != "done" {
+		t.Fatalf("result status = %d, body = %#v", status, got)
+	}
+	result, ok := got["result"].(map[string]any)
+	if !ok || result["case_status"] != "completed" {
+		t.Fatalf("result = %#v", got["result"])
+	}
+
+	status, got = serviceGet(t, s, "/clerk/v1/cases/clerk-rich/artifacts")
+	if status != http.StatusOK {
+		t.Fatalf("artifacts status = %d, body = %#v", status, got)
+	}
+	if !artifactListContains(got["artifacts"], "run.json") || !artifactListContains(got["artifacts"], "digest.md") {
+		t.Fatalf("artifacts = %#v", got["artifacts"])
+	}
+	if artifactListContains(got["artifacts"], "transcript.md") {
+		t.Fatalf("unsafe symlink listed in artifacts = %#v", got["artifacts"])
+	}
+
+	rawStatus, body := serviceRawGet(t, s, "/clerk/v1/cases/clerk-rich/artifacts/digest.md")
+	if rawStatus != http.StatusOK || string(body) != "digest text\n" {
+		t.Fatalf("digest status = %d body = %q", rawStatus, string(body))
+	}
+	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/clerk-rich/evidence/EV1")
+	if rawStatus != http.StatusOK || string(body) != "evidence text\n" {
+		t.Fatalf("evidence status = %d body = %q", rawStatus, string(body))
+	}
+	for _, path := range []string{
+		"/clerk/v1/cases/clerk-rich/artifacts/logs/mcp.stderr",
+		"/clerk/v1/cases/clerk-rich/artifacts/openclaw-plaintiff-lawyer-skill.md",
+	} {
+		status, got = serviceGet(t, s, path)
+		if status != http.StatusNotFound {
+			t.Fatalf("%s status = %d, body = %#v", path, status, got)
+		}
+	}
+	status, got = serviceGet(t, s, "/clerk/v1/cases/clerk-rich/artifacts/transcript.md")
+	if status != http.StatusBadRequest {
+		t.Fatalf("transcript symlink status = %d, body = %#v", status, got)
 	}
 }
 
@@ -540,6 +708,14 @@ func serviceGet(t *testing.T, s *Server, path string) (int, map[string]any) {
 	return rec.Code, got
 }
 
+func serviceRawGet(t *testing.T, s *Server, path string) (int, []byte) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	return rec.Code, rec.Body.Bytes()
+}
+
 func servicePost(t *testing.T, s *Server, path string, body map[string]any) (int, map[string]any) {
 	t.Helper()
 	raw, err := json.Marshal(body)
@@ -555,6 +731,42 @@ func servicePost(t *testing.T, s *Server, path string, body map[string]any) (int
 		t.Fatalf("decode response: %v", err)
 	}
 	return rec.Code, got
+}
+
+func writeClerkRecord(t *testing.T, outDir string, rec ClerkRecord) {
+	t.Helper()
+	raw, err := json.MarshalIndent(rec, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal clerk record: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, clerkRecordName), raw, 0o644); err != nil {
+		t.Fatalf("write clerk record: %v", err)
+	}
+}
+
+func writeJSONFile(t *testing.T, path string, value any) {
+	t.Helper()
+	raw, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal json file: %v", err)
+	}
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write json file: %v", err)
+	}
+}
+
+func artifactListContains(value any, name string) bool {
+	items, ok := value.([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range items {
+		obj, ok := item.(map[string]any)
+		if ok && obj["name"] == name {
+			return true
+		}
+	}
+	return false
 }
 
 func waitClerkStatus(t *testing.T, s *Server, caseID string, want string) map[string]any {

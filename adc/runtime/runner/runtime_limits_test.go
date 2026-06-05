@@ -18,4 +18,7 @@ func TestRuntimeLimitsNormalized(t *testing.T) {
 	if got.InvalidAttemptLimit != DefaultInvalidAttemptLimit {
 		t.Fatalf("InvalidAttemptLimit = %d, want %d", got.InvalidAttemptLimit, DefaultInvalidAttemptLimit)
 	}
+	if got.JurorMaxOutputTokens != DefaultJurorMaxOutputTokens {
+		t.Fatalf("JurorMaxOutputTokens = %d, want %d", got.JurorMaxOutputTokens, DefaultJurorMaxOutputTokens)
+	}
 }

@@ -24,7 +24,7 @@ const (
 	serverName         = "aard"
 	serverVersion      = "0.1.0"
 
-	DefaultListenAddr             = "127.0.0.1:19780"
+	DefaultListenAddr             = "127.0.0.1:19800"
 	DefaultSessionTTL             = 30 * time.Minute
 	DefaultSessionCleanupInterval = time.Minute
 

@@ -517,7 +517,7 @@ func (api *roleAPIServer) statusResponseLocked(req roleAPIRequest) map[string]an
 		return response
 	}
 	response["current_turn"] = api.currentTurnPayloadLocked(api.active)
-	if !api.turnMatchesRequest(api.active, req) {
+	if !api.turnVisibleToRequest(api.active, req) {
 		response["status"] = "waiting"
 		return response
 	}
@@ -589,12 +589,19 @@ func remainingMillis(deadline time.Time) int64 {
 	return int64(remaining / time.Millisecond)
 }
 
-func (api *roleAPIServer) turnMatchesRequest(turn *externalOpportunityTurn, req roleAPIRequest) bool {
+func (api *roleAPIServer) turnVisibleToRequest(turn *externalOpportunityTurn, req roleAPIRequest) bool {
 	if turn == nil {
 		return false
 	}
 	if strings.TrimSpace(req.RoleID) == "observer" {
 		return true
+	}
+	return api.turnMatchesActor(turn, req)
+}
+
+func (api *roleAPIServer) turnMatchesActor(turn *externalOpportunityTurn, req roleAPIRequest) bool {
+	if turn == nil {
+		return false
 	}
 	if strings.TrimSpace(req.RoleID) != strings.TrimSpace(turn.role.Name) {
 		return false
@@ -618,7 +625,7 @@ func (api *roleAPIServer) doLocked(req roleAPIRequest) (map[string]any, int) {
 		return map[string]any{"ok": false, "case_id": api.caseID(), "status": "waiting", "error": roleAPIError("no_active_opportunity", "no active opportunity for this role")}, http.StatusConflict
 	}
 	turn := api.active
-	if !api.turnMatchesRequest(turn, req) {
+	if !api.turnMatchesActor(turn, req) {
 		return map[string]any{"ok": false, "case_id": api.caseID(), "status": "waiting", "current_turn": api.currentTurnPayloadLocked(turn), "error": roleAPIError("wrong_turn", "current opportunity belongs to another role or principal")}, http.StatusConflict
 	}
 	if req.OpportunityID != "" && req.OpportunityID != turn.opportunity.OpportunityID {
@@ -652,7 +659,7 @@ func (api *roleAPIServer) failLocked(req roleAPIRequest) (map[string]any, int) {
 		return map[string]any{"ok": false, "case_id": api.caseID(), "error": roleAPIError("no_active_opportunity", "no active opportunity")}, http.StatusConflict
 	}
 	turn := api.active
-	if !api.turnMatchesRequest(turn, req) {
+	if !api.turnMatchesActor(turn, req) {
 		return map[string]any{"ok": false, "case_id": api.caseID(), "error": roleAPIError("wrong_turn", "current opportunity belongs to another role or principal")}, http.StatusConflict
 	}
 	message := strings.TrimSpace(req.Message)
@@ -1026,7 +1033,6 @@ func (r *Runner) writeWorkNotes(turn *externalOpportunityTurn, notes string) (ma
 	if _, err := f.Write(append(raw, '\n')); err != nil {
 		return nil, fmt.Errorf("write work notes: %w", err)
 	}
-	turn.transcript = append(turn.transcript, map[string]any{"action": "send_work_notes", "result": map[string]any{"ok": true, "path": path}})
 	return map[string]any{"ok": true, "path": path}, nil
 }
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-OpenClaw lawyer containers can use the Codex credentials stored under `~/.codex` or an `OPENAI_API_KEY`.  The tested Codex path stages only `~/.codex/auth.json` into a per-container directory, mounts that directory into the OpenClaw container, and sets `CODEX_HOME` to the mount point.  OpenClaw then uses its `openai-codex` provider profile for `gpt-5.5`.
+OpenClaw lawyer containers can use the Codex credentials stored under `~/.codex` or an `OPENAI_API_KEY`.  The Codex path stages only `~/.codex/auth.json` into a per-container directory, mounts that directory into the OpenClaw container, sets `CODEX_HOME` to the mount point, extracts `tokens.access_token`, and imports that token into OpenClaw's `openai:codex` provider profile.  OpenClaw then uses that provider profile for `gpt-5.5`.
 
 This is useful for `aar run` because OpenClaw lawyers can run from ChatGPT/Codex subscription credentials without charging the OpenAI Platform API key.  `OPENAI_API_KEY` remains available for machines that do not have a Codex login cache or that need Platform API billing.  The Pi council still uses its configured provider path, currently OpenRouter through `OPENROUTER_API_KEY`.  The OpenClaw lawyer auth path and the Pi council auth path are separate.
 
@@ -16,7 +16,7 @@ The manual also documents `CODEX_ACCESS_TOKEN` and `codex login --with-access-to
 
 The test copied only the Codex auth file into a temporary directory.  It did not mount the whole `~/.codex` directory, because that directory can contain logs, history, configuration, and other local state unrelated to authentication.  It mounted the temporary directory into the container as `/aar-codex` and set `CODEX_HOME=/aar-codex`.
 
-The test also removed `OPENAI_API_KEY` from the container environment before calling OpenClaw.  That made the result depend on the staged Codex auth file rather than the Platform API key path.  The temporary directory was deleted after the test.
+The test also removed `OPENAI_API_KEY` from the container environment before calling OpenClaw.  It imported the staged access token into OpenClaw before starting the agent, so the result depended on the staged Codex auth file rather than the Platform API key path.  The temporary directory was deleted after the test.
 
 ```bash
 AUTH="$HOME/.codex/auth.json"
@@ -32,6 +32,9 @@ docker run --rm \
   sh -lc 'set -eu
     unset OPENAI_API_KEY
     test -r "$CODEX_HOME/auth.json"
+    codex_token="$(node -e "const fs=require(\"fs\"); const home=process.env.CODEX_HOME; const d=JSON.parse(fs.readFileSync(home + \"/auth.json\", \"utf8\")); process.stdout.write(d.tokens.access_token);")"
+    printf "%s\n" "$codex_token" | openclaw models auth paste-token --provider openai --profile-id openai:codex >/dev/null
+    unset codex_token
     openclaw agent --local --model gpt-5.5 --thinking low --timeout 120 --session-key agent:aar:codex-auth-test --message "Use the OpenAI Codex credentials in CODEX_HOME. Reply with exactly: codex oauth container auth works" --json
   '
 ```
@@ -46,7 +49,7 @@ That result establishes that the stock OpenClaw image can read a staged Codex au
 
 `aar run` creates one Codex home directory per OpenClaw lawyer container under the run output directory when Codex auth is selected.  Each directory contains a copied `auth.json` with mode `0600`.  The Docker invocation mounts that directory read-write and sets `CODEX_HOME=/aar-codex`.
 
-`aar run` has three OpenClaw auth modes.  `auto` prefers a readable Codex auth file and falls back to `OPENAI_API_KEY`.  `codex` requires the Codex auth file.  `api-key` requires `OPENAI_API_KEY`.  The Docker arguments in Codex mode omit `-e OPENAI_API_KEY` and unset that variable inside the container command before OpenClaw starts.
+`aar run` has three OpenClaw auth modes.  `auto` prefers a readable Codex auth file and falls back to `OPENAI_API_KEY`.  `codex` requires the Codex auth file.  `api-key` requires `OPENAI_API_KEY`.  The Docker arguments in Codex mode omit `-e OPENAI_API_KEY`, unset that variable inside the container command, and run `openclaw models auth paste-token --provider openai --profile-id openai:codex` before OpenClaw starts.
 
 The implementation avoids sharing one mounted Codex home across multiple lawyer containers.  A shared directory can create write races if Codex or OpenClaw refreshes tokens or updates session state.  Per-container copies keep the state isolated and make cleanup explicit.
 

@@ -366,7 +366,7 @@ The council output limit is enforced by the local `aar run` process while it mon
 
 ## OpenClaw Lawyer Auth
 
-Codex auth mode copies only `auth.json` into a per-lawyer Codex home under the run output directory, mounts that directory into the OpenClaw container as `/aar-codex`, and sets `CODEX_HOME=/aar-codex`.  The container command unsets `OPENAI_API_KEY` in Codex mode.  Those copied auth files remain in the run output directory after completion, including Clerk-started runs.
+Codex auth mode copies only `auth.json` into a per-lawyer Codex home under the run output directory, mounts that directory into the OpenClaw container as `/aar-codex`, and sets `CODEX_HOME=/aar-codex`.  The container command unsets `OPENAI_API_KEY`, reads the staged access token, and imports it into OpenClaw with `openclaw models auth paste-token --provider openai --profile-id openai:codex`.  `aar run` removes those staged Codex homes during normal cleanup; an interrupted process can leave a staged copy behind and should be checked before preserving or sharing the run directory.
 
 Use this command shape for local runs:
 
@@ -463,7 +463,7 @@ If `--bearer-token` is set, every service request must include `Authorization: B
 
 The Clerk API starts and tracks full `aar run` child processes.  It stores one record in each run output directory as `clerk.json`.  Listing scans immediate child directories under `--out-root` and reads those records.  There is no separate Clerk index.
 
-The service role proxy routes are for direct `/api/v1/cases` records.  A Clerk-started run has its own case process and MCP server inside the child `aar run` process.  Remote lawyers use the MCP URL and generated skill from that run, and operators inspect Clerk runs through Clerk records and output packet files.
+The service role proxy routes are for direct `/api/v1/cases` records.  A Clerk-started run has its own case process and MCP server inside the child `aar run` process.  Remote lawyers use the MCP URL and generated skill from that run, while operators use Clerk routes to inspect the run record, final result, primary artifacts, and submitted evidence.
 
 Create a case:
 
@@ -511,6 +511,31 @@ curl -sS http://127.0.0.1:19770/clerk/v1/cases
 curl -sS 'http://127.0.0.1:19770/clerk/v1/cases?status=running'
 ```
 
+Inspect one Clerk case:
+
+```bash
+curl -sS http://127.0.0.1:19770/clerk/v1/cases/arb-custom-20260603123000
+```
+
+Read final result or pending status:
+
+```bash
+curl -sS http://127.0.0.1:19770/clerk/v1/cases/arb-custom-20260603123000/result
+```
+
+List and read output artifacts:
+
+```bash
+curl -sS http://127.0.0.1:19770/clerk/v1/cases/arb-custom-20260603123000/artifacts
+curl -sS http://127.0.0.1:19770/clerk/v1/cases/arb-custom-20260603123000/artifacts/digest.md
+```
+
+Read submitted evidence by evidence id:
+
+```bash
+curl -sS http://127.0.0.1:19770/clerk/v1/cases/arb-custom-20260603123000/evidence/EVIDENCE_ID
+```
+
 Kill a Clerk case:
 
 ```bash
@@ -518,6 +543,8 @@ curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases/arb-custom-20260603123000
 ```
 
 Kill sends interrupt, waits 10 seconds, and then kills the child process if it has not exited.  If the case record is active on disk but the current service process has no process handle, the endpoint returns HTTP `409` with error code `case_not_attached`.  Terminal disk-only records return unchanged because there is no live process to kill.
+
+Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, and `evidence-manifest.json`.  They do not serve arbitrary output files, process logs, generated remote-lawyer skill files, or staged Codex auth directories.  The evidence route reads `evidence-manifest.json` and serves submitted evidence by evidence id when the manifest maps that id to a readable file.
 
 Clerk create request fields mirror `aar run` options in structured JSON:
 
@@ -571,7 +598,7 @@ Clerk create request fields mirror `aar run` options in structured JSON:
 
 ## Direct Case Service API
 
-The `/api/v1/cases` API starts `aar case` children instead of full `aar run` children.  It is useful when the lawyers or council members will be driven through HTTP directly, without the local OpenClaw and Pi agents that `aar run` starts.  It stores case records under `--registry-dir` and can proxy `/lawyerapi/v1` and `/councilapi/v1` calls to the active child by `case_id`.
+The `/api/v1/cases` API starts `aar case` children instead of full `aar run` children.  It is useful when the lawyers or council members will be driven through HTTP directly, without the local OpenClaw and Pi agents that `aar run` starts.  It stores case records under `--registry-dir` and can proxy `/lawyerapi/v1` and `/councilapi/v1` calls to the active child by `case_id`.  If the request supplies `out_dir`, that directory must be an immediate child of the service output root.
 
 Create a direct service case:
 
@@ -600,7 +627,7 @@ Cancel:
 curl -sS -X POST http://127.0.0.1:19770/api/v1/cases/api-case-1/cancel
 ```
 
-Artifact routes expose selected files from a case output directory.  `GET /api/v1/cases/{case_id}/artifacts` lists known artifacts, and `GET /api/v1/cases/{case_id}/artifacts/{name}` serves one artifact.  `GET /api/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted evidence by evidence id when the manifest contains a readable file name.
+Artifact routes serve only listed artifact names from a case output directory.  `GET /api/v1/cases/{case_id}/artifacts` lists known artifacts, and `GET /api/v1/cases/{case_id}/artifacts/{name}` serves one exact listed artifact name.  `GET /api/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted evidence by evidence id when the manifest contains a readable file name.
 
 ## Output Packet
 

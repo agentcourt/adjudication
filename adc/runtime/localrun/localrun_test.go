@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"testing"
 
+	"adjudication/adc/runtime/runner"
 	"adjudication/common/modelrequest"
 )
 
@@ -127,7 +128,7 @@ func TestWritePiConfigUsesFullOpenRouterSpec(t *testing.T) {
 	openrouter := models["providers"].(map[string]any)["openrouter"].(map[string]any)
 	entries := openrouter["models"].([]any)
 	entry := entries[0].(map[string]any)
-	if entry["maxTokens"].(float64) != float64(defaultPiMaxOutputTokens) {
+	if entry["maxTokens"].(float64) != float64(runner.DefaultJurorMaxOutputTokens) {
 		t.Fatalf("maxTokens = %#v", entry["maxTokens"])
 	}
 	routing := entry["compat"].(map[string]any)["openRouterRouting"].(map[string]any)
