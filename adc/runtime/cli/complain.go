@@ -25,7 +25,6 @@ func RunComplain(args []string, stdout io.Writer, stderr io.Writer) error {
 	outputPath := fs.String("out", "", "Output complaint path. Default: complaint.md beside the situation file")
 	courtRef := fs.String("court", courts.DefaultCourtName, "Court profile name or JSON path")
 	model := fs.String("model", casegen.DefaultPlannerModel(), "Model for complaint drafting")
-	allThroughXProxy := fs.Bool("all-through-xproxy", false, "Send complaint drafting through xproxy and accept plain model names as OpenAI xproxy models")
 	timeoutSeconds := fs.Int("timeout-seconds", defaultLLMTimeoutSeconds, "LLM HTTP timeout in seconds")
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -55,38 +54,6 @@ func RunComplain(args []string, stdout io.Writer, stderr io.Writer) error {
 
 	timeout := time.Duration(*timeoutSeconds) * time.Second
 	modelName := strings.TrimSpace(*model)
-	if *allThroughXProxy {
-		xproxyServer, err := maybeStartXProxy(true)
-		if err != nil {
-			return err
-		}
-		if xproxyServer != nil {
-			defer xproxyServer.Close()
-		}
-		client, err := newXProxyClient(false, timeout)
-		if err != nil {
-			return err
-		}
-		modelName, err = normalizeXProxyModel(modelName)
-		if err != nil {
-			return fmt.Errorf("normalize --model for xproxy: %w", err)
-		}
-		temp := 0.2
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		complaintMarkdown, err := casegen.DraftComplaint(ctx, client, modelName, source, court, &temp)
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(targetPath, []byte(complaintMarkdown), 0o644); err != nil {
-			return fmt.Errorf("write complaint: %w", err)
-		}
-		if _, err := fmt.Fprintln(stdout, targetPath); err != nil {
-			return err
-		}
-		return nil
-	}
-
 	client, err := openai.NewFromEnv(false, timeout)
 	if err != nil {
 		return err

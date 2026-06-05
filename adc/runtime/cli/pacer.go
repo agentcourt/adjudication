@@ -2,10 +2,10 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"strings"
 
 	"adjudication/adc/runtime/store"
@@ -32,14 +32,18 @@ func RunPacer(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
+	closeStore := func(err error) error {
 		if closeErr := st.Close(); closeErr != nil {
-			log.Printf("error closing sqlite: %v", closeErr)
+			return errors.Join(err, fmt.Errorf("close sqlite: %w", closeErr))
 		}
-	}()
+		return err
+	}
 
 	c, err := st.LoadLatestCase(strings.TrimSpace(*caseID))
 	if err != nil {
+		return closeStore(err)
+	}
+	if err := closeStore(nil); err != nil {
 		return err
 	}
 	docs := store.BuildPacerDocuments(c.Case)

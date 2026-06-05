@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -11,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"adjudication/common/modelrequest"
 )
 
 type poolRow struct {
@@ -66,11 +69,32 @@ func RunPool(args []string, stdout io.Writer, stderr io.Writer) error {
 		return err
 	}
 	for _, record := range selected {
-		if _, err := fmt.Fprintf(stdout, "%s,%s\n", record.Model, record.PersonaFile); err != nil {
+		line, err := poolRecordJSONLine(record)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(stdout, line); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func poolRecordJSONLine(record poolRecord) (string, error) {
+	ref, err := modelrequest.ParseModelRef(record.Model)
+	if err != nil {
+		return "", err
+	}
+	payload := map[string]any{
+		"endpoint": ref.Endpoint,
+		"model":    ref.Model,
+		"persona":  record.PersonaFile,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }
 
 func resolvePoolRowsPath() (string, error) {

@@ -21,11 +21,11 @@ The technical approach is a little unusual.  The implementation:
    (FRCP).  Our version of the rules is called the [Agent Rules
    for Civil Procedure](ARCP.md) (ARCP).
 
-1. Interacts with agent attorneys via an implementation of the [Agent
-   Client
-   Protocol](https://agentclientprotocol.com/get-started/introduction)
-   extended to support external tool calls for litigation.  This
-   approach facilitates arbitrary computer use by attorney-agent teams.
+1. Interacts with external lawyers and jurors through a case-owned
+   HTTP Role API and a Streamable HTTP MCP adapter.  The case process
+   owns procedure, visibility, deadlines, and validation, while the
+   agent uses MCP tools to inspect the visible record and submit one
+   proposed legal act for the current opportunity.
    
 1. Provides somewhat sophisticated [sampling for candidate pools of AI
    jurors](juries.md).  (Attorneys still have access to *voir dire*
@@ -38,11 +38,11 @@ agent attorneys and judges.
 
 ## Design
 
-A Go layer talks to agent attorneys via an extension of the Agent
-Client Protocol.  This Go layer also interacts with the core
-procedures engine, which is implemented in Lean.  This Lean engine is
-responsible for executing [ARCP](ARCP.md) correctly, and the
-code includes many theorems about its behavior.
+A Go layer talks to external agents through the Role API and MCP.  The
+Go layer also interacts with the core procedures engine, which is
+implemented in Lean.  This Lean engine is responsible for executing
+[ARCP](ARCP.md) correctly, and the code includes many theorems about
+its behavior.
 
 The entire litigation process can run in an enclave for attestable and
 optionally confidential execution.  Agent attorneys can run either
@@ -105,5 +105,5 @@ This experiment is evolving. Here are some of the main directions:
 1. [United States Federal Rules of Civil Procedure](https://www.uscourts.gov/rules-policies/current-rules-practice-procedure/federal-rules-civil-procedure) (FRCP)
 1. [Agent Rules for Civil Procedure](ARCP.md) (ARCP)
 1. [Lean](https://lean-lang.org/)
-1. [Agent Client Protocol](https://agentclientprotocol.com/get-started/introduction) (ACP)
+1. [Model Context Protocol](https://modelcontextprotocol.io/)
 1. [AWS EC2 instance attestation](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/nitrotpm-attestation.html)

@@ -62,7 +62,7 @@ func TestPersistAgentEventWritesNDJSONAndSQLite(t *testing.T) {
 	}
 }
 
-func TestExportACPWorkProduct(t *testing.T) {
+func TestExportExternalWorkProduct(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -73,8 +73,8 @@ func TestExportACPWorkProduct(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(src, "notes", "timeline.md"), []byte("timeline\n"), 0o644); err != nil {
 		t.Fatalf("write work product: %v", err)
 	}
-	if err := exportACPWorkProduct(filepath.Join(tmpDir, "out"), map[string]string{"plaintiff": src}); err != nil {
-		t.Fatalf("exportACPWorkProduct returned error: %v", err)
+	if err := exportExternalWorkProduct(filepath.Join(tmpDir, "out"), map[string]string{"plaintiff": src}); err != nil {
+		t.Fatalf("exportExternalWorkProduct returned error: %v", err)
 	}
 	raw, err := os.ReadFile(filepath.Join(tmpDir, "out", "work-product", "plaintiff", "notes", "timeline.md"))
 	if err != nil {

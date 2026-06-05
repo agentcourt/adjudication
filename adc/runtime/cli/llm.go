@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"adjudication/adc/runtime/runner"
+	"adjudication/common/modelrequest"
 	"adjudication/common/openai"
 	"adjudication/common/persona"
-	"adjudication/common/xproxy"
 )
 
 const llmToolCheckName = "submit_juror_vote"
@@ -27,7 +27,7 @@ func RunLLM(args []string, stdout io.Writer, stderr io.Writer) error {
 	})
 	prompt := fs.String("prompt", "", "Prompt text")
 	promptFile := fs.String("prompt-file", "", "Path to prompt text file")
-	model := fs.String("model", "openrouter://openai/gpt-5", "Model name in xproxy PROVIDER://MODEL form")
+	model := fs.String("model", "openrouter://openai/gpt-5", "Model name in endpoint://model form")
 	personaRecord := fs.String("persona", "", `Persona record in PROVIDER://MODEL,path/to/persona.txt form, or "random" to sample from the shared personas file`)
 	timeoutSeconds := fs.Int("timeout-seconds", defaultLLMTimeoutSeconds, "LLM HTTP timeout in seconds")
 	toolCheck := fs.Bool("tool-check", false, "Require one submit_juror_vote tool call and print its arguments")
@@ -45,6 +45,7 @@ func RunLLM(args []string, stdout io.Writer, stderr io.Writer) error {
 		return fmt.Errorf("--prompt or --prompt-file is required")
 	}
 	modelName := strings.TrimSpace(*model)
+	var requestSpec *modelrequest.Spec
 	systemPrompt := ""
 	if strings.TrimSpace(*personaRecord) != "" {
 		cwd, err := os.Getwd()
@@ -56,6 +57,11 @@ func RunLLM(args []string, stdout io.Writer, stderr io.Writer) error {
 			return fmt.Errorf("parse --persona: %w", err)
 		}
 		modelName = spec.Model
+		if spec.RequestSpec != nil {
+			copied := *spec.RequestSpec
+			requestSpec = &copied
+			modelName = copied.RuntimeModel()
+		}
 		systemPrompt = persona.JurorPrompt("", spec.Text)
 		if sampled {
 			if _, err := fmt.Fprintln(stdout, spec.File); err != nil {
@@ -66,17 +72,15 @@ func RunLLM(args []string, stdout io.Writer, stderr io.Writer) error {
 	if modelName == "" {
 		return fmt.Errorf("--model is required")
 	}
-	if _, err := xproxy.ParseXProxyModel(modelName); err != nil {
+	modelRef, err := modelrequest.ParseModelRef(modelName)
+	if err != nil {
 		return fmt.Errorf("parse --model: %w", err)
 	}
-	xproxyServer, err := maybeStartXProxy(true)
-	if err != nil {
-		return err
+	endpoint := modelRef.Endpoint
+	if requestSpec != nil {
+		endpoint = requestSpec.Endpoint
 	}
-	if xproxyServer != nil {
-		defer xproxyServer.Close()
-	}
-	client, err := newXProxyClient(false, time.Duration(*timeoutSeconds)*time.Second)
+	client, err := openai.NewForEndpoint(endpoint, false, time.Duration(*timeoutSeconds)*time.Second)
 	if err != nil {
 		return err
 	}
@@ -100,7 +104,12 @@ func RunLLM(args []string, stdout io.Writer, stderr io.Writer) error {
 			return err
 		}
 	}
-	resp, err := client.CreateResponse(ctx, modelName, input, tools, "", nil)
+	var resp openai.Response
+	if requestSpec != nil {
+		resp, err = client.CreateResponseWithRequestSpec(ctx, *requestSpec, input, tools, "")
+	} else {
+		resp, err = client.CreateResponse(ctx, modelName, input, tools, "", nil)
+	}
 	if err != nil {
 		return err
 	}

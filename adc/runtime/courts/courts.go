@@ -66,7 +66,7 @@ func Resolve(ref string) (Profile, error) {
 		ref = DefaultCourtName
 	}
 	if builtinPath, ok := builtinCourtPath(ref); ok {
-		return loadFile(builtinPath)
+		return loadFile(resolveBuiltinCourtPath(builtinPath))
 	}
 	return loadFile(ref)
 }
@@ -79,6 +79,29 @@ func builtinCourtPath(name string) (string, bool) {
 		return filepath.FromSlash("etc/courts/international-claw-district.json"), true
 	default:
 		return "", false
+	}
+}
+
+func resolveBuiltinCourtPath(rel string) string {
+	rel = filepath.FromSlash(rel)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return rel
+	}
+	for {
+		for _, candidate := range []string{
+			filepath.Join(cwd, rel),
+			filepath.Join(cwd, "adc", rel),
+		} {
+			if _, err := os.Stat(candidate); err == nil {
+				return candidate
+			}
+		}
+		parent := filepath.Dir(cwd)
+		if parent == cwd {
+			return rel
+		}
+		cwd = parent
 	}
 }
 

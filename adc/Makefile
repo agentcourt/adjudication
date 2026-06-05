@@ -1,16 +1,13 @@
-.PHONY: build build-image test prove install demo demo-xproxy demo-quick demo-flash cluster-personas clean
+.PHONY: build test prove install demo demo-quick cluster-personas clean
 
 BIN_DIR := .bin
 GO_ENV := CGO_ENABLED=0
 
-build: build-image
+build:
 	mkdir -p $(BIN_DIR)
 	cd engine && lake build adcengine
 	install -m 755 engine/.lake/build/bin/adcengine $(BIN_DIR)/adcengine
 	cd runtime && $(GO_ENV) go build -o ../$(BIN_DIR)/adc ./cmd/adc
-
-build-image:
-	../common/pi-container/build-image.sh
 
 test:
 	cd runtime && $(GO_ENV) go test ./...
@@ -26,22 +23,7 @@ demo: build
 	.bin/adc complain --situation examples/ex1/situation.md --out examples/ex1/complaint.md
 	.bin/adc case \
 		--complaint examples/ex1/complaint.md \
-		--out-dir out/ex1-demo \
-		--acp-role plaintiff \
-		--acp-role defendant \
-		--acp-command $(CURDIR)/../common/pi-container/acp-podman.sh
-
-demo-xproxy: build
-	rm -rf out/ex1-demo-xproxy
-	examples/ex1/sign.sh
-	.bin/adc complain --all-through-xproxy --situation examples/ex1/situation.md --out examples/ex1/complaint.md
-	.bin/adc case \
-		--all-through-xproxy \
-		--complaint examples/ex1/complaint.md \
-		--out-dir out/ex1-demo-xproxy \
-		--acp-role plaintiff \
-		--acp-role defendant \
-		--acp-command $(CURDIR)/../common/pi-container/acp-podman.sh
+		--out-dir out/ex1-demo
 
 demo-quick: build
 	rm -rf out/ex1-demo-quick
@@ -50,25 +32,9 @@ demo-quick: build
 	.bin/adc case \
 		--complaint examples/ex1/complaint.md \
 		--out-dir out/ex1-demo-quick \
-		--skip-voir-dire \
-		--acp-role plaintiff \
-		--acp-role defendant \
-		--acp-command $(CURDIR)/../common/pi-container/acp-podman.sh
-
-demo-flash: build
-	rm -rf out/ex1-demo-flash
-	examples/ex1/sign.sh
-	.bin/adc complain --situation examples/ex1/situation.md --out examples/ex1/complaint.md
-	.bin/adc case \
-		--complaint examples/ex1/complaint.md \
-		--out-dir out/ex1-demo-flash \
-		--flash gpt-5-mini \
-		--acp-role plaintiff \
-		--acp-role defendant \
-		--acp-command $(CURDIR)/../common/pi-container/acp-podman.sh
+		--skip-voir-dire
 
 cluster-personas: 
-	@echo "Start xproxy first in another shell: ./.bin/adc xproxy"
 	uv run --script ../common/tools/cluster-personas.py \
 		--personas-file ../common/etc/personas.csv \
 		--genes-file ../common/data/personas/genes.json \
@@ -79,8 +45,8 @@ cluster-personas:
 		> ../common/data/personas/persona-clusters.csv
 
 pool:
-	.bin/adc pool --size 50  | sort | uniq > ../common/data/personas/pool.csv
-	wc -l ../common/data/personas/pool.csv
+	.bin/adc pool --size 50  | sort | uniq > ../common/data/personas/pool.jsonl
+	wc -l ../common/data/personas/pool.jsonl
 
 clean:
 	rm -rf $(BIN_DIR) engine/.lake/build

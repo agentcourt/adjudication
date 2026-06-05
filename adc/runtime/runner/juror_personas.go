@@ -10,15 +10,16 @@ import (
 	"strconv"
 	"strings"
 
+	"adjudication/common/modelrequest"
 	"adjudication/common/openai"
 	"adjudication/common/persona"
-	"adjudication/common/xproxy"
 )
 
 type jurorPersonaPair struct {
 	Model       string
 	PersonaText string
 	PersonaFile string
+	RequestSpec *modelrequest.Spec
 }
 
 type jurorPersonaPool struct {
@@ -40,13 +41,12 @@ func (p *jurorPersonaPool) findPair(model string, personaFile string) (jurorPers
 	return jurorPersonaPair{}, false
 }
 
-func loadJurorPersonaPool(path string, scenarioBaseDir string, flashModel string) (*jurorPersonaPool, error) {
+func loadJurorPersonaPool(path string, scenarioBaseDir string) (*jurorPersonaPool, error) {
 	resolvedPairsPath := resolveScenarioRelativePath(path, scenarioBaseDir)
 	raw, err := os.ReadFile(resolvedPairsPath)
 	if err != nil {
 		return nil, fmt.Errorf("read juror personas file: %w", err)
 	}
-	flashModel = strings.TrimSpace(flashModel)
 	lines := strings.Split(string(raw), "\n")
 	pairs := make([]jurorPersonaPair, 0, len(lines))
 	for _, rawLine := range lines {
@@ -58,13 +58,18 @@ func loadJurorPersonaPool(path string, scenarioBaseDir string, flashModel string
 		if err != nil {
 			return nil, err
 		}
-		if flashModel != "" {
-			spec.Model = flashModel
+		var requestSpec *modelrequest.Spec
+		if spec.RequestSpec != nil {
+			copied := *spec.RequestSpec
+			requestSpec = &copied
+		} else {
+			return nil, fmt.Errorf("juror persona record must be a JSONL request spec: %s", line)
 		}
 		pairs = append(pairs, jurorPersonaPair{
 			Model:       spec.Model,
 			PersonaText: spec.Text,
 			PersonaFile: spec.File,
+			RequestSpec: requestSpec,
 		})
 	}
 	if len(pairs) == 0 {
@@ -233,6 +238,19 @@ func (r *Runner) jurorOpportunityPromptContext(opportunity leanOpportunity) (str
 	return model, persona.JurorPrompt(jurorID, context)
 }
 
+func (r *Runner) jurorOpportunityRequestSpec(opportunity leanOpportunity) *modelrequest.Spec {
+	jurorID := targetJurorIDForOpportunity(opportunity)
+	if jurorID == "" {
+		return nil
+	}
+	pair, ok := r.jurorPersonaAssignments[jurorID]
+	if !ok || pair.RequestSpec == nil {
+		return nil
+	}
+	spec := *pair.RequestSpec
+	return &spec
+}
+
 func (r *Runner) jurorResponseClient(model string) (*openai.Client, error) {
 	model = strings.TrimSpace(model)
 	if model == "" {
@@ -241,11 +259,11 @@ func (r *Runner) jurorResponseClient(model string) (*openai.Client, error) {
 		}
 		return r.client, nil
 	}
-	if _, err := xproxy.ParseXProxyModel(model); err != nil {
-		return nil, fmt.Errorf("invalid juror model %q: %w", model, err)
-	}
 	if r.jurorClient == nil {
-		return nil, fmt.Errorf("juror xproxy client is nil for model %q", model)
+		if r.client == nil {
+			return nil, fmt.Errorf("llm client is nil")
+		}
+		return r.client, nil
 	}
 	return r.jurorClient, nil
 }

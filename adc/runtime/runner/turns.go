@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"adjudication/adc/runtime/spec"
+	"adjudication/common/modelrequest"
 	openaiapi "adjudication/common/openai"
 )
 
@@ -214,6 +215,7 @@ func (r *Runner) executeOpportunityTurn(
 	systemPrompt := buildSystemPrompt(role, view)
 	activeModel := r.effectiveRoleModel(role)
 	responseClient := r.client
+	var activeRequestSpec *modelrequest.Spec
 	if role.Name == "juror" {
 		caseObj, _ := r.state["case"].(map[string]any)
 		jurorModel, jurorPersona := r.jurorOpportunityPromptContext(opportunity)
@@ -221,6 +223,7 @@ func (r *Runner) executeOpportunityTurn(
 		if strings.TrimSpace(jurorModel) != "" {
 			activeModel = jurorModel
 		}
+		activeRequestSpec = r.jurorOpportunityRequestSpec(opportunity)
 		responseClient, err = r.jurorResponseClient(activeModel)
 		if err != nil {
 			return TurnLog{}, err
@@ -265,7 +268,12 @@ func (r *Runner) executeOpportunityTurn(
 	}
 	for decisionSteps < opportunity.StepBudget {
 		steps++
-		resp, err := responseClient.CreateResponse(ctx, activeModel, inputItems, tools, prevID, r.effectiveRoleTemperature(role))
+		var resp openaiapi.Response
+		if activeRequestSpec != nil {
+			resp, err = responseClient.CreateResponseWithRequestSpec(ctx, *activeRequestSpec, inputItems, tools, prevID)
+		} else {
+			resp, err = responseClient.CreateResponse(ctx, activeModel, inputItems, tools, prevID, r.effectiveRoleTemperature(role))
+		}
 		if err != nil {
 			if timeoutLog, handled, handleErr := r.handleOpportunityResponseError(turnIndex, role, opportunity, activeModel, err); handled {
 				if handleErr != nil {

@@ -152,6 +152,51 @@ func TestHandleCandidateJurorTimeoutReplacesJuror(t *testing.T) {
 	}
 }
 
+func TestHandleCandidateJurorFailureReplacesJuror(t *testing.T) {
+	r := newTimeoutTestRunner(t)
+	caseObj := r.state["case"].(map[string]any)
+	caseObj["status"] = "trial"
+	caseObj["trial_mode"] = "jury"
+	caseObj["phase"] = "voir_dire"
+	caseObj["jury_configuration"] = map[string]any{
+		"juror_count":        6,
+		"unanimous_required": true,
+		"minimum_concurring": 6,
+	}
+	caseObj["jurors"] = []any{
+		map[string]any{"juror_id": "J1", "name": "Juror 1", "status": "candidate", "note": "", "model": "", "persona_filename": ""},
+	}
+	opportunity := leanOpportunity{
+		OpportunityID: "opp-1",
+		Phase:         "voir_dire",
+		Objective:     "Answer the juror questionnaire.",
+		AllowedTools:  []string{"answer_juror_questionnaire"},
+		Constraints: map[string]any{
+			"required_payload": map[string]any{"juror_id": "J1"},
+		},
+	}
+	log, handled, err := r.handleOpportunityResponseError(24, spec.RoleSpec{Name: "juror"}, opportunity, "openrouter://model", assertionError("agent output limit exceeded"))
+	if !handled {
+		t.Fatalf("handled = false, want true")
+	}
+	if err != nil {
+		t.Fatalf("handleOpportunityResponseError error = %v", err)
+	}
+	if log.Steps != 2 {
+		t.Fatalf("Steps = %d, want 2", log.Steps)
+	}
+	caseObj = r.state["case"].(map[string]any)
+	jurors := caseObj["jurors"].([]any)
+	first := jurors[0].(map[string]any)
+	second := jurors[1].(map[string]any)
+	if first["juror_id"] != "J1" || first["status"] != "timed_out" {
+		t.Fatalf("first juror = %#v", first)
+	}
+	if second["juror_id"] != "J2" || second["status"] != "candidate" {
+		t.Fatalf("replacement juror = %#v", second)
+	}
+}
+
 func TestHandleDeliberatingJurorTimeoutDeclaresHungJuryWhenThresholdImpossible(t *testing.T) {
 	r := newTimeoutTestRunner(t)
 	caseObj := r.state["case"].(map[string]any)

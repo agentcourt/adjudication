@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"adjudication/common/modelrequest"
 	"adjudication/common/openai"
 )
 
@@ -26,16 +27,16 @@ func TestLoadJurorPersonaPoolAndSample(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "etc", "personas", "persons", "j2.txt"), []byte("insists on corroboration"), 0o644); err != nil {
 		t.Fatalf("WriteFile j2 error = %v", err)
 	}
-	csvPath := filepath.Join(root, "etc", "personas.csv")
-	csv := strings.Join([]string{
-		"openrouter://openai/gpt-5,personas/persons/j1.txt",
-		"openrouter://anthropic/claude-3.7-sonnet,personas/persons/j2.txt",
+	poolPath := filepath.Join(root, "etc", "personas", "pool.jsonl")
+	poolText := strings.Join([]string{
+		`{"openrouter_model_id":"openai/gpt-5","provider":{"only":["openai"],"allow_fallbacks":false,"require_parameters":true},"request":{"temperature":0,"max_tokens":32},"persona":"persons/j1.txt"}`,
+		`{"openrouter_model_id":"anthropic/claude-3.7-sonnet","provider":{"only":["anthropic"],"allow_fallbacks":false,"require_parameters":true},"request":{"temperature":0,"max_tokens":32},"persona":"persons/j2.txt"}`,
 	}, "\n")
-	if err := os.WriteFile(csvPath, []byte(csv), 0o644); err != nil {
-		t.Fatalf("WriteFile csv error = %v", err)
+	if err := os.WriteFile(poolPath, []byte(poolText), 0o644); err != nil {
+		t.Fatalf("WriteFile pool error = %v", err)
 	}
 
-	pool, err := loadJurorPersonaPool("etc/personas.csv", scenarioBase, "openai://gpt-5-mini")
+	pool, err := loadJurorPersonaPool("etc/personas/pool.jsonl", scenarioBase)
 	if err != nil {
 		t.Fatalf("loadJurorPersonaPool error = %v", err)
 	}
@@ -43,8 +44,8 @@ func TestLoadJurorPersonaPoolAndSample(t *testing.T) {
 		t.Fatalf("pool = %+v", pool)
 	}
 	for _, pair := range pool.pairs {
-		if pair.Model != "openai://gpt-5-mini" {
-			t.Fatalf("flash override failed: %+v", pair)
+		if pair.RequestSpec == nil {
+			t.Fatalf("missing request spec in %+v", pair)
 		}
 		if strings.TrimSpace(pair.PersonaText) == "" {
 			t.Fatalf("empty persona text in %+v", pair)
@@ -72,8 +73,8 @@ func TestApplyJurorPersonaDefaultsAndOpportunityContext(t *testing.T) {
 
 	pool := &jurorPersonaPool{
 		pairs: []jurorPersonaPair{
-			{Model: "openrouter://openai/gpt-5", PersonaText: "skeptical of screenshots", PersonaFile: "personas/persons/j1.txt"},
-			{Model: "openrouter://anthropic/claude-3.7-sonnet", PersonaText: "insists on corroboration", PersonaFile: "personas/persons/j2.txt"},
+			{Model: "openrouter://openai/gpt-5", PersonaText: "skeptical of screenshots", PersonaFile: "personas/persons/j1.txt", RequestSpec: &modelrequest.Spec{Endpoint: "openrouter", Model: "openai/gpt-5"}},
+			{Model: "openrouter://anthropic/claude-3.7-sonnet", PersonaText: "insists on corroboration", PersonaFile: "personas/persons/j2.txt", RequestSpec: &modelrequest.Spec{Endpoint: "openrouter", Model: "anthropic/claude-3.7-sonnet"}},
 		},
 		remaining: []int{0, 1},
 	}
@@ -105,6 +106,10 @@ func TestApplyJurorPersonaDefaultsAndOpportunityContext(t *testing.T) {
 	})
 	if ctxModel != model || !strings.Contains(ctxPrompt, "You are J1.") {
 		t.Fatalf("jurorOpportunityPromptContext = (%q, %q)", ctxModel, ctxPrompt)
+	}
+	reqSpec := r.jurorOpportunityRequestSpec(leanOpportunity{ActorMessage: "Juror J1 should answer."})
+	if reqSpec == nil || strings.TrimSpace(reqSpec.RuntimeModel()) == "" {
+		t.Fatalf("jurorOpportunityRequestSpec = %+v", reqSpec)
 	}
 }
 
@@ -151,9 +156,11 @@ func TestJurorResponseClient(t *testing.T) {
 	}
 	got, err = r.jurorResponseClient("openrouter://openai/gpt-5")
 	if err != nil || got != jurorClient {
-		t.Fatalf("jurorResponseClient xproxy = (%v, %v)", got, err)
+		t.Fatalf("jurorResponseClient request spec model = (%v, %v)", got, err)
 	}
-	if _, err := r.jurorResponseClient("gpt-5"); err == nil {
-		t.Fatalf("jurorResponseClient invalid model error = nil")
+	r = &Runner{client: baseClient}
+	got, err = r.jurorResponseClient("openrouter://openai/gpt-5")
+	if err != nil || got != baseClient {
+		t.Fatalf("jurorResponseClient fallback = (%v, %v)", got, err)
 	}
 }

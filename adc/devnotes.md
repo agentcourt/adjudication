@@ -1,5 +1,37 @@
 # Development Notes
 
+## 2026-06-04: Role API and MCP path
+
+### References
+
+- ADC update plan: [`update-plan.md`](update-plan.md)
+- Role API: [`runtime/runner/roleapi.go`](runtime/runner/roleapi.go)
+- MCP adapter: [`runtime/mcp/mcp.go`](runtime/mcp/mcp.go)
+- Clerk service: [`runtime/service/service.go`](runtime/service/service.go)
+- Local run command: [`runtime/localrun/localrun.go`](runtime/localrun/localrun.go)
+
+### Decisions
+
+ADC now exposes external plaintiff, defendant, and juror opportunities through a case-owned role API.  The runner remains the case owner because it holds the Lean state, opportunity deadlines, invalid-attempt counts, case-file visibility, and final result generation.  Complaint planning and scenario construction remain internal direct-model work before the live case starts.
+
+The ADC MCP adapter is a thin HTTP adapter.  Each MCP session binds to a case id, role id, and optional juror principal id, then forwards tool calls to the role API.  The MCP tool set is stable; each active opportunity describes which legal tools Lean permits at that point.
+
+ADC removed the active ACP and xproxy paths.  Juror pools now use JSONL request-spec records.  Those records preserve the model request configuration needed by Pi agents, including endpoint and request parameters.
+
+`adc run` is now the operator-level local command.  It accepts either `--complaint` or `--scenario`, starts the case API and MCP in-process, starts OpenClaw lawyers according to `--auto-lawyers`, and starts Pi jurors when a juror first appears.  The former direct scenario command is now `adc scenario`.
+
+Entries below this section are historical development notes.  ACP and xproxy entries record the old path and do not describe the current ADC runtime.
+
+### Plan
+
+- [x] Record the agreed ADC update plan.
+- [x] Add the role API at the Lean opportunity boundary.
+- [x] Add work notes and remote case-file reads through the role API.
+- [x] Add a thin MCP adapter over the role API.
+- [x] Add a clerk service that starts case processes and proxies role API calls.
+- [x] Remove active ACP and xproxy runtime paths.
+- [x] Make `adc run` the local OpenClaw/Pi command.
+
 ## 2026-05-20: ACP role portability
 
 ### References

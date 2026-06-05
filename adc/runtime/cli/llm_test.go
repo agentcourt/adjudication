@@ -22,8 +22,8 @@ func TestResolveLLMPersonaSpecRandom(t *testing.T) {
 	if err := os.WriteFile(personaPath, []byte("skeptical of unsigned documents"), 0o644); err != nil {
 		t.Fatalf("WriteFile persona error = %v", err)
 	}
-	recordsPath := filepath.Join(cwd, "common", "data", "personas", "pool.csv")
-	record := "openrouter://openai/gpt-5,personas/persons/a.txt\n"
+	recordsPath := filepath.Join(cwd, "common", "data", "personas", "pool.jsonl")
+	record := `{"openrouter_model_id":"openai/gpt-5","provider":{"only":["openai"],"allow_fallbacks":false,"require_parameters":true},"request":{"temperature":0,"max_tokens":32},"persona":"personas/persons/a.txt"}` + "\n"
 	if err := os.WriteFile(recordsPath, []byte(record), 0o644); err != nil {
 		t.Fatalf("WriteFile records error = %v", err)
 	}

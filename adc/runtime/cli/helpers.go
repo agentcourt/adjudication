@@ -10,18 +10,25 @@ import (
 	"strings"
 
 	"adjudication/adc/runtime/runner"
-	"adjudication/adc/runtime/spec"
-	"adjudication/common/xproxy"
 )
 
 const (
-	defaultACPTimeoutSeconds = runner.DefaultACPTimeoutSeconds
-	defaultLLMTimeoutSeconds = runner.DefaultLLMTimeoutSeconds
+	defaultRoleAPITimeoutSeconds = runner.DefaultRoleAPITimeoutSeconds
+	defaultLLMTimeoutSeconds     = runner.DefaultLLMTimeoutSeconds
 )
 
-type flashModelOverride struct {
-	Direct string
-	XProxy string
+type stringListFlag []string
+
+func (f *stringListFlag) String() string {
+	if f == nil {
+		return ""
+	}
+	return strings.Join([]string(*f), ",")
+}
+
+func (f *stringListFlag) Set(value string) error {
+	*f = append(*f, value)
+	return nil
 }
 
 func newFlagSet(name string, stderr io.Writer, usage func()) *flag.FlagSet {
@@ -29,6 +36,23 @@ func newFlagSet(name string, stderr io.Writer, usage func()) *flag.FlagSet {
 	fs.SetOutput(stderr)
 	fs.Usage = usage
 	return fs
+}
+
+func loadPromptText(prompt string, promptFile string) (string, error) {
+	if strings.TrimSpace(prompt) != "" && strings.TrimSpace(promptFile) != "" {
+		return "", fmt.Errorf("--prompt and --prompt-file are mutually exclusive")
+	}
+	if strings.TrimSpace(prompt) != "" {
+		return prompt, nil
+	}
+	if strings.TrimSpace(promptFile) == "" {
+		return "", nil
+	}
+	raw, err := os.ReadFile(promptFile)
+	if err != nil {
+		return "", fmt.Errorf("read prompt file: %w", err)
+	}
+	return string(raw), nil
 }
 
 func writeJSONFile(path string, v any) error {
@@ -66,7 +90,30 @@ func ensureParentDir(path string) error {
 }
 
 func defaultEngineCommand() string {
-	return ".bin/adcengine"
+	return defaultADCPath(".bin", "adcengine")
+}
+
+func defaultADCPath(parts ...string) string {
+	rel := filepath.Join(parts...)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return rel
+	}
+	for {
+		for _, candidate := range []string{
+			filepath.Join(cwd, rel),
+			filepath.Join(cwd, "adc", rel),
+		} {
+			if fileExists(candidate) {
+				return candidate
+			}
+		}
+		parent := filepath.Dir(cwd)
+		if parent == cwd {
+			return rel
+		}
+		cwd = parent
+	}
 }
 
 func defaultCommonRoot() string {
@@ -95,7 +142,7 @@ func firstExistingPath(paths ...string) string {
 }
 
 func defaultPersonaRecordsPathFor(baseDir string) string {
-	return defaultCommonPathFrom(baseDir, "data", "personas", "pool.csv")
+	return defaultCommonPathFrom(baseDir, "data", "personas", "pool.jsonl")
 }
 
 func defaultPersonaRecordsPath() string {
@@ -103,18 +150,7 @@ func defaultPersonaRecordsPath() string {
 	if err == nil {
 		return defaultPersonaRecordsPathFor(cwd)
 	}
-	return defaultCommonPath("data", "personas", "pool.csv")
-}
-
-func defaultXProxyConfigPath() string {
-	return resolveDefault(
-		firstExistingPath(defaultCommonPath("etc", "xproxy.json"), "etc/xproxy.json"),
-		defaultCommonPath("etc", "xproxy.json"),
-	)
-}
-
-func defaultACPServerPath() string {
-	return filepath.FromSlash("common/pi-container/acp-podman.sh")
+	return defaultCommonPath("data", "personas", "pool.jsonl")
 }
 
 func fileExists(path string) bool {
@@ -134,10 +170,10 @@ func locateCommonRootFrom(start string) string {
 	}
 	for {
 		candidate := filepath.Join(base, "common")
-		if fileExists(filepath.Join(candidate, "etc", "xproxy.json")) || fileExists(filepath.Join(candidate, "etc", "personas.csv")) {
+		if fileExists(filepath.Join(candidate, "data", "personas", "pool.jsonl")) || fileExists(filepath.Join(candidate, "etc", "personas.csv")) {
 			return candidate
 		}
-		if filepath.Base(base) == "common" && (fileExists(filepath.Join(base, "etc", "xproxy.json")) || fileExists(filepath.Join(base, "etc", "personas.csv"))) {
+		if filepath.Base(base) == "common" && (fileExists(filepath.Join(base, "data", "personas", "pool.jsonl")) || fileExists(filepath.Join(base, "etc", "personas.csv"))) {
 			return base
 		}
 		next := filepath.Dir(base)
@@ -155,56 +191,4 @@ func resolveDefault(value string, fallback string) string {
 		return value
 	}
 	return strings.TrimSpace(fallback)
-}
-
-func parseFlashModel(raw string) (flashModelOverride, error) {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return flashModelOverride{}, nil
-	}
-	switch value {
-	case "gpt-5-mini", "openai://gpt-5-mini":
-		return flashModelOverride{
-			Direct: "gpt-5-mini",
-			XProxy: "openai://gpt-5-mini",
-		}, nil
-	default:
-		return flashModelOverride{}, fmt.Errorf(`--flash must be "gpt-5-mini" or "openai://gpt-5-mini"`)
-	}
-}
-
-func normalizeXProxyModel(model string) (string, error) {
-	model = strings.TrimSpace(model)
-	if model == "" {
-		return "", nil
-	}
-	if strings.Contains(model, "://") {
-		if _, err := xproxy.ParseXProxyModel(model); err != nil {
-			return "", err
-		}
-		return model, nil
-	}
-	normalized := "openai://" + model
-	if _, err := xproxy.ParseXProxyModel(normalized); err != nil {
-		return "", err
-	}
-	return normalized, nil
-}
-
-func normalizeScenarioModelsForXProxy(scenario spec.FormalScenario) (spec.FormalScenario, error) {
-	var err error
-	scenario.Model, err = normalizeXProxyModel(scenario.Model)
-	if err != nil {
-		return spec.FormalScenario{}, fmt.Errorf("normalize scenario model: %w", err)
-	}
-	for i := range scenario.Roles {
-		if strings.TrimSpace(scenario.Roles[i].Model) == "" {
-			continue
-		}
-		scenario.Roles[i].Model, err = normalizeXProxyModel(scenario.Roles[i].Model)
-		if err != nil {
-			return spec.FormalScenario{}, fmt.Errorf("normalize role %s model: %w", scenario.Roles[i].Name, err)
-		}
-	}
-	return scenario, nil
 }

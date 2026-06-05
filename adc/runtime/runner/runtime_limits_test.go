@@ -9,8 +9,8 @@ func TestRuntimeLimitsNormalized(t *testing.T) {
 	if got.LLMTimeoutSeconds != DefaultLLMTimeoutSeconds {
 		t.Fatalf("LLMTimeoutSeconds = %d, want %d", got.LLMTimeoutSeconds, DefaultLLMTimeoutSeconds)
 	}
-	if got.ACPTimeoutSeconds != DefaultACPTimeoutSeconds {
-		t.Fatalf("ACPTimeoutSeconds = %d, want %d", got.ACPTimeoutSeconds, DefaultACPTimeoutSeconds)
+	if got.RoleAPITimeoutSeconds != DefaultRoleAPITimeoutSeconds {
+		t.Fatalf("RoleAPITimeoutSeconds = %d, want %d", got.RoleAPITimeoutSeconds, DefaultRoleAPITimeoutSeconds)
 	}
 	if got.MaxResponseBytes != DefaultMaxResponseBytes {
 		t.Fatalf("MaxResponseBytes = %d, want %d", got.MaxResponseBytes, DefaultMaxResponseBytes)

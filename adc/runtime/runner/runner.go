@@ -3,11 +3,11 @@ package runner
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"adjudication/adc/runtime/courts"
 	"adjudication/adc/runtime/lean"
@@ -22,14 +22,15 @@ type Config struct {
 	OutputPath        string
 	EventsPath        string
 	RunID             string
+	CaseID            string
+	CaseAPIAddr       string
+	ExternalRoles     []string
 	Model             string
 	Temperature       *float64
 	JurorTemperature  *float64
 	JurorPersonasPath string
-	FlashJurorModel   string
 	Offline           bool
 	Runtime           RuntimeLimits
-	ACP               *ACPConfig
 }
 
 type TurnLog struct {
@@ -68,10 +69,11 @@ type Runner struct {
 	state                   map[string]any
 	roles                   map[string]spec.RoleSpec
 	courtProfile            courts.Profile
-	acpSessions             map[string]*acpPersistentSession
 	workProductDirs         map[string]string
 	jurorPersonaPool        *jurorPersonaPool
 	jurorPersonaAssignments map[string]jurorPersonaPair
+	externalRoles           map[string]bool
+	roleAPI                 *roleAPIServer
 }
 
 func (r *Runner) RequiresLLMTurns() bool {
@@ -115,12 +117,12 @@ func New(st *store.Store, le lean.Engine, client *openai.Client, jurorClient *op
 		cfg:                     cfg,
 		roles:                   roles,
 		courtProfile:            courtProfile,
-		acpSessions:             map[string]*acpPersistentSession{},
 		workProductDirs:         map[string]string{},
 		jurorPersonaAssignments: map[string]jurorPersonaPair{},
+		externalRoles:           externalRoleSet(cfg.ExternalRoles),
 	}
 	if strings.TrimSpace(cfg.JurorPersonasPath) != "" {
-		pool, err := loadJurorPersonaPool(cfg.JurorPersonasPath, cfg.ScenarioBaseDir, cfg.FlashJurorModel)
+		pool, err := loadJurorPersonaPool(cfg.JurorPersonasPath, cfg.ScenarioBaseDir)
 		if err != nil {
 			return nil, err
 		}
@@ -272,6 +274,28 @@ func validateScenarioActions(scenario spec.FormalScenario, roles map[string]spec
 }
 
 func (r *Runner) Run(ctx context.Context) (Result, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var api *caseAPIServer
+	var err error
+	if strings.TrimSpace(r.cfg.CaseAPIAddr) != "" {
+		api, err = startCaseAPIServer(r)
+		if err != nil {
+			return Result{}, err
+		}
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_ = api.Close(shutdownCtx)
+		}()
+	}
+	var result Result
+	defer func() {
+		if r.roleAPI != nil {
+			r.roleAPI.setTerminal(result, err)
+		}
+	}()
 	if err := resetEventLog(r.cfg.EventsPath); err != nil {
 		return Result{}, err
 	}
@@ -290,9 +314,6 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 		}
 		log, err := r.executeTurn(ctx, i+1, role, turn, allowed)
 		if err != nil {
-			if cleanupErr := r.closeACPSessions(); cleanupErr != nil {
-				return Result{}, errors.Join(err, cleanupErr)
-			}
 			return Result{}, err
 		}
 		turnLogs = append(turnLogs, log)
@@ -300,27 +321,18 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 	if r.scenario.LoopPolicy != nil && strings.TrimSpace(r.scenario.LoopPolicy.Type) == "autopilot_trial" {
 		logs, err := r.runAutopilot(ctx, len(turnLogs)+1)
 		if err != nil {
-			if cleanupErr := r.closeACPSessions(); cleanupErr != nil {
-				return Result{}, errors.Join(err, cleanupErr)
-			}
 			return Result{}, err
 		}
 		turnLogs = append(turnLogs, logs...)
 	}
 	assertions := evaluateAssertions(r.scenario.Assertions, r.state, turnLogs)
-	result := Result{
+	result = Result{
 		Scenario:   r.scenario.Name,
 		Assertions: assertions,
 		TurnLogs:   turnLogs,
 		FinalState: r.state,
 	}
 	if err := r.writeEvidence(result); err != nil {
-		if cleanupErr := r.closeACPSessions(); cleanupErr != nil {
-			return Result{}, errors.Join(err, cleanupErr)
-		}
-		return Result{}, err
-	}
-	if err := r.closeACPSessions(); err != nil {
 		return Result{}, err
 	}
 	status := "ok"

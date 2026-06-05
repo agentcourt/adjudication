@@ -1,7 +1,7 @@
 flowchart TD
     A[example run\nsituation.md plus linked files] --> B[sign.sh\nregenerate keypair,\npublic key, signature]
     B --> C[adc complain\ndraft complaint.md]
-    C --> D[adc case]
+    C --> D[adc case or adc run]
 
     D --> E[stage complaint files\nand generate case packet]
     E --> F[generate plaintiff strategy\nand defense strategy]
@@ -9,9 +9,9 @@ flowchart TD
     G --> H[Lean initialize_case\nseed complaint and attachments]
     H --> I[next_opportunity loop]
     I --> J[log agent call\nrole, phase, reason,\nallowed tools]
-    J --> K{delegated role?}
+    J --> K{external role?}
     K -- no --> L[local model call]
-    K -- yes --> M[ACP agent session\npi-acp and pi in Podman\nwith ephemeral home only]
+    K -- yes --> M[Role API opportunity\nMCP tools for OpenClaw or Pi]
     L --> N[decision or pass]
     M --> N
     N --> O[Lean apply_decision\nvalidate opportunity]

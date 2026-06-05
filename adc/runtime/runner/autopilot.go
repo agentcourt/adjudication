@@ -90,8 +90,8 @@ func (r *Runner) runAutopilot(ctx context.Context, startTurnIndex int) ([]TurnLo
 				return nil, err
 			}
 		} else {
-			if acpCfg := r.externalACPConfigForRole(role.Name); acpCfg != nil {
-				turnLog, err = r.executeOpportunityTurnACP(ctx, turnIndex, role, opportunity, rolesPayload, stateVersion, *acpCfg)
+			if r.roleIsExternal(role.Name) {
+				turnLog, err = r.executeExternalOpportunityTurn(ctx, turnIndex, role, opportunity, rolesPayload, stateVersion)
 				if err != nil {
 					return nil, err
 				}

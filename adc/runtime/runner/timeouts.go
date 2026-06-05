@@ -45,7 +45,7 @@ func (r *Runner) handleOpportunityResponseError(
 	model string,
 	err error,
 ) (TurnLog, bool, error) {
-	if role.Name != "juror" || !isTimeoutError(err) {
+	if role.Name != "juror" || err == nil {
 		return TurnLog{}, false, nil
 	}
 	jurorID := strings.TrimSpace(opportunityConstraintString(opportunity, "juror_id"))

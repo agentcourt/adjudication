@@ -61,7 +61,7 @@ func TestSamplePoolRecordsWarnsWhenSizeExceedsUniquePairs(t *testing.T) {
 }
 
 func TestRunPoolSuppressesTraceWithoutVerbose(t *testing.T) {
-	rows := "m1,p1,1,0\nm2,p2,1,1\nm1,p1,2,0\nm2,p2,2,1\n"
+	rows := "openrouter://m1,p1,1,0\nopenrouter://m2,p2,1,1\nopenrouter://m1,p1,2,0\nopenrouter://m2,p2,2,1\n"
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatalf("resolve adc root: %v", err)

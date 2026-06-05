@@ -4,6 +4,13 @@ __pycache__/
 *.png
 analysis.md
 
+/.bin/
+/.cache/
+/run.sh
+/adc/run.sh
+/arb/run.sh
+/arbd/run.sh
+
 adc/.bin/
 adc/.cache/
 adc/.state/

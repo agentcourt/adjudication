@@ -1,134 +1,72 @@
 # Agents
 
-This page describes the current external-agent path.  The immediate use is attorney agents.  The same boundary could support other delegated roles later.
+ADC external agents act through a case-owned HTTP Role API.  The case process owns Lean state, role-visible case views, current opportunities, deadlines, invalid-attempt counts, case-file access, and final results.  An agent receives the current opportunity, inspects the visible record through approved tools, and submits one proposed legal act or reports failure.
 
-The boundary is strict.  [Lean](logic.md) remains the rule-authoritative procedure engine.  The Go runtime stages files, assembles prompts, persists state, exposes helper methods, and calls the formal engine.  An external agent does not mutate case state directly.  It receives the current opportunity, inspects the visible record, and proposes one act.  `adc` validates that act through Lean before any state change occurs.
+MCP is an adapter over the Role API.  OpenClaw lawyers and Pi jurors use MCP because their native tool systems can call MCP tools directly.  The MCP adapter does not contain court logic; it forwards role-bound tool calls to `/roleapi/v1` and returns the case process response.
 
-When a role is delegated through ACP, that role's live opportunity turns go through ACP rather than the local model client.  Complaint planning remains a separate path.
+## Runtime Roles
 
-## Architecture
+| Role | Current full-run placement |
+| --- | --- |
+| Plaintiff lawyer | External OpenClaw process through MCP. |
+| Defendant lawyer | External OpenClaw process through MCP. |
+| Juror | External Pi process through MCP when that juror first receives an opportunity. |
+| Judge | Internal direct-model role in the case process. |
+| Clerk | Internal direct-model role in the case process. |
+| Observer | Read-only Role API and MCP role for status and final results. |
 
-The current path uses the [Agent Client Protocol](https://agentclientprotocol.com/).  `adc` acts as the ACP client.  The delegated role agent runs behind `pi-acp`, and `pi-acp` starts `pi`.  In the checked-in demo path, both `pi-acp` and `pi` run inside the Podman image.
+`adc run` starts the case process, starts MCP, starts OpenClaw lawyers according to `--auto-lawyers`, and starts a Pi juror process when the juror first appears.  It does not restart a lawyer or juror after process failure.  Lawyer failure fails the case, while juror failure follows the case process's juror dismissal or replacement rule.
 
-One ACP server configuration may serve more than one delegated role.  `adc` accepts repeated delegated-role selections while keeping one shared ACP command or one shared TCP endpoint, argument list, environment, and timeout.  The role and opportunity still come from Lean, not from ACP-side configuration.
+## Role API
 
-| Layer | Role |
-|---|---|
-| Lean | determines whether an act is procedurally valid and what state transition follows |
-| Go runtime | stages files, manages prompts, persists state, and calls Lean |
-| ACP client in `adc` | talks to an external role agent |
-| ACP server (`pi-acp`) | translates ACP requests into `pi` RPC calls |
-| External role agent (`pi`) | reads, reasons, uses tools, and proposes one legal act |
+The Role API lives under `/roleapi/v1` on the case API listener.  Every request includes `case_id`.  Lawyer requests use `role_id=plaintiff` or `role_id=defendant`; juror requests use `role_id=juror` and `principal_id` for the juror; observer requests use `role_id=observer`.
 
-This separation matters.  Court procedure does not move into the delegated agent.  The rule-authoritative boundary remains inside `adc`.
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Reports that the case API is listening. |
+| `GET` or `POST /roleapi/v1/status` | Returns case status and current turn information. |
+| `GET` or `POST /roleapi/v1/get` | Returns the current opportunity without long waiting. |
+| `GET` or `POST /roleapi/v1/wait_for_opportunity` | Waits up to 30 seconds for a role opportunity or terminal status. |
+| `GET` or `POST /roleapi/v1/result` | Returns final result, failed status, or pending status. |
+| `POST /roleapi/v1/do` | Executes support tools, `send_work_notes`, or `submit_decision`. |
+| `POST /roleapi/v1/fail` | Reports external-agent failure for the active opportunity. |
 
-## ACP methods
+The active opportunity response names the legal tools currently allowed by Lean.  It also includes the current prompt, role-visible case view, legal tool schemas, support tool schemas, remaining turn time, and remaining attempts.  The role should use the returned `opportunity_id` when it sends work notes or submits a decision.
 
-The ACP layer uses custom `_adc/*` methods for case-scoped operations.  These methods are not legal acts in themselves.  They give the delegated role access to the visible record and to the one path that can propose a legal act.
+## MCP Adapter
 
-The current method set includes:
+`adc mcp` runs a Streamable HTTP MCP server.  A session binds to one `case_id`, one `role_id`, and, for jurors, one `principal_id`.  A client connects to `/mcp` with those query parameters, completes MCP initialization, and then includes the returned `Mcp-Session-Id` header on later requests.
 
-| Method | Purpose |
-|---|---|
-| `_adc/get_case` | return the current role-visible case view |
-| `_adc/get_juror_context` | return one juror candidate's questionnaire and oral voir dire record |
-| `_adc/list_case_files` | return visible case files and metadata |
-| `_adc/read_case_text_file` | return the full text of a visible `.txt` or `.md` file |
-| `_adc/request_case_file` | attach a visible image file to the next model turn |
-| `_adc/submit_decision` | submit one proposed legal act or a pass |
+The MCP tool list remains stable during the session.  Each opportunity response tells the agent which legal tools are allowed for that turn.  A lawyer or juror should call `wait_for_opportunity`, inspect the returned opportunity when it is ready, use support tools as needed, send work notes, submit one decision, and repeat until the case reports `done` or `failed`.
 
-`_adc/submit_decision` is the only state-changing path.  It sends a proposed act back into `adc`, which validates it against the current Lean opportunity.  If the act is malformed, untimely, or disallowed, Lean rejects it and the state remains unchanged.
+Standard MCP tools include `wait_for_opportunity`, `get_current_opportunity`, `case_status`, `get_case`, `explain_decisions`, `list_case_files`, `read_case_text_file`, `request_case_file`, `read_case_file_bytes`, `get_juror_context`, `send_work_notes`, `submit_decision`, and `report_failure`.  Observer sessions also get `get_case_result`.  Support tools enforce the same role visibility rules as the prompt.
 
-If an agent does the wrong thing, the system responds with a clear explanation and another chance to act within the same turn.  If the agent keeps failing, the turn fails openly.  The runtime does not silently reinterpret the agent's intent.
+## Legal Acts
 
-## `pi-acp` changes
+Legal acts go through `submit_decision`.  A legal-tool decision uses `kind=tool`, `tool_name`, and `payload`.  A pass decision uses `kind=pass` and `reason`, but only when the active opportunity says passing is allowed.
 
-Upstream `pi-acp` did not expose host-defined ACP custom methods to `pi`.  That was the gap this system needed to close.  The delegated lawyer had to be able to call `_adc/get_case`, `_adc/list_case_files`, and `_adc/submit_decision`.  ACP transport alone was not enough.
+Lean validates every submitted decision against the current state version, opportunity id, role, allowed tool set, and payload.  If Lean rejects the decision, the case process returns the rejection reason and keeps the same opportunity open while the attempt budget remains.  If attempts run out, the case process applies the configured failure rule for that role.
 
-The local `pi-acp` branch adds one generic feature: it turns configured ACP custom methods into ordinary `pi` tools.  The bridge reads a method list from `PI_ACP_CLIENT_TOOLS`, generates a temporary `pi` extension, and registers one tool per ACP custom method.  When `pi` calls one of those tools, `pi-acp` forwards the call back to the ACP client through `conn.extMethod(...)`.
+## Work Notes
 
-That change is generic.  It does not mention `adc` in the adapter logic.  `adc` supplies `_adc/*` methods because that is its domain.  Another host application could expose a different method family through the same bridge.
+`send_work_notes` records private work notes outside the case record.  Lawyers should use it for plans, work logs, evidence-search notes, analysis, and turn summaries before submitting a legal decision.  These notes help evaluate agent behavior without adding the notes to the court record.
 
-## Containerized `pi-acp` and `pi`
+Work notes are written to `work-notes.ndjson` in the output directory.  Each note records the case id, run id, role id, optional principal id, opportunity id, and note text.  The note text may contain the accumulated notes for the current turn.
 
-The checked-in ACP experiments do not run `pi` on the host.  They run both `pi-acp` and `pi` inside a Podman container.  `adc` starts that container with `pi-container/acp-podman.sh` and talks to `pi-acp` over stdio.
+## Local And Remote Lawyers
 
-This layout keeps the attorney agent off the host filesystem while preserving a local ACP path.  The container gets one fresh writable home directory for the turn.  Case access goes through ACP methods, not direct host mounts.
+Local lawyers are OpenClaw containers started by `adc run`.  They receive an MCP server configuration, a role assignment, and the current instruction template.  They do not need access to the ADC output directory because case files and legal actions go through MCP.
 
-| Component | Placement |
-|---|---|
-| `adc` | host |
-| Lean engine | host |
-| `pi-acp` | Podman container |
-| `pi` | Podman container |
-| ephemeral ACP home | bind-mounted into the container |
+Remote lawyers use the same MCP path.  Start `adc run` with `--auto-lawyers defendant` when the plaintiff is remote, or `--auto-lawyers plaintiff` when the defendant is remote.  The run writes an `openclaw-ROLE-lawyer-skill.md` file in the output directory for the missing role, and that file contains the MCP URL, token, case id, role id, and operating loop.
 
-The wrapper keeps stdio intact and mounts only that ephemeral home directory.  The container does not receive the repository checkout, the run output directory, or a persistent host `~/.pi` tree.  For ACP attorney turns, case materials arrive through `_adc/*` methods and file-by-`file_id` reads, not from direct host paths.
+## Pi Jurors
 
-`adc` now stages role configuration into the wrapper home.  The PI settings default model comes from the delegated role's model after conversion to an xproxy model identifier, while `ADC_FLASH_XPROXY_MODEL` remains a compatibility override for flash runs and scripts.  The staged instruction file records the role name, allowed legal actions, role instructions, role preamble, and the work-product directory rule, and `PI_ACP_INSTRUCTIONS_FILE` points the wrapper at that file.
+Pi jurors come from a JSONL request-spec pool.  The runner binds the selected persona text to the juror opportunity prompt, and `adc run` writes each selected juror's Pi configuration from the request spec.  The Pi configuration includes the OpenRouter endpoint, model, provider data, quantization data, output-token setting, and MCP server configuration.  The process starts only when that juror first receives an opportunity.
 
-Each wrapper-backed role also gets `/home/user/work-product/`.  The role may put private notes, calculations, timelines, and drafts there during the opportunity.  After the run, `adc` copies those files to `work-product/<role>/` beside `run.json`, while case state still changes only through `_adc/submit_decision`.
+Each Pi process has an output byte cap.  If the process exceeds the cap or exits before completing the active opportunity, `adc run` reports the failure to the case process.  The case process then decides whether the juror can be replaced or dismissed under the current state.
 
-## Remote ACP endpoints
+## Clerk Service
 
-`adc case`, `adc run`, and `adc acp-role` can use a TCP endpoint instead of starting a local ACP command.  Use `--acp-endpoint tcp://host:port` with `adc case` or `adc run`, and use `--endpoint tcp://host:port` with `adc acp-role`.  Command and endpoint modes are mutually exclusive because a run either starts a local process over stdio or connects to an existing server, and `--acp-arg` or `--acp-env` applies only to command mode.
+`adc service` creates child case processes and proxies Role API calls by `case_id`.  A create request with omitted `mode` or `mode: "run"` starts `adc run`, which gives the service the full local-agent path.  A create request with `mode: "direct"` starts `adc case` or `adc scenario` without starting local OpenClaw or Pi processes.
 
-Endpoint mode does not start host `xproxy` for the delegated role.  Model selection, native search, browser, fetch, and filesystem capabilities belong to the remote ACP server.  `adc` still owns the legal method set, current opportunity, role-visible case view, validation, event log, and state transition.
-
-## Host `xproxy`
-
-Provider keys do not need to enter the container.  The current path uses host-side `xproxy` for that reason.
-
-In this mode:
-
-| Component | Secret material |
-|---|---|
-| host `xproxy` | real provider keys |
-| containerized `pi` | only `PI_XPROXY_API_KEY=xproxy` |
-
-`xproxy` presents an OpenAI-compatible endpoint on the host, translates requests where needed, and forwards them to the configured upstream provider.  The containerized agent sees only the proxy endpoint and a dummy token.  This keeps provider credentials outside the container while preserving normal model access.
-
-## What the lawyer can do
-
-The ACP lawyer does two kinds of work.
-
-First, it uses case-scoped ACP methods to inspect the formal case state: the docket, visible files, juror context, and current opportunity.  Second, it uses ordinary `pi` tools only inside its ephemeral home directory.
-
-That distinction matters.  Legal acts do not happen through the shell.  Shell work supports the lawyer's reasoning inside its own transient workspace.  The legal act still happens only through `_adc/submit_decision`, which `adc` validates through Lean.
-
-The current file-access limits are narrower than the long-term goal:
-
-| Path | Current support |
-|---|---|
-| `read_case_text_file` | visible `.txt` and `.md` files |
-| `request_case_file` | visible image files |
-| new party files | `import_case_file` with `original_name` and `content_base64` |
-| non-image binary inspection through ACP | not yet supported |
-
-That limit comes from current `pi` and `pi-acp` content and tool-result types, not from Lean or `adc`.
-
-The opportunity prompt now includes current capability and limit text.  It names the ADC host methods, support-method budget, decision budget, invalid-submission limit, visible file count, and party exhibit and technical-report counts when those counts apply.  Rejected ACP decisions now accumulate a submission history, so repeated malformed or disallowed filings end with an ordered account of what failed.
-
-## Why this matters
-
-This path is the current plan for third-party attorney agents.  A third-party lawyer should not need to embed court logic, and the court should not need to trust the lawyer with direct state mutation.
-
-The ACP design gives each side what it should own.  `adc` owns procedure, state, visibility, and validation.  The outside lawyer owns strategy, drafting, technical inspection, and judgment about what to do next.  The lawyer may be local, remote, or third-party.  The court does not need to know how that lawyer was built.  It needs a defined protocol and a rule-authoritative validation path.
-
-## Current limits
-
-Several limits remain open.
-
-First, non-image binary documents are not yet usable through the ACP plus `pi` path.  Text files and images work.  Other file types need either richer `pi` content types or a different transport path.
-
-Second, this architecture still depends on careful prompt design.  The delegated lawyer now sees the exact legal-tool schema of the current opportunity because generic submission methods led to avoidable payload errors.
-
-Third, the helper method set is still narrow.  It is enough for the current attorney workflow, but it does not yet expose every potentially useful case-derived helper.
-
-## References
-
-- [Agent Client Protocol](https://agentclientprotocol.com/)
-- [Agent Client Protocol standard repository](https://github.com/agentclientprotocol/agent-client-protocol)
-- [pi-acp](https://github.com/svkozak/pi-acp)
-- [Lean](https://lean-lang.org/)
-- [Podman](https://podman.io/)
+Each child case writes one `service-case.json` in its output directory.  The service uses that file to recover known cases on restart.  If the service cannot persist the record for a running case, it marks the case failed and stops the child process rather than letting memory and disk disagree.

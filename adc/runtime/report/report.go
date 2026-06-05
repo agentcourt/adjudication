@@ -13,7 +13,6 @@ import (
 
 	"adjudication/adc/runtime/runner"
 	"adjudication/common/openai"
-	"adjudication/common/xproxy"
 )
 
 func WriteTranscript(path string, result runner.Result) error {
@@ -30,7 +29,7 @@ func WriteTranscript(path string, result runner.Result) error {
 	b.WriteString(fmt.Sprintf("Case: %s\n\n", caption))
 	b.WriteString(fmt.Sprintf("Court: %s\n\n", court))
 	b.WriteString("## External Agent Activity\n\n")
-	b.WriteString(renderACPActivityTable(result.TurnLogs))
+	b.WriteString(renderExternalActivityTable(result.TurnLogs))
 	b.WriteString("\n")
 	b.WriteString("## Proceedings\n\n")
 
@@ -63,14 +62,14 @@ func WriteTranscript(path string, result runner.Result) error {
 }
 
 func WriteDigest(path string, result runner.Result) error {
-	return WriteDigestWithClient(path, result, "", nil, false)
+	return WriteDigestWithClient(path, result, "", nil)
 }
 
 func WriteDigestWithModel(path string, result runner.Result, model string) error {
-	return WriteDigestWithClient(path, result, model, nil, false)
+	return WriteDigestWithClient(path, result, model, nil)
 }
 
-func WriteDigestWithClient(path string, result runner.Result, model string, client *openai.Client, xproxyMode bool) error {
+func WriteDigestWithClient(path string, result runner.Result, model string, client *openai.Client) error {
 	if strings.TrimSpace(path) == "" {
 		return nil
 	}
@@ -99,7 +98,7 @@ func WriteDigestWithClient(path string, result runner.Result, model string, clie
 	b.WriteString(fmt.Sprintf("| Turn logs | %d |\n", len(result.TurnLogs)))
 
 	b.WriteString("\n## External Agent Activity\n\n")
-	b.WriteString(renderACPActivityTable(result.TurnLogs))
+	b.WriteString(renderExternalActivityTable(result.TurnLogs))
 
 	b.WriteString("\n## Important Agent Bash Executions\n\n")
 	b.WriteString(renderImportantAgentBashExecutions(result.TurnLogs))
@@ -161,7 +160,7 @@ func WriteDigestWithClient(path string, result runner.Result, model string, clie
 	}
 
 	b.WriteString("\n## Side Argument Summaries\n\n")
-	summary, err := summarizeArgumentsBySide(caseObj, docket, model, client, xproxyMode)
+	summary, err := summarizeArgumentsBySide(caseObj, docket, model, client)
 	if err != nil {
 		return fmt.Errorf("generate side argument summaries: %w", err)
 	}
@@ -238,7 +237,7 @@ type sideSummaryResult struct {
 	Source    string
 }
 
-func summarizeArgumentsBySide(caseObj map[string]any, docket []any, model string, client *openai.Client, xproxyMode bool) (sideSummaryResult, error) {
+func summarizeArgumentsBySide(caseObj map[string]any, docket []any, model string, client *openai.Client) (sideSummaryResult, error) {
 	plaintiffText, defendantText := collectSideArguments(docket)
 	courtroomContext := collectCourtroomContext(docket)
 	evidenceContext := collectEvidenceContext(caseObj, docket)
@@ -251,7 +250,7 @@ func summarizeArgumentsBySide(caseObj map[string]any, docket []any, model string
 		}, nil
 	}
 
-	plaintiffLLM, defendantLLM, err := summarizeArgumentsBySideLLM(plaintiffText, defendantText, courtroomContext, evidenceContext, model, client, xproxyMode)
+	plaintiffLLM, defendantLLM, err := summarizeArgumentsBySideLLM(plaintiffText, defendantText, courtroomContext, evidenceContext, model, client)
 	if err == nil {
 		return sideSummaryResult{
 			Plaintiff: plaintiffLLM,
@@ -262,7 +261,7 @@ func summarizeArgumentsBySide(caseObj map[string]any, docket []any, model string
 	return sideSummaryResult{}, err
 }
 
-func resolveSummaryModel(model string, xproxyMode bool) (string, error) {
+func resolveSummaryModel(model string) string {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = strings.TrimSpace(os.Getenv("OPENAI_REPORT_MODEL"))
@@ -270,20 +269,7 @@ func resolveSummaryModel(model string, xproxyMode bool) (string, error) {
 	if model == "" {
 		model = "gpt-4.1-mini"
 	}
-	if !xproxyMode {
-		return model, nil
-	}
-	if strings.Contains(model, "://") {
-		if _, err := xproxy.ParseXProxyModel(model); err != nil {
-			return "", fmt.Errorf("parse xproxy report model: %w", err)
-		}
-		return model, nil
-	}
-	model = "openai://" + model
-	if _, err := xproxy.ParseXProxyModel(model); err != nil {
-		return "", fmt.Errorf("parse xproxy report model: %w", err)
-	}
-	return model, nil
+	return model
 }
 
 func collectSideArguments(docket []any) (string, string) {
@@ -351,12 +337,9 @@ func collectEvidenceContext(caseObj map[string]any, docket []any) string {
 	return strings.Join(lines, "\n")
 }
 
-func summarizeArgumentsBySideLLM(plaintiffText, defendantText, courtroomContext, evidenceContext, model string, client *openai.Client, xproxyMode bool) (string, string, error) {
+func summarizeArgumentsBySideLLM(plaintiffText, defendantText, courtroomContext, evidenceContext, model string, client *openai.Client) (string, string, error) {
 	var err error
 	if client == nil {
-		if xproxyMode {
-			return "", "", fmt.Errorf("xproxy digest summarization requires a caller-supplied client")
-		}
 		client, err = openai.NewFromEnv(false, 90*time.Second)
 		if err != nil {
 			return "", "", fmt.Errorf("create llm client: %w", err)
@@ -365,10 +348,7 @@ func summarizeArgumentsBySideLLM(plaintiffText, defendantText, courtroomContext,
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	model, err = resolveSummaryModel(model, xproxyMode)
-	if err != nil {
-		return "", "", err
-	}
+	model = resolveSummaryModel(model)
 	temp := 0.2
 	input := []map[string]any{
 		{
@@ -501,7 +481,7 @@ func countFileAndExhibitEvents(caseObj map[string]any, docket []any) (int, int) 
 	return filesInRecord, admitted
 }
 
-type acpTurnActivity struct {
+type externalTurnActivity struct {
 	Turn           int
 	Role           string
 	Phase          string
@@ -510,18 +490,18 @@ type acpTurnActivity struct {
 	LegalResult    string
 }
 
-func collectACPActivities(turnLogs []runner.TurnLog) []acpTurnActivity {
-	activities := make([]acpTurnActivity, 0)
+func collectExternalActivities(turnLogs []runner.TurnLog) []externalTurnActivity {
+	activities := make([]externalTurnActivity, 0)
 	for i, log := range turnLogs {
 		methodsSeen := map[string]bool{}
 		containerSeen := map[string]bool{}
 		methods := make([]string, 0)
 		containerTools := make([]string, 0)
 		legalResult := ""
-		hasACP := false
+		hasExternal := false
 		for _, raw := range log.Transcript {
 			if method := strings.TrimSpace(strOr(raw["custom_method"], "")); method != "" {
-				hasACP = true
+				hasExternal = true
 				if !methodsSeen[method] {
 					methodsSeen[method] = true
 					methods = append(methods, method)
@@ -529,7 +509,7 @@ func collectACPActivities(turnLogs []runner.TurnLog) []acpTurnActivity {
 				continue
 			}
 			if toolCall := getMap(raw["agent_tool_call"]); len(toolCall) > 0 {
-				hasACP = true
+				hasExternal = true
 				title := strings.TrimSpace(strOr(toolCall["title"], ""))
 				if title != "" && !strings.HasPrefix(title, "adc_") && !containerSeen[title] {
 					containerSeen[title] = true
@@ -542,20 +522,20 @@ func collectACPActivities(turnLogs []runner.TurnLog) []acpTurnActivity {
 				continue
 			}
 			if action == "pass_turn" {
-				hasACP = true
+				hasExternal = true
 				legalResult = action
 				continue
 			}
-			if isACPReferenceAction(action) {
-				hasACP = true
+			if isExternalReferenceAction(action) {
+				hasExternal = true
 				continue
 			}
 			legalResult = action
 		}
-		if !hasACP {
+		if !hasExternal {
 			continue
 		}
-		activities = append(activities, acpTurnActivity{
+		activities = append(activities, externalTurnActivity{
 			Turn:           i + 1,
 			Role:           log.Role,
 			Phase:          log.OpportunityPhase,
@@ -567,13 +547,13 @@ func collectACPActivities(turnLogs []runner.TurnLog) []acpTurnActivity {
 	return activities
 }
 
-func renderACPActivityTable(turnLogs []runner.TurnLog) string {
-	activities := collectACPActivities(turnLogs)
+func renderExternalActivityTable(turnLogs []runner.TurnLog) string {
+	activities := collectExternalActivities(turnLogs)
 	if len(activities) == 0 {
-		return "No external ACP role activity recorded.\n"
+		return "No external role activity recorded.\n"
 	}
 	var b strings.Builder
-	b.WriteString("| Turn | Role | Phase | ACP methods | Container tools | Legal result |\n")
+	b.WriteString("| Turn | Role | Phase | API methods | Agent tools | Legal result |\n")
 	b.WriteString("|---|---|---|---|---|---|\n")
 	for _, item := range activities {
 		methods := strings.Join(item.Methods, ", ")
@@ -860,7 +840,7 @@ func isImportantBashExecution(command string, output string) bool {
 	return len(command) >= 60
 }
 
-func isACPReferenceAction(action string) bool {
+func isExternalReferenceAction(action string) bool {
 	switch strings.TrimSpace(action) {
 	case "get_case", "list_case_files", "read_case_text_file", "request_case_file", "explain_decisions":
 		return true

@@ -1,25 +1,25 @@
 package runner
 
 const (
-	DefaultLLMTimeoutSeconds   = 180
-	DefaultACPTimeoutSeconds   = 480
-	DefaultMaxResponseBytes    = 128 * 1024
-	DefaultInvalidAttemptLimit = 3
+	DefaultLLMTimeoutSeconds     = 180
+	DefaultRoleAPITimeoutSeconds = 480
+	DefaultMaxResponseBytes      = 128 * 1024
+	DefaultInvalidAttemptLimit   = 3
 )
 
 type RuntimeLimits struct {
-	LLMTimeoutSeconds   int `json:"llm_timeout_seconds"`
-	ACPTimeoutSeconds   int `json:"acp_timeout_seconds"`
-	MaxResponseBytes    int `json:"max_response_bytes"`
-	InvalidAttemptLimit int `json:"invalid_attempt_limit"`
+	LLMTimeoutSeconds     int `json:"llm_timeout_seconds"`
+	RoleAPITimeoutSeconds int `json:"roleapi_timeout_seconds"`
+	MaxResponseBytes      int `json:"max_response_bytes"`
+	InvalidAttemptLimit   int `json:"invalid_attempt_limit"`
 }
 
 func (limits RuntimeLimits) Normalized() RuntimeLimits {
 	if limits.LLMTimeoutSeconds <= 0 {
 		limits.LLMTimeoutSeconds = DefaultLLMTimeoutSeconds
 	}
-	if limits.ACPTimeoutSeconds <= 0 {
-		limits.ACPTimeoutSeconds = DefaultACPTimeoutSeconds
+	if limits.RoleAPITimeoutSeconds <= 0 {
+		limits.RoleAPITimeoutSeconds = DefaultRoleAPITimeoutSeconds
 	}
 	if limits.MaxResponseBytes <= 0 {
 		limits.MaxResponseBytes = DefaultMaxResponseBytes

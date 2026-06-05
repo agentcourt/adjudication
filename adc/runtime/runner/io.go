@@ -117,16 +117,13 @@ func (r *Runner) writeEvidence(result Result) error {
 	if err := os.WriteFile(r.cfg.OutputPath, raw, 0o644); err != nil {
 		return fmt.Errorf("write evidence: %w", err)
 	}
-	if err := exportACPWorkProduct(filepath.Dir(r.cfg.OutputPath), r.workProductDirs); err != nil {
-		return err
-	}
-	if err := exportACPWorkProduct(filepath.Dir(r.cfg.OutputPath), r.workProductDirs); err != nil {
+	if err := exportExternalWorkProduct(filepath.Dir(r.cfg.OutputPath), r.workProductDirs); err != nil {
 		return err
 	}
 	return nil
 }
 
-func exportACPWorkProduct(outputDir string, workProductDirs map[string]string) error {
+func exportExternalWorkProduct(outputDir string, workProductDirs map[string]string) error {
 	if len(workProductDirs) == 0 {
 		return nil
 	}

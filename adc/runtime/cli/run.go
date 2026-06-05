@@ -3,26 +3,25 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"strings"
 	"time"
 
 	"adjudication/adc/runtime/lean"
 	"adjudication/adc/runtime/report"
 	"adjudication/adc/runtime/runner"
-	"adjudication/adc/runtime/spec"
 	"adjudication/adc/runtime/store"
 	"adjudication/common/openai"
 )
 
-func RunScenario(args []string, stdout io.Writer, stderr io.Writer) error {
+func RunScenarioCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	var fs *flag.FlagSet
-	fs = newFlagSet("run", stderr, func() {
-		fmt.Fprintf(stderr, "Usage: adc run --scenario <json> [options]\n\n")
+	fs = newFlagSet("scenario", stderr, func() {
+		fmt.Fprintf(stderr, "Usage: adc scenario --scenario <json> [options]\n\n")
 		fs.PrintDefaults()
 	})
 	scenarioPath := fs.String("scenario", "", "Path to scenario JSON")
@@ -36,11 +35,10 @@ func RunScenario(args []string, stdout io.Writer, stderr io.Writer) error {
 	jurorPersonas := fs.String("juror-personas", defaultPersonaRecordsPath(), "Path to juror model/persona pairs file")
 	online := fs.Bool("online", false, "Enable web search tool")
 	offline := fs.Bool("offline", false, "Disable LLM calls; only deterministic turns")
-	allThroughXProxy := fs.Bool("all-through-xproxy", false, "Send direct runtime inference and digest summarization through xproxy. Plain model names are treated as OpenAI xproxy models")
-	var acpRoles stringListFlag
-	acpCommand := fs.String("acp-command", "", "ACP server command shared by delegated roles")
-	acpEndpoint := fs.String("acp-endpoint", "", "TCP ACP endpoint shared by delegated roles, for example tcp://127.0.0.1:19701")
-	acpTimeoutSeconds := fs.Int("acp-timeout-seconds", defaultACPTimeoutSeconds, "Timeout in seconds for each delegated ACP opportunity turn")
+	var externalRoles stringListFlag
+	caseID := fs.String("case-id", "", "Case ID for role API clients. Default: run id")
+	caseAPIAddr := fs.String("caseapi-addr", "", "Listen address for the role API, for example 127.0.0.1:9001")
+	roleAPITimeoutSeconds := fs.Int("roleapi-timeout-seconds", defaultRoleAPITimeoutSeconds, "Timeout in seconds for each external role opportunity")
 	maxResponseBytes := fs.Int("max-response-bytes", runner.DefaultMaxResponseBytes, "Maximum bytes allowed in one direct-runtime model response")
 	runID := fs.String("run-id", "", "Run ID override")
 	engineCommand := fs.String("engine", defaultEngineCommand(), "Engine command string")
@@ -49,11 +47,7 @@ func RunScenario(args []string, stdout io.Writer, stderr io.Writer) error {
 	jsonSummary := fs.Bool("json-summary", true, "Emit JSON summary to stdout")
 	transcriptPath := fs.String("transcript", "", "Optional transcript markdown output path")
 	digestPath := fs.String("digest", "", "Optional digest/report markdown output path")
-	var acpArgList stringListFlag
-	var acpEnvList stringListFlag
-	fs.Var(&acpRoles, "acp-role", "Role to delegate through ACP during opportunity turns; repeat as needed")
-	fs.Var(&acpArgList, "acp-arg", "ACP server argument; repeat as needed")
-	fs.Var(&acpEnvList, "acp-env", "ACP environment override KEY=VALUE; repeat as needed")
+	fs.Var(&externalRoles, "external-role", "Role to serve through the role API during opportunity turns; repeat as needed")
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
 			return nil
@@ -62,24 +56,6 @@ func RunScenario(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 	if strings.TrimSpace(*scenarioPath) == "" {
 		return fmt.Errorf("--scenario is required")
-	}
-	if len(acpRoles) > 0 {
-		switch {
-		case strings.TrimSpace(*acpCommand) != "" && strings.TrimSpace(*acpEndpoint) != "":
-			return fmt.Errorf("--acp-command and --acp-endpoint are mutually exclusive")
-		case strings.TrimSpace(*acpCommand) == "" && strings.TrimSpace(*acpEndpoint) == "":
-			return fmt.Errorf("--acp-command or --acp-endpoint is required when --acp-role is set")
-		}
-	}
-	useJurorXProxy := strings.TrimSpace(*jurorPersonas) != ""
-	if *allThroughXProxy || (len(acpRoles) > 0 && strings.TrimSpace(*acpCommand) != "") || (!*offline && useJurorXProxy) {
-		xproxyServer, err := maybeStartXProxy(true)
-		if err != nil {
-			return err
-		}
-		if xproxyServer != nil {
-			defer xproxyServer.Close()
-		}
 	}
 	for _, path := range []string{*outputPath, *runtimePath, *eventsPath, *dbPath, *transcriptPath, *digestPath} {
 		if strings.TrimSpace(path) == "" {
@@ -93,115 +69,77 @@ func RunScenario(args []string, stdout io.Writer, stderr io.Writer) error {
 	if effectiveRunID == "" {
 		effectiveRunID = fmt.Sprintf("run-%d", time.Now().UTC().UnixNano())
 	}
-	activeScenarioPath := *scenarioPath
-	if *allThroughXProxy {
-		scenario, err := spec.Load(*scenarioPath)
-		if err != nil {
-			return err
-		}
-		scenario, err = normalizeScenarioModelsForXProxy(scenario)
-		if err != nil {
-			return fmt.Errorf("normalize scenario models for xproxy: %w", err)
-		}
-		tmp, err := os.CreateTemp("", "adc-scenario-xproxy-*.json")
-		if err != nil {
-			return fmt.Errorf("create temporary xproxy scenario: %w", err)
-		}
-		tmpPath := tmp.Name()
-		if err := tmp.Close(); err != nil {
-			return fmt.Errorf("close temporary xproxy scenario: %w", err)
-		}
-		defer os.Remove(tmpPath)
-		if err := writeJSONFile(tmpPath, scenario); err != nil {
-			return err
-		}
-		activeScenarioPath = tmpPath
-	}
 	st, err := store.Open(*dbPath)
 	if err != nil {
 		return err
 	}
-	defer func() {
+	closeStore := func(err error) error {
 		if closeErr := st.Close(); closeErr != nil {
-			log.Printf("error closing sqlite: %v", closeErr)
+			return errors.Join(err, fmt.Errorf("close sqlite: %w", closeErr))
 		}
-	}()
+		return err
+	}
 
 	engine := lean.New(strings.Fields(strings.TrimSpace(*engineCommand)))
 	var client *openai.Client
 	var jurorClient *openai.Client
 	resolvedModel := strings.TrimSpace(*model)
-	if *allThroughXProxy {
-		resolvedModel, err = normalizeXProxyModel(resolvedModel)
-		if err != nil {
-			return fmt.Errorf("normalize --model for xproxy: %w", err)
-		}
-	}
 	if !*offline {
-		if *allThroughXProxy {
-			client, err = newXProxyClient(*online, time.Duration(*timeoutSeconds)*time.Second)
-			if err != nil {
-				return err
-			}
-		} else {
-			client, err = openai.NewFromEnv(*online, time.Duration(*timeoutSeconds)*time.Second)
-			if err != nil {
-				return err
-			}
+		client, err = openai.NewFromEnv(*online, time.Duration(*timeoutSeconds)*time.Second)
+		if err != nil {
+			return closeStore(err)
 		}
-		if useJurorXProxy {
-			jurorClient, err = newXProxyClient(*online, time.Duration(*timeoutSeconds)*time.Second)
+		if strings.TrimSpace(*jurorPersonas) != "" {
+			jurorClient, err = openai.NewFromEnv(*online, time.Duration(*timeoutSeconds)*time.Second)
 			if err != nil {
-				return err
+				return closeStore(err)
 			}
 		}
 	}
 
 	tempPtr, err := parseOptionalFloat(*temperature)
 	if err != nil {
-		return fmt.Errorf("parse --temperature: %w", err)
+		return closeStore(fmt.Errorf("parse --temperature: %w", err))
 	}
 	jurorTempPtr, err := parseOptionalFloat(*jurorTemperature)
 	if err != nil {
-		return fmt.Errorf("parse --juror-temperature: %w", err)
+		return closeStore(fmt.Errorf("parse --juror-temperature: %w", err))
 	}
 
-	acpCfg, err := runner.NewACPConfig([]string(acpRoles), *acpCommand, *acpEndpoint, []string(acpArgList), []string(acpEnvList), time.Duration(*acpTimeoutSeconds)*time.Second)
-	if err != nil {
-		return err
-	}
 	runtimeLimits := runner.RuntimeLimits{
-		LLMTimeoutSeconds:   *timeoutSeconds,
-		ACPTimeoutSeconds:   *acpTimeoutSeconds,
-		MaxResponseBytes:    *maxResponseBytes,
-		InvalidAttemptLimit: *invalidAttemptLimit,
+		LLMTimeoutSeconds:     *timeoutSeconds,
+		RoleAPITimeoutSeconds: *roleAPITimeoutSeconds,
+		MaxResponseBytes:      *maxResponseBytes,
+		InvalidAttemptLimit:   *invalidAttemptLimit,
 	}.Normalized()
 	if err := writeJSONFile(*runtimePath, runtimeLimits); err != nil {
-		return err
+		return closeStore(err)
 	}
 
 	r, err := runner.New(st, engine, client, jurorClient, runner.Config{
-		ScenarioPath:      activeScenarioPath,
+		ScenarioPath:      *scenarioPath,
 		OutputPath:        *outputPath,
 		EventsPath:        *eventsPath,
 		RunID:             effectiveRunID,
+		CaseID:            resolveDefault(*caseID, effectiveRunID),
+		CaseAPIAddr:       strings.TrimSpace(*caseAPIAddr),
+		ExternalRoles:     []string(externalRoles),
 		Model:             resolvedModel,
 		Temperature:       tempPtr,
 		JurorTemperature:  jurorTempPtr,
 		JurorPersonasPath: strings.TrimSpace(*jurorPersonas),
 		Runtime:           runtimeLimits,
 		Offline:           *offline,
-		ACP:               acpCfg,
 	})
 	if err != nil {
-		return err
+		return closeStore(err)
 	}
 	if *offline && r.RequiresLLMTurns() {
 		log.Printf("warning: --offline is set, but scenario includes non-deterministic turns that require an LLM")
 	}
 	result, err := r.Run(context.Background())
-	if err != nil {
-		return err
+	if closeErr := closeStore(err); closeErr != nil {
+		return closeErr
 	}
 	failed := 0
 	for _, a := range result.Assertions {
@@ -244,7 +182,7 @@ func RunScenario(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err := report.WriteTranscript(strings.TrimSpace(*transcriptPath), result); err != nil {
 		return err
 	}
-	if err := report.WriteDigestWithClient(strings.TrimSpace(*digestPath), result, "", client, *allThroughXProxy); err != nil {
+	if err := report.WriteDigestWithClient(strings.TrimSpace(*digestPath), result, "", client); err != nil {
 		return err
 	}
 	if failed > 0 {
