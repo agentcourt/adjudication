@@ -54,7 +54,7 @@ This split also determines persistence.  Policy values that affect the legal cas
 
 The main configuration surface should remain one policy file, not a long list of unrelated CLI flags.  A single `--policy FILE` argument is enough for procedural policy.  The existing CLI can keep a small number of operational flags such as timeout values and output paths, plus narrow policy overrides such as `--council-size` and `--judgment-standard` when they are useful for testing.
 
-That separation matters because the same complaint should be able to run under different procedural policies without rewriting the complaint, and the same policy should be able to run under different timeout settings without changing the legal state.  It also means the final run packet can show exactly which question, which policy, and which runtime limits produced the recorded council answers.  That record boundary is part of the procedure's audit trail, not a convenience feature.
+That separation lets the same complaint run under different procedural policies without rewriting the complaint, and it lets the same policy run under different timeout settings without changing the legal state.  The final run packet can then show exactly which question, which policy, and which runtime limits produced the recorded council answers.  That record boundary is part of the procedure's audit trail.
 
 ## Defaults
 

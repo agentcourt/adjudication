@@ -8,7 +8,7 @@ AAR owns record custody. It stores admitted bytes, assigns stable evidence ident
 
 `evidence_id` is the record identity for an evidence item. It is deterministic from the stored SHA-256 and a normalized source name. It is not a local path, workspace path, or content-addressed storage path. Filings cite visible `evidence_id` values in `offered_evidence`.
 
-Local paths, workspace paths, and content-addressed storage names are implementation details. Use `evidence_id` plus SHA-256 when exact byte custody matters.
+Local paths, workspace paths, and content-addressed storage names are implementation details.  Use `evidence_id` plus SHA-256 when exact byte custody is at issue.
 
 ## Runtime storage
 

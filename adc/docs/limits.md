@@ -249,7 +249,7 @@ Every rejected action on limit grounds should return a structured error with mac
 | `serve_request_for_production` | `discovery.rfp_requests_per_set` | count | each set |
 | `serve_request_for_admission` | `discovery.rfa_requests_per_set` | count | each set |
 | `file_rule12_motion` and `file_rule56_motion` | `motions.dispositive_motions_per_side_pretrial` | count | case + party + pretrial |
-| any tool action in harness turn | `runtime.invalid_actions_per_turn` | count | turn |
+| any tool action in a role turn | `runtime.invalid_actions_per_turn` | count | turn |
 
 ## Implementation constraint
 

@@ -33,4 +33,4 @@ That changes both pleading and motion practice.  The court does not generate an 
 
 ## Shared procedure
 
-The shared system matters more than the difference.  Both courts use the same Lean procedure engine.  Both use the same party roles, docket structure, evidence handling, trial phases, voir dire, jury empanelment, juror voting rounds, and judgment flow.  The court profile changes only the jurisdiction layer and the Rule 12 consequences that flow from it.
+Both courts use the same Lean procedure engine.  Both use the same party roles, docket structure, evidence handling, trial phases, voir dire, jury empanelment, juror voting rounds, and judgment flow.  The court profile changes only the jurisdiction layer and the Rule 12 consequences that flow from it.

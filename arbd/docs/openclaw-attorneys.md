@@ -11,7 +11,7 @@ OpenClaw authentication can use either `OPENAI_API_KEY` or a Codex `auth.json` f
 ```bash
 .bin/aard run ex1 \
   --openclaw-auth codex \
-  --openclaw-codex-auth ~/src/auth.json \
+  --openclaw-codex-auth PATH/TO/auth.json \
   --council-pool pool.jsonl
 ```
 

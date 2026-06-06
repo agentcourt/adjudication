@@ -12,6 +12,8 @@ Jury size and verdict threshold are case-policy settings.  `adc case`, `adc scen
 
 Read [`manual.md`](manual.md) first.  It describes the command set, environment, Role API, MCP adapter, local OpenClaw and Pi operation, remote OpenClaw operation, clerk service, output files, and troubleshooting.  The manual is the current operating reference for ADC.
 
+Read [Agent District Court Practice Guide](docs/practice.md) for litigation and juror practice.  It covers pleadings, discovery, evidence search, evidence analysis, trial work, jury instructions, closings, and deliberation.  The governing rules are [Agent Rules for Civil Procedure](docs/ARCP.md).
+
 ## Requirements
 
 | Requirement | Purpose |
@@ -22,7 +24,7 @@ Read [`manual.md`](manual.md) first.  It describes the command set, environment,
 | Docker | Runs OpenClaw lawyer containers in `adc run`. |
 | Podman | Runs Pi juror containers in `adc run`. |
 | `OPENROUTER_API_KEY` | Required for Pi jurors selected from a request-spec pool. |
-| Codex `auth.json` or `OPENAI_API_KEY` | Required for OpenClaw lawyers.  Codex auth is the usual path. |
+| Codex `auth.json` or `OPENAI_API_KEY` | Required for OpenClaw lawyers.  Codex auth supports subscription-backed OpenClaw runs. |
 
 ## Build
 
@@ -108,7 +110,7 @@ curl -sS -X POST http://127.0.0.1:19870/clerk/v1/cases \
 | `agent-instructions/` | Templates passed to OpenClaw lawyers and Pi jurors. |
 | `etc/` | Court profile files. |
 | `examples/` | Example case source documents. |
-| `docs/` | Rule documents and supporting technical notes. |
+| `docs/` | Rules, practice guide, reference notes, proof notes, and procedure analysis. |
 | `analysis/` | Mermaid diagrams and explanatory notes. |
 | `manual.md` | Current operating manual. |
 

@@ -18,7 +18,7 @@ those situations, you should consider if the tests themselves are
 incorrect.  You can't assume anything is really authoritative.  Give
 strong deference to the rules (ARCP), but even they can be adjusted if
 appropriate.  When in doubt about what must give, ask. You should also
-feel free simply to note a problem and defer/abandon that particular
+feel free to note a problem and defer/abandon that particular
 little effort for now.  You'll likely run into these sort of obstacles
 frequently.  Don't give up on a proof too soon. Work at the proof
 while holding everything else fixed.  Maybe work pretty hard; iterate

@@ -50,7 +50,7 @@ The Clerk `ex02` run showed C3 voting successfully and then continuing to call `
 
 ### OpenClaw lawyer authentication
 
-Reference: [OpenClaw OAuth-Derived Codex Auth](openclaw-oauth.md)
+Reference: [OpenClaw OAuth-Derived Codex Auth](docs/openclaw-auth.md)
 
 `aar run` now supports both OpenClaw lawyer authentication paths.  Automatic mode prefers a readable Codex `auth.json`, stages one copied Codex home per lawyer container, mounts it as `/aar-codex`, and sets `CODEX_HOME=/aar-codex`.  If no readable Codex auth file exists, automatic mode uses `OPENAI_API_KEY`.  Explicit `codex` and `api-key` modes force either path.
 
@@ -86,7 +86,7 @@ The first executable pass now starts `aar mcp` as a subprocess, drives `/mcp` wi
 
 ### Provider and transport cleanup
 
-Reference: [Council API](../scratch/councilapi.md), [OpenClaw service runbook](running.md), [Pi container README](../common/pi-container/README.md)
+Reference: [Council API](../scratch/arb/councilapi.md), [OpenClaw service runbook](../scratch/arb/running.md), [Pi container README](../common/pi-container/README.md)
 
 AAR council calls now use direct provider clients for the `direct` backend.  Council seats carry JSON request specs with endpoint, model, provider, quantization, request parameters, and persona information.  The case runner no longer starts a local provider proxy, and the CLI no longer accepts provider-proxy or removed council-agent flags.
 
@@ -94,7 +94,7 @@ Local service examples now run OpenClaw containers for lawyers and Pi containers
 
 ### Lawyer case results
 
-Reference: [Lawyer HTTP API](../scratch/lawyerapi.md), [OpenClaw service runbook](running.md)
+Reference: [Lawyer HTTP API](../scratch/arb/lawyerapi.md), [OpenClaw service runbook](../scratch/arb/running.md)
 
 The Lawyer API now exposes `GET /lawyerapi/v1/result`.  The request uses the same `case_id` and `role_id` shape as the rest of the API.  While the case remains open, the response reports `status: "pending"` and returns the live turn envelope.  After the case closes, it returns the resolution, final reason when known, deliberation round, every stored council vote with rationale, and vote counts by round.
 
@@ -102,13 +102,13 @@ The unified MCP server exposes the same data through the read-only `get_case_res
 
 ### Lawyer case status
 
-Reference: [Lawyer HTTP API](../scratch/lawyerapi.md), [OpenClaw service runbook](running.md)
+Reference: [Lawyer HTTP API](../scratch/arb/lawyerapi.md), [OpenClaw service runbook](../scratch/arb/running.md)
 
 The Lawyer API now exposes `GET /lawyerapi/v1/status` and the read-only `case_status` tool.  The response reports the role's current status, case phase, case status, active turn, current opportunity details, state version, and compact counts for evidence, filings, events, and council votes.  The unified MCP server exposes `case_status` through the stable tool set and calls the status endpoint directly, so a waiting lawyer can inspect case status without an active `opportunity_id`.
 
 ### Lawyer Evidence Tools
 
-Reference: [Evidence Handling](docs/evidence-handling.md), [OpenClaw lawyer runbook](running.md)
+Reference: [Evidence Handling](docs/evidence-handling.md), [OpenClaw lawyer runbook](../scratch/arb/running.md)
 
 The Lawyer API now separates read access from evidence submission.  Read-only evidence tools are available in every active lawyer phase, so a remote lawyer can inspect case-packet files before an opening or closing.  Evidence-submission tools remain limited to arguments, rebuttals, and surrebuttals.
 
@@ -128,7 +128,7 @@ Repeated OpenClaw runs showed plaintiff finding useful sources but attempting to
 
 ### Council API and MCP adapter
 
-Reference: [Council HTTP API](../scratch/councilapi.md)
+Reference: [Council HTTP API](../scratch/arb/councilapi.md)
 
 The Council API follows the Lawyer API architecture but binds each active client to `case_id` and `member_id`.  The HTTP server exposes `get`, `wait`, and `do`, and the MCP adapter only brokers those calls over Streamable HTTP.  The API keeps vote validation, deadlines, attempts, and evidence read budgets in AAR rather than moving that state into an agent adapter.
 
@@ -138,7 +138,7 @@ The adapter uses one MCP session per case-member.  A failed or expired MCP sessi
 
 ### Lawyer API
 
-Reference: [Lawyer HTTP API](../scratch/lawyerapi.md)
+Reference: [Lawyer HTTP API](../scratch/arb/lawyerapi.md)
 
 The lawyer side now uses one HTTP API owned by `aar case`.  The runner starts `/lawyerapi/v1`, publishes one active turn at a time, and blocks until the active lawyer submits a valid `submit_decision` call, exhausts attempts, or reaches the turn deadline.  Plaintiff and defendant integrations now sit outside the runtime and can use curl, a CLI, an MCP server, or another client that speaks this API.
 

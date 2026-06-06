@@ -4,7 +4,7 @@
 
 ### Service and agent runtime migration
 
-Reference: [AARD service and agent update plan](update-plan.md)
+Reference: [AARD service and agent update plan](../scratch/arbd/update-plan.md)
 
 `arbd` now has the same current runtime shape as `arb`: a direct `aard` command with `case`, `mcp`, `service`, and `run` subcommands; a private case HTTP API; role-bound Lawyer API and Council API endpoints; an MCP adapter over those APIs; a Clerk service; and a local run path that starts OpenClaw lawyers and Pi council agents.  The implementation keeps AARD degree semantics.  Lawyers argue for numeric answers or answer ranges, council members call `submit_council_answer` with an integer from `0` through `100`, and final result data exposes the answer map rather than a binary resolution.
 

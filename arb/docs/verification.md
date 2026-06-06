@@ -26,7 +26,7 @@ Taken together, these theorems say that the engine keeps the procedure in order,
 
 ## Verification Program
 
-The proof work followed a staged order because later claims depended on earlier invariants.  That order still matters as a map of the library, even though the stages are now complete.  The table below records the finished agenda and the public result each stage delivered.
+The proof work followed a staged order because later claims depended on earlier invariants.  That order now serves as a map of the library, even though the stages are complete.  The table below records the finished agenda and the public result each stage delivered.
 
 | Stage | Theorem family | Status | Public result |
 |---|---|---|---|

@@ -1,8 +1,8 @@
 # Lean Proving Guide
 
-This guide is for proving mathematics in Lean, from first contact with tactic mode to custom tactics and ecosystem packages you may add later.  It is written for this repository's current toolchain, but its scope is deliberately wider than the packages installed here.
+This guide is for proving mathematics in Lean, from first contact with tactic mode to custom tactics and packages you may add later.  It is written for this repository's current toolchain, but its scope is deliberately wider than the packages installed here.
 
-Lean changes.  Always prefer the reference manual and current package docs when exact syntax matters.  Use this guide as the working manual and the cited sources as the final authority.
+Lean changes.  Always prefer the reference manual and current package docs when exact syntax is relevant.  Use this guide as the working manual and the cited sources as the final authority.
 
 ## Scope and sources
 
@@ -126,7 +126,7 @@ The most important `simp` technique is curation.  Add `[simp]` only to lemmas th
 
 ### `simp` discipline
 
-| Technique | Why it matters |
+| Technique | Reason |
 | --- | --- |
 | Prefer `simp [defs]` over repeated `rw` when the rewrite base is canonical. | It makes proofs shorter and more stable. |
 | Prefer `rw` over `simp` when only one directed rewrite should happen. | It keeps proof intent explicit. |
@@ -285,15 +285,15 @@ This repository currently has core Lean plus mathlib and the packages mathlib pu
 
 | Package or source | What it adds | When to consider it |
 | --- | --- | --- |
-| [Reservoir](https://reservoir.lean-lang.org/) | Registry view of add-on packages | Use this to survey the ecosystem before adding anything. |
+| [Reservoir](https://reservoir.lean-lang.org/) | Registry view of add-on packages | Use this to survey available packages before adding anything. |
 | [Duper](https://github.com/leanprover-community/duper) | First-order superposition prover | Consider it when goals are first-order, equational, and lemma search is the bottleneck. |
 | Package README and source docstrings | Package-specific semantics and examples | Treat these as the primary source for non-core, non-mathlib tactics. |
 
 Rules for evaluating external tactic packages:
 
-| Question | Why it matters |
+| Question | Reason |
 | --- | --- |
-| Does the package solve a repeated proof bottleneck, or does it only look impressive? | Add packages for leverage, not novelty. |
+| Does the package solve a repeated proof bottleneck, or does it only look impressive? | Add packages for repeated proof needs, not novelty. |
 | Is the package actively maintained and compatible with the current Lean release? | Version skew is the fastest way to lose time. |
 | Are the tactics predictable enough for long-lived proofs? | Heavy automation with unstable output is expensive later. |
 | Can the same gain be achieved by adding two or three lemmas instead? | New dependencies should beat simple library work. |

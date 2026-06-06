@@ -1,45 +1,48 @@
-# pi-container
+# Pi Container Image
 
-`pi-container/` runs upstream `pi` and `pi-acp` inside Podman for the ACP attorney path.  `adc` talks to the ACP bridge through the wrapper scripts in this directory.
+`common/pi-container/` builds the local Podman image used for Pi juror and council agents in live runs.  The active `adc run`, `aar run`, and `aard run` commands start Pi containers directly with Podman, mount one per-agent home directory, write Pi configuration into that home, install the MCP adapter, and give the agent instructions for the current case role.  The default image name is `agentcourt-pi-sandbox`, and each runtime can override it with `--pi-image` or `PI_CONTAINER_IMAGE`.
 
 ## Files
 
 | Path | Purpose |
-|---|---|
-| `Dockerfile` | Minimal image recipe for upstream `pi`, `pi-acp`, and `openssl` |
-| `build-image.sh` | Builds the local image used by `pi-podman.sh` and `acp-podman.sh` |
-| `pi-podman.sh` | Starts `pi` inside Podman and preserves stdio |
-| `acp-podman.sh` | Starts `pi-acp` inside Podman and preserves stdio |
-| `../etc/pi-settings.xproxy.json` | `xproxy` defaults copied into each ephemeral ACP home |
-| `../etc/pi-models.xproxy.json` | Minimal `xproxy` model catalog copied into each ephemeral ACP home |
+| --- | --- |
+| `Dockerfile` | Builds a local image with upstream Pi and its runtime dependencies. |
+| `build-image.sh` | Runs `podman build` for the local image. |
+| `pi-podman.sh` | Older direct-Pi wrapper kept beside the image recipe. |
+| `acp-podman.sh` | Older adapter wrapper kept beside the image recipe. |
 
-## Build the image
+The wrapper scripts preserve the historical command shape.  Current `adc/`, `arb/`, and `arbd/` live runs use the local-run code paths in each runtime.  Treat the Dockerfile and `build-image.sh` as the current shared pieces.
 
-From the repository root:
+## Build
+
+Run this command from `common/pi-container/`:
 
 ```bash
-./pi-container/build-image.sh
+./build-image.sh
 ```
 
-The default image name is `agentcourt-pi-sandbox`.  Override it with `PI_CONTAINER_IMAGE` if needed.
+Run this command from the repository root if you prefer an explicit path:
 
-## Embedded `xproxy`
+```bash
+common/pi-container/build-image.sh
+```
 
-Before delegated ACP turns begin, `adc` starts `xproxy` in-process.  For each ACP attorney turn, `adc` stages a fresh writable home directory, writes `settings.json`, `models.json`, and `auth.json` under `/home/user/.pi/agent`, and mounts only that directory into the container.
+`PI_CONTAINER_IMAGE` overrides the tag:
 
-## How the wrapper works
+```bash
+PI_CONTAINER_IMAGE=my-pi-agent common/pi-container/build-image.sh
+```
 
-`adc case` uses `acp-podman.sh` directly.  The ACP wrapper starts `pi-acp` in the container and sets `PI_ACP_PI_COMMAND=/usr/local/bin/pi` so `pi-acp` starts the container-local `pi`, not a host binary.
+## Runtime Use
 
-The wrapper:
+The three live-agent commands use the image for Pi jurors or council members:
 
-- runs Podman with `-i` and no TTY so ACP stdio remains intact;
-- uses `--network host` so the containerized `pi` can reach the host-side ACP custom-method bridge and host `xproxy`;
-- mounts one ephemeral writable directory at `/home/user`;
-- uses that mounted directory as home, temp, and working directory;
-- passes through ACP bridge environment variables;
-- always uses the host `xproxy` path and passes only `PI_XPROXY_API_KEY=xproxy` into the container.
+| Runtime | Agent role | Default adapter |
+| --- | --- | --- |
+| `adc run` | Jurors | `npm:pi-mcp-adapter` |
+| `aar run` | Council members | `npm:pi-mcp-adapter` |
+| `aard run` | Council members | `npm:pi-mcp-adapter` |
 
-## Run mode
+Each process gets a private `/home/user` mount under the run output directory.  The runtime writes Pi settings, MCP server configuration, model request settings, and role instructions into that directory before starting the container.  Agent access to the case goes through MCP and the case HTTP API, with the private home mount carrying the Pi configuration and agent-local files.
 
-The container no longer receives the repository checkout, the run output directory, or a persistent host `~/.pi` tree.  Attorney case access goes through ACP methods such as `_adc/list_case_files`, `_adc/read_case_text_file`, `_adc/request_case_file`, and `_adc/get_juror_context`.
+Pi agents require the provider credentials named by the selected pool entries.  The current local pools use OpenRouter, so live runs require `OPENROUTER_API_KEY`.  Pool records supply the model request configuration, including provider, model, quantization, request parameters, and persona.

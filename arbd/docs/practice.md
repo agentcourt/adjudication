@@ -1,62 +1,62 @@
-# Practice Manual
+# Agent Degree Arbitration Practice Guide
 
-This manual explains how to litigate in Agent Arbitration Degree as it exists in this repository.  The procedure is small on purpose.  There are no pretrial motions, no judge, no clerk, and no voir dire.  The council answers the complaint question with one integer from `0` through `100` under the governing judgment standard.
+This guide explains how to litigate and deliberate in Agent Arbitration Degree.  AARD asks one bounded question and returns council answers from `0` through `100`.  The procedure is short: lawyers use openings, arguments, rebuttal, surrebuttal, and closings to build a record, then council members answer from that record.
 
-The governing source is [Agent Rules for Arbitration Degree Procedure](ARAP.md).  This manual describes the working procedure in practical terms: what each phase is for, what the record contains, and what advocates should do to build a persuasive case.  The phases are fixed and short, so sequencing matters more here than in ordinary civil litigation.
+The governing source is [Agent Rules for Arbitration Degree Procedure](ARAP.md).  The operator reference is [Agent Degree Arbitration Manual](../manual.md).  This guide covers practice judgment: how to frame a degree question, how to search for evidence, how to preserve source material, how to analyze that material, and how to argue a number rather than a binary outcome.
 
-## Core Orientation
+## Procedure Map
 
-The complaint does one thing.  It states the question to be decided.  The judgment standard comes from policy or case configuration, not from the pleading.  There are no counts, defenses, motions, or discovery requests separate from the merits sequence.  Everything that matters must be presented through the merits phases and the record built there.
+| Phase | Actor | Work |
+| --- | --- | --- |
+| `openings` | plaintiff, then defendant | Frame the question, identify the facts that should affect the score, and describe the method the council should use. |
+| `arguments` | plaintiff, then defendant | Build the main record with submitted evidence, offered exhibits, technical reports, and a proposed answer or range. |
+| `rebuttals` | plaintiff | Answer the defendant's method, evidence, or proposed score with targeted argument and, when useful, new evidence or reports. |
+| `surrebuttals` | defendant | Answer the rebuttal with targeted argument and, when useful, new evidence or reports. |
+| `closings` | plaintiff, then defendant | Apply the full record to the question and explain why the final answer should fall at the proposed point or range. |
+| `deliberation` | council members | Read the record, inspect admitted evidence, and submit one integer answer with a rationale. |
 
-The procedure runs in one line: openings, arguments, rebuttals, surrebuttals, closings, and deliberation.  Claimant goes first in openings, arguments, rebuttals, and closings.  Respondent goes second in openings and arguments, may answer with a surrebuttal, and closes last.  Deliberation then proceeds through the seated council members, each of whom records one answer and one rationale.
+Evidence-reading tools are available in every lawyer phase.  Evidence-submission tools are available in arguments, rebuttals, and surrebuttals.  Openings and closings may cite and read admitted evidence, but new source material must enter the record before closing.
 
-Because the structure is this narrow, each phase has a clear job.  Openings frame the question and explain how the score should be approached.  Arguments add the record material that the council will later read.  Rebuttal and surrebuttal answer the other side's method or score.  Closings explain why the full record supports one advocated number better than nearby alternatives.
+## Record And Work Notes
 
-## Phase Map
+The record contains the complaint question, initial case files, lawyer filings, admitted evidence, technical reports, and council answers.  Submitted evidence carries an `evidence_id`, source metadata, byte size, MIME type, SHA-256, and storage metadata.  Filings cite admitted evidence through `offered_evidence`; the council should be able to trace each factual claim to the admitted record.
 
-| Phase | Who acts | What belongs there |
-|---|---|---|
-| `openings` | claimant, then respondent | theory of the case, framing of the numeric question, and explanation of how the judgment standard applies |
-| `arguments` | claimant, then respondent | merits argument, submitted source evidence, exhibits, technical reports, and a concrete advocated score or range |
-| `rebuttals` | claimant | response to the respondent's method or score, with targeted source evidence, exhibits, and technical reports if needed, or a pass |
-| `surrebuttals` | respondent | response to the rebuttal, or a pass |
-| `closings` | claimant, then respondent | final application of the full record to the question, with a concrete advocated answer |
-| `deliberation` | council members | individual answers and rationales |
+Work notes are private operator-facing analysis, stored outside the case record.  Lawyers should use `send_work_notes` during each turn to report plans, search logs, source leads, adverse facts, checks performed, dead ends, and provisional scoring views.  Good notes help later review determine whether the lawyer searched well, preserved the right material, and analyzed the evidence before filing.
 
-In the current implementation, `arguments` remains the main record-building phase.  Rebuttal may also add submitted evidence, exhibits, and technical reports, but only for the claimant and only as a response to the respondent's argument.  Surrebuttal remains text-only.
+## Evidence Search
 
-## Openings
+A degree answer usually depends on source quality and method.  Lawyers should search beyond the initial case packet when the question depends on public facts, provenance, text comparison, images, official records, market rules, chronologies, or technical claims.  They should use all available resources: web search, browsers, command-line tools, scripts, OCR, text extraction, metadata checks, archive lookups, hash checks, and small programs written for the case.
 
-Openings should be short, clear, and methodical.  At that point the record contains only the question and the governing judgment standard.  A good opening therefore states what features should move the score up or down, explains which features should be discounted, and gives the council a method for reading later evidence.
+Search should be planned around the score.  A lawyer should identify what would move the answer lower, middle, or higher, then search for evidence that tests those points.  A one-sided search that confirms the preferred number without checking alternatives gives the council little reason to trust the proposed score.
 
-Use openings to frame the method and identify the evidence that would justify a low, middle, or high answer.  Reserve detailed scoring tables for record material already introduced.  If the opening overstates facts that are not yet in the record, the side loses credibility for no gain.
+Source preservation comes before argument.  If a lawyer will rely on an outside source, it should submit the source or a faithful extract through `submit_evidence` or chunked upload before citing it.  The filing should distinguish source evidence from lawyer analysis, and any technical report should explain the method used to extract, compare, or measure the material.
 
-## Arguments and Record Building
+## Evidence Analysis
 
-Arguments are the center of the case.  This is the main phase in which a side may submit source evidence, offer files as exhibits, and submit technical reports.  Counsel should therefore treat the arguments phase as both merits briefing and record assembly.
+AARD often asks how much, how similar, how likely, or how strongly supported.  Those questions need explicit methods.  Lawyers should name the scale, the features being scored, the weights or qualitative priorities they propose, and the reason nearby numbers fit less well.
 
-Use a selective record-building strategy.  Submit source evidence when exact outside material matters, offer the files that matter to the score and the judgment standard, and use technical reports when a concrete check will move the number in an explainable way.  In a similarity case, that may mean a side-by-side alignment, a chronology check, a structural comparison, or a report that separates distinctive reuse from background conventions.
+Technical reports can carry useful analysis when a question depends on extraction or comparison.  In a text-similarity case, a report might align passages, count shared phrases, separate ordinary genre conventions from distinctive reuse, and identify structural similarity.  In a chronology case, a report might verify timestamps, source order, archive captures, and consistency across official records.
 
-A good argument ties each record item to a specific scoring consequence.  One source may establish the earlier text, another may show the later text, and a report may explain how much of the wording, structure, or development persisted.  If a technical check weakens your side's preferred score, report that weakness directly and explain why the remaining evidence still supports the advocated number.
+The analysis should handle adverse facts directly.  A plaintiff arguing for `85` should explain why the evidence does not support `65` or `98`.  A defendant arguing for `25` should explain which facts prevent a lower answer and which facts prevent a higher answer.
 
-Arguments in `arbd` should also make their scoring method explicit.  A side should say which factors matter, which factors should be discounted, and why its advocated number fits the record better than numbers ten points lower or higher.  A filing that argues for `92` without explaining why `82` is too low and why `98` is too high leaves the decisive work to the council without guidance.
+## Phase Practice
 
-## Rebuttal, Surrebuttal, and Closings
+Openings frame the method.  They should tell the council which facts will affect the score, what evidence would prove those facts, and how the judgment standard affects uncertainty.  Openings should avoid detailed factual claims that the record does not yet support.
 
-Rebuttal and surrebuttal are narrow response phases.  They exist to answer the other side's method, weighting, or use of the record.  A good rebuttal identifies one or two decisive failures in the respondent's scoring approach, then shows why those failures matter under the stated judgment standard.
+Arguments build the main record.  A good argument submits the source materials needed to decide the question, offers the important evidence by `evidence_id`, includes technical reports when they improve the council's ability to evaluate the record, and names a concrete proposed answer or narrow range.  The filing should connect each exhibit to a scoring consequence.
 
-These phases should not repeat the full merits presentation.  Rebuttal may sharpen the record with targeted source evidence, exhibits, or technical reports, but it should do so only in direct response to the respondent's case.  What remains is argument about how the council should read the record, which features are distinctive, which similarities should be discounted, and which nearby numbers fail to fit the evidence.
+Rebuttal and surrebuttal are focused response phases.  They should answer the other side's method, weighting, source selection, or technical analysis.  They may add targeted evidence or reports when the response depends on source material that has not yet entered the record.
 
-Closings should synthesize, not expand.  By then the council has the full set of filings, submitted source evidence, exhibits, and technical reports.  The closing should tell the council what number the record supports, why nearby alternatives fit less well, and how the judgment standard bears on disputed inferences.  A strong closing in `arbd` almost always names a concrete answer rather than a vague upper or lower band.
+Closings synthesize the record.  A closing should identify the answer the record supports, explain why neighboring scores fit less well, and show how the evidence standard affects remaining uncertainty.  It should not introduce unsubmitted source material or depend on private work notes.
 
-## Council Deliberation
+## Council Practice
 
-The council answers after closings.  Each member casts one individual answer with a rationale.  Counsel should therefore expect the result to show any real spread across the council.
+Each council member reads the final record and submits one integer answer.  The rationale should identify the decisive filings and evidence, explain the scoring method used, and address the main competing number or range.  A rationale that gives a number without a method leaves the result hard to evaluate.
 
-Advocate clarity matters here.  The council reads the filings and record directly, then gives reasons in its own words.  Arguments that depend on an unstated weighting rule or an undocumented factual leap tend to break down here, because each council member has to reconstruct the missing method independently.
+Council members have read-only evidence tools during deliberation.  They should inspect important exhibits directly, especially when the lawyers disagree about source text, provenance, extraction, or technical reports.  They should decide from admitted evidence and filings, not from independent investigation.
 
-## Practical Method
+## Working Method
 
-A good working method for this forum has three stages.  First, define the exact question and identify what facts would justify low, middle, and high answers under the stated standard.  Second, decide which documents and technical checks can prove or disprove those facts.  Third, map those materials into the arguments phase so that rebuttal and closing can stay focused on weighting and inference instead of scrambling to supply missing support.
+A lawyer should start each turn by scanning the current record, admitted evidence, and recent filings.  The next step is a written plan: what question must be answered, what sources or tools can answer it, what adverse result would change the proposed score, and what evidence needs preservation.  Before filing, the lawyer should send accumulated work notes, submit necessary evidence, offer admitted evidence in the filing, and explain the path from record to number.
 
-This procedure rewards concentration.  Because there is no separate motion practice, no discovery phase, and no evidentiary hearing outside the merits sequence, every filing should do visible work.  The best cases in this forum are compact, supported, and explicit about the path from record to advocated number.
+A council member should start deliberation by reading the complaint, the final filings, and the evidence manifest.  The next step is targeted inspection of exhibits and reports that control the score.  The final answer should state the number, the method, the decisive evidence, and the main reason the rejected ranges fit less well.

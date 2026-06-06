@@ -1,8 +1,8 @@
 # Jury Pool Generation
 
-This document describes the older CSV pipeline that produced selected council files from OpenRouter model metadata, live tool-probe results, checked-in persona texts, clustering output, and PCA coordinates. Runtime council pools now use JSONL request-spec records, because provider endpoint and quantization constraints must remain attached to each sampled council member.
+This document describes the CSV curation pipeline that produced selected council files from OpenRouter model metadata, live tool-probe results, checked-in persona texts, clustering output, and PCA coordinates.  Current runtime pools use JSONL request-spec records so each sampled council member carries provider endpoint, quantization, request parameters, and persona data.  The CSV pipeline remains useful for refreshing the candidate corpus and producing source material for those JSONL records.
 
-The runtime no longer uses the CSV files described here as its default council pool. A current pool record must carry the OpenRouter model id, provider endpoint tag, quantization when known, and persona path in JSONL form.
+A current pool record carries the OpenRouter model id, provider endpoint tag, quantization when known, request parameters, and persona path in JSONL form.  CSV files such as `council.csv` and `pool.csv` are historical selection outputs.  Convert selected rows into request-spec records before using them in `adc run`, `aar run`, or `aard run`.
 
 Run the commands below from the repository root unless the command says otherwise. Use `uv run --script` for Python scripts with PEP 723 metadata.
 

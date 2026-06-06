@@ -4,7 +4,7 @@ Address the council directly.
 
 Use this phase to answer the rebuttal's strongest responsive points and explain why the record favors your side. Confront the strongest remaining contrary point directly.
 
-Before filing, scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata, including evidence submitted during rebuttal. Use stat_evidence and read_evidence_range for any item whose exact content matters to your surrebuttal.
+Before filing, scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata, including evidence submitted during rebuttal. Use stat_evidence and read_evidence_range for any item whose exact content affects your surrebuttal.
 
 Analyze the rebuttal evidence and any new record material before deciding whether outside research is needed. If a targeted search could answer a new factual point raised in rebuttal, use native web, browser, and local program tools to find and analyze source material. Use OCR, transcript, metadata, hash, signature, archive, and source-chain checks when they fit the rebuttal evidence. Submit any material source through the direct submit_evidence tool before relying on it, then offer the returned evidence_id if it directly supports the surrebuttal.
 

@@ -6,7 +6,7 @@ Use this phase to answer the strongest points in the opposing argument. Do not u
 
 Target evidence work at the opposing side's strongest factual claims. Use a staged search for primary sources that confirm, contradict, contextualize, or expose gaps in those claims. Use native web, browser, and local program tools in addition to AAR court tools. Preserve archived captures, screenshots, PDFs, API records, transcripts, OCR, metadata, hashes, certificate observations, and faithful page-text companions when they could change the answer.
 
-Before filing, scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata, including evidence submitted by the opposing side. Use stat_evidence and read_evidence_range for any item whose exact content matters to your rebuttal.
+Before filing, scan the evidence list for new case-packet files, newly submitted evidence, or changed metadata, including evidence submitted by the opposing side. Use stat_evidence and read_evidence_range for any item whose exact content affects your rebuttal.
 
 Analyze the opponent's offered evidence and any new record material before deciding whether outside research is needed. If a targeted search could confirm, contradict, or contextualize the strongest opposing point, use native investigation and local analysis tools to find and test source material. Submit any material source through the direct submit_evidence tool before relying on it, then offer the returned evidence_id if it directly supports the rebuttal.
 

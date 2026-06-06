@@ -1,10 +1,10 @@
-# OpenClaw OAuth-Derived Codex Auth
+# OpenClaw Codex Auth
 
 ## Purpose
 
 OpenClaw lawyer containers can use the Codex credentials stored under `~/.codex` or an `OPENAI_API_KEY`.  The Codex path stages only `~/.codex/auth.json` into a per-container directory, mounts that directory into the OpenClaw container, sets `CODEX_HOME` to the mount point, extracts `tokens.access_token`, and imports that token into OpenClaw's `openai:codex` provider profile.  OpenClaw then uses that provider profile for `gpt-5.5`.
 
-This is useful for `aar run` because OpenClaw lawyers can run from ChatGPT/Codex subscription credentials without charging the OpenAI Platform API key.  `OPENAI_API_KEY` remains available for machines that do not have a Codex login cache or that need Platform API billing.  The Pi council still uses its configured provider path, currently OpenRouter through `OPENROUTER_API_KEY`.  The OpenClaw lawyer auth path and the Pi council auth path are separate.
+This path lets `aar run` use ChatGPT/Codex subscription credentials for OpenClaw lawyers.  `OPENAI_API_KEY` remains available for machines using Platform API billing.  The Pi council still uses its configured provider path, currently OpenRouter through `OPENROUTER_API_KEY`.  The OpenClaw lawyer auth path and the Pi council auth path are separate.
 
 ## Documentation Basis
 
@@ -43,7 +43,7 @@ docker run --rm \
 
 The OpenClaw container completed the request without `OPENAI_API_KEY`.  The response text was exactly `codex oauth container auth works`.  The JSON metadata reported provider `openai-codex`, model `gpt-5.5`, and `requestShaping.authMode: "auth-profile"`.
 
-That result establishes that the stock OpenClaw image can read a staged Codex auth directory through `CODEX_HOME`.  It also establishes that `aar run` does not need to pass `OPENAI_API_KEY` to OpenClaw lawyer containers when this auth path is used.  The test does not establish long-term token refresh behavior under concurrent containers, so `aar run` gives each lawyer container its own staged copy of `auth.json`.
+That result establishes that the stock OpenClaw image can read a staged Codex auth directory through `CODEX_HOME`.  It also establishes that `aar run` can omit `OPENAI_API_KEY` from OpenClaw lawyer containers when this auth path is used.  Long-term token refresh behavior under concurrent containers still needs testing, so `aar run` gives each lawyer container its own staged copy of `auth.json`.
 
 ## Implementation Notes For `aar run`
 

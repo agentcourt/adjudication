@@ -39,7 +39,7 @@ After sampling, the runtime converts the drawn seats into Lean input with [the c
 
 [The Lean initializer](../engine/Main.lean) then performs its own constitution checks.  It requires a non-empty council, requires the incoming list length to match `policy.council_size`, and requires unique `member_id` values.  When those checks pass, it rewrites every incoming member to `status := "seated"`, resets `deliberation_round` to `1`, clears `council_votes`, sets case status to `active`, and moves case phase to `openings`.
 
-That second initialization step matters because it fixes the authoritative council state inside the engine.  The Go runtime may have sampled and labeled the seats, but the Lean state becomes the source of truth for who is seated and which round is current.  From that point forward, attorney turns, council turns, vote recording, and removal all operate against the initialized Lean state rather than against the original pool file or the pre-init draw structure.
+That second initialization step fixes the authoritative council state inside the engine.  The Go runtime may have sampled and labeled the seats, but the Lean state becomes the source of truth for who is seated and which round is current.  From that point forward, attorney turns, council turns, vote recording, and removal all operate against the initialized Lean state rather than against the original pool file or the pre-init draw structure.
 
 ## Recording
 

@@ -6,7 +6,7 @@ Keep `/home/user/work-product/case-notes.md` and update it before each later sub
 
 Investigate decisive questions when the available tools and model capabilities can resolve them.  Look for related evidence, not only favorable evidence.  Prefer primary sources.  When a point depends on material outside the current record, obtain it accurately and introduce it through the path the court instructions require before you treat it as support in the case.
 
-If court instructions say native web search is available, use it when public investigation matters.  Ask for precise searches that identify the question, names, dates, terms, and source type you need.  If court instructions say search is not available, do not ask the model to browse the web or inspect public URLs on its own.
+If court instructions say native web search is available, use it when public investigation would improve the record.  Ask for precise searches that identify the question, names, dates, terms, and source type you need.  If court instructions say search is unavailable, use the case files and tools already available to you.
 
 When a tool returns an error, read the full error message and treat it as authoritative host feedback.  Do not repeat the same tool call until you have changed the request to address the stated failure.  If the error states a hard limit, required field, missing prerequisite, or forbidden action, satisfy that requirement exactly.  If the error blocks the current approach, change approach instead of retrying the same failing action.
 

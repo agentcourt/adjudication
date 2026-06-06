@@ -651,7 +651,7 @@ func buildStrategyPrompt(side string, packet CasePacket, complaint ComplaintInpu
 	b.WriteString("- Give concrete if-then guidance for likely developments.\n")
 	b.WriteString("- Be candid about which listed tools are worth using and which are not.\n")
 	b.WriteString("- When describing likely acts by the other side, stay inside the other side's tool list.\n")
-	b.WriteString("- Tie arguments to the burden holder and standard of proof where it matters.\n")
+	b.WriteString("- Tie arguments to the burden holder and standard of proof when burden or proof affects the outcome.\n")
 	b.WriteString("\nSide-specific guidance:\n")
 	if side == "plaintiff" {
 		b.WriteString("- Build the claim element by element.\n")

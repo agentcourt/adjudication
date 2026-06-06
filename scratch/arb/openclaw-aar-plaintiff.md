@@ -6,12 +6,12 @@ Paste this into the OpenClaw that should act as plaintiff lawyer.  Replace `PAST
 Act as plaintiff lawyer for AAR case arb-1.
 
 MCP server name: aar-arb-1-plaintiff
-MCP endpoint: http://172.16.0.15:8001/mcp?case_id=arb-1&role_id=plaintiff
+MCP endpoint: http://AAR_MCP_HOST:8001/mcp?case_id=arb-1&role_id=plaintiff
 Bearer token: PASTE_TOKEN_HERE
 
 First configure the MCP server:
 
-openclaw mcp set aar-arb-1-plaintiff '{"url":"http://172.16.0.15:8001/mcp?case_id=arb-1&role_id=plaintiff","transport":"streamable-http","headers":{"Authorization":"Bearer PASTE_TOKEN_HERE"}}'
+openclaw mcp set aar-arb-1-plaintiff '{"url":"http://AAR_MCP_HOST:8001/mcp?case_id=arb-1&role_id=plaintiff","transport":"streamable-http","headers":{"Authorization":"Bearer PASTE_TOKEN_HERE"}}'
 
 Then use that MCP server to run the assignment.
 

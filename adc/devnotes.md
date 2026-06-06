@@ -79,7 +79,7 @@ A fresh deliberation process gets the deliberation prompt, which includes the tr
 
 ### References
 
-- ADC update plan: [`update-plan.md`](update-plan.md)
+- ADC update plan: [`../scratch/adc/update-plan.md`](../scratch/adc/update-plan.md)
 - Role API: [`runtime/runner/roleapi.go`](runtime/runner/roleapi.go)
 - MCP adapter: [`runtime/mcp/mcp.go`](runtime/mcp/mcp.go)
 - Clerk service: [`runtime/service/service.go`](runtime/service/service.go)
@@ -114,7 +114,7 @@ Entries below this section are historical development notes.  ACP and xproxy ent
 - ACP role runtime: [`runtime/runner/acp_role.go`](runtime/runner/acp_role.go)
 - PI-home staging: [`runtime/runner/pi_container_home.go`](runtime/runner/pi_container_home.go)
 - Agent documentation: [`docs/agents.md`](docs/agents.md)
-- Porting inventory: [`update.md`](update.md)
+- Porting inventory: [`../scratch/adc/update.md`](../scratch/adc/update.md)
 
 ### Decisions
 

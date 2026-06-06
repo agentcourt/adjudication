@@ -6,7 +6,7 @@ The immediate goal is to remove duplicated hard-coded values and make the config
 
 ## Current status
 
-The first implementation slice is complete.  [The case CLI](../runtime/cli/case.go) now loads a policy file, defaulting to [`etc/policy.json`](../etc/policy.json) in the current working directory when that file exists.  That policy now includes `evidence_standard` as well as the structural limits.  [The Go runner](../runtime/runner/policy.go) validates both procedural policy and runtime limits before case initialization.  [The Lean engine](../engine/Main.lean) now carries `required_votes_for_decision`, `max_surrebuttal_chars`, and cumulative per-side exhibit and report caps.  [The attorney tool path](../runtime/runner/attorney_tools.go) and [the council path](../runtime/runner/council.go) enforce runtime invalid-attempt and response-size limits.  [The output evidence](../runtime/runner/render.go) now include `policy.json` and `runtime.json`.
+The current implementation loads a policy file through [the case CLI](../runtime/cli/case.go), defaulting to [`etc/policy.json`](../etc/policy.json) in the current working directory when that file exists.  That policy includes `evidence_standard` as well as the structural limits.  [The Go runner](../runtime/runner/policy.go) validates both procedural policy and runtime limits before case initialization.  [The Lean engine](../engine/Main.lean) carries `required_votes_for_decision`, `max_surrebuttal_chars`, and cumulative per-side exhibit and report caps.  [The attorney tool path](../runtime/runner/attorney_tools.go) and [the council path](../runtime/runner/council.go) enforce runtime invalid-attempt and response-size limits.  [The output renderer](../runtime/runner/render.go) writes `policy.json` and `runtime.json`.
 
 One part remains open.  The proof-friendly policy shape is now in place, but the Lean theorems over it are not.  The shared per-side fields make those theorems straightforward to state.  They have not yet been written.
 
@@ -58,7 +58,7 @@ Where the procedure intends symmetry, the policy should express that symmetry di
 
 The same principle applies to vote thresholds.  A single `required_votes_for_decision` field is better than a computed majority rule hidden in code, but it is also better than side-specific decision thresholds that the procedure does not need.  The policy should state the common limit once.  Theorems can then quantify over one field and prove the same bound for both sides.
 
-This matters for cumulative limits.  Per-filing limits and per-side limits solve different problems.  `max_exhibits_per_filing` prevents one oversized submission.  `max_exhibits_per_side` constrains the whole case record attributable to one side.  If later work needs proofs such as “each side gets the same maximum number of exhibits” or “no side can exceed the configured report cap,” those proofs are simpler if the state counts filings by side and compares them to one shared policy field.
+Cumulative limits need both per-filing and per-side fields.  `max_exhibits_per_filing` prevents one oversized submission.  `max_exhibits_per_side` constrains the whole case record attributable to one side.  If later work needs proofs such as “each side gets the same maximum number of exhibits” or “no side can exceed the configured report cap,” those proofs are simpler if the state counts filings by side and compares them to one shared policy field.
 
 ## Enforcement split
 
@@ -70,7 +70,7 @@ This split also determines persistence.  Policy values that affect the legal cas
 
 The main configuration surface should be one policy file, not a long list of unrelated CLI flags.  A single `--policy FILE` argument is enough for procedural policy.  The existing CLI can keep a small number of operational flags such as timeout values and output paths, plus narrow policy overrides such as `--council-size` and `--evidence-standard` when they are useful for testing.  That keeps the procedure readable, reduces duplicated defaults, and gives each run one concrete policy evidence that can be inspected later.
 
-The policy file should contain only procedural parameters.  Complaint content stays in the complaint markdown.  Runtime limits stay in Go config.  That separation matters because the same complaint should be able to run under different procedural policies without rewriting the complaint, and the same policy should be able to run under different timeout settings without changing the legal state.
+The policy file should contain only procedural parameters.  Complaint content stays in the complaint markdown.  Runtime limits stay in Go config.  That separation lets the same complaint run under different procedural policies without rewriting the complaint, and it lets the same policy run under different timeout settings without changing the legal state.
 
 ## Implementation order
 

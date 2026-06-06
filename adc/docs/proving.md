@@ -18,7 +18,7 @@ The current engine uses deterministic ids derived from opportunity content.
 That fixes the positional-id bug.  It does not give injective ids.  The ids
 are deterministic, not collision-free.
 
-That distinction matters for proofs.  The strongest pass-isolation theorem
+That distinction controls the proof shape.  The strongest pass-isolation theorem
 would say: passing one optional opportunity suppresses exactly that
 opportunity and preserves every other distinct opportunity in the same agenda.
 The current hashed scheme does not support that theorem cleanly, because the

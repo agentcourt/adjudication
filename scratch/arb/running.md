@@ -108,7 +108,7 @@ An OpenClaw lawyer receives one MCP server definition and one assignment prompt.
   "url": "http://host.docker.internal:19780/mcp?case_id=arb-ex01-local&role_id=plaintiff",
   "transport": "streamable-http",
   "headers": {
-    "Authorization": "Bearer aar-local-test-token"
+    "Authorization": "Bearer REPLACE_WITH_TOKEN"
   }
 }
 ```
@@ -120,7 +120,7 @@ Council members use the same MCP endpoint with `member_id` instead of `role_id`.
   "url": "http://host.docker.internal:19780/mcp?case_id=arb-ex01-local&member_id=C1",
   "transport": "streamable-http",
   "headers": {
-    "Authorization": "Bearer aar-local-test-token"
+    "Authorization": "Bearer REPLACE_WITH_TOKEN"
   }
 }
 ```

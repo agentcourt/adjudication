@@ -22,7 +22,7 @@ This design records the procedure's product directly.  When the case is close, d
 
 ## Role-Bound Advocacy
 
-The fourth goal is to keep advocacy role-bound even when the evidence points away from the side's preferred number.  The claimant should still file the strongest truthful high-number case, and the respondent should still file the strongest truthful low-number case.  That structure matters more in `arbd` than in `arb`, because disputes about weighting, discounting, and calibration often do most of the work in a degree question.
+The fourth goal is to keep advocacy role-bound even when the evidence points away from the side's preferred number.  The claimant should still file the strongest truthful high-number case, and the respondent should still file the strongest truthful low-number case.  Degree questions often turn on weighting, discounting, and calibration, so role-bound advocacy needs to show its method instead of assuming a binary outcome frame.
 
 This does not authorize exaggeration.  A side may have to concede that the best surviving case supports a narrower range than it wanted at the outset, and the filing should say so.  What `arbd` needs from advocacy is disciplined position-taking: a concrete number, a method for getting there, and an account of why nearby alternatives fit the record less well.
 
