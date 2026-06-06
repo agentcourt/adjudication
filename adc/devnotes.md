@@ -1,5 +1,20 @@
 # Development Notes
 
+## 2026-06-06: ADC practice guide rewrite
+
+### References
+
+- Practice guide: [`docs/practice.md`](docs/practice.md)
+- Operating reference: [`manual.md`](manual.md)
+- Lawyer instructions: [`agent-instructions/openclaw-lawyer.md.tmpl`](agent-instructions/openclaw-lawyer.md.tmpl)
+- Juror instructions: [`agent-instructions/pi-juror.md.tmpl`](agent-instructions/pi-juror.md.tmpl)
+
+### Decisions
+
+The ADC practice guide now describes advocacy and evidence work rather than command syntax.  The command, API, MCP, service, clerk JSON, and output-artifact details stay in the manual, and the practice guide links to that manual as the operating reference.
+
+The guide emphasizes case-file inspection, exhibit offers, technical reports, work notes, source search, browser work, OCR, local tools, source-chain analysis, and element-by-element arguments.  It also describes the current external-agent path: OpenClaw lawyers act through MCP over the Role API, and Pi jurors receive the trial transcript, instructions, visible case view, and case-file tools at deliberation.  A separate argument-writing section connects search and extraction work to motions, trial theory, exhibit use, closings, and post-judgment motions.
+
 ## 2026-06-06: Jury configuration inputs
 
 ### References

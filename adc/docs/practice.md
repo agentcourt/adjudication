@@ -1,499 +1,245 @@
-# Practice Manual
+# Agent District Court Practice Guide
 
-This manual explains how to litigate in Agent District Court for readers who are new to civil procedure and for practitioners who want detailed workflow guidance.  It is a practical guide to what happens in this court, what each side should do, and how to build a strong record from first filing through post-judgment.
+## Purpose and Sources
 
-The governing sources are the [Agent Rules of Civil Procedure (ARCP)](ARCP.md), the [Local Rules Limits Guide](limits.md), and case-specific court orders entered under [Rule 16](ARCP.md#rule-16-pretrial-conferences-scheduling-management), [Rule 83](ARCP.md#rule-83-rules-by-district-courts-judges-directives), and [Rule 87](ARCP.md#rule-87-agent-assisted-litigation-orders).
+This guide teaches agent lawyers how to litigate in Agent District Court, or ADC.  It covers case planning, factual investigation, evidence development, motion practice, trial presentation, jury work, and post-verdict review.  Like Moore's Federal Practice and Procedure and similar practice guides, it explains how advocates use procedure to build proof, preserve the record, and sequence tactical choices.
 
-The practical structure is straightforward.  Every consequential filing or courtroom action should identify rule authority, factual basis, requested relief, and requested order language.  In this court, procedural precision and record quality directly affect outcomes.
+The related [Agent District Court Manual](../manual.md) supplies the operating reference for commands, flags, HTTP routes, MCP behavior, service endpoints, clerk JSON fields, output artifacts, and local-agent setup.  The [Agent Rules of Civil Procedure](ARCP.md) supply the civil procedure rules, and the [Local Rules Limits Guide](limits.md) supplies local limits and override concepts.  Use those documents for exact syntax, API shape, and rule text.
 
-## Part I: Core orientation
+ADC practice depends on three records at once.  The pleadings and docket define the procedural case, the case files and admitted exhibits define the trial record, and the private work notes explain how agent lawyers searched, analyzed, and prepared.  Keep those records separate: private notes do not prove facts, case files do not become trial exhibits without the proper legal act, and docket entries control procedural history.
 
-A civil case is an adjudicated dispute between plaintiff and defendant.  Plaintiff files a complaint asking for relief.  Defendant answers and may raise defenses or dispositive motions.  The court manages discovery, resolves motions, determines trial mode, conducts trial, enters judgment, and resolves post-judgment motions.
+## Core Orientation
 
-The court runs procedure as constrained state transition.  Each proposed action is checked against rule constraints and current case state.  Valid actions update state and docket.  Invalid actions are rejected with explicit reasons.  See [Procedure execution](logic.md).
+A complaint starts the action, the defendant answers or raises threshold objections, the court manages pretrial work, the parties develop the record, and the case resolves by bench decision, jury verdict, judgment, or another authorized disposition.  Complaint-driven runs currently normalize the dispute into a focused claim packet before live litigation begins, so the first task is to understand the claim elements, the defenses, the requested relief, and the files attached to the complaint.
 
-This model rewards sequence discipline.  A filing that would be valid in a different phase can fail in the current phase.  Counsel should therefore check phase and preconditions before each action.
+The case process owns the litigation.  It owns the Lean state, the current phase, role opportunities, deadlines, invalid-attempt limits, file visibility, docket updates, event logs, work-note logging, verdict derivation, and final output.  Lawyers and jurors act through the Role API or MCP, but those tools only let them act inside the current opportunity returned by the case process.
 
-The docket is the authoritative event record.  Counsel should use [AACER](aacer.md) and the [AACER CLI Guide](aacer-cli.md) continuously to confirm filings, rulings, and document identity.
+ADC separates legal acts from investigation.  Legal acts are court-facing actions accepted through `submit_decision`, such as filing an answer, serving discovery, submitting a technical report, offering an exhibit, delivering a closing argument, proposing a jury instruction, or casting a juror vote.  Investigation uses support tools and the lawyer's ordinary computer resources to inspect files, search sources, extract text, verify signatures, prepare reports, and decide what the court-facing act should say.
 
-## Part II: Essential terms
+## Procedure Map
 
-A *pleading* is a claim or defense statement that defines dispute scope.  Complaints and answers are pleadings.
+Each phase determines what the lawyer can do and what the lawyer prepares for the next phase.  The legal tools for each opportunity come from the Role API or MCP response, not from memory or a static list.
 
-A *motion* is a request for a ruling.  Motions ask the court to decide an issue or set procedural terms.
+| Phase or stage | Main actors | Practice function |
+|---|---|---|
+| Complaint setup | plaintiff, planner, clerk | Convert the dispute and linked files into the initial case packet, claim theory, and private strategy memos. |
+| Pleadings | plaintiff, defendant | Define the claim, admissions, denials, defenses, jurisdiction, and threshold objections. |
+| Initial disclosures | parties | Identify key sources, custodians, damages material, and case files needed for discovery and trial. |
+| Written discovery | parties | Use interrogatories, production requests, and requests for admission to close proof gaps and remove needless disputes. |
+| Discovery disputes | parties, judge | Use Rule 37 motions and orders to resolve material failures, not to repeat ordinary disagreement. |
+| Dispositive motions | parties, judge | Test threshold legal failure under Rule 12 or factual sufficiency under Rule 56. |
+| Trial setup | clerk, judge | Resolve trial mode, enter the pretrial order, configure the jury, and set trial control terms. |
+| Voir dire | judge, parties, jurors | Test juror suitability, preserve challenges, and empanel the jury unless voir dire is skipped by case policy. |
+| Openings | parties | Frame the evidence path and disputed elements without adding proof. |
+| Trial theory | parties | State the merits theory from the current record and prepare the evidence sequence. |
+| Evidence phases | parties | Offer case files as exhibits, submit permitted reports, and rest when the record is complete. |
+| Rebuttal and surrebuttal | parties | Answer the other side's new or central points with narrow analysis and, when allowed, targeted evidence. |
+| Charge conference | parties, judge | Propose instructions, object to faulty language, and preserve charge issues. |
+| Closings | parties | Apply the admitted record to each element, defense, and damages question. |
+| Deliberation | jurors | Vote from the trial transcript, instructions, visible case files, admitted exhibits, and the case view. |
+| Judgment | judge | Enter judgment from the verdict or bench decision and create the final case result. |
 
-*Discovery* is formal information exchange before trial.  In this court, written discovery tools are central and heavily used.
+The phase sequence determines time allocation.  Pleadings and early discovery identify the proof problem.  Trial evidence phases build the record the jury or judge will use.  Closings cannot fix missing exhibits, incomplete verification, or a source-chain gap that should have been preserved earlier.
 
-A *dispositive motion* asks the court to resolve claims without full trial.  The main dispositive vehicles are Rule 12 and Rule 56.
+## Case Theory and Element Work
 
-*Voir dire* is jury questioning by court and counsel to test impartiality and suitability.
+Every ADC lawyer needs an element table.  For the plaintiff, the table states each element, the fact that proves it, the file or exhibit that supports it, the expected defense answer, and the fallback source if the primary proof fails.  For the defense, the same table becomes a defect table: which element is legally insufficient, factually unproven, unsupported by admissible material, or defeated by an affirmative defense.
 
-A *cause challenge* seeks removal of a juror for demonstrated inability to serve impartially.
+The element table should stay stable from complaint through closing.  If a document proves contract formation, the lawyer should use the same document when drafting discovery, preparing the pretrial order, offering exhibits, and closing to the jury.  If a later source changes the theory, the work notes and filing should explain that change rather than letting the case drift.
 
-A *peremptory challenge* removes a juror without cause findings, subject to governing limits.
+Damages need their own proof path.  A damages exhibit may show an amount, but it may not show causation, reasonableness, mitigation, or recoverability.  Damages analysis separates arithmetic from legal entitlement and ties each dollar category to a specific breach, reliance event, or loss mechanism.
 
-## Part III: Case start and pleadings
+| Planning item | Plaintiff question | Defense question |
+|---|---|---|
+| Element | What must be proved to win? | Which element can fail? |
+| Source | Which file or outside source proves it? | Which source contradicts or narrows it? |
+| Authentication | How will the source be tied to a party, system, date, or event? | What provenance or custody gap affects weight? |
+| Causation | What connects the act to the loss or requested relief? | What intervening choice, missing timeline, or alternative cause breaks the chain? |
+| Damages | Which item proves amount and reasonableness? | Which item shows only claimed spending or unsupported allocation? |
 
-### Rules 1 through 6 in practice
+## The Record Model
 
-[Rule 1](ARCP.md#rule-1-scope-and-purpose) and [Rule 2](ARCP.md#rule-2-one-form-of-action) establish the case posture.  Counsel should frame every request in terms of fair process and efficient resolution.
+ADC record practice centers on case files, exhibits, technical reports, docket entries, and transcripts.  A case file has a `file_id`, original name, label, size, hash, storage path, and recorded uses.  A file attached to the complaint is visible as a case file, but trial use requires offering it as an exhibit during the proper evidence phase.
 
-Under [Rule 3](ARCP.md#rule-3-commencing-an-action), case quality starts with complaint quality.  A complaint should map claim elements to factual allegations and requested relief.
+An exhibit is a trial-facing use of a case file.  The act `offer_case_file_as_exhibit` tells the court that a party relies on a visible file for a stated purpose.  The returned exhibit identity, such as P-1 or D-1, becomes the short trial citation, while the same `file_id` remains the source identity.
 
-Example: A contract complaint can be drafted as five numbered blocks: agreement, required performance, breach, causation, and damages.  Each block should cite specific facts and dates.
+Technical reports explain source work.  They are appropriate for signature verification, hash comparison, OCR, transcript preparation, metadata review, source-chain reconstruction, archive inspection, or a search ledger that affects weight.  The report should identify inputs by `file_id` or exhibit when possible, state the method, give the result, and state limits that matter to the factfinder.
 
-[Rules 4, 4.1, and 5](ARCP.md#rule-4-summons) require clear service and filing sequence.  If service method is contested, ask for explicit service protocol in a management order.
+Private work notes are outside the case record.  The `send_work_notes` tool records plans, work logs, search history, extraction steps, source URLs, tool errors, and reasoning for later evaluation, but the jury and judge decide from filed material, admitted exhibits, technical reports, and docketed argument.  If a work-note fact affects the case outcome, counsel must move the relevant source, extraction, or report into the record through an allowed legal tool.
 
-Example: Defendant disputes receipt format for an electronically served filing.  Plaintiff should present service metadata and ask the court to set a forward-looking service format and confirmation method.
+## Role API, MCP, and Remote Lawyering
 
-[Rule 4.1](ARCP.md#rule-41-serving-other-process) governs service of process other than summons.  In practice, this rule matters when the court issues process that must be served through a designated official channel.  Counsel should not assume that ordinary party service under Rule 5 satisfies Rule 4.1 process requirements.
+The Role API and MCP adapter give a lawyer the current opportunity, current prompt, legal tool specs, support tools, remaining time, and attempts left.  The lawyer should call `wait_for_opportunity`, read the active opportunity, inspect the case with `case_status`, `get_case`, and `list_case_files`, and then complete exactly one legal act for that opportunity.  If the response says another role has the current opportunity, the lawyer waits instead of trying to act.
 
-[Rule 5.1](ARCP.md#rule-51-constitutional-challenge-to-a-statute-notice-certification-and-intervention) issues should be raised with explicit notice language, not inferred by implication.
+Remote lawyers do not need a filesystem mount.  They read the visible record through support tools: `list_case_files` for file identity and uses, `read_case_text_file` for readable `.md`, `.txt`, `.pem`, and `.b64` files, `request_case_file` when a provider can attach the raw file to the next model turn, and `read_case_file_bytes` when byte-level inspection affects analysis.  The lawyer's own web search, browser, OCR, shell, scripts, and installed programs operate in the lawyer's environment, while court filings must still go through ADC tools.
 
-When [Rule 5.1](ARCP.md#rule-51-constitutional-challenge-to-a-statute-notice-certification-and-intervention) applies, filing quality is mostly about procedural completeness.  Counsel should file the constitutional-question notice, identify the challenged statute, and confirm service on the appropriate attorney general without delay.  If this sequence is incomplete, the case can stall on avoidable notice defects.
+The MCP adapter passes Role API opportunities and tool calls to the case process.  The same practice duties apply whether the lawyer acts through curl, MCP, a local OpenClaw container, or a remote OpenClaw.  The opportunity response controls the legal tools for the turn, and the lawyer should treat invalid submissions as practice failures to diagnose immediately through the returned error.
 
-[Rule 6](ARCP.md#rule-6-computing-and-extending-time-time-for-motion-papers) is deadline law.  Build a case calendar at filing and update it after every order.
+## Full Computer Use
 
-Example: If defense seeks extension, the motion should identify original deadline, reason, diligence steps, and proposed date.
+Lawyer agents use the computer resources available to them when those resources can find, test, or explain material evidence.  Those resources can include web search, source-page fetches, browser sessions, computer-use tools, local shell commands, OCR, PDF extraction, image inspection, video or audio transcript tools, metadata tools, hash tools, signature tools, archive tools, public APIs, and short programs.  Counsel should use these resources when the current legal act depends on exact source content, provenance, chronology, authenticity, or extraction quality.
 
-### Rules 7 through 16 in practice
+Search results are leads, not evidence.  A search result, snippet, answer box, model summary, or index entry can identify a source target, but counsel should follow the lead to the source page, record, PDF, image, video, archive capture, API response, or other artifact before relying on it.  If the source supports a filing, counsel should import or produce the source as a case file when the current phase permits it, or explain why the source cannot be preserved and how that affects the argument.
 
-[Rules 7, 8, and 10](ARCP.md#rule-7-pleadings-allowed-form-of-motions-and-other-papers) should be used to maintain clean pleading architecture.  Short numbered allegations are easier to test in discovery and motion practice.
+Browser use applies when a source depends on rendering, layout, scrolling, session state, embedded media, or interactive controls.  A browser can reveal visible timestamps, author identity, surrounding context, media attachments, repost structure, and whether a basic text fetch missed material content.  When visual context affects meaning, counsel should preserve screenshots or source captures through the court-facing file path, and use a technical report to explain what the browser showed.
 
-Example: Replace broad narrative allegations with numbered factual propositions that can be admitted, denied, or disproved.
+Local programs matter when ordinary reading is inadequate.  OCR can turn scans and screenshots into text; PDF tools can reveal hidden text, images, or forms; media tools can extract frames and transcripts; archive tools can list contents and paths; metadata tools can show file dates and formats; hash and signature tools can test integrity.  If counsel installs tools or writes scripts, the work notes should record what was installed or written, and a technical report should state the method when the result affects the case.
 
-[Rule 7.1](ARCP.md#rule-71-disclosure-statement) requires ownership disclosures from covered parties.  Counsel should treat this filing as an early compliance item rather than an administrative afterthought.  Missing or delayed disclosure can create avoidable motion practice and credibility loss at the first scheduling stage.
+## Evidence Search
 
-Answer practice is equally important.  A strong answer under [Rules 8 and 12](ARCP.md#rule-8-general-rules-of-pleading) admits what is truly undisputed, denies contested allegations with precision, and states defenses in a way that preserves later motion and trial positions.  Overbroad denials reduce credibility.  Under-inclusive defenses can create waiver problems.
+Evidence search begins with the element table.  Counsel identifies the likely primary source class for each material fact: official records, party communications, signed documents, invoices, logs, regulator pages, public filings, source code, repository history, API records, original media, archive captures, screenshots, transcripts, or contemporaneous notes.  Secondary sources can locate those materials, but proof should rest on the original or most direct preserved source when available.
 
-Example answer method: create a paragraph-by-paragraph response table with three columns: admit, deny, or insufficient knowledge.  For each denial, identify the specific factual point being denied.  For each defense, identify the element or legal theory it targets.
+Search terms should be planned, varied, and recorded.  Effective searches use party names, project names, dates, exact phrases, identifiers, repository paths, filenames, account handles, statutory names, event labels, hash values, and expected file types.  Counsel should search both for supporting material and for adverse material that would weaken or defeat the assigned side's theory.
 
-[Rule 9](ARCP.md#rule-9-pleading-special-matters) demands particularity where required.  Particular allegations should carry through to discovery requests and exhibit planning.
+Adverse search tests the assigned side's theory.  The defense should look for facts that make plaintiff's proof less complete, less material, less causal, or less reliable.  The plaintiff should look for defenses, alternative causes, later corrections, missing context, and source-chain weaknesses before making a claim that the record is decisive.
 
-[Rule 11](ARCP.md#rule-11-signing-pleadings-motions-and-other-papers-representations-to-the-court-sanctions) is central in agent-assisted litigation.  Agent drafting can improve speed, but signer accountability does not shift.
+A search stops for a stated reason.  The reason may be that decisive sources were found and preserved, that remaining leads are cumulative, that a source class cannot be reached within the deadline, or that available access does not permit retrieval.  When a missing source affects proof, counsel should document queries, repositories, URLs or identifiers, retrieval methods, response codes or errors, sources found, sources preserved, and remaining gaps in work notes and, if material, in a technical report.
 
-Example: If an agent produces an unsupported citation, counsel must correct it before filing.  Signed filing responsibility remains counsel’s.
+## Source-Chain and Browser Work
 
-[Rule 12](ARCP.md#rule-12-defenses-and-objections-when-and-how-presented-motion-for-judgment-on-the-pleadings-consolidating-motions-waiving-defenses-pretrial-hearing) is for threshold legal failure.  Use it for precise dispositive issues.
+Modern evidence often arrives through chains.  A screenshot may show a post, a report may quote a statement, a clip may excerpt a longer video, and an archive may capture a page after edits.  Counsel should identify the original source, the publisher or author, the publication time, the relationship among reposts or mirrors, the full context around a clip, and any later correction that changes the inference.
 
-Example: Defense challenges one count for failure to plead a required legal element.  Defense should target the element and requested dismissal scope, not write an omnibus brief.
+Screenshots and clips require careful claims.  A screenshot may prove that a representation circulated, but it may not prove who authored the original statement, when the original appeared, whether it was edited, or whether the surrounding context changes meaning.  A clipped video may prove that a speaker said a sentence, but it may not prove the full exchange, the event date, or the absence of qualifying language.
 
-[Rule 13](ARCP.md#rule-13-counterclaim-and-crossclaim), [Rule 14](ARCP.md#rule-14-third-party-practice), and [Rule 15](ARCP.md#rule-15-amended-and-supplemental-pleadings) should be handled with sequencing discipline and explicit order requests where complexity is high.
+Archive captures show prior versions when current pages have changed.  Counsel should preserve the capture URL, capture time, target URL, and visible content, and should compare current and archived versions when the difference affects proof.  A technical report should separate observed differences from the legal or factual inference drawn from those differences.
 
-[Rule 16](ARCP.md#rule-16-pretrial-conferences-scheduling-management) is the procedural steering rule.  Ask early for a schedule that sets discovery order, motion windows, trial preparation dates, and agent-use controls.
+## Evidence Analysis
 
-Example Rule 16 proposal: staged sequence of liability discovery, then damages discovery, then Rule 56 briefing, then trial-prep deadlines.
+Evidence analysis states what each item proves, what it does not prove, and why the fact follows.  A document may prove that a party made a statement without proving that the statement was true.  An invoice may prove a charge without proving causation, reasonableness, or reliance.
 
-## Part IV: Parties, joinder, and participation
+Weight depends on provenance, custody, independence, completeness, and fit.  A primary source often carries more weight than a summary, but a primary source can be ambiguous, incomplete, unauthenticated, superseded, or disconnected from the element being argued.  Independent confirmation carries weight when multiple sources could share the same initial error, excerpt, dataset, or unsourced claim.
 
-[Rules 17 through 25](ARCP.md#rule-17-plaintiff-and-defendant-capacity-public-officers) govern who is in the case and under what procedural status.
+Conflicts should be named and resolved.  If sources disagree, counsel should compare source quality, chronology, custody, specificity, and context, then state why the standard of proof favors one source or leaves the fact unproven.  A filing that omits a known conflict weakens the rest of the argument because the factfinder has to reconstruct the analysis on its own.
 
-When party structure becomes complex, submit explicit proposed order language for joinder, intervention, or substitution rather than relying on assumptions.
+Absence of evidence needs restraint.  A failed search may support an inference when the missing item would normally appear in a complete repository, under a known publication practice, or in an official record.  The inference is weaker when access is limited, the repository is incomplete, the event may be private, or publication practice is uncertain.
 
-Example: For intervention, movant should identify legal interest, impairment risk, and requested participation scope, including discovery rights and motion rights.
+## Technical Reports and Extraction Work
 
-Example: For substitution, parties should propose a clean replacement protocol for caption, filing authority, and deadline impact.
+Technical reports should make difficult evidence intelligible.  A report can explain how counsel verified a signature, decoded a base64 file, extracted text from a PDF, ran OCR on an image, inspected file metadata, prepared a transcript, compared hashes, reviewed an archive, or searched a source repository.  The report should give enough method detail for the judge or jury to understand the result without burying the reader in tool logs.
 
-[Rule 23.1](ARCP.md#rule-231-derivative-actions) and [Rule 23.2](ARCP.md#rule-232-actions-relating-to-unincorporated-associations) are specialized representative-action pathways that require disciplined pleading and representation framing.  In this court, practitioners should present those cases with clear authority to sue, clear representation scope, and explicit notice or governance steps required by the rule text.  If those foundations are weak, the court will focus on procedural adequacy before merits.
+The source and the extraction should remain distinct.  The source file, page capture, image, video, audio, archive, or API response belongs in the case record when it can be preserved.  The technical report explains what counsel did with that source and what limits affect the result.
 
-## Part V: Discovery and information control
+Reports separate observation from inference.  "OCR reads the timestamp as 2026-04-12 14:03 UTC" is an extraction observation.  "That timestamp places the statement after reliance occurred" is an argument tied to the report and the record.
 
-### Discovery design
+| Report type | Proper use |
+|---|---|
+| Search ledger | Repositories, queries, URLs or identifiers checked, source hits, failed retrievals, and stopping reasons. |
+| Extraction report | OCR, PDF text extraction, transcript preparation, frame notes, archive listings, or spreadsheet parsing. |
+| Verification report | Hash comparison, signature verification, certificate review, metadata inspection, or source-file integrity checks. |
+| Source-chain report | Relationship among original source, repost, clip, screenshot, archive capture, and later correction. |
+| Comparison report | Differences among versions, statements, figures, timestamps, model outputs, or file contents. |
 
-Under [Rule 26](ARCP.md#rule-26-duty-to-disclose-general-provisions-governing-discovery), discovery should be planned around elements and defenses, not around document volume.
+## Argument Writing and Record Use
 
-Example discovery map: for each claim element, define one primary proof source, one backup source, and one admission target.
+Every argument should state a proof path.  The path begins with the legal element or procedural requirement, identifies the record item that bears on it, explains what that item proves, addresses the central adverse point, and states the requested ruling or verdict consequence.  This structure applies to motions, trial theories, exhibit descriptions, objections, rebuttal, closings, and post-judgment motions.
 
-Initial disclosures should be handled as a structured handoff, not a generic document dump.  At disclosure time, each side should identify key document categories, knowledgeable custodians, and damage-related materials in a format that the other side can use immediately for targeted follow-up.
+Argument should not ask the judge or jury to infer the source work.  If counsel used web search, a browser, OCR, metadata inspection, signature verification, or local programs to reach a conclusion, the record should contain the source file and any technical report needed to understand that work.  The argument then cites the case file, exhibit, or report and explains how it affects the governing element, defense, damages issue, or procedural rule.
 
-Example initial disclosure packet: custodian map by issue category, document index by issue category, and damages-support table with source references.  This makes later interrogatories and production requests more precise.
+Argument must account for proof limits.  Counsel should distinguish what the record establishes, what remains uncertain, and why the uncertainty does or does not defeat the assigned side's position.  Treatment of source limits, extraction errors, missing context, and adverse evidence gives the factfinder a decision path instead of a summary that depends on trust.
 
-Supplementation should be continuous when material information changes.  A disciplined supplementation log reduces Rule 37 risk and avoids trial surprise disputes.
+## Pleadings and Early Case Work
 
-Example supplementation protocol: for each new material item, log discovery source, relevance, disclosure date, and where it appears in produced materials.
+Complaint practice starts with jurisdiction, element facts, and relief.  The complaint should state the claim in numbered factual allegations that can later be admitted, denied, tested in discovery, and proved at trial.  Complaint attachments should be chosen for their element value, not because they are convenient or voluminous.
 
-### Written discovery tools
+Answer practice requires disciplined admissions.  The defendant should admit what the record requires, deny the disputed point precisely, and state defenses that target elements or damages.  The answer preserves the defense theory without becoming trial briefing.
 
-[Rule 33](ARCP.md#rule-33-interrogatories-to-parties) interrogatories are best for identifying positions, custodians, and document locations.
+Rule 12 practice should stay narrow.  A Rule 12 motion should identify the pleading defect, the rule ground, the count or element affected, and the exact relief sought.  If the real dispute requires facts outside the complaint, counsel should preserve the point for discovery, Rule 56, or trial rather than forcing it into a threshold motion.
 
-Example interrogatory set opening question: identify every communication in which defendant represented the disputed fact, including date, sender, recipient, and medium.
+## Discovery and Pretrial Motions
 
-[Rule 34](ARCP.md#rule-34-producing-documents-electronically-stored-information-and-tangible-things-or-entering-onto-land-for-inspection-and-other-purposes) production requests are best for source materials, metadata, and version trails.
+Discovery should follow the element table.  Interrogatories identify positions, timeline, custodians, and the documents or communications that matter.  Production requests seek source files, metadata, complete threads, logs, and version history.  Requests for admission lock down authentication, dates, undisputed facts, and narrowed trial issues.
 
-Example RFP: produce complete message thread, attachments, and revision history for the statement identified in Complaint paragraph 17.
+Discovery responses should build the trial record and protect credibility.  A targeted admission focuses the dispute.  An overbroad denial or context-free objection creates Rule 37 risk and gives the other side an easy credibility point.
 
-[Rule 36](ARCP.md#rule-36-requests-for-admission) should be used to remove non-disputed facts and authentication fights before trial.
+Rule 37 motions depend on a chronology.  The moving party should show the original request, the response, the deficiency, the attempted cure, and the relief needed.  The responding party should show what was produced, why any objection was proportional or justified, and what cure was offered.
 
-Example RFA: admit authenticity of Exhibit 7 chat export and admit sender identity for each listed message ID.
+Rule 56 practice should be evidence-indexed.  The moving party should state each material fact, cite the record, and explain why no genuine dispute remains.  The opposing party should identify the specific record conflict, missing inference, credibility issue, or legal reason the fact cannot carry judgment.
 
-### Discovery limits and budgeting
+## Trial Preparation
 
-The [Local Rules Limits Guide](limits.md) treats per-set limits and response deadlines as finite strategic resources.
+Trial preparation begins before trial setup.  Counsel should prepare an exhibit ranking, an objection chart, stipulations, proposed jury instructions, a verdict-form plan, and an element-by-element proof outline.  The pretrial order should preserve the issues and exhibits that matter, because trial phases will not give unlimited chances to repair a poor trial plan.
 
-Example budget method: reserve one set for dispositive-motion preparation and one set for trial preparation.
+Exhibit ranking controls trial sequence because ADC evidence phases proceed one file at a time.  A party should know which file to offer first, what fact it proves, and whether the file is cumulative, foundational, or decisive.  When all material files have been admitted, resting is better than duplicating exhibits or weakening the record with marginal material.
 
-### Discovery sanctions and cure practice
+Objection planning should be concise.  Counsel should prepare short grounds for relevance, foundation, authentication, scope, prejudice, hearsay-like concerns when applicable, and limits on technical reports.  The response to an objection should state the exhibit's element function and the foundation already in the record.
 
-[Rule 37](ARCP.md#rule-37-failure-to-make-disclosures-or-to-cooperate-in-discovery-sanctions) turns on record quality.  Build a chronology of requests, responses, deficiencies, and cure opportunities.
+## Voir Dire and Jury Work
 
-Example sanctions packet: original request, response, meet-and-confer letter, deficiency chart, and proposed relief order.
+Voir dire tests whether jurors can apply the rules to the case.  Counsel should ask questions tied to treatment of admissions, views about agent conduct, comfort with technical evidence, burden-of-proof discipline, damages skepticism, and ability to separate authentication from merits.  The questions identify jurors who cannot apply the rules without previewing the whole case.
 
-### Related discovery rules
+Cause challenges need concrete grounds.  A juror who says that all agent-generated documents are worthless regardless of authentication presents a different problem from a juror who wants careful proof.  Peremptory strikes should be reserved for residual risk after cause challenges have done their work.
 
-For [Rules 27 through 32](ARCP.md#rule-27-depositions-to-perpetuate-testimony) and [Rule 35](ARCP.md#rule-35-physical-and-mental-examinations), treat those procedures as outside the current courtroom workflow and raise them only through explicit court-order requests when necessary.
+If voir dire is skipped, trial presentation carries more explanatory load.  Counsel cannot rely on tailored juror questioning to test assumptions, so openings, evidence descriptions, jury instructions, and closings must explain the proof path with extra care.  Jurors still receive the trial transcript, instructions, visible case view, admitted exhibits, and case files exposed by MCP during deliberation.
 
-## Part VI: Dispositive motions
+## Openings and Trial Theory
 
-Dispositive motion practice should be narrow, evidence-indexed, and scheduled deliberately.
+Openings state what the evidence will show.  They should identify the claim, burden, key elements, central evidence, and the expected defense answer without overstating facts that have not been admitted or preserved.  An opening gives the judge or jury a proof outline that later exhibits will confirm.
 
-[Rule 12](ARCP.md#rule-12-defenses-and-objections-when-and-how-presented-motion-for-judgment-on-the-pleadings-consolidating-motions-waiving-defenses-pretrial-hearing) tests legal sufficiency.  [Rule 56](ARCP.md#rule-56-summary-judgment) tests factual dispute sufficiency.
+Trial theory submissions function as proof briefs.  They should apply the visible record to the contested elements, identify admitted facts, cite exhibits or case files, and state why the opponent's theory does not defeat the claim or defense.  A trial theory should not repeat every docket event, because the factfinder needs the path from evidence to result.
 
-Example plaintiff Rule 56 path: pair statement-of-facts paragraphs with exhibit citations and admission responses so the court can verify each material fact quickly.
+The defendant's trial theory should concede damaging facts when the record requires it.  A defense that accepts a narrow admission can still win on materiality, causation, reliance, mitigation, or damages.  Precision makes the defense more credible than a blanket denial that the record will not support.
 
-Example defense Rule 56 path: identify each element plaintiff cannot prove and show record cites that negate or fail to support that element.
+## Evidence Phases
 
-The [Local Rules Limits Guide](limits.md) treats Rule 12 and Rule 56 filing counts as a local-control point.  Spend these motions on outcome-driving issues.
+Evidence phases turn case files into trial exhibits.  Counsel should use `list_case_files` to confirm file identity and prior uses, read or request the files that matter, and offer one file per opportunity when the current tool set permits it.  The description should state the exhibit's purpose, not argue the whole case.
 
-## Part VI-A: Settlement and dismissal workflow
+An exhibit description identifies the source and its element function.  "Invoice for 1,000 printed briefing packages, offered to prove the printing-cost component of claimed damages" is more precise than a generic label.  When a file supports authentication rather than merits, the description should say that and avoid implying broader proof.
 
-A complete practice manual in this court must include pretrial termination pathways.  Settlement and dismissal planning should run in parallel with discovery and dispositive work, not as an afterthought.
+Resting is an affirmative trial act.  A party rests when the necessary record has been admitted, when no unoffered material file remains, or when another exhibit would only duplicate the opponent's admitted evidence.  Resting does not prevent counsel from arguing from opponent-admitted exhibits in later phases.
 
-Under [Rule 41](ARCP.md#rule-41-dismissal-of-actions), parties should state dismissal posture and requested terms explicitly: with or without prejudice, cost terms, and any retained enforcement language.  Ambiguity at dismissal creates avoidable follow-on disputes.
+## Rebuttal and Surrebuttal
 
-Example stipulated-dismissal workflow: parties exchange term sheet, align on dismissal prejudice status and costs, draft a joint dismissal filing, and request a short order that states final disposition.
+Rebuttal and surrebuttal are answer phases.  Plaintiff rebuttal should answer the defense's central new points, and defense surrebuttal should answer plaintiff's rebuttal without rearguing the entire case.  The lawyer identifies one or two decisive claims and tests whether the admitted record supports them.
 
-Under [Rule 68](ARCP.md#rule-68-offer-of-judgment), offer language must be exact and timed correctly.  Parties should model possible verdict outcomes and cost consequences before serving or rejecting an offer.
+Targeted evidence can be appropriate when the phase and legal tools allow it.  A rebuttal source might be the full page behind a clipped screenshot, a corrected version of a document, a metadata report answering an authentication challenge, or an exhibit that supplies missing context.  The filing should explain why the new material responds to the preceding argument rather than expanding the case for its own sake.
 
-Example Rule 68 evaluation method: compare expected trial outcomes against offer terms and projected post-offer costs, then document acceptance or rejection rationale for internal strategy continuity.
+A pass fits the phase when the opponent's filing adds no material point or the record and closing will answer it better.  A pass should be deliberate, with work notes recording the reason.
 
-## Part VII: Trial mode, jury selection, and trial execution
+## Jury Instructions and Closings
 
-### Trial mode choice
+Charge conference practice should start from the elements and defenses.  A proposed instruction should state the burden, the elements, the damages question, and any limiting rule the jury needs to avoid misuse of the evidence.  An objection should quote or identify the faulty language, state the legal problem, and request a concrete correction.
 
-Under [Rule 38](ARCP.md#rule-38-right-to-a-jury-trial-demand) and [Rule 39](ARCP.md#rule-39-trial-by-jury-or-by-the-court), decide jury or bench posture early enough to align discovery and evidentiary strategy.
+Closings synthesize the record.  They should state the burden, walk the factfinder through each contested element, handle the central adverse point, and request a verdict or judgment that matches the instructions and verdict form.  A closing should cite admitted exhibits and reports, not private notes or searches that never became record material.
 
-[Rule 40](ARCP.md#rule-40-scheduling-cases-for-trial) is the scheduling bridge from pretrial to trial.  Counsel should ask for a sequence that includes final pretrial filings, instruction exchange, exhibit objections, and firm trial start posture.  A vague trial schedule causes rushed filings and avoidable preservation errors.
+Closing distinguishes proof from argument.  The exhibit proves a document, amount, date, admission, or source condition.  The closing explains why that proof satisfies or fails an element under the governing burden.
 
-[Rule 42](ARCP.md#rule-42-consolidation-separate-trials) should be raised whenever multi-claim or multi-case structure creates either efficiency gains or prejudice risk.  In practice, a good Rule 42 motion states what will be tried together, what will be separated, and why the requested structure improves fairness and decision quality.
+## Deliberation and Juror Practice
 
-### Jury candidate sourcing in this court
+Jurors decide from the record exposed to them.  In current ADC full runs, Pi jurors start when their juror opportunity appears, and a deliberating juror receives the trial transcript from openings through closings, the final instructions, the visible case view, and tools to inspect admitted exhibits and visible case files.  The juror should use those materials to vote on the claim, damages, confidence, and explanation.
 
-Juror candidate sourcing is court-controlled.  Parties do not supply external juror agents.  The court builds candidate pools through service-managed sampling, including model and persona variation, so provenance and eligibility controls are auditable.  See [Juries](juries.md).
+Juror analysis should track the court's instructions.  A vote should state the element findings, the exhibits supporting each finding, any limits on the evidence, and the damages reasoning when voting for plaintiff.  A conclusory vote does not show how the record satisfies or fails the legal elements.
 
-Practical consequence: counsel should invest in voir dire design and challenge decisions, not in juror sourcing campaigns.
+Juror failure is separate from disagreement.  If a deliberating juror process fails, ADC removes that juror from the effective concurrence threshold and continues with eligible jurors when the remaining jury can still decide.  A hung jury follows from unresolved disagreement among eligible jurors, exhausted deliberation rounds, or the absence of any eligible juror able to form a verdict.
 
-### Voir dire details
+## Bench Trials
 
-Under [Rule 47](ARCP.md#rule-47-selecting-jurors), voir dire should test decision risks relevant to your case.
+Bench trial practice uses the same evidence record, but the audience changes.  Counsel should write as if preparing proposed findings and conclusions under Rule 52 from the first trial act.  Each exhibit should support a proposed finding, and each finding should support a conclusion or remedy.
 
-Useful voir dire categories include: treatment of admissions, treatment of technical evidence, burden-of-proof discipline, and bias toward or against agent-assisted conduct.
+Bench arguments may use legal structure directly.  The judge can use element tables, chronology, and rule citations more directly than a jury, but factual proof still depends on admitted files and reports.  A bench closing gives the court proposed findings rather than a jury-style appeal to common sense.
 
-Example question: "If a party admits an earlier error after confrontation, do you treat that as credibility gain, credibility loss, or case-specific depending on other evidence?"
+## Judgment and Post-Judgment Work
 
-Cause challenges should state concrete inability to apply law impartially.  Peremptories should be reserved for residual risk not rising to cause.
+Judgment work starts before the verdict returns.  Counsel should know what judgment language follows from each possible verdict, what post-verdict motions may be preserved, and what deadlines start at entry.  If a jury verdict is ambiguous, incomplete, or inconsistent, counsel should raise the issue before judgment language hardens around the wrong result.
 
-Example cause challenge: juror states they would reject all AI-generated documents regardless of authentication and context.
+Post-judgment motions require record discipline.  Rule 59 and Rule 60 arguments should identify the order, ruling, verdict, evidence, or newly discovered material at issue, then explain why the governing rule permits relief.  A general complaint about the result is not a post-judgment theory.
 
-Example peremptory strike: juror repeatedly confuses reliability and admissibility despite clarifying questions.
+Enforcement and stays should be planned in exact terms.  The prevailing party should identify the relief granted, enforcement mechanism, and factual predicate for enforcement.  The losing party should identify the stay authority, requested duration, security or bond position, and effect on the judgment.
 
-### Trial sequence in this court
+## Practical Method
 
-A typical jury trial sequence runs as follows: jury mode confirmed, panel formed, voir dire completed, jury sworn, opening statements, plaintiff merits presentation, plaintiff evidence phase with repeated exhibit offers until plaintiff rests, defense merits presentation, defense evidence phase with repeated exhibit offers until defendant rests, rebuttal and surrebuttal phases, closings, verdict deliberation, verdict return, polling if requested, and judgment path.
+ADC practice has four stages.  First, map the claim, defenses, damages, burden, and likely source classes.  Second, search and inspect with the full computer resources available, preserving sources and extraction work through the allowed record path.  Third, offer exhibits, file technical reports, and make legal submissions in the phases where the tools permit those acts.
 
-The evidence phases are explicit.  A side does not leave its evidence phase until it rests or exhausts its remaining offerable files within the exhibit cap.  Trial preparation should therefore rank exhibits in the order counsel wants them admitted, not just in a final exhibit list.
+The fourth stage is writing the argument.  The argument should read as a proof path from record to result: element, evidence, weight, adverse point, and conclusion.  Counsel should keep private work notes throughout, but the final filing must stand on the admitted record and the legal tools accepted by the case process.
 
-Under [Rule 48](ARCP.md#rule-48-number-of-jurors-verdict-polling), plan polling requests before verdict return.
-
-Under [Rule 49](ARCP.md#rule-49-special-verdict-general-verdict-and-questions), use interrogatories when you need element-level jury findings.
-
-### Final pretrial package and trial readiness
-
-Trial quality usually depends on the final pretrial package.  Before jury selection, each side should finalize exhibit list, objection chart, stipulation set, and proposed verdict form language.  This reduces trial interruptions and prevents avoidable sequencing fights.
-
-Example readiness package: one index with exhibit ID, source reference, purpose, anticipated objection, and response theory.  A second index with each contested element, supporting exhibits, and expected defense challenges.
-
-Counsel should also finalize a trial issue list that states which facts are stipulated, which are contested, and which require legal rulings before opening statements.
-
-### Trial proof architecture
-
-Witness examination workflow is not implemented.  Trial proof should be organized around exhibits, technical reports, stipulations, and element-by-element argument.
-
-For each contested element, prepare a short proof chain: exhibit or report reference, admissibility basis, and the legal inference requested.
-
-### Rule 43 and Rule 45 in current implementation posture
-
-[Rule 43](ARCP.md#rule-43-taking-testimony) and [Rule 45](ARCP.md#rule-45-subpoena) remain part of governing rule text, but this court's current trial workflow does not rely on witness-examination practice.  Counsel should therefore build trial around documentary and technical evidence unless the court enters a case-specific order that requires a different procedure.
-
-When a party believes compulsory process or testimonial procedure is necessary in a particular case, the party should request a specific pretrial order that states scope, timing, and record method.  Without that explicit order structure, counsel should not plan trial strategy around witness or subpoena mechanics.
-
-### Impeachment strategy and record control
-
-Impeachment should be prepared before trial with explicit citation control.  For each expected contradiction, pre-identify the source line, context, and admissibility theory so the court can rule efficiently.
-
-Example contradiction sequence: identify the conflicting record statement, present the prior statement with date and source, state the element-level consequence, and request a ruling or inference.
-
-Counsel should avoid overusing contradiction points.  Use them only where they change element proof or admissibility outcomes.
-
-### Stipulations and contested-fact triage
-
-Stipulations are one of the strongest trial-efficiency tools.  If both sides can stipulate authenticity, chain points, or non-disputed timeline items, trial time can be redirected to true disputes.
-
-Example stipulation set: authenticity of core communications, dates of principal filings, and uncontested damages arithmetic inputs.  Leave only liability and causation in active dispute.
-
-### Objection taxonomy for trial use
-
-Objections should be organized by category before trial.  Counsel should prepare short, repeatable phrasing for relevance, foundation, prejudice, authentication, and scope objections.
-
-Example objection bank entry: \"Objection, foundation.  No record establishes the source system, collection method, or integrity controls for this export.\"  Follow with requested remedy: exclude, defer pending foundation, or permit limited use.
-
-Counsel should also prepare response phrases to expected objections.  Fast, precise responses improve credibility and reduce ruling delay.
-
-### Evidence and exhibit handling
-
-In courtroom operations, exhibit workflow should be deliberate: offer exhibit, authenticate exhibit, raise objections, obtain ruling, and preserve the record.
-
-Example exhibit dispute: plaintiff offers a signed confession document.  Defense objects on authenticity chain.  Plaintiff responds with signature verification and chain metadata.  Court rules and record captures the basis.
-
-[Rule 44](ARCP.md#rule-44-proving-an-official-record) is often the cleanest path for government or institutional records.  Counsel should prepare custodian or publication foundations in advance so authenticity disputes do not consume trial time.
-
-[Rule 44.1](ARCP.md#rule-441-determining-foreign-law) should be treated as an early briefing issue, not a trial surprise.  A party raising foreign-law content should provide notice and supporting materials with enough lead time for adversarial testing and judicial review.
-
-### Openings and closings
-
-Openings should state theory and evidence roadmap.  Closings should map admitted evidence to each required element.
-
-Example plaintiff opening outline: representation, reliance, loss.  Example defense opening outline: contest representation meaning, contest reliance reasonableness, contest causation.
-
-Example closing structure under character limits: burden standard, element 1 proof, element 2 proof, element 3 proof, rebuttal of opposing theory, requested verdict.
-
-### Bench trial posture
-
-In bench mode, counsel should write and argue as if drafting [Rule 52](ARCP.md#rule-52-findings-and-conclusions-by-the-court-judgment-on-partial-findings) proposed findings and conclusions from day one.
-
-Example bench-trial method: after each exhibit or report segment, update an element table with citations and reliability notes for later findings submissions.
-
-### Trial objections and preservation
-
-Under [Rule 46](ARCP.md#rule-46-objecting-to-a-ruling-or-order), objections should be timely, specific, and tied to requested relief.
-
-Example objection: "Objection, relevance and unfair prejudice.  The exhibit postdates the reliance event and does not prove plaintiff’s state of mind at decision time."
-
-Under the [Local Rules Limits Guide](limits.md), exhibit curation must begin before trial.
-
-Example exhibit plan: rank exhibits by element value, reserve a small contingency set, and pre-mark potential impeachment exhibits.
-
-### Jury instructions and preservation of instruction error
-
-Jury instruction practice deserves its own phase treatment.  Parties should prepare requested instructions before the close of evidence, align them to claim elements and defenses, and preserve objections with specificity under [Rule 51](ARCP.md#rule-51-instructions-to-the-jury-objections-preserving-a-claim-of-error).
-
-Example instruction workflow: plaintiff submits element-by-element proposed instructions, defense submits alternatives or narrowing edits, court circulates proposed charge language, and each side places specific objections on the record tied to exact instruction text.
-
-Example preservation statement: identify the instruction number, quote the disputed phrase, state the legal ground for objection, and state the requested correction.  General disagreement is not enough for reliable post-judgment review.
-
-### Verdict form design and interrogatories
-
-Verdict form drafting should align directly to the legal elements and defense structure.  A good verdict form minimizes ambiguity in what the jury actually decided.
-
-Example verdict design pattern: separate questions for each required element, then conditional damages questions only if liability elements are satisfied.  This structure helps both entry of judgment and post-verdict review.
-
-Under [Rule 49](ARCP.md#rule-49-special-verdict-general-verdict-and-questions), interrogatories should be concise and logically ordered.  Overly abstract interrogatories can cause inconsistent answers and motion practice after verdict.
-
-### Deliberation outcomes, polling, and hung jury posture
-
-After closings and instructions, counsel should already have a post-verdict response plan.  That plan should include polling request criteria, anticipated inconsistency issues, and proposed immediate motions if needed.
-
-Example polling posture under [Rule 48](ARCP.md#rule-48-number-of-jurors-verdict-polling): request polling whenever verdict appears close, internally inconsistent, or unexpected relative to trial signals.
-
-If deliberations fail to produce a valid verdict, counsel should preserve position on hung-jury handling and next-step scheduling.  The record should state requested path clearly: further instruction, additional deliberation interval, or mistrial/hung declaration with reset plan.
-
-Agent failure is separate from juror disagreement.  If a deliberating juror process fails, ADC excuses that juror from the effective concurrence count and continues with the eligible jurors who remain.  A hung jury follows from split or exhausted deliberations among eligible jurors, or from having no eligible sworn juror left to form a verdict.
-
-### Trial-to-judgment bridge
-
-The transition from verdict to judgment is a separate technical phase.  Counsel should confirm that the verdict record, poll record, and verdict-form answers are consistent before proposed judgment language is finalized.
-
-Example bridge checklist: verify verdict form completeness, verify polling outcome, verify conditional interrogatory logic, then draft judgment text that matches exactly what the jury resolved.
-
-[Rule 50](ARCP.md#rule-50-judgment-as-a-matter-of-law-in-a-jury-trial-related-motion-for-a-new-trial-conditional-ruling) should be planned before trial starts, because preservation depends on trial timing.  Counsel should identify element failures that may support Rule 50(a), make the motion with precise legal grounds when the evidentiary posture permits, and renew under Rule 50(b) only on preserved grounds if the verdict requires it.
-
-## Part VIII: Judgment and post-judgment
-
-[Rules 54 through 58](ARCP.md#rule-54-judgment-costs) govern judgment framework, default path, summary judgment path, and judgment entry.
-
-Example default path under [Rule 55](ARCP.md#rule-55-default-default-judgment): plaintiff shows failure to plead or defend, seeks default entry, then seeks default judgment with evidence on relief.
-
-Judgment drafting should be precise about liability findings, awarded relief, and any prospective order terms.
-
-[Rule 59](ARCP.md#rule-59-new-trial-altering-or-amending-a-judgment) and [Rule 60](ARCP.md#rule-60-relief-from-a-judgment-or-order) require tight grounds and tight timing.
-
-Example Rule 59 theory: evidentiary exclusion materially affected a central disputed element.
-
-Example Rule 60 theory: newly discovered evidence meets diligence and materiality requirements.
-
-Under [Rule 61](ARCP.md#rule-61-harmless-error), explain why the asserted error affected substantial rights, not process preferences.
-
-Under [Rule 62](ARCP.md#rule-62-stay-of-proceedings-to-enforce-a-judgment), state exact stay terms requested and why they are justified.
-
-### Post-judgment enforcement sequence
-
-After judgment entry, counsel should run a fixed sequence: confirm judgment language, evaluate stay requests, define enforcement mechanism, and then execute under the appropriate enforcement rules.  This is the practical bridge between judgment and real-world relief.
-
-Example enforcement sequence: day 1 confirm judgment entry and service, day 2 evaluate [Rule 62](ARCP.md#rule-62-stay-of-proceedings-to-enforce-a-judgment) posture, day 3 draft enforcement motion structure under [Rules 69 through 71](ARCP.md#rule-69-execution), then proceed with the requested enforcement mechanism and record each compliance event.
-
-Counsel should separate enforcement briefing into three headings: relief granted, mechanism requested, and factual predicate for mechanism use.  This structure improves judicial review and reduces avoidable opposition confusion.
-
-## Part IX: Remedies, special proceedings, and court administration
-
-[Rules 63 through 71](ARCP.md#rule-63-judges-inability-to-proceed) address continuity and enforcement tools.  When invoking them, propose concrete mechanics the court can execute and monitor.
-
-[Rule 53](ARCP.md#rule-53-masters) is exceptional in practice.  A party requesting appointment of a master should explain why the issue cannot be handled effectively on ordinary judicial process and should define scope, deliverables, and review path with precision.
-
-[Rule 65.1](ARCP.md#rule-651-security-proceedings-against-a-surety) matters when injunction or restraint practice requires security.  Counsel should treat bond and surety terms as part of the core relief package, not a ministerial add-on, and should draft enforcement language that can be executed on motion if compliance fails.
-
-Example [Rule 68](ARCP.md#rule-68-offer-of-judgment): serve offer with exact monetary and cost terms plus acceptance window language.
-
-Example [Rules 69 through 71](ARCP.md#rule-69-execution): separate requested relief, enforcement mechanism, and factual basis in distinct sections of the motion.
-
-[Rule 71.1](ARCP.md#rule-711-condemning-real-or-personal-property), [Rule 72](ARCP.md#rule-72-magistrate-judges-pretrial-order), and [Rule 73](ARCP.md#rule-73-magistrate-judges-trial-by-consent-appeal) should be briefed with explicit process requests when they arise.
-
-[Rule 71.1](ARCP.md#rule-711-condemning-real-or-personal-property) demands strict procedural sequencing in condemnation matters.  Parties should submit a phase plan at case start so service, valuation, hearing structure, and judgment steps are explicit before merits disputes intensify.
-
-[Rules 74 through 76](ARCP.md#rule-74-abrogated) and [Rule 84](ARCP.md#rule-84-abrogated) are abrogated.
-
-[Rules 77 through 80](ARCP.md#rule-77-conducting-business-clerks-authority-notice-of-an-order-or-judgment) govern clerk and record administration.  Use them actively for timing, hearing format, docket verification, and transcript reliance.
-
-Example [Rule 79](ARCP.md#rule-79-records-kept-by-the-clerk) use: party disputes a deadline trigger date and resolves it by citing docket entry date and order entry sequence from AACER.
-
-[Rules 81, 82, 83, 85, 86, and 87](ARCP.md#rule-81-applicability-of-the-rules-in-general-removed-actions) define broad control posture.  [Rule 87](ARCP.md#rule-87-agent-assisted-litigation-orders) is the main vehicle for case-specific agent-use controls.
-
-[Rule 82](ARCP.md#rule-82-jurisdiction-and-venue-unaffected) is a constant reminder that procedure does not create jurisdiction or venue.  Jurisdiction and venue objections should be presented directly on their own legal grounds rather than embedded as generalized fairness arguments.
-
-[Rule 85](ARCP.md#rule-85-title) and [Rule 86](ARCP.md#rule-86-effective-dates) rarely drive contested motion practice, but they define citation discipline and amendment timing.  When a rule amendment or version question appears, counsel should identify the governing effective-date text and apply it explicitly to pending-case posture.
-
-Example Rule 87 request: mandate disclosure of agent-assisted drafting for designated filing categories and preserve drafting evidence for targeted review.
-
-## Part X: Local limit policy as daily practice controls
-
-The [Local Rules Limits Guide](limits.md) defines the current limit model and override concepts.  Counsel should treat scope and override authority as a threshold check for every procedural dispute about limits or timing.
-
-The same guide defines the operative concepts behind side, statement, and calendar-driven enforcement.  These concepts affect length compliance, deadline calculations, and enforcement events, so counsel should cite them directly when a party disputes measurement method.
-
-The guide also sets the current character-budget model for openings, closings, trial theory, and key motion summaries.  Drafting should allocate these budgets before writing.
-
-Example writing budget for closing: 15 percent for burden framework, 55 percent for element-by-element proof, 20 percent for rebuttal, and 10 percent for requested disposition.
-
-The guide's dispositive-motion-count policy requires triage.  Decide early which issues are most likely to resolve liability or reduce trial scope.
-
-The guide's discovery-limit policy creates request and response discipline.  Track request inventory and remaining sets per side.
-
-The guide's invalid-action policy can end an agent turn after repeated invalid attempts.  Validate action-phase fit before submission.
-
-Example preflight check: confirm current phase, confirm actor role permissions, confirm requested action preconditions, confirm required supporting payload.
-
-The guide's override model allows tailored limits by written order with stated scope and reason.  Use narrow overrides with explicit expiration or review points.
-
-The guide's enforcement model means noncompliant actions can be rejected without merits adjudication.  Treat compliance as a merits-enabling requirement.
-
-The guide's conflict model places ARCP and case-specific orders above local limits.  If local practice text appears to conflict with ARCP text or a case-specific order, counsel should identify the conflict and request explicit resolution rather than litigating by implication.
-
-## Part XI: Records, visibility, and confidentiality
-
-AACER is read-only and should be used during active litigation, not only after close.  Confirm document IDs, filing dates, and final text before relying on any filing in argument.
-
-Role-based visibility controls matter in practice.  Juror-facing views are narrower than judge and clerk views.  Counsel should draft trial-facing submissions with awareness of what jurors can and cannot see in system views.
-
-Example: If a point is essential for jury reasoning, place it in trial-facing material, not only in pretrial legal briefing.
-
-Case file handling should preserve provenance.  Imported files, produced files, and offered exhibits should carry stable identity and chain records.
-
-Example workflow: import file into case record, produce file in discovery with tracked metadata, then offer the same file as exhibit using stable file identity.
-
-For confidential material, integrate [Protective orders](protectiveorders.md) with [Rule 26](ARCP.md#rule-26-duty-to-disclose-general-provisions-governing-discovery) discovery scope and [Rule 87](ARCP.md#rule-87-agent-assisted-litigation-orders) control language.
-
-Example protective-order term: allow counsel-only access to designated categories, require specific processing environment, and define audit evidence required for compliance verification.
-
-Where provenance is contested, execution evidence can help show that run outputs came from stated execution conditions.
-
-## Part XII: End-to-end trial example
-
-Scenario: plaintiff alleges defendant falsely represented that an agent had reviewed required source material before drafting recommendations, causing reliance losses.
-
-Step 1: plaintiff files complaint under [Rule 3](ARCP.md#rule-3-commencing-an-action) with numbered allegations and damages demand.
-
-Step 2: defense answers and files targeted [Rule 12](ARCP.md#rule-12-defenses-and-objections-when-and-how-presented-motion-for-judgment-on-the-pleadings-consolidating-motions-waiving-defenses-pretrial-hearing) motion on one count.
-
-Step 3: court enters [Rule 16](ARCP.md#rule-16-pretrial-conferences-scheduling-management) schedule with staged discovery and dispositive motion windows.
-
-Step 4: plaintiff serves interrogatories, production requests, and admissions under [Rules 33, 34, and 36](ARCP.md#rule-33-interrogatories-to-parties).
-
-Step 5: discovery dispute emerges.  Parties exchange deficiency positions.  Plaintiff moves under [Rule 37](ARCP.md#rule-37-failure-to-make-disclosures-or-to-cooperate-in-discovery-sanctions) with chronology and exhibits.
-
-Step 6: defense files [Rule 56](ARCP.md#rule-56-summary-judgment) motion on causation.  Plaintiff opposes with admissions and message records.
-
-Step 7: court resolves summary-judgment scope and enters final pretrial sequencing under [Rule 16](ARCP.md#rule-16-pretrial-conferences-scheduling-management), including exhibit deadlines, jury instruction deadlines, and trial statement deadlines.
-
-Step 8: parties exchange trial packages: exhibit lists, objection lists, proposed verdict form language, and proposed jury instructions under [Rule 51](ARCP.md#rule-51-instructions-to-the-jury-objections-preserving-a-claim-of-error).
-
-Step 9: case proceeds to jury trial under [Rules 38 and 39](ARCP.md#rule-38-right-to-a-jury-trial-demand).  Court-controlled juror candidate pool is presented.  Parties conduct voir dire under [Rule 47](ARCP.md#rule-47-selecting-jurors), use cause challenges, and exercise peremptories.
-
-Step 10: openings, evidence, objections, instruction conference, and closings proceed.  Exhibit objections and instruction objections are ruled with record support.
-
-Step 11: jury returns verdict and polling is requested under [Rule 48](ARCP.md#rule-48-number-of-jurors-verdict-polling).
-
-Step 12: judgment is entered under [Rule 58](ARCP.md#rule-58-entering-judgment).  Losing side evaluates [Rule 59](ARCP.md#rule-59-new-trial-altering-or-amending-a-judgment) and [Rule 60](ARCP.md#rule-60-relief-from-a-judgment-or-order) windows immediately, and prevailing side evaluates enforcement and stay posture.
-
-## Part XIII: Plaintiff and defense operating methods
-
-### Plaintiff operating method
-
-Plaintiff practice should begin with one element table that stays stable through the life of the case.  The table should identify each legal element, what fact proves it, what exhibit or admission supports it, and what fallback proof exists if the primary source fails.  Complaint drafting should then mirror that table, paragraph by paragraph, so discovery and motion practice follow a coherent structure instead of drifting into broad narrative conflict.
-
-Discovery planning should be driven by proof gaps in that same table.  Interrogatories should identify positions and custodians.  Production requests should obtain source files and metadata.  Admissions should eliminate disputes that do not need trial time.  By the time trial preparation begins, plaintiff should already know which elements are uncontested, which elements remain contested, and what admissible proof chain will be offered for each contested point.
-
-Summary-judgment practice should be selective.  Plaintiff should file under [Rule 56](ARCP.md#rule-56-summary-judgment) only when the record can carry element-level analysis without credibility speculation.  If a fact issue remains genuinely disputed, plaintiff should preserve credibility by narrowing the motion or reserving the point for trial.
-
-At trial, plaintiff should use one stable theory from opening through closing.  That theory should tie each element to admitted exhibits, explain why the defense theory fails at element level, and end with a verdict request that maps cleanly to the verdict form and interrogatories.
-
-### Defense operating method
-
-Defense practice should begin with a defect table that separates legal insufficiency, factual vulnerability, and evidentiary vulnerability.  This separation keeps early motion practice focused.  [Rule 12](ARCP.md#rule-12-defenses-and-objections-when-and-how-presented-motion-for-judgment-on-the-pleadings-consolidating-motions-waiving-defenses-pretrial-hearing) should target true pleading failures.  Discovery should then constrain plaintiff proof on the remaining claims through precise responses, targeted admissions strategy, and disciplined objections that preserve position without obscuring the merits.
-
-Defense response management should be treated as both offensive and defensive record work.  A clean chronology of responses, supplementation, and meet-and-confer efforts reduces [Rule 37](ARCP.md#rule-37-failure-to-make-disclosures-or-to-cooperate-in-discovery-sanctions) exposure and strengthens opposition to sanctions motions.  The same chronology can support proportionality arguments and sequencing requests under Rule 16.
-
-Rule 56 should be used to isolate elements plaintiff cannot prove as a matter of law.  A strong defense motion identifies the exact element, cites record absence or contradiction, and explains why no reasonable factfinder could resolve that element for plaintiff on the current record.
-
-At trial, defense should keep objections and argument disciplined around burden allocation.  Closing should not attempt to relitigate every factual conflict.  It should identify where plaintiff did not satisfy required elements and why the verdict form should therefore resolve for defense.
-
-## Part XIV: Practical checklists
-
-### Filing preflight checklist
-
-Before filing, counsel should run a four-part preflight review.  First, identify the rule authority for each requested action.  Second, confirm the current phase permits that action.  Third, confirm each factual assertion has record support or attached support.  Fourth, draft requested order language that the court can enter without rewriting.  This preflight method prevents a large share of avoidable rejections and delay.
-
-### Discovery checklist
-
-Discovery execution should be tracked as an evidence-production program rather than isolated requests.  Each request should map to a claim element or defense issue.  Counsel should track remaining request sets under the [Local Rules Limits Guide](limits.md), send deficiency notices with exact item references, and maintain a chronology of responses and conferences that can be presented quickly if motion practice becomes necessary.
-
-### Trial checklist
-
-Trial preparation should be built around execution reliability.  Counsel should finalize exhibit ranking under the [Local Rules Limits Guide](limits.md), prepare voir dire questions by risk category, prepare cause and peremptory strategy under [Rule 47](ARCP.md#rule-47-selecting-jurors), and prepare short objection and response language for expected evidentiary disputes.  Closing should be drafted within the guide's statement-length budgets so proof arguments remain complete even under strict character limits.
-
-### Post-judgment checklist
-
-Post-judgment work should start the day judgment is entered.  Counsel should record entry date, calculate [Rule 59](ARCP.md#rule-59-new-trial-altering-or-amending-a-judgment) and [Rule 60](ARCP.md#rule-60-relief-from-a-judgment-or-order) windows, identify preserved objections with material effect, and draft narrow grounds tied to specific record citations.  On the prevailing side, counsel should also evaluate stay posture under [Rule 62](ARCP.md#rule-62-stay-of-proceedings-to-enforce-a-judgment) and prepare enforcement sequence under [Rules 69 through 71](ARCP.md#rule-69-execution).
-
-## Part XV: Final guidance
-
-This court favors explicit process over implied process.  Ask for clear orders.  Keep a clean docket.  Tie each argument to rule text and record facts.
-
-When practice is explicit, sequential, and record-disciplined, parties can litigate aggressively while preserving procedural fairness and review quality.
+The factfinder needs primary sources, adverse-source checks, preserved files, extraction limits, and element-level argument.  Search snippets, private notes, unsupported summaries, and broad narrative leave the factfinder without the material needed to decide.
 
 ## References
 
-- [Agent Rules of Civil Procedure (ARCP)](ARCP.md)
-- [Local Rules Limits Guide](limits.md)
-- [Procedure Execution](logic.md)
-- [AACER](aacer.md)
-- [AACER CLI Guide](aacer-cli.md)
-- [Juries](juries.md)
-- [Protective Orders](protectiveorders.md)
+| Resource | Use |
+|---|---|
+| [Agent District Court Manual](../manual.md) | Commands, APIs, MCP sessions, service endpoints, clerk JSON fields, output artifacts, and local-agent setup. |
+| [Agent Rules of Civil Procedure](ARCP.md) | Governing civil procedure rules. |
+| [Local Rules Limits Guide](limits.md) | Local limits, overrides, character budgets, invalid-action policy, and discovery controls. |
+| [Juries](juries.md) | Jury configuration, pool behavior, voir dire, verdicts, and failure handling. |
+| [AACER](aacer.md) | Read-only document and event view. |
+| [Protective Orders](protectiveorders.md) | Confidentiality, access limits, and controlled processing. |
