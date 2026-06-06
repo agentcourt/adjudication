@@ -41,6 +41,9 @@ func RunLocal(args []string, stdout io.Writer, stderr io.Writer) error {
 	jurorPersonas := fs.String("juror-personas", defaultPersonaRecordsPath(), "Juror JSONL request-spec pool")
 	trialMode := fs.String("trial-mode", "auto", "Trial mode override for complaint setup: auto, jury, or bench")
 	skipVoirDire := fs.Bool("skip-voir-dire", false, "Skip questionnaires and voir dire during complaint setup, then empanel randomly from the candidate panel")
+	jurorCount := fs.Int("juror-count", 0, "Jury size for jury trials, 6 through 12. Omit to use the scenario or court default")
+	minimumConcurring := fs.Int("minimum-concurring", 0, "Minimum concurring jurors needed for a verdict. Omit to use the scenario or court default")
+	unanimousRequired := fs.String("unanimous-required", "", "Whether the jury verdict must be unanimous: true or false. Omit to use the scenario or court default")
 	online := fs.Bool("online", false, "Enable web search for internal direct model calls")
 	offline := fs.Bool("offline", false, "Disable internal LLM calls")
 	caseAPIAddr := fs.String("caseapi-addr", runner.DefaultCaseAPIAddr, "Private case API listen address")
@@ -109,6 +112,14 @@ func RunLocal(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("parse --juror-temperature: %w", err)
 	}
+	unanimousRequiredPtr, err := parseOptionalBool(*unanimousRequired)
+	if err != nil {
+		return fmt.Errorf("parse --unanimous-required: %w", err)
+	}
+	policyOverrides, err := juryPolicyOverrides(*jurorCount, *minimumConcurring, unanimousRequiredPtr)
+	if err != nil {
+		return err
+	}
 
 	runScenarioPath := strings.TrimSpace(*scenarioPath)
 	runModel := strings.TrimSpace(*model)
@@ -135,6 +146,9 @@ func RunLocal(args []string, stdout io.Writer, stderr io.Writer) error {
 			NonJurorTemperature: nonJurorTempPtr,
 			TrialModeOverride:   *trialMode,
 			SkipVoirDire:        *skipVoirDire,
+			JurorCount:          *jurorCount,
+			MinimumConcurring:   *minimumConcurring,
+			UnanimousRequired:   unanimousRequiredPtr,
 		})
 		if err != nil {
 			return err
@@ -183,6 +197,7 @@ func RunLocal(args []string, stdout io.Writer, stderr io.Writer) error {
 		JurorOutputLimitBytes:     *jurorOutputLimitBytes,
 		DockerMCPHost:             *dockerMCPHost,
 		PodmanMCPHost:             *podmanMCPHost,
+		PolicyOverrides:           policyOverrides,
 		Log:                       stderr,
 	})
 	if err != nil {

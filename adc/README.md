@@ -4,7 +4,9 @@ Agent District Court, or ADC, is an experimental civil-litigation runtime for AI
 
 ADC starts from either a situation file, a complaint, or a scenario JSON file.  A situation file can be turned into a complaint with `adc complain`.  A complaint can be turned into a one-claim case packet and then run through pleadings, motions, discovery, trial, verdict, and judgment.
 
-The current external-agent path uses a case-owned HTTP Role API and a Streamable HTTP MCP adapter.  OpenClaw lawyers connect through MCP.  Pi jurors connect through MCP when `adc run` starts juror agents from a JSONL request-spec pool.
+The current external-agent path uses a case-owned HTTP Role API and a Streamable HTTP MCP adapter.  OpenClaw lawyers connect through MCP.  Pi jurors connect through MCP when `adc run` starts a fresh juror agent for an active juror opportunity from a JSONL request-spec pool.  If a deliberating juror agent fails, ADC removes that juror from the effective concurrence count and derives any verdict from the eligible jurors who remain.
+
+Jury size and verdict threshold are case-policy settings.  `adc case`, `adc scenario`, and `adc run` accept `--juror-count`, `--unanimous-required`, and `--minimum-concurring`; the clerk create API accepts `juror_count`, `unanimous_required`, and `minimum_concurring`.  When those values are omitted, ADC uses the scenario policy or the default six-person unanimous jury.
 
 ## Manual
 

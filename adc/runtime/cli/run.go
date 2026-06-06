@@ -33,6 +33,9 @@ func RunScenarioCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	temperature := fs.String("temperature", "", "Override the scenario default temperature for roles without their own temperature")
 	jurorTemperature := fs.String("juror-temperature", "", "Override runtime temperature for jurors only")
 	jurorPersonas := fs.String("juror-personas", defaultPersonaRecordsPath(), "Path to juror model/persona pairs file")
+	jurorCount := fs.Int("juror-count", 0, "Jury size for jury trials, 6 through 12. Omit to use the scenario or court default")
+	minimumConcurring := fs.Int("minimum-concurring", 0, "Minimum concurring jurors needed for a verdict. Omit to use the scenario or court default")
+	unanimousRequired := fs.String("unanimous-required", "", "Whether the jury verdict must be unanimous: true or false. Omit to use the scenario or court default")
 	online := fs.Bool("online", false, "Enable web search tool")
 	offline := fs.Bool("offline", false, "Disable LLM calls; only deterministic turns")
 	var externalRoles stringListFlag
@@ -105,6 +108,14 @@ func RunScenarioCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err != nil {
 		return closeStore(fmt.Errorf("parse --juror-temperature: %w", err))
 	}
+	unanimousRequiredPtr, err := parseOptionalBool(*unanimousRequired)
+	if err != nil {
+		return closeStore(fmt.Errorf("parse --unanimous-required: %w", err))
+	}
+	policyOverrides, err := juryPolicyOverrides(*jurorCount, *minimumConcurring, unanimousRequiredPtr)
+	if err != nil {
+		return closeStore(err)
+	}
 
 	runtimeLimits := runner.RuntimeLimits{
 		LLMTimeoutSeconds:     *timeoutSeconds,
@@ -130,6 +141,7 @@ func RunScenarioCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		JurorPersonasPath: strings.TrimSpace(*jurorPersonas),
 		Runtime:           runtimeLimits,
 		Offline:           *offline,
+		PolicyOverrides:   policyOverrides,
 	})
 	if err != nil {
 		return closeStore(err)

@@ -1,5 +1,65 @@
 # Development Notes
 
+## 2026-06-06: Jury configuration inputs
+
+### References
+
+- Jury policy and deterministic clerk action: [`engine/Main.lean`](engine/Main.lean)
+- Scenario policy defaults and runtime overrides: [`runtime/runner/state_init.go`](runtime/runner/state_init.go), [`runtime/runner/runner.go`](runtime/runner/runner.go)
+- Direct command flags: [`runtime/cli/case.go`](runtime/cli/case.go), [`runtime/cli/run.go`](runtime/cli/run.go), [`runtime/cli/localrun.go`](runtime/cli/localrun.go)
+- Clerk create request: [`runtime/service/service.go`](runtime/service/service.go)
+
+### Decisions
+
+Jury size and verdict threshold are ADC case-policy values.  The scenario policy keys are `jury_juror_count`, `jury_unanimous_required`, and `jury_minimum_concurring`, and the engine uses those values when the clerk sets jury configuration at trial setup.  The default policy remains a six-person unanimous jury with minimum concurring six.
+
+Direct case commands expose the policy through `--juror-count`, `--unanimous-required`, and `--minimum-concurring`.  Complaint-based commands write the selected values into the generated scenario.  Scenario-based commands apply the same values as startup overrides, leaving the scenario file unchanged.
+
+The clerk service exposes the same configuration through `juror_count`, `unanimous_required`, and `minimum_concurring` in the create-request JSON.  Those fields apply to full local-agent children and direct children.  The service checks simple numeric ranges before it starts a child process, and the Lean action validation remains the final rule check.
+
+## 2026-06-06: Failed deliberating jurors
+
+### References
+
+- Verdict derivation: [`engine/Main.lean`](engine/Main.lean)
+- Lean sample proofs: [`engine/Proofs/RecentVerdictDerivation.lean`](engine/Proofs/RecentVerdictDerivation.lean)
+- Juror timeout handling: [`runtime/runner/timeouts.go`](runtime/runner/timeouts.go)
+- Timeout tests: [`runtime/runner/timeouts_test.go`](runtime/runner/timeouts_test.go)
+
+### Decisions
+
+ADC now treats failed deliberating jurors as removed from the effective concurrence threshold.  The configured jury size and nominal concurrence rule remain in the case configuration, but verdict derivation caps the required votes at the number of sworn jurors still eligible to vote.  If no sworn jurors remain, the case records a hung jury because no verdict can be formed.
+
+This rule matches the operational goal for agent trials.  A single Pi model failure should not turn five matching votes into a hung jury.  Disagreement among the remaining jurors can still produce additional deliberation rounds or a hung jury under the existing split-vote rules.
+
+### Plan
+
+- [x] Add an effective concurrence helper in the Lean engine.
+- [x] Add a Lean sample proof for a five-vote verdict after one failed juror.
+- [x] Update the Go timeout test to expect a verdict from the remaining jurors.
+
+## 2026-06-05: Pi juror opportunity lifetime
+
+### References
+
+- Local ADC full-run process management: [`runtime/localrun/localrun.go`](runtime/localrun/localrun.go)
+- Pi juror instructions: [`agent-instructions/pi-juror.md.tmpl`](agent-instructions/pi-juror.md.tmpl)
+- Juror deliberation prompt: [`runtime/runner/juror_prompt.go`](runtime/runner/juror_prompt.go)
+
+### Decisions
+
+A Pi juror process handles one active juror opportunity and then stops.  ADC starts a fresh Pi process if the same juror later receives another opportunity.  The case process owns waiting, so juror agents do not stay alive through non-juror trial phases.
+
+A fresh deliberation process gets the deliberation prompt, which includes the trial transcript from openings through closings, jury instructions, and guidance to inspect admitted exhibits and visible case files through MCP.  Voir dire memory is not carried into deliberation through the Pi process home.  The case record remains the source of juror status and trial evidence.
+
+### Plan
+
+- [x] Tie Pi juror process names and homes to the active opportunity id.
+- [x] Stop juror processes whose opportunity is no longer active.
+- [x] Change Pi juror instructions to stop after a successful submission.
+- [x] Strengthen the deliberation prompt's trial transcript and evidence review guidance.
+- [x] Run focused ADC tests and build.
+
 ## 2026-06-04: Role API and MCP path
 
 ### References

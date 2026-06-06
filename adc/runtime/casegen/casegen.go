@@ -124,6 +124,9 @@ type ScenarioOptions struct {
 	FiledOn             string
 	TrialModeOverride   string
 	SkipVoirDire        bool
+	JurorCount          int
+	MinimumConcurring   int
+	UnanimousRequired   *bool
 }
 
 func LoadComplaint(path string) (ComplaintInput, error) {
@@ -338,6 +341,19 @@ func BuildScenario(plan Plan, complaint ComplaintInput, opts ScenarioOptions) (s
 	policy := map[string]any{}
 	if opts.SkipVoirDire {
 		policy["skip_voir_dire"] = 1
+	}
+	if opts.JurorCount > 0 {
+		policy["jury_juror_count"] = opts.JurorCount
+	}
+	if opts.MinimumConcurring > 0 {
+		policy["jury_minimum_concurring"] = opts.MinimumConcurring
+	}
+	if opts.UnanimousRequired != nil {
+		if *opts.UnanimousRequired {
+			policy["jury_unanimous_required"] = 1
+		} else {
+			policy["jury_unanimous_required"] = 0
+		}
 	}
 	if trialMode == "jury" {
 		assertions = append(assertions, spec.AssertionSpec{Type: "jury_outcome_recorded", CaseIndex: 0})

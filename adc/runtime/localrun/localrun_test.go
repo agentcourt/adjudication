@@ -155,6 +155,32 @@ func TestWritePiConfigUsesFullOpenRouterSpec(t *testing.T) {
 	}
 }
 
+func TestJurorInstructionsStopAfterActiveOpportunity(t *testing.T) {
+	t.Parallel()
+
+	text, err := renderInstructions(DefaultJurorInstructionsPath(), instructionData{
+		CaseID:           "case-1",
+		PrincipalID:      "J2",
+		OpportunityID:    "opp-1",
+		OpportunityPhase: "deliberation",
+		MCPServer:        "adc",
+	})
+	if err != nil {
+		t.Fatalf("renderInstructions: %v", err)
+	}
+	for _, want := range []string{
+		"opportunity opp-1 in phase deliberation",
+		"After `adc_submit_decision` returns `ok: true`, stop.",
+		"Do not wait for another juror opportunity.",
+		"ADC will start a new Pi process if juror J2 later receives another opportunity.",
+		"the prompt includes the trial transcript from openings through closings",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("juror instructions missing %q:\n%s", want, text)
+		}
+	}
+}
+
 func readJSONMap(t *testing.T, path string) map[string]any {
 	t.Helper()
 	raw, err := os.ReadFile(path)

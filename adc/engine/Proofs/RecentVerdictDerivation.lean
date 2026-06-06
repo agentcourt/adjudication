@@ -103,6 +103,25 @@ def continuingSplitCase : CaseState :=
       ]
   }
 
+def plaintiffAfterFailedJurorCase : CaseState :=
+  { stableSplitCase with
+    jurors :=
+      [ swornJurorRecent "J1" "m1" "p1"
+      , swornJurorRecent "J2" "m2" "p2"
+      , swornJurorRecent "J3" "m3" "p3"
+      , swornJurorRecent "J4" "m4" "p4"
+      , swornJurorRecent "J5" "m5" "p5"
+      , { swornJurorRecent "J6" "m6" "p6" with status := "timed_out" }
+      ]
+    juror_votes :=
+      [ { juror_id := "J1", round := 2, vote := "plaintiff", damages := 100.0, confidence := "high", explanation := "e1", submitted_at := "2026-03-15" }
+      , { juror_id := "J2", round := 2, vote := "plaintiff", damages := 100.0, confidence := "high", explanation := "e2", submitted_at := "2026-03-15" }
+      , { juror_id := "J3", round := 2, vote := "plaintiff", damages := 100.0, confidence := "high", explanation := "e3", submitted_at := "2026-03-15" }
+      , { juror_id := "J4", round := 2, vote := "plaintiff", damages := 100.0, confidence := "high", explanation := "e4", submitted_at := "2026-03-15" }
+      , { juror_id := "J5", round := 2, vote := "plaintiff", damages := 100.0, confidence := "high", explanation := "e5", submitted_at := "2026-03-15" }
+      ]
+  }
+
 def plaintiffMajorityVerdictSummary : Bool :=
   match deriveVerdictFromJurorVotes? {} plaintiffMajorityCase with
   | some (some verdict, none, none, none) =>
@@ -142,24 +161,24 @@ def plaintiffMajorityPermutedVerdictSummary : Bool :=
       verdict.damages.toBits == (100.0).toBits
   | _ => false
 
+def plaintiffAfterFailedJurorVerdictSummary : Bool :=
+  match deriveVerdictFromJurorVotes? {} plaintiffAfterFailedJurorCase with
+  | some (some verdict, none, none, none) =>
+      verdict.verdict_for == "plaintiff" &&
+      verdict.votes_for_verdict == 5 &&
+      verdict.required_votes == 5 &&
+      verdict.damages.toBits == (100.0).toBits
+  | _ => false
+
 /--
 Verdict derivation stops if any sworn juror has not yet voted in the current
-round, provided enough sworn jurors still remain to reach the configured
-threshold.
-
-The timeout rule added one earlier exit: if too few sworn jurors remain, the
-engine declares a hung jury immediately.  This theorem states the remaining
-completeness boundary.  When the jury is still large enough to reach the
-threshold, the engine may derive neither a verdict nor a hung jury nor a new
-ballot round until every sworn juror has a ballot in the active round.
+round.  The engine may derive neither a verdict nor a hung jury nor a new
+ballot round until every eligible sworn juror has a ballot in the active round.
 -/
 theorem deriveVerdictFromJurorVotes_none_when_current_round_vote_missing
     (policy : CourtPolicy)
     (c : CaseState)
-    (hEnough :
-      match c.jury_configuration with
-      | none => True
-      | some cfg => countJurorsByStatus c.jurors "sworn" >= cfg.minimum_concurring)
+    (hSworn : countJurorsByStatus c.jurors "sworn" ≠ 0)
     (hMissing :
       (nextSwornJurorWithoutVoteInRound? c (currentDeliberationRound c)).isSome = true) :
     deriveVerdictFromJurorVotes? policy c = none := by
@@ -168,9 +187,7 @@ theorem deriveVerdictFromJurorVotes_none_when_current_round_vote_missing
   | none =>
       simp
   | some cfg =>
-      have hEnough' : cfg.minimum_concurring ≤ countJurorsByStatus c.jurors "sworn" := by
-        simpa [hCfg] using hEnough
-      simp [hMissing, hEnough']
+      simp [hMissing, hSworn]
 
 /- 
 This theorem marks the remaining formal boundary of the verdict logic.
@@ -246,6 +263,10 @@ the emitted hung-jury record, including the explanatory note.
 -/
 theorem deriveVerdictFromJurorVotes_stable_split_declares_hung_jury :
     stableSplitHungJurySummary = true := by
+  native_decide
+
+theorem deriveVerdictFromJurorVotes_adjusts_threshold_after_failed_juror :
+    plaintiffAfterFailedJurorVerdictSummary = true := by
   native_decide
 
 /- 

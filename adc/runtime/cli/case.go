@@ -43,6 +43,9 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	jurorPersonas := fs.String("juror-personas", defaultPersonaRecordsPath(), "Path to juror model/persona pairs file")
 	trialMode := fs.String("trial-mode", "auto", "Trial mode override: auto, jury, or bench")
 	skipVoirDire := fs.Bool("skip-voir-dire", false, "Skip questionnaires and voir dire, then empanel randomly from the candidate panel")
+	jurorCount := fs.Int("juror-count", 0, "Jury size for jury trials, 6 through 12. Omit to use the scenario or court default")
+	minimumConcurring := fs.Int("minimum-concurring", 0, "Minimum concurring jurors needed for a verdict. Omit to use the scenario or court default")
+	unanimousRequired := fs.String("unanimous-required", "", "Whether the jury verdict must be unanimous: true or false. Omit to use the scenario or court default")
 	online := fs.Bool("online", false, "Enable web search tool for planning and litigation agents")
 	timeoutSeconds := fs.Int("timeout-seconds", defaultLLMTimeoutSeconds, "LLM HTTP timeout in seconds")
 	maxResponseBytes := fs.Int("max-response-bytes", runner.DefaultMaxResponseBytes, "Maximum bytes allowed in one direct-runtime model response")
@@ -94,6 +97,14 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("parse --juror-temperature: %w", err)
 	}
+	unanimousRequiredPtr, err := parseOptionalBool(*unanimousRequired)
+	if err != nil {
+		return fmt.Errorf("parse --unanimous-required: %w", err)
+	}
+	policyOverrides, err := juryPolicyOverrides(*jurorCount, *minimumConcurring, unanimousRequiredPtr)
+	if err != nil {
+		return err
+	}
 
 	ctx := context.Background()
 	setup, err := prepareComplaintScenario(ctx, client, complaintSetupOptions{
@@ -111,6 +122,9 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		NonJurorTemperature: nonJurorTempPtr,
 		TrialModeOverride:   *trialMode,
 		SkipVoirDire:        *skipVoirDire,
+		JurorCount:          *jurorCount,
+		MinimumConcurring:   *minimumConcurring,
+		UnanimousRequired:   unanimousRequiredPtr,
 	})
 	if err != nil {
 		return err
@@ -167,6 +181,7 @@ func RunCase(args []string, stdout io.Writer, stderr io.Writer) error {
 		JurorTemperature:  jurorTempPtr,
 		JurorPersonasPath: strings.TrimSpace(*jurorPersonas),
 		Runtime:           runtimeLimits,
+		PolicyOverrides:   policyOverrides,
 	})
 	if err != nil {
 		return closeStore(err)

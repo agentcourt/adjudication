@@ -219,6 +219,9 @@ structure CourtPolicy where
   max_support_tool_calls_per_opportunity : Nat := 30
   max_jury_note_chars : Nat := 3000
   skip_voir_dire : Nat := 0
+  jury_juror_count : Nat := 6
+  jury_unanimous_required : Nat := 1
+  jury_minimum_concurring : Nat := 6
   voir_dire_candidate_count : Nat := 10
   max_voir_dire_questions_per_side_per_juror : Nat := 1
   max_disallowed_voir_dire_questions_per_side : Nat := 3
@@ -1080,18 +1083,26 @@ def meanDamagesForVotes (votes : List JurorVote) : Float :=
     let total := votes.foldl (fun acc vote => acc + vote.damages) 0.0
     total / Float.ofNat votes.length
 
+def effectiveMinimumConcurring (cfg : JuryConfiguration) (swornCount : Nat) : Nat :=
+  if swornCount = 0 then
+    0
+  else if swornCount < cfg.minimum_concurring then
+    swornCount
+  else
+    cfg.minimum_concurring
+
 def deriveVerdictFromJurorVotes? (policy : CourtPolicy) (c : CaseState) :
     Option (Option JuryVerdict × Option HungJury × Option Nat × Option String) :=
   let round := currentDeliberationRound c
   match c.jury_configuration with
   | none => none
   | some cfg =>
-      let required := cfg.minimum_concurring
       let swornCount := countJurorsByStatus c.jurors "sworn"
-      if swornCount < required then
+      let required := effectiveMinimumConcurring cfg swornCount
+      if swornCount = 0 then
         some (none, some {
           claim_id := "claim-1"
-          note := s!"fewer than {required} sworn jurors remained eligible to deliberate in round {round}"
+          note := s!"no sworn jurors remained eligible to deliberate in round {round}"
         }, none, none)
       else if nextSwornJurorWithoutVoteInRound? c round |>.isSome then
         none
@@ -1901,6 +1912,20 @@ def roleAllowsAll (roles : List RolePolicy) (role : String) (tools : List String
   | none => false
   | some rp => tools.all (fun tool => rp.allowed_tools.contains tool)
 
+def policyJuryJurorCount (policy : CourtPolicy) : Nat :=
+  if policy.jury_juror_count = 0 then 6 else policy.jury_juror_count
+
+def policyJuryUnanimousRequired (policy : CourtPolicy) : Bool :=
+  policy.jury_unanimous_required != 0
+
+def policyJuryMinimumConcurring (policy : CourtPolicy) (jurorCount : Nat) : Nat :=
+  if policyJuryUnanimousRequired policy then
+    jurorCount
+  else if policy.jury_minimum_concurring = 0 then
+    6
+  else
+    policy.jury_minimum_concurring
+
 def requiredJuryVotes (c : CaseState) : Nat :=
   match c.jury_configuration with
   | some cfg => cfg.minimum_concurring
@@ -1926,6 +1951,18 @@ def mkDeterministicRandomEmpanelJury (caseId : String) (jurorCount : Nat) : Json
     ("case_id", toJson caseId),
     ("juror_count", toJson jurorCount)
   ]
+
+def mkDeterministicJuryConfiguration (caseId : String) (policy : CourtPolicy) : Json :=
+  let jurorCount := policyJuryJurorCount policy
+  let unanimous := policyJuryUnanimousRequired policy
+  let minimumConcurring := policyJuryMinimumConcurring policy jurorCount
+  mkDeterministicSingleTool "set_jury_configuration"
+    (Json.mkObj [
+      ("case_id", toJson caseId),
+      ("juror_count", toJson jurorCount),
+      ("unanimous_required", toJson unanimous),
+      ("minimum_concurring", toJson minimumConcurring)
+    ])
 
 def mandatoryOpportunityTool (tool : String) : Bool :=
   tool = "decide_rule11_motion" ||
@@ -2634,7 +2671,13 @@ def trialCandidates (req : OpportunityRequest) (c : CaseState) (facts : TurnFact
   let maxForCausePerSide := req.state.policy.max_for_cause_challenges_per_side
   let maxPeremptoryPerSide := req.state.policy.max_peremptory_challenges_per_side
   if c.trial_mode = "jury" && c.jury_configuration.isNone && roleAllowsAll req.roles "clerk" ["set_jury_configuration"] then
-    actions := actions.concat (mkTurn "clerk" "For case 0, set jury configuration to six jurors with minimum concurring six." ["set_jury_configuration"] true maxSteps)
+    let jurorCount := policyJuryJurorCount req.state.policy
+    let minimumConcurring := policyJuryMinimumConcurring req.state.policy jurorCount
+    actions := actions.concat
+      (mkTurn "clerk"
+        s!"For case 0, set jury configuration to {jurorCount} jurors with minimum concurring {minimumConcurring}."
+        ["set_jury_configuration"] true maxSteps
+        (some (mkDeterministicJuryConfiguration c.case_id req.state.policy)))
   if c.trial_mode = "jury" && c.phase = "none" && !voirDirePanelReady req.state.policy c &&
       roleAllowsAll req.roles "clerk" ["add_juror"] then
     actions := actions.concat (mkTurn "clerk" s!"For case 0, add any missing prospective jurors to reach a voir dire panel of {candidateTarget} candidates." ["add_juror"] true maxSteps

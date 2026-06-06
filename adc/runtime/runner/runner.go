@@ -31,6 +31,7 @@ type Config struct {
 	JurorPersonasPath string
 	Offline           bool
 	Runtime           RuntimeLimits
+	PolicyOverrides   map[string]any
 }
 
 type TurnLog struct {
@@ -93,6 +94,7 @@ func New(st *store.Store, le lean.Engine, client *openai.Client, jurorClient *op
 	if err != nil {
 		return nil, err
 	}
+	applyPolicyOverrides(&scenario, cfg.PolicyOverrides)
 	if strings.TrimSpace(cfg.ScenarioBaseDir) == "" {
 		cfg.ScenarioBaseDir = filepath.Dir(cfg.ScenarioPath)
 	}
@@ -140,6 +142,18 @@ func New(st *store.Store, le lean.Engine, client *openai.Client, jurorClient *op
 		r.state = state
 	}
 	return r, nil
+}
+
+func applyPolicyOverrides(scenario *spec.FormalScenario, overrides map[string]any) {
+	if len(overrides) == 0 {
+		return
+	}
+	if scenario.Policy == nil {
+		scenario.Policy = map[string]any{}
+	}
+	for key, value := range overrides {
+		scenario.Policy[key] = value
+	}
 }
 
 func resolveScenarioCourtProfile(scenario spec.FormalScenario) (courts.Profile, error) {

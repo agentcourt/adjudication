@@ -147,6 +147,7 @@
 | `defective_filed_case_dismissal_then_stops` | `Proofs/JurisdictionFlow.lean` | medium | Shows the end-to-end filed-case path: jurisdiction dismissal closes the case and stops opportunity generation. |
 | `defective_filed_case_rule12_available_but_not_actionable` | `Proofs/JurisdictionFlow.lean` | low |  |
 | `deriveVerdictFromJurorVotes_defendant_majority_zeroes_damages` | `Proofs/RecentVerdictDerivation.lean` | medium | Shows that a defense verdict carries zero damages even if some jurors proposed plaintiff-side amounts. |
+| `deriveVerdictFromJurorVotes_adjusts_threshold_after_failed_juror` | `Proofs/RecentVerdictDerivation.lean` | high | Shows that verdict derivation caps the required vote count after a deliberating juror fails. |
 | `deriveVerdictFromJurorVotes_none_when_current_round_vote_missing` | `Proofs/RecentVerdictDerivation.lean` | high | Shows that verdict derivation cannot run until every sworn juror has cast a ballot in the current round. |
 | `deriveVerdictFromJurorVotes_nonstable_split_advances_round` | `Proofs/RecentVerdictDerivation.lean` | medium | Shows that the jury gets another ballot round when the split is still moving and no side has reached the threshold. |
 | `deriveVerdictFromJurorVotes_plaintiff_majority_is_order_invariant_on_sample` | `Proofs/RecentVerdictDerivation.lean` | medium | Checks that vote storage order does not affect the representative plaintiff-majority verdict. |

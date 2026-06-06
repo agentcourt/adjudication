@@ -214,6 +214,11 @@ func toInt(v any) int {
 			return int(f)
 		}
 		return 0
+	case bool:
+		if x {
+			return 1
+		}
+		return 0
 	default:
 		return 0
 	}

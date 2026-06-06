@@ -70,6 +70,9 @@ type CaseCreateRequest struct {
 	JurorPersonas             string   `json:"juror_personas,omitempty"`
 	TrialMode                 string   `json:"trial_mode,omitempty"`
 	SkipVoirDire              bool     `json:"skip_voir_dire,omitempty"`
+	JurorCount                int      `json:"juror_count,omitempty"`
+	MinimumConcurring         int      `json:"minimum_concurring,omitempty"`
+	UnanimousRequired         *bool    `json:"unanimous_required,omitempty"`
 	Online                    bool     `json:"online,omitempty"`
 	Offline                   bool     `json:"offline,omitempty"`
 	TimeoutSeconds            int      `json:"timeout_seconds,omitempty"`
@@ -337,6 +340,9 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 	if req.OpenClawStartDelaySeconds != nil && *req.OpenClawStartDelaySeconds < 0 {
 		return CaseRecord{}, fmt.Errorf("openclaw_lawyer_start_delay_seconds must be non-negative")
 	}
+	if err := validateJuryConfigRequest(req); err != nil {
+		return CaseRecord{}, err
+	}
 	caseID := strings.TrimSpace(req.CaseID)
 	if caseID == "" {
 		caseID = "adc-" + time.Now().UTC().Format("20060102150405") + "-" + randomHex(4)
@@ -493,6 +499,12 @@ func (s *Server) caseProcessArgs(mode string, req CaseCreateRequest, caseID stri
 		}
 		return append(args, name, fmt.Sprintf("%d", value))
 	}
+	addBoolPtr := func(args []string, name string, value *bool) []string {
+		if value == nil {
+			return args
+		}
+		return append(args, name, fmt.Sprintf("%t", *value))
+	}
 	addCommon := func(args []string) []string {
 		args = addString(args, "--model", req.Model)
 		args = addString(args, "--temperature", req.Temperature)
@@ -501,6 +513,9 @@ func (s *Server) caseProcessArgs(mode string, req CaseCreateRequest, caseID stri
 		args = addInt(args, "--timeout-seconds", req.TimeoutSeconds)
 		args = addInt(args, "--invalid-attempt-limit", req.InvalidAttemptLimit)
 		args = addInt(args, "--max-response-bytes", req.MaxResponseBytes)
+		args = addInt(args, "--juror-count", req.JurorCount)
+		args = addInt(args, "--minimum-concurring", req.MinimumConcurring)
+		args = addBoolPtr(args, "--unanimous-required", req.UnanimousRequired)
 		if req.Online {
 			args = append(args, "--online")
 		}
@@ -1284,6 +1299,25 @@ func firstPositive(values ...int) int {
 		}
 	}
 	return 0
+}
+
+func validateJuryConfigRequest(req CaseCreateRequest) error {
+	if req.JurorCount < 0 {
+		return fmt.Errorf("juror_count must be non-negative")
+	}
+	if req.JurorCount > 0 && (req.JurorCount < 6 || req.JurorCount > 12) {
+		return fmt.Errorf("juror_count must be between 6 and 12")
+	}
+	if req.MinimumConcurring < 0 {
+		return fmt.Errorf("minimum_concurring must be non-negative")
+	}
+	if req.MinimumConcurring > 0 && (req.MinimumConcurring < 6 || req.MinimumConcurring > 12) {
+		return fmt.Errorf("minimum_concurring must be between 6 and 12")
+	}
+	if req.JurorCount > 0 && req.MinimumConcurring > req.JurorCount {
+		return fmt.Errorf("minimum_concurring cannot exceed juror_count")
+	}
+	return nil
 }
 
 func validateServiceOutputDir(outputRoot string, outDir string) error {

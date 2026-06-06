@@ -133,16 +133,19 @@ type Options struct {
 	JurorOutputLimitBytes     int64
 	DockerMCPHost             string
 	PodmanMCPHost             string
+	PolicyOverrides           map[string]any
 	Log                       io.Writer
 }
 
 type instructionData struct {
-	CaseID      string
-	RoleID      string
-	PrincipalID string
-	MCPServer   string
-	MCPURL      string
-	MCPJSON     string
+	CaseID           string
+	RoleID           string
+	PrincipalID      string
+	OpportunityID    string
+	OpportunityPhase string
+	MCPServer        string
+	MCPURL           string
+	MCPJSON          string
 }
 
 type processRecord struct {
@@ -157,6 +160,7 @@ type processRecord struct {
 	finished   chan struct{}
 
 	stdoutCounter *processOutputCounter
+	jurorTarget   *jurorProcessTarget
 
 	mu            sync.Mutex
 	exited        bool
@@ -173,6 +177,7 @@ type jurorProcessTarget struct {
 type activeJurorOpportunity struct {
 	principalID   string
 	opportunityID string
+	phase         string
 	requestSpec   *modelrequest.Spec
 }
 
@@ -352,7 +357,7 @@ func Run(ctx context.Context, opts Options) (result runner.Result, err error) {
 
 	jurorTicker := time.NewTicker(time.Second)
 	defer jurorTicker.Stop()
-	if err := state.startActiveJuror(runCtx, mcpPort); err != nil {
+	if err := state.updateJurorProcesses(runCtx, mcpPort); err != nil {
 		cancel()
 		return runner.Result{}, err
 	}
@@ -385,7 +390,7 @@ func Run(ctx context.Context, opts Options) (result runner.Result, err error) {
 			cancel()
 			return runner.Result{}, exit
 		case <-jurorTicker.C:
-			if err := state.startActiveJuror(runCtx, mcpPort); err != nil {
+			if err := state.updateJurorProcesses(runCtx, mcpPort); err != nil {
 				if isConnectionRefused(err) {
 					select {
 					case outcome := <-caseDone:
@@ -459,6 +464,7 @@ func runScenarioCase(ctx context.Context, opts Options, caseAPIAddr string) (run
 		JurorPersonasPath: strings.TrimSpace(opts.JurorPersonasPath),
 		Offline:           opts.Offline,
 		Runtime:           runtimeLimits,
+		PolicyOverrides:   opts.PolicyOverrides,
 	})
 	if err != nil {
 		return runner.Result{}, err
@@ -1034,9 +1040,15 @@ func (s *runState) stageOpenClawCodexAuth(role string) (string, error) {
 	return home, nil
 }
 
-func (s *runState) startActiveJuror(ctx context.Context, mcpPort string) error {
+func (s *runState) updateJurorProcesses(ctx context.Context, mcpPort string) error {
 	active, err := s.activeJurorOpportunity(ctx)
-	if err != nil || active == nil {
+	if err != nil {
+		return err
+	}
+	if active == nil {
+		return s.stopInactiveJurorProcesses("", "")
+	}
+	if err := s.stopInactiveJurorProcesses(active.principalID, active.opportunityID); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -1044,15 +1056,63 @@ func (s *runState) startActiveJuror(ctx context.Context, mcpPort string) error {
 	failed := s.failedJurorTurns[active.opportunityID]
 	s.mu.Unlock()
 	if proc != nil {
-		if proc.isExited() && !failed {
+		if procMatchesJurorOpportunity(proc, *active) && proc.isExited() && !failed {
 			return s.reportJurorFailure(ctx, active.principalID, active.opportunityID, jurorFailureAgentExited, fmt.Sprintf("Juror %s agent process exited before completing opportunity %s.", active.principalID, active.opportunityID), map[string]any{"process_name": proc.name})
 		}
-		return nil
+		if procMatchesJurorOpportunity(proc, *active) {
+			return nil
+		}
 	}
 	if err := s.startPiJuror(ctx, *active, mcpPort); err != nil {
 		return err
 	}
 	return nil
+}
+
+func procMatchesJurorOpportunity(proc *processRecord, active activeJurorOpportunity) bool {
+	if proc == nil || proc.jurorTarget == nil {
+		return false
+	}
+	return proc.jurorTarget.principalID == active.principalID && proc.jurorTarget.opportunityID == active.opportunityID
+}
+
+func (s *runState) stopInactiveJurorProcesses(activePrincipalID string, activeOpportunityID string) error {
+	type staleProcess struct {
+		principalID string
+		proc        *processRecord
+	}
+	stale := []staleProcess{}
+	s.mu.Lock()
+	for principalID, proc := range s.jurorProcesses {
+		if proc == nil {
+			delete(s.jurorProcesses, principalID)
+			continue
+		}
+		if proc.jurorTarget != nil &&
+			proc.jurorTarget.principalID == activePrincipalID &&
+			proc.jurorTarget.opportunityID == activeOpportunityID {
+			continue
+		}
+		if proc.isExited() {
+			delete(s.jurorProcesses, principalID)
+			continue
+		}
+		stale = append(stale, staleProcess{principalID: principalID, proc: proc})
+	}
+	s.mu.Unlock()
+	var errs []error
+	for _, entry := range stale {
+		if err := s.stopProcess(entry.proc); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		s.mu.Lock()
+		if s.jurorProcesses[entry.principalID] == entry.proc {
+			delete(s.jurorProcesses, entry.principalID)
+		}
+		s.mu.Unlock()
+	}
+	return errors.Join(errs...)
 }
 
 func (s *runState) activeJurorOpportunity(ctx context.Context) (*activeJurorOpportunity, error) {
@@ -1088,7 +1148,11 @@ func (s *runState) activeJurorOpportunity(ctx context.Context) (*activeJurorOppo
 	if err != nil {
 		return nil, fmt.Errorf("parse request_spec for juror %s: %w", principalID, err)
 	}
-	return &activeJurorOpportunity{principalID: principalID, opportunityID: opportunityID, requestSpec: &spec}, nil
+	phase := strings.TrimSpace(mapString(opportunity["phase"]))
+	if phase == "" {
+		phase = strings.TrimSpace(mapString(currentTurn["phase"]))
+	}
+	return &activeJurorOpportunity{principalID: principalID, opportunityID: opportunityID, phase: phase, requestSpec: &spec}, nil
 }
 
 func getJSON(ctx context.Context, rawURL string) (map[string]any, error) {
@@ -1126,15 +1190,18 @@ func (s *runState) startPiJuror(ctx context.Context, active activeJurorOpportuni
 	server := defaultPiMCPServer
 	url := mcpURL("http://"+net.JoinHostPort(s.opts.PodmanMCPHost, mcpPort), s.opts.CaseID, map[string]string{"role_id": "juror", "principal_id": active.principalID})
 	instructions, err := renderInstructions(s.opts.JurorInstructionsPath, instructionData{
-		CaseID:      s.opts.CaseID,
-		PrincipalID: active.principalID,
-		MCPServer:   server,
-		MCPURL:      url,
+		CaseID:           s.opts.CaseID,
+		PrincipalID:      active.principalID,
+		OpportunityID:    active.opportunityID,
+		OpportunityPhase: active.phase,
+		MCPServer:        server,
+		MCPURL:           url,
 	})
 	if err != nil {
 		return err
 	}
-	home, err := outputSubdir(s.opts.OutputDir, "pi-"+active.principalID)
+	processName := jurorProcessName(active)
+	home, err := outputSubdir(s.opts.OutputDir, processName)
 	if err != nil {
 		return fmt.Errorf("resolve Pi home path: %w", err)
 	}
@@ -1163,7 +1230,7 @@ func (s *runState) startPiJuror(ctx context.Context, active activeJurorOpportuni
 		"--mode", "json",
 		"-p", instructions,
 	}
-	proc, err := s.startProcess(ctx, "pi-"+active.principalID, "podman", s.opts.PodmanCommand, args, "", &jurorProcessTarget{
+	proc, err := s.startProcess(ctx, processName, "podman", s.opts.PodmanCommand, args, "", &jurorProcessTarget{
 		principalID:   active.principalID,
 		opportunityID: active.opportunityID,
 	})
@@ -1179,6 +1246,37 @@ func (s *runState) startPiJuror(ctx context.Context, active activeJurorOpportuni
 
 func outputSubdir(outputDir string, name string) (string, error) {
 	return filepath.Abs(filepath.Join(outputDir, name))
+}
+
+func jurorProcessName(active activeJurorOpportunity) string {
+	name := "pi-" + safeProcessNameComponent(active.principalID)
+	if strings.TrimSpace(active.opportunityID) != "" {
+		name += "-" + safeProcessNameComponent(active.opportunityID)
+	}
+	return name
+}
+
+func safeProcessNameComponent(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "unknown"
+	}
+	var b strings.Builder
+	for _, r := range value {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
+			b.WriteRune(r)
+			continue
+		}
+		b.WriteByte('_')
+	}
+	out := strings.Trim(b.String(), "._-")
+	if out == "" {
+		return "unknown"
+	}
+	if len(out) > 80 {
+		return out[:80]
+	}
+	return out
 }
 
 func renderInstructions(path string, data instructionData) (string, error) {
@@ -1311,6 +1409,11 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 	if err := os.WriteFile(filepath.Join(s.opts.OutputDir, name+".pid"), []byte(fmt.Sprintf("%d\n", cmd.Process.Pid)), 0o644); err != nil {
 		return nil, errors.Join(err, cmd.Process.Kill(), cmd.Wait(), closeStdout(), stderr.Close())
 	}
+	var targetCopy *jurorProcessTarget
+	if jurorTarget != nil {
+		copyTarget := *jurorTarget
+		targetCopy = &copyTarget
+	}
 	record := &processRecord{
 		name:          name,
 		kind:          kind,
@@ -1321,6 +1424,7 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 		stderrPath:    stderrPath,
 		finished:      make(chan struct{}),
 		stdoutCounter: stdoutCounter,
+		jurorTarget:   targetCopy,
 	}
 	go func() {
 		err := cmd.Wait()
@@ -1332,8 +1436,8 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 		if ctx.Err() != nil {
 			return
 		}
-		if jurorTarget != nil {
-			if err := s.handleJurorProcessExit(ctx, record, *jurorTarget, waitErr); err != nil {
+		if targetCopy != nil {
+			if err := s.handleJurorProcessExit(ctx, record, *targetCopy, waitErr); err != nil {
 				s.agentErrs <- err
 			}
 			return
@@ -1344,8 +1448,8 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 		}
 		s.agentErrs <- fmt.Errorf("%s process %s exited before case completion", kind, name)
 	}()
-	if jurorTarget != nil {
-		go s.monitorJurorOutput(ctx, record, *jurorTarget, defaultJurorOutputCheck)
+	if targetCopy != nil {
+		go s.monitorJurorOutput(ctx, record, *targetCopy, defaultJurorOutputCheck)
 	}
 	return record, nil
 }
@@ -1558,23 +1662,35 @@ func (s *runState) stopAgents() error {
 	s.mu.Unlock()
 	var errs []error
 	for _, proc := range processes {
-		proc.mu.Lock()
-		exited := proc.exited
-		proc.mu.Unlock()
-		if exited || proc.command.Process == nil {
-			continue
-		}
-		if proc.kind == "docker" && strings.TrimSpace(proc.stopName) != "" {
-			if err := exec.Command(s.opts.DockerCommand, "stop", proc.stopName).Run(); err != nil {
-				errs = append(errs, fmt.Errorf("docker stop %s: %w", proc.stopName, err))
-			}
-			continue
-		}
-		if err := proc.command.Process.Kill(); err != nil {
-			errs = append(errs, fmt.Errorf("kill %s: %w", proc.name, err))
+		if err := s.stopProcess(proc); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func (s *runState) stopProcess(proc *processRecord) error {
+	if proc == nil {
+		return nil
+	}
+	proc.mu.Lock()
+	exited := proc.exited
+	proc.mu.Unlock()
+	if exited || proc.command.Process == nil {
+		return nil
+	}
+	if proc.kind == "docker" && strings.TrimSpace(proc.stopName) != "" {
+		if err := exec.Command(s.opts.DockerCommand, "stop", proc.stopName).Run(); err != nil {
+			return fmt.Errorf("docker stop %s: %w", proc.stopName, err)
+		}
+		<-proc.finished
+		return nil
+	}
+	if err := proc.command.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return fmt.Errorf("kill %s: %w", proc.name, err)
+	}
+	<-proc.finished
+	return nil
 }
 
 func (s *runState) cleanupSecrets() error {

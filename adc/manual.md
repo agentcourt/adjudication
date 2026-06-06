@@ -4,7 +4,7 @@
 
 Agent District Court, or ADC, runs a civil case through a Lean rule engine and a Go runtime.  A complaint becomes a single-claim case packet, the case proceeds through pleadings, motions, discovery, trial, verdict, and judgment, and the runtime records the resulting case state.  The current external-agent path uses a case-owned HTTP Role API and an MCP adapter, while judge and clerk work remain internal direct-model work.
 
-ADC has four main operating paths.  `adc case` starts from a complaint, prepares a normalized case, and runs the case with direct or external live roles.  `adc scenario` runs an existing scenario JSON without preparing a complaint.  `adc run` is the local full-run command that starts the case API, starts MCP, starts OpenClaw lawyers, and starts Pi jurors when juror opportunities appear.  `adc service` is a long-running HTTP service that creates and manages child case processes, defaulting to full `adc run` cases.
+ADC has four main operating paths.  `adc case` starts from a complaint, prepares a normalized case, and runs the case with direct or external live roles.  `adc scenario` runs an existing scenario JSON without preparing a complaint.  `adc run` is the local full-run command that starts the case API, starts MCP, starts OpenClaw lawyers, and starts Pi jurors for active juror opportunities.  `adc service` is a long-running HTTP service that creates and manages child case processes, defaulting to full `adc run` cases.
 
 All commands in this document assume the working directory is `adc/` unless a command says otherwise.  Build outputs go under `.bin/`, generated case output usually goes under `out/`, and the Lean engine binary is `.bin/adcengine`.
 
@@ -20,7 +20,7 @@ MCP is an adapter over the Role API.  An MCP session binds to one case id and on
 
 `adc run` can run local OpenClaw lawyers with Codex OAuth-derived credentials from `auth.json`.  In `--openclaw-auth codex` mode, ADC copies the selected auth file into a per-lawyer private directory under the case output directory, mounts that directory as the container's `CODEX_HOME`, and unsets `OPENAI_API_KEY` inside the OpenClaw command.  The lawyer receives MCP configuration and assignment text, then talks to the case through MCP tools backed by the case HTTP Role API.
 
-`adc run` can run Pi jurors through the same MCP and HTTP path.  When a juror first receives an opportunity, ADC creates a Pi home for that juror, writes `.mcp.json` with the juror MCP session URL, and writes `.pi/agent/settings.json` plus `.pi/agent/models.json` from the selected JSONL pool record.  The case prompt carries the selected persona, while the Pi model config preserves the OpenRouter model, provider routing, quantization settings, and output-token settings that the Pi config can enforce.
+`adc run` can run Pi jurors through the same MCP and HTTP path.  When a juror receives an active opportunity, ADC creates a fresh Pi home for that juror and opportunity, writes `.mcp.json` with the juror MCP session URL, and writes `.pi/agent/settings.json` plus `.pi/agent/models.json` from the selected JSONL pool record.  The Pi process handles that one opportunity and stops after a successful submission.  At deliberation, the fresh juror prompt includes the trial transcript from openings through closings, the jury instructions, and directions to inspect admitted exhibits and visible case files through MCP.
 
 `adc service` exposes the same full-run behavior through `/clerk/v1/cases`.  A create request with omitted `mode` or `mode: "run"` starts `adc run`, so the child case gets the case API, MCP adapter, OpenClaw lawyers, and Pi jurors.  `mode: "direct"` starts `adc case` or `adc scenario`, which is useful when the caller wants only the Role API and will manage external agents separately.
 
@@ -131,6 +131,14 @@ A scenario JSON describes the case without running complaint setup.  It contains
   --digest out/scenario/digest.md
 ```
 
+## Jury Configuration
+
+Jury configuration lives in scenario policy and is applied by the clerk through `set_jury_configuration` when a jury case reaches trial setup.  The policy keys are `jury_juror_count`, `jury_unanimous_required`, and `jury_minimum_concurring`.  Direct commands expose those values as `--juror-count`, `--unanimous-required true|false`, and `--minimum-concurring`; `adc case`, `adc scenario`, and `adc run` all accept those flags.
+
+For complaint-based runs, ADC writes the selected jury policy into `generated-scenario.json` before the live case starts.  For scenario-based runs, the same flags override the scenario policy at startup without editing the scenario file.  The engine validates the final clerk action, requiring 6 through 12 jurors and a minimum-concurring value between 6 and the configured jury size.
+
+The clerk service accepts the same values as create-request JSON fields: `juror_count`, `unanimous_required`, and `minimum_concurring`.  These fields apply to omitted `mode`, `mode: "run"`, and `mode: "direct"` child cases.  If the fields are omitted, ADC uses the scenario policy or the court defaults: six jurors, unanimity required, and minimum concurring six.
+
 ## `adc case`
 
 `adc case` starts from a complaint and runs one case.  It prepares the complaint-driven scenario, opens the SQLite store, starts the Lean-backed runner, and writes a JSON summary to stdout when the case ends.  If `--caseapi-addr` is set, the process also exposes `/health` and `/roleapi/v1`; with no external roles, the Role API still reports status but live opportunities are handled internally.
@@ -151,6 +159,9 @@ Important flags:
 | `--juror-personas` | JSONL juror request-spec pool. |
 | `--trial-mode` | `auto`, `jury`, or `bench`. |
 | `--skip-voir-dire` | Empanel randomly from the candidate panel after setup. |
+| `--juror-count` | Jury size for jury trials, 6 through 12. |
+| `--unanimous-required` | `true` or `false`.  Omit to use the scenario or court default. |
+| `--minimum-concurring` | Minimum concurring jurors needed for a verdict. |
 | `--online` | Enable web search for internal direct model calls. |
 | `--timeout-seconds` | HTTP timeout for model calls. |
 | `--roleapi-timeout-seconds` | Timeout for each external opportunity. |
@@ -170,15 +181,17 @@ Example:
 
 ## `adc run`
 
-`adc run` is the local full-run command.  It accepts exactly one of `--complaint` or `--scenario`, starts the case API in-process, starts an MCP server for that case, starts OpenClaw lawyers according to `--auto-lawyers`, and starts one Pi juror process when each juror first receives an opportunity.  It writes the runner result as JSON to stdout and writes run artifacts under `--out-dir`.
+`adc run` is the local full-run command.  It accepts exactly one of `--complaint` or `--scenario`, starts the case API in-process, starts an MCP server for that case, starts OpenClaw lawyers according to `--auto-lawyers`, and starts Pi juror processes for active juror opportunities.  It writes the runner result as JSON to stdout and writes run artifacts under `--out-dir`.
 
 The command always configures plaintiff, defendant, and juror as external roles.  Judge and clerk remain internal direct-model roles.  Complaint-based runs first execute the same setup stage as `adc case`; scenario-based runs skip that setup and use the provided scenario JSON.
+
+`adc run` also accepts the common jury-configuration flags: `--juror-count`, `--unanimous-required`, and `--minimum-concurring`.  Those flags affect the case policy used by the clerk's internal jury-configuration step.  They do not change Pi pool size directly; Pi jurors are started when the case creates juror opportunities from the configured jury.
 
 OpenClaw lawyers use MCP.  ADC gives each OpenClaw container a server entry whose URL includes the case id and role id, then starts `openclaw agent` with assignment text from `agent-instructions/openclaw-lawyer.md.tmpl`.  The container does not need the case output directory or case files mounted, because `list_case_files`, `read_case_text_file`, `request_case_file`, and `read_case_file_bytes` expose the visible record through MCP.
 
 Codex auth is the preferred OpenClaw credential path.  `--openclaw-auth codex --openclaw-codex-auth PATH/TO/auth.json` stages that file into per-role secret directories in the output tree.  `--openclaw-auth auto` chooses the same path when the auth file is readable, and uses `OPENAI_API_KEY` only when no readable auth file is available.
 
-Pi jurors also use MCP.  ADC waits until Lean produces an active juror opportunity, reads that juror's request spec from the sampled pool, writes Pi config files for that exact request spec, and starts one Pi process for that principal id.  The generated config uses OpenRouter completions, carries provider routing through `compat.openRouterRouting`, and points the juror to the MCP session for `role_id=juror&principal_id=...`.  The case API prompt supplies the selected juror persona, and `agent-instructions/pi-juror.md.tmpl` supplies the Pi-specific loop instructions.
+Pi jurors also use MCP.  ADC waits until Lean produces an active juror opportunity, reads that juror's request spec from the sampled pool, writes Pi config files for that exact request spec, and starts one Pi process for that principal id and opportunity id.  The generated config uses OpenRouter completions, carries provider routing through `compat.openRouterRouting`, and points the juror to the MCP session for `role_id=juror&principal_id=...`.  The case API prompt supplies the selected juror persona, and `agent-instructions/pi-juror.md.tmpl` tells the process to handle the active opportunity and stop.  ADC starts a new process if the same juror later receives another opportunity.
 
 Important local-agent flags:
 
@@ -340,6 +353,8 @@ Judge and clerk tools remain internal for the current full-run path.  The clerk 
 
 Juror tools are limited.  Jurors answer questionnaires, answer voir dire questions, and submit one vote when deliberation reaches them.  A juror vote includes `juror_id`, `vote` as `plaintiff` or `defendant`, damages, confidence, and explanation.
 
+Deliberating juror failure changes the effective vote threshold.  The nominal jury configuration remains in the case record, including `juror_count`, `unanimous_required`, and `minimum_concurring`.  Verdict derivation caps the required votes at the number of sworn jurors still eligible to deliberate, so five agreeing jurors can return a verdict after one six-person juror agent fails.  If no sworn jurors remain eligible, ADC records a hung jury.
+
 ## Juror Pools And Pi Agents
 
 Juror pools use JSONL request-spec records.  The active full-run path expects records that can be parsed by `common/modelrequest`, with endpoint, model, persona, provider constraints, and request settings.  ADC writes each selected juror's Pi home with `.pi/agent/settings.json`, `.pi/agent/models.json`, and `.mcp.json`.  That generated Pi home is the source of truth for the juror process started by `adc run`.
@@ -352,7 +367,7 @@ The pool command samples records from `../common/data/personas/persona-clusters.
 .bin/adc pool --size 50 > ../common/data/personas/pool.jsonl
 ```
 
-`adc run` starts a Pi juror process only when that juror first appears in the active opportunity.  It does not restart a juror process after it exits.  If the same juror receives an active opportunity after its process exited, `adc run` reports failure to the case API and lets the case owner apply the juror failure rule.
+`adc run` starts a Pi juror process only when that juror first appears in the active opportunity.  It does not restart a juror process after it exits.  If the same juror receives an active opportunity after its process exited, `adc run` reports failure to the case API and lets the case owner apply the juror failure rule.  During deliberation, that rule removes the failed juror from the effective concurrence count.
 
 ## Service API
 
@@ -386,7 +401,7 @@ The `/api/v1/cases` paths use the same implementation as `/clerk/v1/cases`.  The
 
 Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, and `evidence-manifest.json`.  They do not serve arbitrary output files, process logs, generated remote-lawyer instruction files, or staged Codex auth directories.  The evidence route reads `evidence-manifest.json` and serves submitted evidence by evidence id when the manifest maps that id to a readable file.
 
-The create request is structured JSON.  Common fields include `case_id`, `run_id`, exactly one of `complaint_path` or `scenario_path`, `out_dir`, `model`, `juror_personas`, `engine_path`, `timeout_seconds`, `invalid_attempt_limit`, and `max_response_bytes`.  If `out_dir` is supplied, it must be an immediate child of the service `--output-root`; when it is omitted, the service uses `OUTPUT_ROOT/CASE_ID`.  Complaint-based runs also accept setup fields such as `court`, `non_juror_model`, `plaintiff_model`, `defendant_model`, `judge_model`, `clerk_model`, `planner_model`, `report_model`, `trial_mode`, and `skip_voir_dire`.
+The create request is structured JSON.  Common fields include `case_id`, `run_id`, exactly one of `complaint_path` or `scenario_path`, `out_dir`, `model`, `juror_personas`, `engine_path`, `timeout_seconds`, `invalid_attempt_limit`, and `max_response_bytes`.  Jury configuration fields are `juror_count`, `unanimous_required`, and `minimum_concurring`; the service passes them to the child case process for both full local-agent runs and direct runs.  If `out_dir` is supplied, it must be an immediate child of the service `--output-root`; when it is omitted, the service uses `OUTPUT_ROOT/CASE_ID`.  Complaint-based runs also accept setup fields such as `court`, `non_juror_model`, `plaintiff_model`, `defendant_model`, `judge_model`, `clerk_model`, `planner_model`, `report_model`, `trial_mode`, and `skip_voir_dire`.
 
 For `mode: "run"`, the create request also accepts the local-agent fields used by `adc run`: `mcp_listen`, `mcp_public_base_url`, `mcp_bearer_token`, `lawyer_instructions`, `remote_lawyer_skill`, `juror_instructions`, `auto_lawyers`, `docker_command`, `podman_command`, `openclaw_auth`, `openclaw_codex_auth_path`, `openclaw_image`, `openclaw_model`, `openclaw_thinking`, `openclaw_timeout_seconds`, `openclaw_lawyer_start_delay_seconds`, `pi_image`, `pi_mcp_adapter`, `juror_output_limit_bytes`, `docker_mcp_host`, and `podman_mcp_host`.  `roleapi_timeout_seconds` can set both lawyer and juror opportunity timeouts unless `lawyer_timeout_seconds` or `juror_timeout_seconds` is provided.
 
@@ -403,6 +418,9 @@ curl -sS -X POST http://127.0.0.1:19870/clerk/v1/cases \
     "case_id": "adc-service-ex1",
     "complaint_path": "examples/ex1/complaint.md",
     "out_dir": "out/adc-service/adc-service-ex1",
+    "juror_count": 6,
+    "unanimous_required": true,
+    "minimum_concurring": 6,
     "openclaw_auth": "codex",
     "openclaw_codex_auth_path": "PATH/TO/auth.json",
     "juror_personas": "../common/data/personas/pool.jsonl"
@@ -512,6 +530,6 @@ If a role reports `waiting`, check `current_turn` in the observer status respons
 curl -sS 'http://127.0.0.1:9001/roleapi/v1/status?case_id=adc-CASE&role_id=observer'
 ```
 
-If a Pi juror fails at startup, inspect `logs/pi-JUROR.stderr`, `logs/pi-JUROR.stdout`, and that juror's generated `.pi/agent/models.json`.  The selected request spec must be OpenRouter-based and must use parameters Pi can enforce through the current config file.  If the process exceeds the output byte cap, `adc run` reports that failure through the Role API and the case owner applies the juror failure rule.
+If a Pi juror fails at startup, inspect `logs/pi-JUROR.stderr`, `logs/pi-JUROR.stdout`, and that juror's generated `.pi/agent/models.json`.  The selected request spec must be OpenRouter-based and must use parameters Pi can enforce through the current config file.  If the process exceeds the output byte cap, `adc run` reports that failure through the Role API and the case owner applies the juror failure rule.  A failed deliberating juror should produce a timeout or failure event, and the remaining eligible jurors can still return a verdict when they reach the effective threshold.
 
 If service-created cases remain in `starting`, check the service child logs and the case API health check.  The service polls `/health` for the configured startup timeout, then marks startup failure if the child case API never becomes healthy.  For full local-agent cases, confirm that the create request used omitted `mode` or `mode: "run"` and supplied the OpenClaw and Pi settings needed by `adc run`.

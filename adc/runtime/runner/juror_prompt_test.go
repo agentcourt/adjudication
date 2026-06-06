@@ -22,9 +22,12 @@ func TestBuildJurorSystemPromptForVoteRound(t *testing.T) {
 	caseObj := map[string]any{
 		"deliberation_round": 2,
 		"docket": []any{
+			map[string]any{"title": "Voir dire answer", "description": "Should not appear."},
 			map[string]any{"title": "Opening statement by plaintiff", "description": "Plaintiff opening."},
+			map[string]any{"title": "Trial theory - plaintiff", "description": "Plaintiff theory."},
 			map[string]any{"title": "Exhibit confession.txt - admitted", "description": "Signed confession."},
 			map[string]any{"title": "Exhibit draft-notes.txt - offered", "description": "Should not appear."},
+			map[string]any{"title": "Closing argument - defendant", "description": "Defense closing."},
 			map[string]any{"title": "Jury instructions delivered", "description": "Use the preponderance standard."},
 			map[string]any{"title": "Jury supplemental instruction", "description": "Do not surrender an honestly held view."},
 		},
@@ -49,7 +52,11 @@ func TestBuildJurorSystemPromptForVoteRound(t *testing.T) {
 		"You are skeptical of unsigned drafts.",
 		"Deliberation round: 2",
 		"Opening statement by plaintiff:",
+		"Trial theory - plaintiff:",
 		"Exhibit confession.txt - admitted:",
+		"Closing argument - defendant:",
+		"Evidence review:",
+		"Use the case-view and case-file tools",
 		"Judge's instructions:",
 		"Use the preponderance standard.",
 		"Do not surrender an honestly held view.",
@@ -62,7 +69,9 @@ func TestBuildJurorSystemPromptForVoteRound(t *testing.T) {
 			t.Fatalf("buildJurorSystemPrompt missing %q\n%s", needle, prompt)
 		}
 	}
-	if strings.Contains(prompt, "draft-notes.txt") || strings.Contains(prompt, "Candidate should not appear.") {
+	if strings.Contains(prompt, "draft-notes.txt") ||
+		strings.Contains(prompt, "Voir dire answer") ||
+		strings.Contains(prompt, "Candidate should not appear.") {
 		t.Fatalf("buildJurorSystemPrompt leaked non-jury record\n%s", prompt)
 	}
 }

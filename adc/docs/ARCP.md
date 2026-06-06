@@ -172,7 +172,7 @@ A formal exception to a ruling or order is unnecessary.  When the ruling or orde
 The court may permit the parties or their attorneys to examine prospective jurors or may examine them itself.  The court must permit the number of peremptory challenges provided by federal law and may excuse a juror for good cause.
 
 ### Rule 48. Number of Jurors; Verdict; Polling
-A civil jury must begin with at least 6 and no more than 12 jurors, and each juror must participate in the verdict unless excused under Rule 47(c).  Unless the parties stipulate otherwise, the verdict must be unanimous and returned by a jury of at least 6.  On request, the court must poll jurors individually.
+A civil jury must begin with at least 6 and no more than 12 jurors, and each juror must participate in the verdict unless excused under Rule 47(c) or removed after agent failure.  Unless the parties stipulate otherwise, the verdict must be unanimous among eligible jurors still participating in deliberation.  On request, the court must poll jurors individually.
 
 ### Rule 49. Special Verdict; General Verdict and Questions
 The court may require a jury to return a special verdict in written findings on each issue of fact, or may submit written questions with a general verdict.  The court must provide instructions and explanations necessary for findings on each submitted issue.

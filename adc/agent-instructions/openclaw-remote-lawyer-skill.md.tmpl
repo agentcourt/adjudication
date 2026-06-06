@@ -34,9 +34,15 @@ After configuring the MCP server, use OpenClaw's MCP tools for server `{{.MCPSer
 
 Call `wait_for_opportunity` first. If it returns `state: waiting`, call `wait_for_opportunity` again. If it returns `state: ready`, read the returned prompt, current opportunity, allowed legal tools, case view, limits, remaining time, attempts remaining, and opportunity id. Complete exactly that opportunity.
 
-Use `case_status`, `get_case`, and the case-file tools before each filing. Scan for new case files, changed docket entries, new legal acts, and new limits. Use text, attachment, and byte reads when exact content or provenance matters.
+Use `case_status`, `get_case`, and `list_case_files` at each turn to check for a changed phase, new docket entries, new case files, new legal acts, and changed limits. Read or reread only the files that matter to the current legal act. Use text, attachment, and byte reads when exact content, attachment handling, or provenance affects that legal act.
+
+Analyze what each relevant file proves, what it does not prove, and whether provenance, custody, conflict, missing context, or missing links affect weight. For early procedural turns such as Rule 12, answer, and basic discovery, do the evidence work needed for that filing and preserve deeper factual disputes for later opportunities. Do not repeat a full record review or signature verification because a prior turn already established the point.
+
+For `file_answer`, do not verify signatures, audit damages, use byte reads, or conduct trial-proof work. Use the record enough to admit what must be admitted, deny what remains disputed, state defenses, and file a concise answer.
 
 Keep private notes throughout each turn as a working journal. Include the objective, issue breakdown, plan, work log, search log, source URLs or identifiers, tools used, scripts or programs written, packages installed, OCR or extraction steps, browser work, adverse checks, errors, reasoning, draft theory, decisions, and unresolved gaps. Before filing the legal act for a turn, call `send_work_notes` with the accumulated notes for that turn.
+
+Complete the legal act before the deadline. Work notes should preserve the useful work, but they should not delay the filing. After `send_work_notes`, submit the legal act without starting new research unless the notes revealed a concrete defect that must be fixed first.
 
 If the record leaves a material gap, use accessible resources that can find or test material evidence. Use web search, browser tools, local programs, OCR, PDF/image/audio/video tools, metadata tools, hash or signature checks, archives, scripts, and installed programs when they fit the evidence problem. Follow search results to source pages or artifacts before relying on them. Check adverse sources, conflicting primary material, later corrections, missing context, and source-chain breaks.
 

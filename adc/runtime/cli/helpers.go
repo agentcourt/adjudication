@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"adjudication/adc/runtime/runner"
@@ -76,6 +77,51 @@ func parseOptionalFloat(raw string) (*float64, error) {
 		return nil, err
 	}
 	return &parsed, nil
+}
+
+func parseOptionalBool(raw string) (*bool, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	parsed, err := strconv.ParseBool(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
+}
+
+func juryPolicyOverrides(jurorCount int, minimumConcurring int, unanimousRequired *bool) (map[string]any, error) {
+	if jurorCount < 0 {
+		return nil, fmt.Errorf("--juror-count must be non-negative")
+	}
+	if jurorCount > 0 && (jurorCount < 6 || jurorCount > 12) {
+		return nil, fmt.Errorf("--juror-count must be between 6 and 12")
+	}
+	if minimumConcurring < 0 {
+		return nil, fmt.Errorf("--minimum-concurring must be non-negative")
+	}
+	if minimumConcurring > 0 && (minimumConcurring < 6 || minimumConcurring > 12) {
+		return nil, fmt.Errorf("--minimum-concurring must be between 6 and 12")
+	}
+	if jurorCount > 0 && minimumConcurring > jurorCount {
+		return nil, fmt.Errorf("--minimum-concurring cannot exceed --juror-count")
+	}
+	out := map[string]any{}
+	if jurorCount > 0 {
+		out["jury_juror_count"] = jurorCount
+	}
+	if minimumConcurring > 0 {
+		out["jury_minimum_concurring"] = minimumConcurring
+	}
+	if unanimousRequired != nil {
+		if *unanimousRequired {
+			out["jury_unanimous_required"] = 1
+		} else {
+			out["jury_unanimous_required"] = 0
+		}
+	}
+	return out, nil
 }
 
 func ensureParentDir(path string) error {

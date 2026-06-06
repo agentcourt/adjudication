@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"adjudication/adc/runtime/courts"
@@ -197,7 +196,7 @@ func TestHandleCandidateJurorFailureReplacesJuror(t *testing.T) {
 	}
 }
 
-func TestHandleDeliberatingJurorTimeoutDeclaresHungJuryWhenThresholdImpossible(t *testing.T) {
+func TestHandleDeliberatingJurorTimeoutAllowsVerdictFromRemainingJurors(t *testing.T) {
 	r := newTimeoutTestRunner(t)
 	caseObj := r.state["case"].(map[string]any)
 	caseObj["status"] = "trial"
@@ -215,6 +214,13 @@ func TestHandleDeliberatingJurorTimeoutDeclaresHungJuryWhenThresholdImpossible(t
 		map[string]any{"juror_id": "J4", "name": "Juror 4", "status": "sworn", "note": "", "model": "", "persona_filename": ""},
 		map[string]any{"juror_id": "J5", "name": "Juror 5", "status": "sworn", "note": "", "model": "", "persona_filename": ""},
 		map[string]any{"juror_id": "J6", "name": "Juror 6", "status": "sworn", "note": "", "model": "", "persona_filename": ""},
+	}
+	caseObj["juror_votes"] = []any{
+		map[string]any{"juror_id": "J2", "round": 1, "vote": "plaintiff", "damages": 100.0, "confidence": "high", "explanation": "e2", "submitted_at": "2026-06-06"},
+		map[string]any{"juror_id": "J3", "round": 1, "vote": "plaintiff", "damages": 100.0, "confidence": "high", "explanation": "e3", "submitted_at": "2026-06-06"},
+		map[string]any{"juror_id": "J4", "round": 1, "vote": "plaintiff", "damages": 100.0, "confidence": "high", "explanation": "e4", "submitted_at": "2026-06-06"},
+		map[string]any{"juror_id": "J5", "round": 1, "vote": "plaintiff", "damages": 100.0, "confidence": "high", "explanation": "e5", "submitted_at": "2026-06-06"},
+		map[string]any{"juror_id": "J6", "round": 1, "vote": "plaintiff", "damages": 100.0, "confidence": "high", "explanation": "e6", "submitted_at": "2026-06-06"},
 	}
 	opportunity := leanOpportunity{
 		OpportunityID: "opp-2",
@@ -238,12 +244,17 @@ func TestHandleDeliberatingJurorTimeoutDeclaresHungJuryWhenThresholdImpossible(t
 	if first["status"] != "timed_out" {
 		t.Fatalf("timed out juror = %#v", first)
 	}
-	hung, _ := caseObj["hung_jury"].(map[string]any)
-	if hung == nil {
-		t.Fatalf("hung_jury = nil, want record")
+	if hung, _ := caseObj["hung_jury"].(map[string]any); hung != nil {
+		t.Fatalf("hung_jury = %#v, want nil", hung)
 	}
-	note, _ := hung["note"].(string)
-	if !strings.Contains(note, "fewer than 6 sworn jurors remained eligible to deliberate") {
-		t.Fatalf("hung jury note = %q", note)
+	verdict, _ := caseObj["jury_verdict"].(map[string]any)
+	if verdict == nil {
+		t.Fatalf("jury_verdict = nil, want verdict")
+	}
+	if verdict["verdict_for"] != "plaintiff" {
+		t.Fatalf("verdict_for = %#v", verdict["verdict_for"])
+	}
+	if toInt(verdict["votes_for_verdict"]) != 5 || toInt(verdict["required_votes"]) != 5 {
+		t.Fatalf("verdict counts = %#v", verdict)
 	}
 }

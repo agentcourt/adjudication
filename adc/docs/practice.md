@@ -306,6 +306,8 @@ Example polling posture under [Rule 48](ARCP.md#rule-48-number-of-jurors-verdict
 
 If deliberations fail to produce a valid verdict, counsel should preserve position on hung-jury handling and next-step scheduling.  The record should state requested path clearly: further instruction, additional deliberation interval, or mistrial/hung declaration with reset plan.
 
+Agent failure is separate from juror disagreement.  If a deliberating juror process fails, ADC excuses that juror from the effective concurrence count and continues with the eligible jurors who remain.  A hung jury follows from split or exhausted deliberations among eligible jurors, or from having no eligible sworn juror left to form a verdict.
+
 ### Trial-to-judgment bridge
 
 The transition from verdict to judgment is a separate technical phase.  Counsel should confirm that the verdict record, poll record, and verdict-form answers are consistent before proposed judgment language is finalized.

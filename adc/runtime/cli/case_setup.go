@@ -27,6 +27,9 @@ type complaintSetupOptions struct {
 	NonJurorTemperature *float64
 	TrialModeOverride   string
 	SkipVoirDire        bool
+	JurorCount          int
+	MinimumConcurring   int
+	UnanimousRequired   *bool
 }
 
 type complaintSetupResult struct {
@@ -88,6 +91,9 @@ func prepareComplaintScenario(ctx context.Context, client *openai.Client, opts c
 		Court:               court,
 		TrialModeOverride:   strings.TrimSpace(opts.TrialModeOverride),
 		SkipVoirDire:        opts.SkipVoirDire,
+		JurorCount:          opts.JurorCount,
+		MinimumConcurring:   opts.MinimumConcurring,
+		UnanimousRequired:   opts.UnanimousRequired,
 	})
 	if err != nil {
 		return complaintSetupResult{}, err

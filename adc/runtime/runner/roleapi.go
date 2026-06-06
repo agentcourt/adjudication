@@ -24,6 +24,7 @@ const (
 	roleAPIBasePath          = "/roleapi/v1"
 	defaultRoleAPIWait       = 30 * time.Second
 	maxRoleAPIWait           = 30 * time.Second
+	roleAPIDeadlineCheck     = time.Second
 	maxRoleAPIRequestBytes   = 64 << 20
 	roleAPIWorkNotesFilename = "work-notes.ndjson"
 )
@@ -56,6 +57,7 @@ type externalOpportunityTurn struct {
 	prompt       string
 	view         map[string]any
 	deadline     time.Time
+	timeout      time.Duration
 
 	attemptsMax       int
 	attemptsRemaining int
@@ -201,8 +203,11 @@ func (r *Runner) executeExternalOpportunityTurn(
 	if err != nil {
 		return TurnLog{}, err
 	}
-	prompt := r.buildRoleAPIPrompt(role, view, opportunity)
 	timeout := time.Duration(r.cfg.Runtime.Normalized().RoleAPITimeoutSeconds) * time.Second
+	deadline := time.Now().Add(timeout)
+	attemptsMax := r.cfg.Runtime.Normalized().InvalidAttemptLimit
+	supportBudget := supportToolBudget(r.state)
+	prompt := r.buildRoleAPIPrompt(role, view, opportunity, deadline, timeout, attemptsMax, supportBudget)
 	turn := &externalOpportunityTurn{
 		turnIndex:         turnIndex,
 		role:              role,
@@ -212,32 +217,33 @@ func (r *Runner) executeExternalOpportunityTurn(
 		stateVersion:      stateVersion,
 		prompt:            prompt,
 		view:              view,
-		deadline:          time.Now().Add(timeout),
-		attemptsMax:       r.cfg.Runtime.Normalized().InvalidAttemptLimit,
-		attemptsRemaining: r.cfg.Runtime.Normalized().InvalidAttemptLimit,
-		supportBudget:     supportToolBudget(r.state),
+		deadline:          deadline,
+		timeout:           timeout,
+		attemptsMax:       attemptsMax,
+		attemptsRemaining: attemptsMax,
+		supportBudget:     supportBudget,
 		done:              make(chan externalOpportunityResult, 1),
 	}
 	if err := r.roleAPI.startTurn(turn); err != nil {
 		return TurnLog{}, err
 	}
 	defer r.roleAPI.clearTurn(turn)
-	timer := time.NewTimer(time.Until(turn.deadline))
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return TurnLog{}, ctx.Err()
-	case <-timer.C:
-		err := fmt.Errorf("%s opportunity timed out after %s", role.Name, timeout)
-		if timeoutLog, handled, handleErr := r.handleOpportunityResponseError(turnIndex, role, opportunity, "", err); handled {
-			if handleErr != nil {
-				return TurnLog{}, handleErr
-			}
-			return timeoutLog, nil
+	deadlineCheck := time.NewTicker(roleAPIDeadlineCheck)
+	defer deadlineCheck.Stop()
+	for {
+		if r.roleAPI.expireTurnIfDue(turn, time.Now()) {
+			continue
 		}
-		return TurnLog{}, err
-	case result := <-turn.done:
-		return result.log, result.err
+		select {
+		case <-ctx.Done():
+			return TurnLog{}, ctx.Err()
+		case <-deadlineCheck.C:
+			if r.roleAPI.expireTurnIfDue(turn, time.Now()) {
+				continue
+			}
+		case result := <-turn.done:
+			return result.log, result.err
+		}
 	}
 }
 
@@ -276,6 +282,57 @@ func (api *roleAPIServer) setTerminal(result Result, err error) {
 func (api *roleAPIServer) signalChangedLocked() {
 	api.version++
 	api.cond.Broadcast()
+}
+
+func (api *roleAPIServer) expireTurnIfDue(turn *externalOpportunityTurn, now time.Time) bool {
+	api.mu.Lock()
+	defer api.mu.Unlock()
+	if api.active != turn || turn == nil || turn.completed || !turnDeadlineExpired(turn, now) {
+		return false
+	}
+	api.expireTurnLocked(turn)
+	return true
+}
+
+func (api *roleAPIServer) expireActiveTurnLocked(now time.Time) bool {
+	turn := api.active
+	if turn == nil || turn.completed || !turnDeadlineExpired(turn, now) {
+		return false
+	}
+	api.expireTurnLocked(turn)
+	return true
+}
+
+func turnDeadlineExpired(turn *externalOpportunityTurn, now time.Time) bool {
+	if turn == nil || turn.deadline.IsZero() {
+		return false
+	}
+	return now.UnixNano() >= turn.deadline.UnixNano()
+}
+
+func (api *roleAPIServer) expireTurnLocked(turn *externalOpportunityTurn) {
+	if turn == nil || turn.completed {
+		return
+	}
+	err := turnTimeoutError(turn)
+	if turn.role.Name == "juror" {
+		log, handled, handleErr := api.r.handleOpportunityResponseError(turn.turnIndex, turn.role, turn.opportunity, "", err)
+		if handled {
+			api.finishTurnLocked(turn, log, handleErr)
+			return
+		}
+	}
+	api.finishTurnLocked(turn, TurnLog{}, err)
+}
+
+func turnTimeoutError(turn *externalOpportunityTurn) error {
+	if turn == nil {
+		return fmt.Errorf("opportunity timed out")
+	}
+	if turn.timeout > 0 {
+		return fmt.Errorf("%s opportunity timed out after %s", turn.role.Name, turn.timeout)
+	}
+	return fmt.Errorf("%s opportunity timed out", turn.role.Name)
 }
 
 func (api *roleAPIServer) handleGet(w http.ResponseWriter, r *http.Request) {
@@ -493,6 +550,7 @@ func (api *roleAPIServer) caseID() string {
 }
 
 func (api *roleAPIServer) statusResponseLocked(req roleAPIRequest) map[string]any {
+	api.expireActiveTurnLocked(time.Now())
 	response := map[string]any{
 		"ok":           true,
 		"case_id":      api.caseID(),
@@ -550,6 +608,7 @@ func (api *roleAPIServer) currentTurnPayloadLocked(turn *externalOpportunityTurn
 		"opportunity_id":      turn.opportunity.OpportunityID,
 		"phase":               turn.opportunity.Phase,
 		"kind":                turn.opportunity.Kind,
+		"deadline_at":         turn.deadline.UTC().Format(time.RFC3339),
 		"remaining_time_ms":   remainingMillis(turn.deadline),
 		"attempts_remaining":  turn.attemptsRemaining,
 		"attempts_max":        turn.attemptsMax,
@@ -621,6 +680,9 @@ func (api *roleAPIServer) doLocked(req roleAPIRequest) (map[string]any, int) {
 		response["result"] = map[string]any{"case_status": response["case_status"], "current_turn": response["current_turn"]}
 		return response, http.StatusOK
 	}
+	if api.expireActiveTurnLocked(time.Now()) {
+		return map[string]any{"ok": false, "case_id": api.caseID(), "status": "expired", "error": roleAPIError("opportunity_expired", "the active opportunity deadline has passed")}, http.StatusConflict
+	}
 	if api.active == nil || api.active.completed {
 		return map[string]any{"ok": false, "case_id": api.caseID(), "status": "waiting", "error": roleAPIError("no_active_opportunity", "no active opportunity for this role")}, http.StatusConflict
 	}
@@ -655,6 +717,9 @@ func (api *roleAPIServer) doLocked(req roleAPIRequest) (map[string]any, int) {
 }
 
 func (api *roleAPIServer) failLocked(req roleAPIRequest) (map[string]any, int) {
+	if api.expireActiveTurnLocked(time.Now()) {
+		return map[string]any{"ok": false, "case_id": api.caseID(), "status": "expired", "error": roleAPIError("opportunity_expired", "the active opportunity deadline has passed")}, http.StatusConflict
+	}
 	if api.active == nil || api.active.completed {
 		return map[string]any{"ok": false, "case_id": api.caseID(), "error": roleAPIError("no_active_opportunity", "no active opportunity")}, http.StatusConflict
 	}
@@ -835,7 +900,7 @@ func roleAPIDecisionFromParams(params map[string]any) (map[string]any, error) {
 	}
 }
 
-func (r *Runner) buildRoleAPIPrompt(role spec.RoleSpec, view map[string]any, opportunity leanOpportunity) string {
+func (r *Runner) buildRoleAPIPrompt(role spec.RoleSpec, view map[string]any, opportunity leanOpportunity, deadline time.Time, timeout time.Duration, attemptsMax int, supportBudget int) string {
 	systemPrompt := buildSystemPrompt(role, view)
 	if role.Name == "juror" {
 		caseObj, _ := r.state["case"].(map[string]any)
@@ -852,6 +917,17 @@ func (r *Runner) buildRoleAPIPrompt(role spec.RoleSpec, view map[string]any, opp
 		"Use send_work_notes to record your plan, work log, analysis, and journal notes before you submit a decision.",
 		"Submit the legal act through submit_decision.  For a legal tool, use kind=tool, tool_name, and payload.  Put legal tool arguments inside payload.",
 	}
+	if !deadline.IsZero() {
+		lines = append(lines,
+			"Deadline: submit this turn before "+deadline.UTC().Format("2006-01-02 15:04:05 UTC")+". The turn started with "+timeout.String()+". The remaining_time_ms field in each response is live.",
+		)
+	}
+	if attemptsMax > 0 {
+		lines = append(lines, fmt.Sprintf("Decision attempts: %d.", attemptsMax))
+	}
+	if supportBudget > 0 {
+		lines = append(lines, fmt.Sprintf("Support tool calls: %d per turn.", supportBudget))
+	}
 	if len(opportunity.AllowedTools) > 0 {
 		lines = append(lines, "Allowed legal tools: "+strings.Join(opportunity.AllowedTools, ", "))
 	}
@@ -866,6 +942,10 @@ func (r *Runner) buildRoleAPIPrompt(role spec.RoleSpec, view map[string]any, opp
 	if schemaLines := r.legalToolSchemaLines(opportunity.AllowedTools); len(schemaLines) > 0 {
 		lines = append(lines, "", "Legal tool payloads:")
 		lines = append(lines, schemaLines...)
+	}
+	if cards := collectToolCards(role.Name, opportunity.AllowedTools); len(cards) > 0 {
+		lines = append(lines, "", "Legal tool guidance:")
+		lines = append(lines, cards...)
 	}
 	lines = append(lines, "", "Available support tools:")
 	for _, spec := range r.roleAPIToolSpecs(role, opportunity) {

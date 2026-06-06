@@ -83,7 +83,7 @@ Most open work remains in discovery depth, deposition stack, jury-instruction wo
 | 45 | Gap | TBD | Subpoenas not modeled. |
 | 46 | Partial | Later | `object_to_evidence` action exists; full preservation/error practice is limited. |
 | 47 | Done |  | Voir dire questions, cause challenges, peremptory strikes, jury swearing. |
-| 48 | Done |  | Jury configuration, verdict votes, polling, hung declaration. |
+| 48 | Done |  | Jury configuration, verdict votes, failed-juror threshold adjustment, polling, hung declaration. |
 | 49 | Partial | Soon | General verdict with interrogatories action exists; full Rule 49 practice is limited. |
 | 50 | Gap | Later | JMOL/new-trial conditional structure not modeled. |
 | 51 | Gap | Soon | Jury instruction/objection package not modeled. |

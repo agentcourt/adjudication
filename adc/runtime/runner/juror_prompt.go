@@ -33,6 +33,7 @@ func buildJurorSystemPrompt(role spec.RoleSpec, opportunity leanOpportunity, per
 	b.WriteString(fmt.Sprintf("%d", round))
 	b.WriteString("\n\nTrial transcript:\n")
 	b.WriteString(juryFacingTrialTranscript(caseObj))
+	b.WriteString("\n\nEvidence review:\nUse the transcript as the starting point. Use the case-view and case-file tools to inspect admitted exhibits and visible files when the contents, provenance, or analysis matter. You may use ordinary local tools to organize and analyze visible record material, but your verdict must rest on the case record and the court's instructions.")
 	b.WriteString("\n\nJudge's instructions:\n")
 	b.WriteString(juryInstructionsText(caseObj))
 	if round > 1 {
@@ -56,9 +57,13 @@ func juryFacingTrialTranscript(caseObj map[string]any) string {
 	if len(docket) == 0 {
 		return "(no recorded trial transcript)"
 	}
+	start, end := juryFacingTrialTranscriptBounds(docket)
+	if start < 0 || end < start {
+		return "(no recorded trial transcript)"
+	}
 	sections := make([]string, 0)
-	for _, raw := range docket {
-		entry, _ := raw.(map[string]any)
+	for i := start; i <= end; i++ {
+		entry, _ := docket[i].(map[string]any)
 		if entry == nil {
 			continue
 		}
@@ -75,6 +80,25 @@ func juryFacingTrialTranscript(caseObj map[string]any) string {
 	return strings.Join(sections, "\n\n")
 }
 
+func juryFacingTrialTranscriptBounds(docket []any) (int, int) {
+	start := -1
+	end := -1
+	for i, raw := range docket {
+		entry, _ := raw.(map[string]any)
+		if entry == nil {
+			continue
+		}
+		title := strings.TrimSpace(stringOrDefault(entry["title"], ""))
+		if start < 0 && strings.HasPrefix(title, "Opening statement") {
+			start = i
+		}
+		if strings.HasPrefix(title, "Closing argument") || strings.HasPrefix(title, "Closing rebuttal") {
+			end = i
+		}
+	}
+	return start, end
+}
+
 func juryFacingTranscriptTitle(title string) bool {
 	title = strings.TrimSpace(title)
 	return strings.HasPrefix(title, "Opening statement") ||
@@ -83,6 +107,7 @@ func juryFacingTranscriptTitle(title string) bool {
 		strings.HasPrefix(title, "Surrebuttal presentation") ||
 		strings.HasPrefix(title, "Closing argument") ||
 		strings.HasPrefix(title, "Closing rebuttal") ||
+		strings.HasPrefix(title, "Technical report") ||
 		strings.HasPrefix(title, "Exhibit ") && strings.HasSuffix(title, " - admitted")
 }
 

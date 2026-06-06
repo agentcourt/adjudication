@@ -108,9 +108,13 @@ func TestRoleAPIProxyForwardsGetAndPost(t *testing.T) {
 func TestCaseProcessArgsDefaultsToRun(t *testing.T) {
 	s := &Server{cfg: Config{EnginePath: "lake exe adc-engine"}}
 	startDelay := 15
+	unanimousRequired := false
 	args := s.caseProcessArgs("", CaseCreateRequest{
 		Model:                     "model-1",
 		JurorPersonas:             "pool.jsonl",
+		JurorCount:                8,
+		MinimumConcurring:         6,
+		UnanimousRequired:         &unanimousRequired,
 		RoleAPITimeoutSeconds:     900,
 		MCPListenAddr:             "127.0.0.1:8001",
 		AutoLawyers:               "defendant",
@@ -125,7 +129,7 @@ func TestCaseProcessArgsDefaultsToRun(t *testing.T) {
 	if args[0] != "run" {
 		t.Fatalf("command = %#v", args)
 	}
-	for _, want := range []string{"--scenario", "/tmp/scenario.json", "--caseapi-addr", "127.0.0.1:9001", "--model", "model-1", "--juror-personas", "pool.jsonl", "--offline", "--mcp-listen", "127.0.0.1:8001", "--lawyer-timeout-seconds", "900", "--juror-timeout-seconds", "900", "--auto-lawyers", "defendant", "--openclaw-auth", "codex", "--openclaw-codex-auth", "auth.json", "--openclaw-lawyer-start-delay-seconds", "15", "--pi-image", "pi-image", "--juror-output-limit-bytes", "4096"} {
+	for _, want := range []string{"--scenario", "/tmp/scenario.json", "--caseapi-addr", "127.0.0.1:9001", "--model", "model-1", "--juror-personas", "pool.jsonl", "--juror-count", "8", "--minimum-concurring", "6", "--unanimous-required", "false", "--offline", "--mcp-listen", "127.0.0.1:8001", "--lawyer-timeout-seconds", "900", "--juror-timeout-seconds", "900", "--auto-lawyers", "defendant", "--openclaw-auth", "codex", "--openclaw-codex-auth", "auth.json", "--openclaw-lawyer-start-delay-seconds", "15", "--pi-image", "pi-image", "--juror-output-limit-bytes", "4096"} {
 		if !containsArg(args, want) {
 			t.Fatalf("missing %q in %#v", want, args)
 		}

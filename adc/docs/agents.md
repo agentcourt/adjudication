@@ -15,7 +15,7 @@ MCP is an adapter over the Role API.  OpenClaw lawyers and Pi jurors use MCP bec
 | Clerk | Internal direct-model role in the case process. |
 | Observer | Read-only Role API and MCP role for status and final results. |
 
-`adc run` starts the case process, starts MCP, starts OpenClaw lawyers according to `--auto-lawyers`, and starts a Pi juror process when the juror first appears.  It does not restart a lawyer or juror after process failure.  Lawyer failure fails the case, while juror failure follows the case process's juror dismissal or replacement rule.
+`adc run` starts the case process, starts MCP, starts OpenClaw lawyers according to `--auto-lawyers`, and starts a Pi juror process when the juror first appears.  It does not restart a lawyer or juror after process failure.  Lawyer failure fails the case, while juror failure follows the case process's juror dismissal or replacement rule.  A failed deliberating juror is removed from the effective concurrence threshold, and verdict derivation uses the eligible sworn jurors who remain.
 
 ## Role API
 
