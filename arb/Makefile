@@ -18,22 +18,22 @@ prove:
 install: build
 
 demo: build
-	@echo "aar case waits for Lawyer API clients. See ../lawyerapi.md and ../clawyers-ex1.md."
+	@echo "aar case waits for Lawyer API clients. See manual.md."
 
 ex02: build
-	@echo "aar case waits for Lawyer API clients. See ../lawyerapi.md."
+	@echo "aar case waits for Lawyer API clients. See manual.md."
 
 ex03: build
-	@echo "aar case waits for Lawyer API clients. See ../lawyerapi.md."
+	@echo "aar case waits for Lawyer API clients. See manual.md."
 
 ex04: build
-	@echo "aar case waits for Lawyer API clients. See ../lawyerapi.md."
+	@echo "aar case waits for Lawyer API clients. See manual.md."
 
 ex05: build
-	@echo "aar case waits for Lawyer API clients. See ../lawyerapi.md."
+	@echo "aar case waits for Lawyer API clients. See manual.md."
 
 ex06: build
-	@echo "aar case waits for Lawyer API clients. See ../lawyerapi.md."
+	@echo "aar case waits for Lawyer API clients. See manual.md."
 
 clean:
 	rm -rf $(BIN_DIR) engine/.lake/build out/ex01-demo out/ex02-demo out/ex03-demo out/ex04-demo out/ex05-demo out/ex06-demo

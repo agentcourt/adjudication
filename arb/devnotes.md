@@ -2,6 +2,14 @@
 
 ## 2026-06-06
 
+### Root documentation tidy
+
+Reference: [AAR Process and HTTP Specification](docs/aar-spec.md), [AAR MCP Specification](docs/aar-mcp-spec.md), [AAR MCP Test Plan](docs/aar-mcp-test.md), [AAR Case Failures](docs/case-failures.md), [AAR Case-Failure Testing](docs/case-failures-testing.md)
+
+Durable AAR specifications and test plans moved from the repository root into `arb/docs/`.  Temporary notes, stale drafts, and one-off OpenClaw instructions moved into root `scratch/`.  Root Markdown now contains only repository-level files: `README.md`, `NOTICES.md`, and `AGENTS.md`.
+
+## 2026-06-06
+
 ### Practice manual expansion
 
 Reference: [Practice Manual](docs/practice.md), [Agent Arbitration Manual](manual.md), [Evidence Handling](docs/evidence-handling.md)
@@ -54,7 +62,7 @@ The staged Codex homes are deleted when the run exits because `auth.json` contai
 
 ### AAR opportunity failure
 
-Reference: [AAR Case Failures](../case-failures.md)
+Reference: [AAR Case Failures](docs/case-failures.md)
 
 AAR now treats participant failure as case state.  The Lean engine exposes one procedural action, `fail_opportunity`, which validates the active opportunity before changing state.  Plaintiff or defendant failure sets `case.status` to `failed` and records a typed failure object.  Council-member failure sets that member's status to `failed`, records the reason fields on the member, and lets deliberation continue under the existing council rules.
 
@@ -68,7 +76,7 @@ The failure specification now distinguishes direct `aar case` terminal artifacts
 
 ### AAR MCP specification
 
-Reference: [AAR MCP Specification](../aar-mcp-spec.md), [AAR MCP Test Plan](../aar-mcp-test.md)
+Reference: [AAR MCP Specification](docs/aar-mcp-spec.md), [AAR MCP Test Plan](docs/aar-mcp-test.md)
 
 The MCP behavior now has separate root-level specification and test-plan documents.  The spec treats `aar mcp` as a transport adapter that binds each MCP session to one case-role or case-member assignment, exposes stable assignment tool sets, normalizes wait responses, injects the active opportunity id, and forwards calls to the service role APIs.  AAR remains the authority for case state, role validation, member validation, deadlines, attempts, and terminal case status.
 
@@ -78,7 +86,7 @@ The first executable pass now starts `aar mcp` as a subprocess, drives `/mcp` wi
 
 ### Provider and transport cleanup
 
-Reference: [Council API](../councilapi.md), [OpenClaw service runbook](running.md), [Pi container README](../common/pi-container/README.md)
+Reference: [Council API](../scratch/councilapi.md), [OpenClaw service runbook](running.md), [Pi container README](../common/pi-container/README.md)
 
 AAR council calls now use direct provider clients for the `direct` backend.  Council seats carry JSON request specs with endpoint, model, provider, quantization, request parameters, and persona information.  The case runner no longer starts a local provider proxy, and the CLI no longer accepts provider-proxy or removed council-agent flags.
 
@@ -86,7 +94,7 @@ Local service examples now run OpenClaw containers for lawyers and Pi containers
 
 ### Lawyer case results
 
-Reference: [Lawyer HTTP API](../lawyerapi.md), [OpenClaw service runbook](running.md)
+Reference: [Lawyer HTTP API](../scratch/lawyerapi.md), [OpenClaw service runbook](running.md)
 
 The Lawyer API now exposes `GET /lawyerapi/v1/result`.  The request uses the same `case_id` and `role_id` shape as the rest of the API.  While the case remains open, the response reports `status: "pending"` and returns the live turn envelope.  After the case closes, it returns the resolution, final reason when known, deliberation round, every stored council vote with rationale, and vote counts by round.
 
@@ -94,7 +102,7 @@ The unified MCP server exposes the same data through the read-only `get_case_res
 
 ### Lawyer case status
 
-Reference: [Lawyer HTTP API](../lawyerapi.md), [OpenClaw service runbook](running.md)
+Reference: [Lawyer HTTP API](../scratch/lawyerapi.md), [OpenClaw service runbook](running.md)
 
 The Lawyer API now exposes `GET /lawyerapi/v1/status` and the read-only `case_status` tool.  The response reports the role's current status, case phase, case status, active turn, current opportunity details, state version, and compact counts for evidence, filings, events, and council votes.  The unified MCP server exposes `case_status` through the stable tool set and calls the status endpoint directly, so a waiting lawyer can inspect case status without an active `opportunity_id`.
 
@@ -120,7 +128,7 @@ Repeated OpenClaw runs showed plaintiff finding useful sources but attempting to
 
 ### Council API and MCP adapter
 
-Reference: [Council HTTP API](../councilapi.md)
+Reference: [Council HTTP API](../scratch/councilapi.md)
 
 The Council API follows the Lawyer API architecture but binds each active client to `case_id` and `member_id`.  The HTTP server exposes `get`, `wait`, and `do`, and the MCP adapter only brokers those calls over Streamable HTTP.  The API keeps vote validation, deadlines, attempts, and evidence read budgets in AAR rather than moving that state into an agent adapter.
 
@@ -130,7 +138,7 @@ The adapter uses one MCP session per case-member.  A failed or expired MCP sessi
 
 ### Lawyer API
 
-Reference: [Lawyer HTTP API](../lawyerapi.md)
+Reference: [Lawyer HTTP API](../scratch/lawyerapi.md)
 
 The lawyer side now uses one HTTP API owned by `aar case`.  The runner starts `/lawyerapi/v1`, publishes one active turn at a time, and blocks until the active lawyer submits a valid `submit_decision` call, exhausts attempts, or reaches the turn deadline.  Plaintiff and defendant integrations now sit outside the runtime and can use curl, a CLI, an MCP server, or another client that speaks this API.
 
