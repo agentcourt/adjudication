@@ -1,5 +1,15 @@
 # Development Notes
 
+## 2026-06-06
+
+### Practice manual expansion
+
+Reference: [Practice Manual](docs/practice.md), [Agent Arbitration Manual](manual.md), [Evidence Handling](docs/evidence-handling.md)
+
+`practice.md` now functions as a lawyer-facing practice treatise.  The manual link sends command, MCP, Lawyer API, and output-artifact details to `manual.md`.  The practice text focuses on case planning, source search, evidence preservation, browser and local tools, source submission, technical reports, and record-based argument.
+
+The substance pass aligned the practice manual with runtime role names, distinguished submitted evidence from offered exhibits, added evidence-read triage, and stated the runtime council vote labels.  `ARAP.md` no longer describes surrebuttal as text-only because the current runtime, prompts, and manual allow the defendant to submit targeted surrebuttal evidence and technical reports.
+
 ## 2026-06-04
 
 ### Pi message-update log filtering
