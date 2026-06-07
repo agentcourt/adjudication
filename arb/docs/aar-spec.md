@@ -4,7 +4,7 @@
 
 This specification defines the external behavior used to test AAR.  Tests start AAR processes, observe their exit status and standard streams, and call HTTP endpoints.  Tests do not call Lean directly, import Go packages, inspect in-memory state, or rely on agent behavior.
 
-The specification covers two entry points.  `aar case` runs one arbitration case and exposes role HTTP APIs during the run.  `aar service` runs a multi-case HTTP service, starts `aar case` child processes, and proxies role API calls to the active child.
+This specification covers `aar case`, the direct case service under `/api/v1`, the Clerk service under `/clerk/v1`, the Lawyer API, and the Council API.  `aar run` is covered here only through Clerk-created runs.
 
 ## Process Model
 
@@ -16,9 +16,11 @@ When the private case API starts, `aar case` writes a diagnostic line with this 
 
 A nonzero `aar case` exit status reports process or runtime failure.  Examples include invalid command-line input, unreadable complaint files, failure to start a required HTTP listener, engine execution failure, storage failure, or invalid internal state.  Participant failure should not produce a nonzero process exit.
 
-`aar service` runs until interrupted or until its parent process stops it.  It writes `aar service listening on http://{addr}` to standard error after successful startup.  It requires a registry directory, an output root, and the path to the `aar` binary used for child cases.
+`aar service` runs until interrupted or until its parent process stops it.  It writes `aar service listening on http://{addr}` to standard error after successful startup.  It requires an output root and the path to the `aar` binary used for child cases or runs.  The direct `/api/v1` routes also use a registry directory.
 
-`aar service` starts one `aar case` child for each created case.  The service assigns the child's private case API address before startup, records the child process id, private case API base URL, stdout and stderr log paths, child exit code, parsed stdout summary, and service-level status.  After starting the child, the service polls `GET /health` on the assigned private case API base.  A successful health response marks the case `running`; startup timeout marks it `failed`.
+The direct service starts one `aar case` child for each created `/api/v1` case.  The service assigns the child's private case API address before startup, records the child process id, private case API base URL, stdout and stderr log paths, child exit code, parsed stdout summary, and service-level status.  After starting the child, the service polls `GET /health` on the assigned private case API base.  A successful health response marks the case `running`; startup timeout marks it `failed`.
+
+The Clerk service starts one full `aar run` child for each created `/clerk/v1` case.  A Clerk-started run starts the case process, MCP server, local OpenClaw lawyers when configured, and Pi council agents when deliberation begins.  The service records run status in `clerk.json` under the run output directory.
 
 ## Common HTTP Rules
 
@@ -30,7 +32,11 @@ Procedural tool rejection usually returns HTTP `200` with `ok: false`.  The serv
 
 If `aar service` starts with a bearer token, every HTTP request to the service must include `Authorization: Bearer {token}`.  Missing or wrong tokens return HTTP `401` with `ok: false`.  Private role APIs started by `aar case` do not enforce the service bearer token.
 
-## Service Case Endpoints
+## Service APIs
+
+`aar service` has two case-management API groups.  The direct case API under `/api/v1/cases` starts `aar case` children and can proxy role API calls by `case_id`.  The Clerk API under `/clerk/v1/cases` starts full `aar run` children and exposes run inspection endpoints.
+
+### Direct Case API
 
 `POST /api/v1/cases` starts a new case.  The JSON request includes `complaint_path` and may include `case_id`, `run_id`, `case_files`, `policy_path`, `out_dir`, `council_backend`, timeouts, attempt limits, response limits, common root, engine path, council pool path, prompt paths, and attorney instruction paths.  On success, the service returns HTTP `202` with `ok: true` and a `case` record.
 
@@ -49,6 +55,16 @@ If a child has no final artifact yet, the result endpoint returns `ok: true`, th
 `GET /api/v1/cases/{case_id}/artifacts` lists files under the case output directory.  `GET /api/v1/cases/{case_id}/artifacts/{name}` serves one artifact file if the normalized path stays inside the output directory.  Artifact path errors return JSON; successful file reads use normal file serving.
 
 `GET /api/v1/cases/{case_id}/evidence/{evidence_id}` serves a submitted evidence file from the final evidence manifest.  Unknown cases, missing manifests, bad manifests, missing paths, and unknown evidence ids return JSON errors.  Successful reads serve the stored file bytes.
+
+### Clerk API
+
+`POST /clerk/v1/cases` starts a full `aar run` child.  The JSON request mirrors `aar run` options in structured form.  Common fields include `example`, `complaint_path`, `case_files`, `out_dir`, `policy_path`, `council_size`, `evidence_standard`, `council_pool_path`, `openclaw_auth`, `openclaw_codex_auth_path`, `auto_lawyers`, `mcp_public_base_url`, `pi_image`, `pi_mcp_adapter`, and council output limits.
+
+`GET /clerk/v1/cases` lists Clerk cases.  `GET /clerk/v1/cases/{case_id}` returns one Clerk record.  `GET /clerk/v1/cases/{case_id}/result` returns the final or pending run result.  `POST /clerk/v1/cases/{case_id}/kill` stops an attached active child process and records the resulting service status.
+
+`GET /clerk/v1/cases/{case_id}/artifacts` lists primary run artifacts.  `GET /clerk/v1/cases/{case_id}/artifacts/{name}` serves one exact listed artifact name.  `GET /clerk/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted submitted evidence by evidence id when the run manifest maps that id to a readable file.
+
+The service role proxy routes are for direct `/api/v1/cases` records.  A Clerk-started run has its own case process and MCP server inside the child `aar run` process.
 
 ## Lawyer HTTP API
 
@@ -106,7 +122,7 @@ The same failure fact should appear in every applicable external report.  For a 
 
 ## Test Obligations
 
-Tests for this specification should start real `aar` processes and communicate over HTTP.  A direct `aar case` test should read standard error until it finds the private case API base URL line, then append the role API path for role calls.  A service test should start `aar service`, call `POST /api/v1/cases`, and use the service's public endpoints.
+Tests for this specification should start real `aar` processes and communicate over HTTP.  A direct `aar case` test should read standard error until it finds the private case API base URL line, then append the role API path for role calls.  A direct service test should start `aar service`, call `POST /api/v1/cases`, and use the service's public endpoints.  A Clerk service test should call `POST /clerk/v1/cases` and inspect the Clerk record, result, artifacts, and submitted evidence endpoints.
 
 Tests should use short deadlines and small attempt budgets.  Attempt-exhaustion tests should prefer invalid tool calls over sleeps because they produce faster and more deterministic failures.  Deadline tests should use bounded waits and assert the terminal status after the deadline has actually expired.
 

@@ -8,10 +8,10 @@
 | --- | --- |
 | `Dockerfile` | Builds a local image with upstream Pi and its runtime dependencies. |
 | `build-image.sh` | Runs `podman build` for the local image. |
-| `pi-podman.sh` | Older direct-Pi wrapper kept beside the image recipe. |
-| `acp-podman.sh` | Older adapter wrapper kept beside the image recipe. |
+| `pi-podman.sh` | Direct-Pi wrapper kept beside the image recipe. |
+| `acp-podman.sh` | Adapter wrapper kept beside the image recipe. |
 
-The wrapper scripts preserve the historical command shape.  Current `adc/`, `arb/`, and `arbd/` live runs use the local-run code paths in each runtime.  Treat the Dockerfile and `build-image.sh` as the current shared pieces.
+Current `adc/`, `arb/`, and `arbd/` live runs use the local-run code paths in each runtime.  Treat the Dockerfile and `build-image.sh` as the current shared pieces.
 
 ## Build
 

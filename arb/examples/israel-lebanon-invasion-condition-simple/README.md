@@ -30,6 +30,5 @@ Official API endpoint used:
 - `secondary-reporting.txt` — credible reporting excerpts from Reuters-syndicated, NBC, NPR, BBC, CBS/AP, Al Jazeera, and UN News records.
 - `unresolved-record-gaps.txt` — missing or incomplete records that should not be overclaimed.
 - `source-captures/` — raw HTTP bodies, headers, extracted text, API JSON, and extracted web-fetch records where direct raw capture failed.
-- `analysis.md` — local OTRVD journal for this case-preparation pass.
 
 No arbitration runs have been started for this case.

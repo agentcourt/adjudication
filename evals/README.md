@@ -1,6 +1,6 @@
 # Adjudication Evals
 
-`evals/` contains small adjudication eval tools and the endpoint-variant sampling tools used to build juror and council model pools.  The checked-in eval sets are small enough for manual audit: a 20-item core set and a 20-item deliberation set.  The directory also contains a historical filtered endpoint-variant snapshot, gene-response clustering tools, and pool samplers.
+`evals/` contains small adjudication eval tools and the endpoint-variant sampling tools used to build juror and council model pools.  The checked-in eval sets are small enough for manual audit: a 20-item core set and a 20-item deliberation set.  The directory also contains the current checked-in filtered endpoint-variant snapshot, gene-response clustering tools, and pool samplers.
 
 The runner requests strict JSON responses and records raw outputs, parsed responses, tool traces, provider metadata, and timing data.  Generated run artifacts belong under `results/`, which is ignored except for `results/.gitkeep`.  The current checked-in endpoint-variant survivor set lives under `variants/filtered-20260529/`.
 
@@ -28,12 +28,10 @@ The runner requests strict JSON responses and records raw outputs, parsed respon
 | `tools/run_gene_pca_clustering.py` | The per-gene PCA clustering tool. |
 | `tools/aggregate_variant_persona_clusters.py` | The cluster-vector aggregator for variant/persona rows. |
 | `variants/filtered-20260529/` | A 32-row survivor endpoint-variant snapshot with exact request specs. |
-| `genes.json` and `sampled-genes.json` | The source gene list and the sampled gene subset used by the historical clustering run. |
+| `genes.json` and `sampled-genes.json` | The source gene list and the sampled gene subset used by the clustering workflow. |
 | `tools/sample-pool.py`, `tools/sample-diverse-pool.py`, and `tools/sample-tuple-pool.py` | Pool samplers for variant/persona cluster rows. |
 | `docs/model-inventory.md` | Detailed notes for OpenRouter endpoint inventory work. |
-| `docs/history/sampling.md` | Historical notes for the sampling and clustering run. |
 | `docs/sampling-runbook.md` | The repeatable sampling workflow from root-model inventory through tuple-uniform pool sampling. |
-| `docs/history/eval-analysis.md` | Development journal entries for recent eval, sampling, and clustering work. |
 
 ## Quick Start
 
@@ -238,7 +236,7 @@ To stop a long run, create the `STOP` file named in the runner's JSON status out
 
 ## Filtered Variants
 
-`variants/filtered-20260529/` contains the active checked-in survivor set from the historical combined eval run.  The set has 32 endpoint variants selected from 72 combined variants.  `variants/filtered-20260529/summary.json` records the filter criteria: `provider_error_count == 0` and `deliberation_score >= 0.90`.
+`variants/filtered-20260529/` contains the active checked-in survivor set.  `variants/filtered-20260529/summary.json` records the filter criteria: `provider_error_count == 0` and `deliberation_score >= 0.90`.
 
 The directory contains the full survivor rows, an inspection CSV, per-variant eval summaries, manifest rows, exact request specs, and a summary file:
 

@@ -29,6 +29,5 @@ Polymarket page metadata reports the canonical URL as the first URL above.
 - `secondary-reporting.txt` — credible reporting excerpts on the clothing and the dispute.
 - `unresolved-record-gaps.txt` — missing or incomplete records that should not be overclaimed.
 - `source-captures/` — raw captures and representative official image files.
-- `analysis.md` — local lab journal for this case-preparation pass.
 
 No arbitration runs have been started for this case.

@@ -6,17 +6,10 @@ and deferred proof work that depends on later design changes.
 
 ## Opportunity identity
 
-Optional opportunities first used positional ids such as `o1`, `o2`, and so
-on within each freshly generated candidate list.  That made
-`passed_opportunities` unsafe.  Passing one optional turn could suppress an
-unrelated later optional turn that happened to reuse the same positional id in
-the same unchanged state.  The failure surfaced during live voir dire, where
-the run stopped with `no_eligible_opportunity` after a defendant optional
-pass.
-
-The current engine uses deterministic ids derived from opportunity content.
-That fixes the positional-id bug.  It does not give injective ids.  The ids
-are deterministic, not collision-free.
+The engine uses deterministic ids derived from opportunity content.  The ids
+are stable for the same opportunity content, but they are not formally
+injective.  A theorem about exact optional-pass isolation therefore has to
+account for possible id collisions.
 
 That distinction controls the proof shape.  The strongest pass-isolation theorem
 would say: passing one optional opportunity suppresses exactly that
@@ -32,9 +25,8 @@ the engine means.  We are not changing the implementation yet.
 
 ## Maintained proof target
 
-`make prove` should cover maintained theorems about the current engine, not a
-stale archive of proofs that no longer matches the code.  The current proof
-root therefore imports only maintained theorem modules for recent behavior.
+`make prove` should cover maintained theorems about the current engine.  The
+current proof root imports maintained theorem modules for current behavior.
 
 The current maintained set covers:
 

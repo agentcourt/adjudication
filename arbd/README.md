@@ -49,7 +49,7 @@ Start the Clerk service when cases should be created and managed through HTTP:
 
 ```bash
 .bin/aard service \
-  --listen 127.0.0.1:19771 \
+  --listen 127.0.0.1:19790 \
   --out-root out/service \
   --aard-bin .bin/aard
 ```

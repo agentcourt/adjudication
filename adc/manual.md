@@ -57,7 +57,7 @@ MCP is an adapter over the Role API.  An MCP session binds to one case id and on
 | `engine/` | Lean rule engine and proof project. |
 | `agent-instructions/` | Templates given to OpenClaw lawyers and Pi jurors by `adc run`. |
 | `examples/` | Example civil cases and source documents. |
-| `docs/` and `analysis/` | Design notes, older commentary, diagrams, and legal-rule notes. |
+| `docs/` and `analysis/` | Rules, technical references, diagrams, and procedure notes. |
 
 ## Build And Environment
 

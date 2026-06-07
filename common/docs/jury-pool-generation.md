@@ -1,8 +1,8 @@
 # Jury Pool Generation
 
-This document describes the CSV curation pipeline that produced selected council files from OpenRouter model metadata, live tool-probe results, checked-in persona texts, clustering output, and PCA coordinates.  Current runtime pools use JSONL request-spec records so each sampled council member carries provider endpoint, quantization, request parameters, and persona data.  The CSV pipeline remains useful for refreshing the candidate corpus and producing source material for those JSONL records.
+This document describes the CSV curation pipeline for selected council files built from OpenRouter model metadata, live tool-probe results, checked-in persona texts, clustering output, and PCA coordinates.  Current runtime pools use JSONL request-spec records so each sampled council member carries provider endpoint, quantization, request parameters, and persona data.  The CSV pipeline remains useful for refreshing the candidate corpus and producing source material for those JSONL records.
 
-A current pool record carries the OpenRouter model id, provider endpoint tag, quantization when known, request parameters, and persona path in JSONL form.  CSV files such as `council.csv` and `pool.csv` are historical selection outputs.  Convert selected rows into request-spec records before using them in `adc run`, `aar run`, or `aard run`.
+A current pool record carries the OpenRouter model id, provider endpoint tag, quantization when known, request parameters, and persona path in JSONL form.  CSV files such as `council.csv` and `pool.csv` are selection outputs, not current runtime pools.  Convert selected rows into request-spec records before using them in `adc run`, `aar run`, or `aard run`.
 
 Run the commands below from the repository root unless the command says otherwise. Use `uv run --script` for Python scripts with PEP 723 metadata.
 
@@ -26,9 +26,9 @@ Run the commands below from the repository root unless the command says otherwis
 | `common/data/personas/pca-cluster.csv` | `MODEL,PERSONA_FILE,GENE,PC1,PC2,PC3,CLUSTER` rows from `cluster-personas.py` |
 | `common/data/personas/model-operational-failures.csv` | Manual exclusion ledger for known model failures |
 | `common/tools/select-council.py` | Selects a behaviorally diverse council from cluster/PCA data |
-| `common/data/personas/council.csv` | Historical selected council rows, written as `MODEL,personas/persons/....txt` |
+| `common/data/personas/council.csv` | Selected council rows, written as `MODEL,personas/persons/....txt` |
 | `common/data/personas/council-report.md` | Default selection report from `generate-council.py` |
-| `common/data/personas/pool.csv` | Historical CSV pool file; not a current runtime council pool |
+| `common/data/personas/pool.csv` | CSV pool file; not a current runtime council pool |
 
 Rows in `common/etc/personas.csv`, `common/data/personas/council.csv`, and `common/data/personas/pool.csv` have two columns:
 
@@ -121,7 +121,7 @@ MODEL,ELAPSED_MS,TOOLS_SUPPORTED
 
 `TOOLS_SUPPORTED=true` means the model successfully called the `submit_council_vote` tool in a direct OpenRouter request. `ELAPSED_MS` is used later to exclude slow models. The default council-selection threshold is 8000 milliseconds unless `--max-elapsed-ms` changes it.
 
-A stale or partial `model-latency.csv` changes the eligible set. For example, a short 35-row latency file will exclude most clustered candidates as `latency_missing`. The 490/198/20 pipeline described below requires the full latency file used for the clustering run.
+A partial `model-latency.csv` changes the eligible set.  For example, a short latency file will exclude most clustered candidates as `latency_missing`.
 
 ## Stage 4: Build The Retained Model List
 
@@ -156,7 +156,7 @@ This file is the broad source pool. It is larger than `council.csv` and `pool.cs
 
 ## Stage 6: Choose The Clustering Input
 
-Clustering the full cross product can be expensive. Use a deliberate sampled input when refreshing the clustered candidate universe. The current clustering data was produced from sampled model/persona inputs, not from the 20-row council file.
+Clustering the full cross product can be expensive. Use a deliberate sampled input when refreshing the clustered candidate universe. The clustering input should come from sampled model/persona inputs, not from the 20-row council file.
 
 A simple sampling pattern is:
 
@@ -195,7 +195,7 @@ MODEL,PERSONA_FILE,GENE,PC1,PC2,PC3,CLUSTER
 
 `cluster-personas.py` samples completions for each selected model/persona pair over the selected gene prompts, embeds those completions, reduces each gene's embedding set with PCA, assigns a cluster label, writes cluster assignments to stdout, and writes PCA rows to `--pca-out`.
 
-The current `clusters.csv` contains 3921 rows representing 490 unique `(MODEL, PERSONA_FILE)` pairs. `select-council.py` treats those 490 unique pairs as the candidate universe.
+`select-council.py` treats the unique `(MODEL, PERSONA_FILE)` pairs in `clusters.csv` as the candidate universe.
 
 ## Stage 8: Select `council.csv`
 
@@ -221,13 +221,7 @@ Selection works in four steps:
 3. Build a diversity vector for each eligible candidate. With `--pca`, this is the mean PCA vector per gene. Without `--pca`, the script falls back to cluster-frequency signatures.
 4. Select `--size` rows by deterministic farthest-first selection with provider caps.
 
-For the current cluster data and the restored full latency file, the expected result is:
-
-```text
-candidates=490 eligible=198 selected=20 out=common/data/personas/council.csv
-```
-
-`council.csv` is a historical selected council candidate set. It is not a current runtime pool, because it omits provider endpoint and quantization constraints.
+`council.csv` is a selected council candidate set.  It is not a current runtime pool, because it omits provider endpoint and quantization constraints.
 
 ## Stage 9: Runtime Pool Decision
 

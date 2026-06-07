@@ -1,6 +1,6 @@
 # Sampling Runbook
 
-This runbook turns the historical procedure in `docs/history/sampling.md` into a repeatable workflow.  It starts with OpenRouter root-model sampling and ends with a JSONL pool sampled from variant/persona cluster vectors.  Run every command from `evals/`.
+This runbook starts with OpenRouter root-model sampling and ends with a JSONL pool sampled from variant/persona cluster vectors.  Run every command from `evals/`.
 
 ## Scope
 
@@ -73,7 +73,7 @@ PY
 
 If the exclusion source is a single inventory run rather than a combined catalog, use `selected_model_ids` instead of `model_roots`.
 
-Record the selected roots in `docs/history/sampling.md` before running the inventory.  The record should include the exact source catalog path, the excluded roots, the seed, the selected roots, and the reason that overlap was or was not allowed.  That record is the audit trail for the random choice.
+Record the exact source catalog path, excluded roots, seed, selected roots, and reason that overlap was or was not allowed.  That record is the audit trail for the random choice.
 
 ## Endpoint Inventory
 
@@ -137,20 +137,13 @@ Verify that every attempted variant has a progress row.  Scored variants have `s
 
 When a sample is incremental, combine the previous and new endpoint catalogs before filtering.  Preserve one flat combined variant list and one flat eval directory.  Renumber combined eval indexes only as display indexes; keep the original endpoint-variant records and source run IDs.
 
-The historical run in `docs/history/sampling.md` used:
-
-| Artifact | Meaning |
-| --- | --- |
-| `results/model-roots-20-combined-variants-20260529T1410Z` | Combined 20-root endpoint catalog. |
-| `results/model-roots-20-combined-variants-and-evals-20260529T1518Z` | Combined catalog plus flat copied eval artifacts. |
-
-If you combine runs again, write a `summary.json` that records source catalogs, source eval runs, combined root count, combined variant count, copied eval run count, and aggregate eval counts.  Verify that every combined variant has one eval summary row.  Keep old source directories unchanged.
+For combined runs, write a `summary.json` that records source catalogs, source eval runs, combined root count, combined variant count, copied eval run count, and aggregate eval counts.  Verify that every combined variant has one eval summary row.  Keep source directories unchanged.
 
 ## Filter Variants
 
-Filter endpoint variants after evals, using explicit operational and deliberation criteria.  The historical filter kept variants with `provider_error_count == 0` and `deliberation_score >= 0.90`.  The filter output used `variants/filtered-20260529/` as the active survivor set for gene inference.
+Filter endpoint variants after evals, using explicit operational and deliberation criteria.  The current checked-in survivor set uses `provider_error_count == 0` and `deliberation_score >= 0.90`.  The filter output uses `variants/filtered-20260529/` as the active survivor set for gene inference unless a new run replaces it.
 
-The current repository contains `variants/filtered-20260529/` from that run.  For a new run, create the same files from the endpoint-variant catalog, eval summaries, and exact spec files.  Each survivor variant row should include `combined_index`, `filter_provider_error_count`, and `filter_deliberation_score`.  Keep removed-variant records for timed-out, failed, provider-error, and low-score variants.
+The current repository contains `variants/filtered-20260529/` as the active survivor set.  For a new run, create the same files from the endpoint-variant catalog, eval summaries, and exact spec files.  Each survivor variant row should include `combined_index`, `filter_provider_error_count`, and `filter_deliberation_score`.  Keep removed-variant records for timed-out, failed, provider-error, and low-score variants.
 
 Use this command for a normal inventory/eval pair produced by `tools/model_inventory.py` and `tools/run_variant_batch.py`.  For a combined run, set `variant_path`, `eval_summary_path`, and `specs_dir` to the combined paths; the command accepts either CSV or JSONL eval summaries.  If preserving the existing `variants/filtered-20260529/` directory, set `out` to a timestamped path and use that path in later commands.
 
@@ -365,11 +358,11 @@ PY
 
 ## Genes And Samples
 
-Use `genes.json` as the source gene list and `sampled-genes.json` as the sampled gene list for a run.  A gene is a behavior-eliciting prompt.  The historical run sampled four distinct genes and used three completions per `gene + endpoint variant + persona`.
+Use `genes.json` as the source gene list and `sampled-genes.json` as the sampled gene list for a run.  A gene is a behavior-eliciting prompt.  The current checked-in sampling workflow uses four distinct genes and three completions per `gene + endpoint variant + persona`.
 
-The current persona is `personas/generic.md`.  Keep one persona unless the run design calls for persona variation.  Record gene count, persona count, endpoint-variant count, samples per combination, and expected completion count in `docs/history/sampling.md`.
+The current persona is `personas/generic.md`.  Keep one persona unless the run design calls for persona variation.  Record gene count, persona count, endpoint-variant count, samples per combination, and expected completion count in the run output.
 
-For the historical 32-survivor run:
+For the current 32-survivor set:
 
 ```text
 32 endpoint variants * 1 persona * 4 genes * 3 samples = 384 completions
@@ -389,7 +382,7 @@ uv run --script tools/run_first_gene_inference_embeddings.py \
   --out results/gene-1-inference-embeddings-YYYYMMDDTHHMMSSZ
 ```
 
-Repeat for each gene index in `sampled-genes.json`.  Use distinct output directories for each gene.  The default request parameters are `temperature: 0.7`, `top_p: 1.0`, and `max_tokens: 512`, matching `docs/history/sampling.md`.
+Repeat for each gene index in `sampled-genes.json`.  Use distinct output directories for each gene.  The default request parameters are `temperature: 0.7`, `top_p: 1.0`, and `max_tokens: 512`.
 
 The current script expects every survivor row to have a non-empty `endpoint_tag`; it builds `provider.only` from that field.  It also writes `persona_id: "generic"` regardless of the persona path.  Keep this stage to the single generic persona unless the script is changed and the change is recorded.
 
@@ -400,11 +393,11 @@ jq '{records_written, embedding_count, completion_error_count, embedding_error_c
   results/gene-1-inference-embeddings-YYYYMMDDTHHMMSSZ/summary.json
 ```
 
-Every successful historical gene run had 96 records, 96 embeddings, and zero completion or embedding errors.  If a new run has errors, record the counts and decide whether to rerun that gene or carry the error rows forward.  PCA includes only `status: "ok"` records.
+For a 32-variant, one-persona, three-sample gene run, the expected output is 96 records and 96 embeddings.  If a new run has errors, record the counts and decide whether to rerun that gene or carry the error rows forward.  PCA includes only `status: "ok"` records.
 
 ## PCA
 
-Run PCA separately for each gene.  PCA coordinates from different genes are not in one shared coordinate system, so clustering must also run per gene.  The historical run reduced embeddings to three dimensions.
+Run PCA separately for each gene.  PCA coordinates from different genes are not in one shared coordinate system, so clustering must also run per gene.  The current workflow reduces embeddings to three dimensions.
 
 ```bash
 uv run --script tools/run_embedding_pca.py \
@@ -546,6 +539,6 @@ PY
 
 ## Run Record
 
-Update `docs/history/sampling.md` during the run, not after reconstructing it from memory.  Record the command, run ID, inputs, output files, counts, selected roots, selected genes, seed values, errors, and verification output for every stage.  If a run is interrupted, record the last completed stage and the next command to run.
+Record the command, run ID, inputs, output files, counts, selected roots, selected genes, seed values, errors, and verification output for every stage.  If a run is interrupted, record the last completed stage and the next command to run.
 
 For root sampling, record the catalog snapshot and exclusion set.  For evals, record operational metrics separately from deliberation score.  For pool generation, record input row count, unique tuple count, output row count, output unique tuple count, output unique row count, seed, and pool path.

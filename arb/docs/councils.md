@@ -6,18 +6,18 @@ The runtime draws council members from a pool file, converts the draw into Lean 
 
 | Stage | Code path | Effect |
 |---|---|---|
-| CLI configuration | [case CLI](../runtime/cli/case.go) | Loads policy, applies `--council-size` and `--council-pool`, and builds `runner.Config`. |
+| CLI configuration | [case command](../runtime/cmd/aar/case.go) | Loads policy, applies `--council-size` and `--council-pool`, and builds proceeding options. |
 | Pool loading | [persona loader](../../common/persona/persona.go) | Reads the pool file, validates model ids, resolves persona files, and loads persona text. |
-| Sampling | [runner helpers](../runtime/runner/helpers.go) | Draws `council_size` records without replacement and assigns seat ids in draw order. |
+| Sampling | [proceeding helpers](../runtime/proceeding/helpers.go) | Draws `council_size` records without replacement and assigns seat ids in draw order. |
 | Engine initialization | [Lean engine](../engine/Main.lean) | Requires exact council length, requires unique member ids, rewrites all members to `seated`, and opens the case. |
-| Recording | [main runner](../runtime/runner/run.go) and [renderer](../runtime/runner/render.go) | Writes the constituted council into the initialization event and the final run evidence. |
+| Recording | [main proceeding](../runtime/proceeding/run.go) and [renderer](../runtime/proceeding/render.go) | Writes the constituted council into the initialization event and the final run evidence. |
 | Deliberation order | [Lean engine](../engine/Main.lean) | Selects the first seated member who has not yet voted in the current round. |
 
 ## Entry Point
 
-`aar case` loads the complaint, resolves the shared `common` tree, loads the arbitration policy, and applies the explicit CLI overrides before it touches the council pool.  The policy controls council size and the decision threshold, so those values must be fixed before sampling begins.  The default policy in [the runtime policy layer](../runtime/runner/policy.go) and [the repository policy file](../etc/policy.json) sets `council_size` to `5` and `required_votes_for_decision` to `3`.
+`aar case` loads the complaint, resolves the shared `common` tree, loads the arbitration policy, and applies the explicit CLI overrides before it touches the council pool.  The policy controls council size and the decision threshold, so those values must be fixed before sampling begins.  The default policy in [the proceeding policy layer](../runtime/proceeding/policy.go) and [the repository policy file](../etc/policy.json) sets `council_size` to `5` and `required_votes_for_decision` to `3`.
 
-The runner accepts `--council-size` as a direct override, and then validates the resulting policy before it starts the run.  [Policy validation](../runtime/runner/policy.go) requires a positive council size, a positive threshold, a threshold no greater than the council size, and a strict-majority relation `2 * required_votes_for_decision > council_size`.  That validation determines the shape of the deciding body before the runtime reads a single council record from the pool.
+The case command accepts `--council-size` as a direct override, and then validates the resulting policy before it starts the run.  [Policy validation](../runtime/proceeding/policy.go) requires a positive council size, a positive threshold, a threshold no greater than the council size, and a strict-majority relation `2 * required_votes_for_decision > council_size`.  That validation determines the shape of the deciding body before the runtime reads a single council record from the pool.
 
 ## Pool File
 
@@ -27,15 +27,15 @@ Each usable line becomes one independent sampleable record.  The loader resolves
 
 ## Sampling
 
-[The council sampler](../runtime/runner/helpers.go) receives the parsed pool and the already-validated `council_size`.  It requires `council_size <= len(specs)`, builds an index list over the pool records, and draws from that index list with `crypto/rand`.  Each successful draw removes one index from the remaining set, so sampling proceeds without replacement across the pool records for that run.
+[The council sampler](../runtime/proceeding/helpers.go) receives the parsed pool and the already-validated `council_size`.  It requires `council_size <= len(specs)`, builds an index list over the pool records, and draws from that index list with `crypto/rand`.  Each successful draw removes one index from the remaining set, so sampling proceeds without replacement across the pool records for that run.
 
 The draw order determines the seat ids.  The first sampled record becomes `C1`, the second becomes `C2`, and the sequence continues until the runtime has drawn `council_size` records.  Each drawn seat carries four runtime values at this stage: the synthetic `member_id`, the selected model id, the persona filename, and the loaded persona text.
 
-The runtime keeps the persona text for prompting, but the public council metadata carries only the seat id, model id, and persona filename.  That separation appears directly in [the council seat type](../runtime/runner/types.go), where `PersonaText` is excluded from JSON output.  The draw therefore produces both the public description of the council and the private prompt material that the council runtime will later feed to each model.
+The runtime keeps the persona text for prompting, but the public council metadata carries only the seat id, model id, and persona filename.  That separation appears directly in [the council seat type](../runtime/proceeding/types.go), where `PersonaText` is excluded from JSON output.  The draw therefore produces both the public description of the council and the private prompt material that the council runtime will later feed to each model.
 
 ## Lean Initialization
 
-After sampling, the runtime converts the drawn seats into Lean input with [the council mapper](../runtime/runner/helpers.go).  Each mapped entry includes `member_id`, `model`, `persona_filename`, and `status`, with `status` set to `seated` before the request is sent.  The Go bridge in [the Lean engine wrapper](../runtime/lean/engine.go) packages that list into an `initialize_case` request together with the proposition and the current policy state.
+After sampling, the runtime converts the drawn seats into Lean input with [the council mapper](../runtime/proceeding/helpers.go).  Each mapped entry includes `member_id`, `model`, `persona_filename`, and `status`, with `status` set to `seated` before the request is sent.  The Go bridge in [the Lean engine wrapper](../runtime/lean/engine.go) packages that list into an `initialize_case` request together with the proposition and the current policy state.
 
 [The Lean initializer](../engine/Main.lean) then performs its own constitution checks.  It requires a non-empty council, requires the incoming list length to match `policy.council_size`, and requires unique `member_id` values.  When those checks pass, it rewrites every incoming member to `status := "seated"`, resets `deliberation_round` to `1`, clears `council_votes`, sets case status to `active`, and moves case phase to `openings`.
 
@@ -43,9 +43,9 @@ That second initialization step fixes the authoritative council state inside the
 
 ## Recording
 
-The constituted council is recorded as soon as initialization succeeds.  [The main runner](../runtime/runner/run.go) appends a `run_initialized` event that includes the complaint, the evidence standard, the attorney model configuration, and the full council list.  That event is the first durable record of which members were seated in that run.
+The constituted council is recorded as soon as initialization succeeds.  [The main proceeding](../runtime/proceeding/run.go) appends a `run_initialized` event that includes the complaint, the evidence standard, the attorney model configuration, and the full council list.  That event is the first durable record of which members were seated in that run.
 
-The same council list appears again in the completion evidence written by [the renderer](../runtime/runner/render.go).  `run.json` carries the council in the top-level `council` field, and `council.json` writes the same list on its own.  Those evidence preserve the constituted body exactly as it existed at initialization, which means the council metadata is not reconstructed later from the vote log.
+The same council list appears again in the completion evidence written by [the renderer](../runtime/proceeding/render.go).  `run.json` carries the council in the top-level `council` field, and `council.json` writes the same list on its own.  Those evidence preserve the constituted body exactly as it existed at initialization, which means the council metadata is not reconstructed later from the vote log.
 
 ## Vote Order
 
@@ -57,8 +57,8 @@ The procedure now waits for all seated members to vote in a round before resolvi
 
 ## Status Changes
 
-The council can shrink during deliberation through explicit status change.  The current runtime path for that change is timeout handling in [the council runtime](../runtime/runner/council.go), which calls Lean `remove_council_member` with a new status such as `timed_out`.  Lean permits that transition only during deliberation, only for a known seated member, and only before that member has cast a vote in the current round.
+The council can shrink during deliberation through explicit status change.  The current runtime path for that change is council opportunity failure in [the council runtime](../runtime/proceeding/council.go), which calls Lean `fail_opportunity` and marks the member `failed`.  Lean permits that transition only during deliberation, only for a known seated member, and only before that member has cast a vote in the current round.
 
-After removal, the member remains present in `council_members`, but the member no longer counts as seated.  Later calls to the next-member selector therefore skip that seat, and later rounds use the smaller seated body.  The runtime records that change as a `council_member_removed` event, so the event stream shows both the originally constituted council and the later status transition.
+After failure, the member remains present in `council_members`, but the member no longer counts as seated.  Later calls to the next-member selector therefore skip that seat, and later rounds use the smaller seated body.  The runtime records that change as an `opportunity_failed` event and a `council_member_removed` event, so the event stream shows both the originally constituted council and the later status transition.
 
-Another council failure path leaves the council composition untouched and ends the run.  If a council model keeps returning malformed or invalid votes until it exceeds the runtime invalid-attempt limit, [the council executor](../runtime/runner/council.go) returns an error and the run stops.  In that case the constituted council remains the same body that initialization created, and the failure appears as a run error rather than as a change in council membership.
+If a council model keeps returning malformed or invalid votes until it exhausts the runtime invalid-attempt limit, AAR records a council-member opportunity failure.  The failed member is dismissed, and the case continues if the remaining seated council members can still proceed under the policy.

@@ -11,7 +11,7 @@ After the run, inspect the regenerated files rather than trusting the command ex
 For `adc/`, the exact commands are these:
 
 ```bash
-cd /home/somebody/src/adjudication/adc
+cd adc
 ../common/tools/proofstats.sh
 uv run --script ../common/tools/gentheorems.py
 git status --short -- docs/proofstats.md docs/theorems.md theorems.tsv
@@ -20,7 +20,7 @@ git status --short -- docs/proofstats.md docs/theorems.md theorems.tsv
 For `arb/`, the exact commands are these:
 
 ```bash
-cd /home/somebody/src/adjudication/arb
+cd arb
 ../common/tools/proofstats.sh
 uv run --script ../common/tools/gentheorems.py
 git status --short -- docs/proofstats.md docs/theorems.md theorems.tsv

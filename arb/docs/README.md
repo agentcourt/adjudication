@@ -10,7 +10,6 @@ These documents cover AAR rules, practice guidance, process specifications, evid
 | [Practice Manual](practice.md) | Lawyer and council practice. |
 | [Evidence Handling](evidence-handling.md) | Evidence custody, evidence APIs, upload rules, and inspection. |
 | [Councils](councils.md) | Council selection and deliberation notes. |
-| [Parameters](params.md) | Policy and runtime parameter notes. |
 
 ## Specifications And Test Plans
 
@@ -21,7 +20,7 @@ These documents cover AAR rules, practice guidance, process specifications, evid
 | [AAR MCP Test Plan](aar-mcp-test.md) | External MCP process test plan. |
 | [AAR Case Failures](case-failures.md) | Case and council failure rules. |
 | [AAR Case Failure Test Plan](case-failures-testing.md) | Process and HTTP failure tests. |
-| [OpenClaw Codex Auth](openclaw-auth.md) | Tested OpenClaw Codex `auth.json` path. |
+| [OpenClaw Codex Auth](openclaw-auth.md) | OpenClaw Codex `auth.json` path. |
 
 ## Proof And Analysis References
 
@@ -30,9 +29,7 @@ These documents cover AAR rules, practice guidance, process specifications, evid
 | [Literate Lean](literate-lean.md) | Lean documentation notes. |
 | [Merits Graphs](merits-graphs.md) | Merits-graph notes. |
 | [Verification](verification.md) | Verification notes. |
-| [More Verification Notes](more-verification-notes.md) | Additional verification notes. |
 | [Proof Statistics](proofstats.md) | Proof count and coverage notes. |
-| [Reviews](reviews.md) | Review notes. |
 | [Theorems](theorems.md) | Theorem catalog. |
 
-Historical run observations, old API drafts, and old design notes live under `../../scratch/arb/`.  Current run instructions live in [Agent Arbitration Manual](../manual.md).  Current advocacy guidance lives in [Practice Manual](practice.md).
+Current run instructions live in [Agent Arbitration Manual](../manual.md).  Current advocacy guidance lives in [Practice Manual](practice.md).
