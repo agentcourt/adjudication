@@ -43,6 +43,7 @@ const (
 	councilFailureAgentExited     = "agent_exited"
 	councilFailureOutputLimit     = "agent_output_limit_exceeded"
 	openClawCodexContainerHome    = "/aar-codex"
+	agentStopWait                 = 30 * time.Second
 )
 
 const (
@@ -126,7 +127,7 @@ type processRecord struct {
 	name     string
 	kind     string
 	command  *exec.Cmd
-	done     chan error
+	done     chan processExit
 	stopName string
 
 	stdoutPath string
@@ -140,6 +141,20 @@ type processRecord struct {
 	forcedReason  string
 	forcedMessage string
 	forcedDetails map[string]any
+}
+
+type processExit struct {
+	waitErr   error
+	stdoutErr error
+	stderrErr error
+}
+
+func (e processExit) err() error {
+	return errors.Join(e.waitErr, e.stdoutErr, e.stderrErr)
+}
+
+func (e processExit) closeErr() error {
+	return errors.Join(e.stdoutErr, e.stderrErr)
 }
 
 type councilProcessTarget struct {
@@ -1352,7 +1367,7 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 		name:       name,
 		kind:       kind,
 		command:    cmd,
-		done:       make(chan error, 1),
+		done:       make(chan processExit, 1),
 		stopName:   stopName,
 		stdoutPath: stdoutPath,
 		stderrPath: stderrPath,
@@ -1361,12 +1376,14 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 		stdoutCounter: stdoutCounter,
 	}
 	go func() {
-		err := cmd.Wait()
-		closeOut := closeStdout()
-		closeErr := stderr.Close()
-		waitErr := errors.Join(err, closeOut, closeErr)
+		exit := processExit{
+			waitErr:   cmd.Wait(),
+			stdoutErr: closeStdout(),
+			stderrErr: stderr.Close(),
+		}
+		waitErr := exit.err()
 		record.markExited()
-		record.done <- waitErr
+		record.done <- exit
 		if ctx.Err() != nil {
 			return
 		}
@@ -1608,14 +1625,31 @@ func (s *runState) stopAgents() error {
 		if proc.kind == "docker" && strings.TrimSpace(proc.stopName) != "" {
 			if err := exec.Command(s.opts.DockerCommand, "stop", proc.stopName).Run(); err != nil {
 				errs = append(errs, fmt.Errorf("docker stop %s: %w", proc.stopName, err))
+				continue
 			}
+		} else if err := proc.command.Process.Kill(); err != nil {
+			errs = append(errs, fmt.Errorf("kill %s: %w", proc.name, err))
 			continue
 		}
-		if err := proc.command.Process.Kill(); err != nil {
-			errs = append(errs, fmt.Errorf("kill %s: %w", proc.name, err))
+		exit, err := waitProcessExit(proc, agentStopWait)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if closeErr := exit.closeErr(); closeErr != nil {
+			errs = append(errs, fmt.Errorf("close logs for %s: %w", proc.name, closeErr))
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func waitProcessExit(proc *processRecord, timeout time.Duration) (processExit, error) {
+	select {
+	case exit := <-proc.done:
+		return exit, nil
+	case <-time.After(timeout):
+		return processExit{}, fmt.Errorf("timed out waiting for %s process %s to exit after stop", proc.kind, proc.name)
+	}
 }
 
 func (s *runState) cleanupSecrets() error {

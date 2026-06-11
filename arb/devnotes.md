@@ -847,3 +847,26 @@ tools, lawyer concurrency, or council containers.  A one-line nested OpenClaw
 request on the same exec AMI failed on Docker bridge networking after 227,809
 ms with the same stream-disconnect error.  The same request succeeded when the
 child OpenClaw container used Docker host networking.
+
+### Agent cleanup ordering
+
+Reference: [Local run launcher](runtime/localrun/localrun.go)
+
+The host-network AAR run on instance `i-0fe13af586ae3c639` passed the previous
+OpenClaw stream-disconnect point, reached council deliberation, and entered the
+success upload path under
+`s3://agentcourt-data/arbattest/aar-runs/aar-ex01-20260611T230151Z/aar/`.
+During that upload, the console showed child container output interleaved with
+S3 copy output.  That led to a cleanup-ordering check in the localrun package.
+
+`stopAgents` stopped live child processes but did not wait for the original
+`docker run` or child process to finish `cmd.Wait()` and close redirected
+stdout and stderr.  The glue script could therefore begin uploading the AAR
+output tree while the final process log bytes were still being flushed.  The
+uploaded output tree can then race the process log closure.
+
+The process completion channel now carries the process wait error separately
+from stdout and stderr close errors.  `stopAgents` waits up to 30 seconds after
+stopping each live process, treats the process exit from an intentional stop as
+expected, and still reports log-close errors.  `TestStopAgentsWaitsForProcessExit`
+covers the ordering.

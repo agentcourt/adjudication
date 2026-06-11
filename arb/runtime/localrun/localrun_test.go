@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"net"
 	"os"
 	"os/exec"
@@ -603,17 +602,19 @@ func TestMonitorCouncilOutputKillsProcessOverLimit(t *testing.T) {
 		name:       "pi-C1",
 		kind:       "podman",
 		command:    cmd,
-		done:       make(chan error, 1),
+		done:       make(chan processExit, 1),
 		stdoutPath: stdoutPath,
 		stderrPath: stderrPath,
 		finished:   make(chan struct{}),
 	}
 	go func() {
-		waitErr := cmd.Wait()
-		closeOut := stdout.Close()
-		closeErr := stderr.Close()
+		exit := processExit{
+			waitErr:   cmd.Wait(),
+			stdoutErr: stdout.Close(),
+			stderrErr: stderr.Close(),
+		}
 		proc.markExited()
-		proc.done <- errors.Join(waitErr, closeOut, closeErr)
+		proc.done <- exit
 	}()
 	t.Cleanup(func() {
 		if !proc.isExited() {
@@ -646,6 +647,60 @@ func TestMonitorCouncilOutputKillsProcessOverLimit(t *testing.T) {
 	}
 	if details["output_bytes"] != int64(6) || details["output_limit_bytes"] != int64(5) {
 		t.Fatalf("details = %#v", details)
+	}
+}
+
+func TestStopAgentsWaitsForProcessExit(t *testing.T) {
+	dir := t.TempDir()
+	stdoutPath := filepath.Join(dir, "pi-C1.stdout")
+	stderrPath := filepath.Join(dir, "pi-C1.stderr")
+	stdout, err := os.Create(stdoutPath)
+	if err != nil {
+		t.Fatalf("create stdout: %v", err)
+	}
+	stderr, err := os.Create(stderrPath)
+	if err != nil {
+		t.Fatalf("create stderr: %v", err)
+	}
+	cmd := exec.Command("sleep", "60")
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start sleep: %v", err)
+	}
+	proc := &processRecord{
+		name:       "pi-C1",
+		kind:       "podman",
+		command:    cmd,
+		done:       make(chan processExit, 1),
+		stdoutPath: stdoutPath,
+		stderrPath: stderrPath,
+		finished:   make(chan struct{}),
+	}
+	go func() {
+		exit := processExit{
+			waitErr:   cmd.Wait(),
+			stdoutErr: stdout.Close(),
+			stderrErr: stderr.Close(),
+		}
+		proc.markExited()
+		proc.done <- exit
+	}()
+	t.Cleanup(func() {
+		if !proc.isExited() {
+			_ = cmd.Process.Kill()
+			<-proc.finished
+		}
+	})
+
+	state := &runState{processes: []*processRecord{proc}}
+	if err := state.stopAgents(); err != nil {
+		t.Fatalf("stopAgents returned error: %v", err)
+	}
+	select {
+	case <-proc.finished:
+	default:
+		t.Fatalf("stopAgents returned before the process finished")
 	}
 }
 
