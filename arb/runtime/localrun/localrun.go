@@ -801,7 +801,7 @@ func (s *runState) startOpenClawLawyer(ctx context.Context, role string, mcpPort
 		"-e", "AAR_PRINCIPAL="+role,
 		s.opts.OpenClawImage,
 		"sh", "-lc",
-		fmt.Sprintf("set -eu\n%s%sopenclaw mcp set \"$AAR_MCP_NAME\" \"$AAR_MCP_JSON\"\nexec openclaw agent --local --model %q --thinking %q --timeout %d --session-key \"$AAR_SESSION_KEY\" --message \"$AAR_ASSIGNMENT\" --json", commandPrefix, configPrefix, s.opts.OpenClawModel, s.opts.OpenClawThinking, s.opts.OpenClawTimeoutSeconds),
+		openClawAgentCommand(commandPrefix, configPrefix, s.opts.OpenClawModel, s.opts.OpenClawThinking, s.opts.OpenClawTimeoutSeconds),
 	)
 	proc, err := s.startProcess(ctx, "openclaw-"+role, "docker", s.opts.DockerCommand, args, name, nil)
 	if err != nil {
@@ -877,6 +877,42 @@ func openClawConfigPatchCommand(lawyerTimeoutSeconds int) (string, error) {
 		return "", fmt.Errorf("marshal OpenClaw config patch: %w", err)
 	}
 	return fmt.Sprintf("cat > /tmp/aar-openclaw-config.json <<'JSON'\n%s\nJSON\nopenclaw config patch --file /tmp/aar-openclaw-config.json\n", raw), nil
+}
+
+func openClawAgentCommand(commandPrefix string, configPrefix string, model string, thinking string, timeoutSeconds int) string {
+	return fmt.Sprintf(`set -eu
+%s%sopenclaw mcp set "$AAR_MCP_NAME" "$AAR_MCP_JSON"
+aar_openclaw_agent_attempts="${AAR_OPENCLAW_AGENT_ATTEMPTS:-3}"
+case "$aar_openclaw_agent_attempts" in
+    ''|*[!0-9]*)
+        echo "error: AAR_OPENCLAW_AGENT_ATTEMPTS must be a positive integer" >&2
+        exit 2
+        ;;
+esac
+if [ "$aar_openclaw_agent_attempts" -lt 1 ]; then
+    echo "error: AAR_OPENCLAW_AGENT_ATTEMPTS must be a positive integer" >&2
+    exit 2
+fi
+aar_openclaw_agent_attempt=1
+while :; do
+    aar_openclaw_err="/tmp/aar-openclaw-agent-$aar_openclaw_agent_attempt.stderr"
+    if openclaw agent --local --model %q --thinking %q --timeout %d --session-key "$AAR_SESSION_KEY" --message "$AAR_ASSIGNMENT" --json 2>"$aar_openclaw_err"; then
+        cat "$aar_openclaw_err" >&2
+        exit 0
+    fi
+    aar_openclaw_status=$?
+    cat "$aar_openclaw_err" >&2
+    if [ "$aar_openclaw_agent_attempt" -ge "$aar_openclaw_agent_attempts" ]; then
+        exit "$aar_openclaw_status"
+    fi
+    if ! grep -q 'stream disconnected before completion' "$aar_openclaw_err"; then
+        exit "$aar_openclaw_status"
+    fi
+    printf 'openclaw agent attempt %%s failed after a stream disconnect; retrying\n' "$aar_openclaw_agent_attempt" >&2
+    aar_openclaw_agent_attempt=$((aar_openclaw_agent_attempt + 1))
+    sleep 10
+done
+`, commandPrefix, configPrefix, model, thinking, timeoutSeconds)
 }
 
 func (s *runState) waitOpenClawStartDelay(ctx context.Context) error {

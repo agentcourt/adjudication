@@ -774,3 +774,32 @@ defendant, observer, and council assignments through MCP JSON-RPC.  The test
 checks tool lists, observer rejection of mutating tools, work-note recording,
 evidence reading, lawyer filings, council votes, service final result data, and
 the case artifacts written under the output directory.
+
+## 2026-06-11
+
+### OpenClaw stream retry
+
+Reference: [Local run launcher](runtime/localrun/localrun.go)
+
+An attested `ex01` AAR run on the Docker-enabled exec AMI reached the plaintiff
+OpenClaw lawyer and failed inside `openclaw agent`.  The plaintiff stderr log
+reported `stream disconnected before completion` from the ChatGPT Codex response
+endpoint after about 228 seconds.  AAR treated the process exit as fatal before
+the plaintiff opening opportunity completed.
+
+The generated OpenClaw container command now retries only that observed stream
+disconnect failure.  It keeps the same `AAR_SESSION_KEY`, captures stderr for
+classification, and exits immediately for auth, MCP, configuration, or other
+OpenClaw failures.  The localrun package test covers the generated command, and
+`go test ./arb/runtime/localrun` passes.
+
+### Glue completion marker
+
+Reference: [AAR glue script](glue/arb-glue.sh)
+
+The exec launcher waits for an `ATTESTATION END` marker in the application
+console output.  The AAR glue path wrote the attestation to S3 but printed only
+`OUTPUT_PREFIX` and `MANIFEST_SHA384`, which would leave a successful run
+waiting until the launcher timeout.  The glue script now prints `ATTESTATION END`
+after it uploads `run.log`, `manifest.json`, `manifest.sha384`, and
+`attestation.b64`.

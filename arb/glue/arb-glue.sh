@@ -137,3 +137,4 @@ aws s3 cp "$attestation" "$output_prefix/attestation.b64"
 
 printf 'OUTPUT_PREFIX=%s\n' "$output_prefix"
 printf 'MANIFEST_SHA384=%s\n' "$manifest_sha384"
+printf 'ATTESTATION END\n'

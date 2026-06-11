@@ -425,6 +425,21 @@ func TestOpenClawConfigPatchCommandUsesLawyerTimeout(t *testing.T) {
 	}
 }
 
+func TestOpenClawAgentCommandRetriesOnlyStreamDisconnects(t *testing.T) {
+	cmd := openClawAgentCommand("auth-prefix\n", "config-prefix\n", "gpt-5.5", "low", 3600)
+	for _, want := range []string{
+		"auth-prefix\nconfig-prefix\nopenclaw mcp set",
+		`AAR_OPENCLAW_AGENT_ATTEMPTS`,
+		`openclaw agent --local --model "gpt-5.5" --thinking "low" --timeout 3600`,
+		`grep -q 'stream disconnected before completion'`,
+		`exit "$aar_openclaw_status"`,
+	} {
+		if !strings.Contains(cmd, want) {
+			t.Fatalf("command missing %q:\n%s", want, cmd)
+		}
+	}
+}
+
 func TestApplyDefaultsOpenClawStartDelay(t *testing.T) {
 	if got := applyDefaults(Options{OpenClawStartDelaySeconds: -1}).OpenClawStartDelaySeconds; got != defaultOpenClawStartDelay {
 		t.Fatalf("default start delay = %d", got)
