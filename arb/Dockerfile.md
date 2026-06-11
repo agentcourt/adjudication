@@ -38,7 +38,9 @@ The final image has these runtime environment defaults:
 
 The run command passes `--docker docker` and `--podman docker`.  This makes both child-container roles use Docker through the mounted host socket.  OpenClaw uses `ghcr.io/openclaw/openclaw:latest`; Pi uses `agentcourt-pi-sandbox:latest`, which the entrypoint imports from the embedded root filesystem tar if the host Docker daemon lacks that tag.
 
-Use host networking for the parent container.  The AAR MCP server, lawyer containers, and council containers communicate through local ports and host-visible addresses.  The proved local and `dev` commands both used `--network host`.
+Use host networking for the parent container.  The AAR MCP server runs inside that parent container, and the parent must expose its local ports on the host network.  The proved local and direct `dev` commands both used `--network host` on the parent container.
+
+The child OpenClaw containers use Docker bridge networking by default.  The attested exec path is different: the Docker-enabled exec AMI reproduced a one-line embedded Codex stream failure when child OpenClaw used Docker bridge networking, and the same request succeeded when child OpenClaw used Docker host networking.  The glue AAR command therefore passes `--openclaw-network host`; in that mode `aar run` uses `127.0.0.1` as the default Docker MCP host.
 
 The output root must be mounted at the same absolute path inside the parent container that exists on the host.  `aar run` creates absolute paths for staged Codex homes and Pi homes, and the host Docker daemon then mounts those paths into child containers.  If the parent container sees `/out` but the host only has `/home/ec2-user/aar-out`, the child-container mounts will refer to the wrong host path.
 
@@ -114,7 +116,7 @@ docker run --rm --network host \
   >"$log" 2>&1
 ```
 
-The `--user` and `--group-add` arguments make files in the output directory belong to the host user while preserving access to the mounted Docker socket.  The `--network host` argument gives the parent and child containers the same host network namespace expected by the local AAR runtime.  The `--podman docker` argument makes the Pi council run through Docker, matching the embedded Pi image import performed by the entrypoint.
+The `--user` and `--group-add` arguments make files in the output directory belong to the host user while preserving access to the mounted Docker socket.  The `--network host` argument applies to the parent `arbattest-aar` container.  The `--podman docker` argument makes the Pi council run through Docker, matching the embedded Pi image import performed by the entrypoint.
 
 ## Inspecting Local Results
 

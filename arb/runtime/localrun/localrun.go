@@ -104,6 +104,7 @@ type Options struct {
 	OpenClawAuth               string
 	OpenClawCodexAuthPath      string
 	OpenClawStartDelaySeconds  int
+	OpenClawNetwork            string
 	PiImage                    string
 	PiMCPAdapter               string
 	CouncilOutputLimitBytes    int64
@@ -454,6 +455,10 @@ func applyDefaults(opts Options) Options {
 	if opts.CouncilOutputLimitBytes == 0 {
 		opts.CouncilOutputLimitBytes = DefaultCouncilOutputLimitBytes
 	}
+	opts.OpenClawNetwork = strings.TrimSpace(opts.OpenClawNetwork)
+	if strings.TrimSpace(opts.DockerMCPHost) == "" && opts.OpenClawNetwork == "host" {
+		opts.DockerMCPHost = "127.0.0.1"
+	}
 	if strings.TrimSpace(opts.DockerMCPHost) == "" {
 		opts.DockerMCPHost = "host.docker.internal"
 	}
@@ -493,6 +498,9 @@ func validateOptions(opts Options) error {
 	}
 	if opts.CouncilOutputLimitBytes < 0 {
 		return fmt.Errorf("council output limit bytes must be non-negative")
+	}
+	if opts.OpenClawNetwork != "" && opts.OpenClawNetwork != "host" {
+		return fmt.Errorf("invalid OpenClaw network %q; expected host or empty", opts.OpenClawNetwork)
 	}
 	for _, path := range []string{opts.LawyerInstructionsPath, opts.RemoteLawyerSkillPath, opts.CouncilInstructionsPath} {
 		if _, err := os.Stat(path); err != nil {
@@ -787,11 +795,7 @@ func (s *runState) startOpenClawLawyer(ctx context.Context, role string, mcpPort
 	if err != nil {
 		return err
 	}
-	args := []string{
-		"run", "--rm",
-		"--name", name,
-		"--add-host=host.docker.internal:host-gateway",
-	}
+	args := openClawDockerRunArgs(s.opts, name)
 	args = append(args, authArgs...)
 	args = append(args,
 		"-e", "AAR_MCP_NAME="+server,
@@ -811,6 +815,17 @@ func (s *runState) startOpenClawLawyer(ctx context.Context, role string, mcpPort
 	s.processes = append(s.processes, proc)
 	s.mu.Unlock()
 	return nil
+}
+
+func openClawDockerRunArgs(opts Options, name string) []string {
+	args := []string{"run", "--rm", "--name", name}
+	if opts.OpenClawNetwork != "" {
+		args = append(args, "--network", opts.OpenClawNetwork)
+	}
+	if opts.OpenClawNetwork != "host" {
+		args = append(args, "--add-host=host.docker.internal:host-gateway")
+	}
+	return args
 }
 
 func (s *runState) writeRemoteLawyerSkill(role string) error {

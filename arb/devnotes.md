@@ -1,5 +1,19 @@
 # Development Notes
 
+## 2026-06-11
+
+### Exec AMI OpenClaw networking
+
+Reference: `arb-glue:poc`, Docker-enabled exec AMI `ami-011f957fe91cf7b81`, AAR run `s3://agentcourt-data/arbattest/aar-runs/ex01-20260611T212020Z`
+
+The `ex01-20260611T212020Z` AAR exec run failed in the plaintiff OpenClaw container after three retries.  Each attempt failed after about 229 to 233 seconds with `stream disconnected before completion` from `https://chatgpt.com/backend-api/codex/responses`, before the plaintiff submitted an opening.  The failing run uploaded `run.log` and `aar-partial/`, but no manifest or attestation, because the glue script writes those artifacts only after a successful AAR run.
+
+The auth placement was checked in the same container topology.  Direct OpenClaw in Docker on `dev` can read `/aar-codex/auth.json`, import the token with `openclaw models auth paste-token`, and complete a one-line `openclaw agent --local` request.  The same check also passes when `arb-glue:poc` starts the child OpenClaw container through the host Docker socket on `dev`, proving the staged path under the shared work root is visible to the child container.
+
+The same nested check failed on the Docker-enabled exec AMI when the child OpenClaw container used Docker bridge networking.  Exec instance `i-031896be76d384d75` mounted `/aar-codex/auth.json`, imported the token, then the one-line `openclaw agent --local` request failed after 227,809 ms with the same stream-disconnect error.  This reproduced the AAR failure without AAR prompts, MCP tools, lawyer concurrency, or council containers.
+
+The host-network variant succeeded on the same exec AMI.  Exec instance `i-0c51749a2ab6e1876` used the same glue image tar, AAR input `auth.json`, OpenClaw image digest, and one-line OpenClaw request, but started the child OpenClaw container with `--network host`; the diagnostic completed and the launcher saw `ATTESTATION END`.  The fix adds an explicit `aar run --openclaw-network` option and makes the glue AAR invocation pass `--openclaw-network host`; when that mode is selected and no Docker MCP host is specified, `aar run` uses `127.0.0.1` for Docker-launched OpenClaw containers.
+
 ## 2026-06-06
 
 ### Root documentation tidy
@@ -803,3 +817,33 @@ console output.  The AAR glue path wrote the attestation to S3 but printed only
 waiting until the launcher timeout.  The glue script now prints `ATTESTATION END`
 after it uploads `run.log`, `manifest.json`, `manifest.sha384`, and
 `attestation.b64`.
+
+### Exec retry result
+
+Reference: [Local run launcher](runtime/localrun/localrun.go)
+
+The rebuilt post-retry glue image tar was uploaded to
+`s3://agentcourt-data/arbattest/images/arb-glue-poc.tar` with SHA-384
+`4586edeca3246f471aa446b536736cbf7d6d6843447f6955a5f2f81016c7784f408f92869eb916adabb7fb624808acb8`.
+The follow-up exec run used instance `i-0237488429308a6e0` and wrote partial
+artifacts under `s3://agentcourt-data/arbattest/aar-runs/ex01-20260611T212020Z`.
+The run reached the OpenClaw lawyers, configured their MCP servers, and stopped
+before any plaintiff opening statement was submitted.
+
+The retry code behaved as intended.  Plaintiff attempts 1, 2, and 3 all failed
+with `stream disconnected before completion` from
+`https://chatgpt.com/backend-api/codex/responses` after about 229 to 233
+seconds.  Defendant attempts 1 and 2 hit the same error before AAR stopped
+because the plaintiff container exited.
+
+The partial AAR state shows the case waiting at `openings:plaintiff`.  `run.log`
+reports `docker process openclaw-plaintiff exited before case completion`, and
+the S3 prefix contains `run.log` plus `aar-partial/` only.  No `manifest.json`,
+`manifest.sha384`, or `attestation.b64` exists for this run because the glue
+script creates those files only after `aar run` exits successfully.
+
+The follow-up diagnostics reproduced the failure without AAR prompts, MCP
+tools, lawyer concurrency, or council containers.  A one-line nested OpenClaw
+request on the same exec AMI failed on Docker bridge networking after 227,809
+ms with the same stream-disconnect error.  The same request succeeded when the
+child OpenClaw container used Docker host networking.
