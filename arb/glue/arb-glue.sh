@@ -8,6 +8,8 @@ output_prefix="${OUTPUT_PREFIX:?OUTPUT_PREFIX is required}"
 input_prefix="${INPUT_PREFIX:-}"
 
 export TPM2TOOLS_TCTI="${TPM2TOOLS_TCTI:-device:/dev/tpmrm0}"
+export TSS2_TCTI="${TSS2_TCTI:-device:/dev/tpmrm0}"
+export TPM_DEVICE="${TPM_DEVICE:-/dev/tpm0}"
 
 case "$output_prefix" in
     s3://*) ;;
@@ -82,7 +84,8 @@ case "$mode" in
 esac
 
 end_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-log_sha384="$(sha384sum "$log" | awk '{print $1}')"
+set -- $(sha384sum "$log")
+log_sha384="$1"
 
 cat > "$manifest" <<EOF
 {
@@ -100,10 +103,13 @@ cat > "$manifest" <<EOF
 }
 EOF
 
-manifest_sha384="$(sha384sum "$manifest" | awk '{print $1}')"
+set -- $(sha384sum "$manifest")
+manifest_sha384="$1"
 printf '%s\n' "$manifest_sha384" > "$manifest_hash_file"
 
-nitro-tpm-attest --user-data "$manifest_hash_file" | base64 | tr -d '\n' > "$attestation"
+attestation_raw="$run_dir/attestation.bin"
+nitro-tpm-attest --user-data "$manifest_hash_file" > "$attestation_raw"
+base64 "$attestation_raw" | tr -d '\n' > "$attestation"
 printf '\n' >> "$attestation"
 
 aws s3 cp "$log" "$output_prefix/run.log"
