@@ -349,6 +349,36 @@ func TestOpenClawAuthArgsForCodexUsesAbsoluteMountPath(t *testing.T) {
 	}
 }
 
+func TestCleanupSecretsRemovesSecretFilesWithoutRemovingPiHome(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "pi-C1")
+	settingsDir := filepath.Join(home, ".pi", "agent")
+	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
+		t.Fatalf("create Pi settings dir: %v", err)
+	}
+	mcpPath := filepath.Join(home, ".mcp.json")
+	authPath := filepath.Join(settingsDir, "auth.json")
+	for _, path := range []string{mcpPath, authPath} {
+		if err := os.WriteFile(path, []byte("{}"), 0o600); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+	state := &runState{}
+	state.trackSecretFile(mcpPath)
+	state.trackSecretFile(authPath)
+	state.trackSecretFile(filepath.Join(settingsDir, "missing.json"))
+	if err := state.cleanupSecrets(); err != nil {
+		t.Fatalf("cleanup secrets: %v", err)
+	}
+	for _, path := range []string{mcpPath, authPath} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("secret file still exists %s: %v", path, err)
+		}
+	}
+	if _, err := os.Stat(settingsDir); err != nil {
+		t.Fatalf("Pi settings dir was removed: %v", err)
+	}
+}
+
 func TestEffectiveLawyerTurnTimeoutSeconds(t *testing.T) {
 	if got := effectiveLawyerTurnTimeoutSeconds(Options{}); got != DefaultRunLawyerTimeoutSeconds {
 		t.Fatalf("default timeout = %d", got)

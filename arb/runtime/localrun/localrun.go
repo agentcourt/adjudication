@@ -203,6 +203,7 @@ type runState struct {
 	token         string
 	openClawAuth  openClawAuthConfig
 	processes     []*processRecord
+	secretFiles   []string
 	secretDirs    []string
 	councilStarts map[string]bool
 	agentErrs     chan error
@@ -951,6 +952,12 @@ func (s *runState) stageOpenClawCodexAuth(role string) (string, error) {
 	return home, nil
 }
 
+func (s *runState) trackSecretFile(path string) {
+	s.mu.Lock()
+	s.secretFiles = append(s.secretFiles, path)
+	s.mu.Unlock()
+}
+
 func (s *runState) waitForCouncilRoster(ctx context.Context, caseDone <-chan caseOutcome, mcpDone <-chan error) ([]councilRosterEntry, error) {
 	rosterDone := make(chan rosterOutcome, 1)
 	go func() {
@@ -1110,6 +1117,8 @@ func (s *runState) startPiCouncil(ctx context.Context, entry councilRosterEntry,
 	if err != nil {
 		return err
 	}
+	s.trackSecretFile(filepath.Join(home, ".mcp.json"))
+	s.trackSecretFile(filepath.Join(home, ".pi", "agent", "auth.json"))
 	args := []string{
 		"run", "--rm",
 		"--network", "host",
@@ -1557,9 +1566,18 @@ func (s *runState) stopAgents() error {
 
 func (s *runState) cleanupSecrets() error {
 	s.mu.Lock()
+	files := append([]string{}, s.secretFiles...)
 	dirs := append([]string{}, s.secretDirs...)
 	s.mu.Unlock()
 	var errs []error
+	for _, path := range files {
+		if strings.TrimSpace(path) == "" {
+			continue
+		}
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, fmt.Errorf("remove staged secret file %s: %w", path, err))
+		}
+	}
 	for _, dir := range dirs {
 		if strings.TrimSpace(dir) == "" {
 			continue
