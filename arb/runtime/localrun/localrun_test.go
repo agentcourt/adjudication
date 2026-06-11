@@ -295,8 +295,15 @@ func TestOpenClawAuthArgsForCodex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat staged auth: %v", err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	if info.Mode().Perm() != 0o666 {
 		t.Fatalf("staged auth mode = %o", info.Mode().Perm())
+	}
+	homeInfo, err := os.Stat(filepath.Dir(staged))
+	if err != nil {
+		t.Fatalf("stat staged auth home: %v", err)
+	}
+	if homeInfo.Mode().Perm() != 0o777 {
+		t.Fatalf("staged auth home mode = %o", homeInfo.Mode().Perm())
 	}
 	if len(state.secretDirs) != 1 {
 		t.Fatalf("secret dirs = %#v", state.secretDirs)

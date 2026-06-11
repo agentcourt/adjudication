@@ -60,11 +60,12 @@ case "$mode" in
         secrets_dir="$run_dir/secrets"
         aar_out="$run_dir/aar"
         mkdir -p "$secrets_dir" "$aar_out"
-        aws s3 cp "${INPUT_PREFIX%/}/auth.json" "$secrets_dir/auth.json"
-        aws s3 cp "${INPUT_PREFIX%/}/keys.sh" "$secrets_dir/keys.sh"
+        aws s3 cp "$input_prefix/auth.json" "$secrets_dir/auth.json" --no-progress
+        aws s3 cp "$input_prefix/keys.sh" "$secrets_dir/keys.sh" --no-progress
         . "$secrets_dir/keys.sh"
         : "${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required}"
         export OPENROUTER_API_KEY
+        set +e
         /usr/local/bin/aar-entrypoint \
             run \
             --out-dir "$aar_out" \
@@ -75,7 +76,24 @@ case "$mode" in
             --pi-image agentcourt-pi-sandbox:latest \
             ex01 \
             > "$log" 2>&1
-        aws s3 cp --recursive "$aar_out" "$output_prefix/aar/"
+        aar_status=$?
+        set -e
+        if [ "$aar_status" -ne 0 ]; then
+            aws s3 cp "$log" "$output_prefix/run.log" --no-progress
+            partial_upload_status=0
+            aws s3 cp --recursive "$aar_out" "$output_prefix/aar-partial/" --no-progress || partial_upload_status=$?
+            if [ "$partial_upload_status" -ne 0 ]; then
+                echo "error: failed to upload partial AAR output after aar exit status $aar_status" >&2
+                exit "$partial_upload_status"
+            fi
+            echo "error: aar failed with exit status $aar_status" >&2
+            exit "$aar_status"
+        fi
+        if ! aws s3 cp --recursive "$aar_out" "$output_prefix/aar/" --no-progress; then
+            aws s3 cp "$log" "$output_prefix/run.log" --no-progress
+            echo "error: failed to upload AAR output" >&2
+            exit 1
+        fi
         ;;
     *)
         echo "error: unsupported ARB_GLUE_MODE: $mode" >&2
