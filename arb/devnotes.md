@@ -962,3 +962,50 @@ attestation, and extracted the archive.  EC2 reported the instance as
 `shutting-down` with reason `Client.UserInitiatedShutdown: User initiated
 shutdown` immediately after the run.  The run therefore used S3 artifacts as the
 completion record and did not require manual cleanup of the launched instance.
+
+### Attested `ex06` run
+
+Reference: [AAR Docker image runbook](Dockerfile.md)
+
+The `ex06` attested run used `tools/run-arb-attested.py` with verification
+enabled.  The dev-side image validated `examples/ex06/complaint.md` before
+input staging.  The runtime launcher files in `/home/ec2-user/attest` matched
+the expected runtime path by SHA-384 before the EC2 run started.
+
+The staged input prefix is
+`s3://agentcourt-data/arbattest/aar-inputs/ex06-20260612T042346Z`, containing
+`auth.json` and `keys.sh`.  The run reused the uploaded glue-image tar at
+`s3://agentcourt-data/arbattest/images/arb-glue-poc.tar` with SHA-384
+`1b3e3a9a1bae75dbe527d12591d95d526b4b4f7a063e72ba1e9239e709e752c7f1f1c5884f722fc5fff94f1cf3695f50`.
+
+The run id is `aar-ex06-20260612T042346Z`.  It used exec AMI
+`ami-011f957fe91cf7b81`, instance `i-00fb5acdf339f2592`, and output prefix
+`s3://agentcourt-data/arbattest/aar-runs/aar-ex06-20260612T042346Z`.  The local
+output directory is `/media/hd2/src/arbattest/aar-attested/aar-ex06-20260612T042346Z`.
+
+The S3 output prefix contains exactly five success objects: `run.log`,
+`manifest.json`, `manifest.sha384`, `attestation.b64`, and
+`aar-output.tar.gz`.  The AAR result in `aar-output/local-run.json` is
+`status=ok`, `resolution=not_demonstrated`, with case id
+`arb-ex06-20260612042615`.  The manifest reports
+`started_at=2026-06-12T04:25:34Z` and `finished_at=2026-06-12T04:41:36Z`.
+
+Verification passed locally.  `manifest.sha384` is
+`d65c655127b54a8846766b1931f90fddb5182b23aee768aeef27c28f320a32a3ef62b0fa9317f4dff73ddce99453a8e3`,
+the archive is 1,166,917 bytes with SHA-384
+`cac64144d8da3103f849efc58f6ffe5e6530079593f5578124dd58c24d03b9c61a63011ddc0b573549806f024d6c301f`,
+and `run.log` SHA-384 is
+`4b3eefaf1be7f5f1db0daded302309da001d31067278d9107166a5443caea138c39ea653e35c55df9aa31a399ba54605`.
+The manifest records container image id
+`sha256:30858a2901b6f61cd0d4cb5ac96edee2ca34bb82f194c5ab807104064ecc82df`
+and container image tar SHA-384
+`1b3e3a9a1bae75dbe527d12591d95d526b4b4f7a063e72ba1e9239e709e752c7f1f1c5884f722fc5fff94f1cf3695f50`.
+
+The attestation signature and certificate chain validated.  The attestation
+user data equals the manifest hash.  PCR4 matched
+`83AC49DFAA5D76939970E1568472FF463FBE90C4038D000D31F6C0520F583D1DD51CE0C103CEB26E4B773AAD99A4B3B4`,
+PCR7 matched
+`98441C7F7625D10058C47683AEC486CE311C633235EB555593A7EE791121E3578AE72D04ECEF661F272D59058B77AF35`,
+and PCR12 was all zeros.  The local driver terminated instance
+`i-00fb5acdf339f2592` after it saw the complete S3 artifact set, downloaded the
+artifacts, verified the manifest and attestation, and extracted the archive.
