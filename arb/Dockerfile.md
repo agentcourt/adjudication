@@ -192,6 +192,37 @@ The expected output is:
 ok
 ```
 
+## Building the Glue Image on `dev`
+
+The attested exec path uses the glue image rather than the base AAR image by itself.  Run the build from the `arb` directory, or pass the `arb/Dockerfile` path and the `arb` directory as the Docker build context.
+
+```bash
+ssh dev 'set -eu
+cd /home/ec2-user/adjudication-build-2361886
+git pull --ff-only origin arbattest
+cd arb
+sudo docker build --no-cache \
+  -t arbattest-aar:dev \
+  -f Dockerfile \
+  .
+sudo docker build --no-cache \
+  --build-arg AAR_IMAGE=arbattest-aar:dev \
+  -t arb-glue:poc \
+  -f Dockerfile.glue \
+  .
+sudo docker save arb-glue:poc -o /home/ec2-user/arb-glue-poc.tar
+sudo chown ec2-user:ec2-user /home/ec2-user/arb-glue-poc.tar
+sha384sum /home/ec2-user/arb-glue-poc.tar
+AWS_DEFAULT_REGION=us-east-2 \
+  aws s3 cp /home/ec2-user/arb-glue-poc.tar \
+  s3://agentcourt-data/arbattest/images/arb-glue-poc.tar
+'
+```
+
+After upload, `s3://agentcourt-data/arbattest/images/arb-glue-poc.tar` is the image file used by `run-aar.sh` on the exec AMI.  Recompute and record the SHA-384 after every rebuild because the exec launcher uses the tar as the image input.
+
+The rebuild from commit `d338c32` produced `arbattest-aar:dev` as `sha256:72775dddf4cc1b3dcf77970443801d98c2f9740d6576bf655c4fa33cc41c035f` and `arb-glue:poc` as `sha256:07ee87e51928468e382851ac72ec92062ea7794116652a312a5c32bfab26c2a1`.  The uploaded glue tar has SHA-384 `fbfb459dd3b5b2e73763ac98e424342a56b5a82fe3624bc0c940db7d2e3d95f628a7e9d99e212ab28bb680ad9d040133`.
+
 ## Preparing Remote Secrets
 
 Copy only the small runtime secret files to `dev`.  The paths used so far are under `/home/ec2-user/arbattest-secrets`.

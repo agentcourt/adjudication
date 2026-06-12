@@ -12,6 +12,8 @@ The glue script now uploads AAR output as one archive object instead of recursiv
 
 The success manifest now records `aar_archive_key`, `aar_archive_sha384`, and `aar_archive_bytes`.  The manifest hash remains the value passed to `nitro-tpm-attest --user-data`, so the attestation binds the single AAR archive object rather than thousands of individual S3 keys.
 
+The dev rebuild used commit `d338c32`.  The rebuilt AAR image is `sha256:72775dddf4cc1b3dcf77970443801d98c2f9740d6576bf655c4fa33cc41c035f`; the rebuilt glue image is `sha256:07ee87e51928468e382851ac72ec92062ea7794116652a312a5c32bfab26c2a1`.  The uploaded tar `s3://agentcourt-data/arbattest/images/arb-glue-poc.tar` has SHA-384 `fbfb459dd3b5b2e73763ac98e424342a56b5a82fe3624bc0c940db7d2e3d95f628a7e9d99e212ab28bb680ad9d040133`.
+
 ### Exec AMI OpenClaw networking
 
 Reference: `arb-glue:poc`, Docker-enabled exec AMI `ami-011f957fe91cf7b81`, AAR run `s3://agentcourt-data/arbattest/aar-runs/ex01-20260611T212020Z`
