@@ -196,7 +196,22 @@ The `keys.sh` file must define `OPENROUTER_API_KEY`.  The glue script sources th
 
 ## Run The Attested AAR
 
-Run the exec AMI from `/home/ec2-user/attest` on `dev`.  Pass `RUN_ID` and `OUTPUT_PREFIX` explicitly so the verifier does not need to recover them from console output.  Set `AAR_EXAMPLE` to any checked-in example name.
+The preferred local driver is `attest/run-arb-attested.py`.  It starts the exec AMI through `dev`, polls the S3 output prefix, writes progress and launcher logs under the local output directory, downloads all S3 artifacts into that directory, extracts the AAR archive, and can run verification.  If a terminal S3 artifact set appears while `exec.sh` is still polling, the driver terminates only the EC2 instance ID launched for that run and stops the remote launcher.
+
+```bash
+uv run attest/run-arb-attested.py \
+  --example ex01 \
+  --input-prefix s3://agentcourt-data/arbattest/aar-inputs/ex01-REPLACE_WITH_STAMP \
+  --exec-ami ami-011f957fe91cf7b81 \
+  --out-dir /tmp/aar-ex01-REPLACE_WITH_STAMP \
+  --verify \
+  --expected-pcr4 83AC49DFAA5D76939970E1568472FF463FBE90C4038D000D31F6C0520F583D1DD51CE0C103CEB26E4B773AAD99A4B3B4 \
+  --expected-pcr7 98441C7F7625D10058C47683AEC486CE311C633235EB555593A7EE791121E3578AE72D04ECEF661F272D59058B77AF35
+```
+
+The output directory receives `run.env`, `progress.log`, `launcher.log`, the downloaded S3 artifacts, `attestation.txt` when verification runs, `verification.log` when verification runs, and either `aar-output/` or `aar-partial/` extracted from the archive.  The driver defaults to `DEV_HOST=dev`, `AWS_REGION=us-east-2`, `INSTANCE_TYPE=m5.4xlarge`, `IAM_INSTANCE_PROFILE=ec2-nix-builder`, `IMAGE_TAR_S3=s3://agentcourt-data/arbattest/images/arb-glue-poc.tar`, and `REMOTE_ATTEST_DIR=/home/ec2-user/attest`.
+
+The manual command below is the same execution path without the local driver.  Run the exec AMI from `/home/ec2-user/attest` on `dev`.  Pass `RUN_ID` and `OUTPUT_PREFIX` explicitly so the verifier does not need to recover them from console output.  Set `AAR_EXAMPLE` to any checked-in example name.
 
 ```bash
 ssh dev 'set -eu

@@ -10,6 +10,8 @@ The glue script now accepts `AAR_EXAMPLE`, validates it with the same path-safet
 
 `Dockerfile.md` now documents the current attested execution path end to end.  It covers the base image, glue image, dev build and upload flow, launcher installation, S3 input staging, the exec AMI command, artifact download, manifest and archive verification, attestation verification, and the known first-failure checks from the completed runs.  The documented generic path runs any checked-in example under `arb/examples/<name>`; external case packets still need an agreed S3 input schema before implementation.
 
+`attest/run-arb-attested.py` is now the preferred local runner for this path.  It launches the existing exec AMI through `dev`, polls the S3 output prefix, writes local `progress.log` and `launcher.log`, downloads all terminal artifacts into the requested local directory, extracts the AAR archive, and can verify the manifest, archive hashes, attestation user data, and selected PCR values.  If terminal S3 artifacts appear while `exec.sh` is still polling, the runner terminates only the instance ID that `exec.sh` launched and stops the remote launcher.
+
 ## 2026-06-11
 
 ### AAR S3 archive output
