@@ -2,7 +2,7 @@
 
 ## Scope
 
-This runbook covers the AAR base image from `arb/Dockerfile`, the AAR glue image from `arb/Dockerfile.glue`, and the attested exec run launched by `attest/run-aar.sh`.  The base image contains the compiled `aar` and `aarengine` binaries, the `adjudication` source tree, the Docker CLI, and an embedded Pi council root filesystem.  The glue image adds AWS CLI, `nitro-tpm-attest`, the TSS runtime libraries, and `glue/arb-glue.sh`.
+This runbook covers the AAR base image from `arb/Dockerfile`, the AAR glue image from `arb/Dockerfile.glue`, and the attested exec run launched by `tools/run-aar.sh`.  The base image contains the compiled `aar` and `aarengine` binaries, the `adjudication` source tree, the Docker CLI, and an embedded Pi council root filesystem.  The glue image adds AWS CLI, `nitro-tpm-attest`, the TSS runtime libraries, and `glue/arb-glue.sh`.
 
 The current generic path runs any checked-in example under `arb/examples/<name>`.  Select the example with `AAR_EXAMPLE`; when the variable is absent, both `run-aar.sh` and the glue script use `ex01`.  To run a new arb this way, add the case as a new checked-in example, push the `arbattest` branch, rebuild and upload the glue image tar, run the exec AMI with `AAR_EXAMPLE=<name>`, and verify the S3 artifacts.
 
@@ -16,7 +16,9 @@ The current glue input schema contains only runtime secrets and the example name
 | Glue image | `adjudication/arb/Dockerfile.glue` | Adds AWS CLI, `nitro-tpm-attest`, TSS libraries, and the S3 artifact flow. |
 | Glue script | `adjudication/arb/glue/arb-glue.sh` | Runs the selected AAR example, archives output, writes the manifest, obtains the TPM attestation, and uploads artifacts to S3. |
 | Exec launcher | `attest/exec.sh` | Starts the Docker-enabled exec AMI with user-data from a script. |
-| AAR exec script | `attest/run-aar.sh` | Downloads the glue image tar on the exec AMI, loads it into Docker, and starts the glue container. |
+| AAR exec script | `adjudication/arb/tools/run-aar.sh` | Downloads the glue image tar on the exec AMI, loads it into Docker, and starts the glue container. |
+| Local AAR driver | `adjudication/arb/tools/run-arb-attested.py` | Starts `exec.sh` through `dev`, polls S3, downloads artifacts, extracts the AAR archive, and can verify the result. |
+| Container proof script | `adjudication/arb/tools/run-container-poc.sh` | Runs the glue image in `attest-only` mode for the container attestation proof. |
 | Attestation parser | `attest/parse_attestation.py` | Verifies the attestation signature and certificate chain and prints user data and PCR values. |
 | Dev source checkout | `/home/ec2-user/adjudication-build-2361886` on `dev` | Source tree used for Docker builds on `dev`. |
 | Dev launcher directory | `/home/ec2-user/attest` on `dev` | Runtime directory for `exec.sh`, `run-aar.sh`, and helper scripts.  This directory is not the source-control checkout. |
@@ -162,15 +164,15 @@ sudo docker run --rm \
 
 ## Install The Exec Runner On `dev`
 
-`/home/ec2-user/attest` on `dev` is the launcher directory used by the AMI runner.  It is not the source-control checkout, so update the runtime scripts there when the checked-in `attest` branch changes.  The current `run-aar.sh` accepts `AAR_EXAMPLE`, defaults to `ex01`, passes it to the glue container, and names default runs as `aar-$AAR_EXAMPLE-$STAMP`.
+`/home/ec2-user/attest` on `dev` is the runtime launcher directory used by the AMI runner.  It is not the `attest` source checkout.  Copy generic exec files from `attest` and AAR-specific files from `adjudication/arb/tools`.  The current `run-aar.sh` accepts `AAR_EXAMPLE`, defaults to `ex01`, passes it to the glue container, and names default runs as `aar-$AAR_EXAMPLE-$STAMP`.
 
 ```bash
 ssh dev 'mkdir -p /home/ec2-user/attest'
-scp attest/exec.sh attest/run-aar.sh attest/parse_attestation.py dev:/home/ec2-user/attest/
+scp attest/exec.sh attest/parse_attestation.py adjudication/arb/tools/run-aar.sh dev:/home/ec2-user/attest/
 ssh dev 'chmod 755 /home/ec2-user/attest/exec.sh /home/ec2-user/attest/run-aar.sh /home/ec2-user/attest/parse_attestation.py'
 ```
 
-Keep the source branch checked in as well.  The runtime copy on `dev` is for execution, while the `attest` repository records the script.  Commit and push `attest/run-aar.sh` when the launcher behavior changes.
+Keep the source branch checked in as well.  The runtime copy on `dev` is for execution, while `adjudication/arb/tools/run-aar.sh` records the AAR-specific script.  Commit and push `adjudication/arb` when AAR launcher behavior changes.
 
 ## Prepare The S3 Input Prefix
 
@@ -196,10 +198,10 @@ The `keys.sh` file must define `OPENROUTER_API_KEY`.  The glue script sources th
 
 ## Run The Attested AAR
 
-The preferred local driver is `attest/run-arb-attested.py`.  It starts the exec AMI through `dev`, polls the S3 output prefix, writes progress and launcher logs under the local output directory, downloads all S3 artifacts into that directory, extracts the AAR archive, and can run verification.  If a terminal S3 artifact set appears while `exec.sh` is still polling, the driver terminates only the EC2 instance ID launched for that run and stops the remote launcher.
+The preferred local driver is `adjudication/arb/tools/run-arb-attested.py`.  It starts the exec AMI through `dev`, polls the S3 output prefix, writes progress and launcher logs under the local output directory, downloads all S3 artifacts into that directory, extracts the AAR archive, and can run verification.  If a terminal S3 artifact set appears while `exec.sh` is still polling, the driver terminates only the EC2 instance ID launched for that run and stops the remote launcher.
 
 ```bash
-uv run attest/run-arb-attested.py \
+uv run adjudication/arb/tools/run-arb-attested.py \
   --example ex01 \
   --input-prefix s3://agentcourt-data/arbattest/aar-inputs/ex01-REPLACE_WITH_STAMP \
   --exec-ami ami-011f957fe91cf7b81 \
@@ -377,7 +379,7 @@ The reference `ex01` run `aar-ex01-20260612T001855Z` verified with manifest SHA-
 
 ## Run Any Checked-In Arb
 
-Add or select an example directory under `arb/examples/<name>` with a valid `complaint.md` and any case files needed by that complaint.  Push the `adjudication` `arbattest` branch so the Docker build can clone it, then rebuild and upload the glue image tar from `dev`.  Install the current `attest/run-aar.sh` in `/home/ec2-user/attest`, stage `auth.json` and `keys.sh` under a new S3 input prefix, run the exec AMI with `AAR_EXAMPLE=<name>`, and run the verification commands above against the resulting output prefix.
+Add or select an example directory under `arb/examples/<name>` with a valid `complaint.md` and any case files needed by that complaint.  Push the `adjudication` `arbattest` branch so the Docker build can clone it, then rebuild and upload the glue image tar from `dev`.  Install the current `adjudication/arb/tools/run-aar.sh` in `/home/ec2-user/attest`, stage `auth.json` and `keys.sh` under a new S3 input prefix, run the exec AMI with `AAR_EXAMPLE=<name>`, and run the verification commands above against the resulting output prefix.
 
 Use a fresh `RUN_ID` and `OUTPUT_PREFIX` for every run.  The recommended naming form is `aar-$AAR_EXAMPLE-$STAMP`, with `STAMP` from `date -u +%Y%m%dT%H%M%SZ`.  Timestamped prefixes keep failed, partial, and verified runs separate and make S3 cleanup decisions explicit.
 

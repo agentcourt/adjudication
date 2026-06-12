@@ -4,13 +4,15 @@
 
 ### Generic attested AAR example runs
 
-Reference: `glue/arb-glue.sh`, `Dockerfile.md`, `attest/run-aar.sh`
+Reference: `glue/arb-glue.sh`, `tools/run-aar.sh`, `tools/run-arb-attested.py`, `Dockerfile.md`
 
-The glue script now accepts `AAR_EXAMPLE`, validates it with the same path-safety boundary as `aar run`, defaults to `ex01`, and records the selected example in `manifest.json`.  If `RUN_ID` is absent in AAR mode, the default run ID is `aar-$AAR_EXAMPLE-$STAMP`; non-AAR glue modes keep the existing `run-$STAMP` default.  The `attest/run-aar.sh` launcher now passes `AAR_EXAMPLE` into the glue container and names default runs from the selected example.
+The glue script now accepts `AAR_EXAMPLE`, validates it with the same path-safety boundary as `aar run`, defaults to `ex01`, and records the selected example in `manifest.json`.  If `RUN_ID` is absent in AAR mode, the default run ID is `aar-$AAR_EXAMPLE-$STAMP`; non-AAR glue modes keep the existing `run-$STAMP` default.  The AAR-owned `tools/run-aar.sh` launcher now passes `AAR_EXAMPLE` into the glue container and names default runs from the selected example.
 
 `Dockerfile.md` now documents the current attested execution path end to end.  It covers the base image, glue image, dev build and upload flow, launcher installation, S3 input staging, the exec AMI command, artifact download, manifest and archive verification, attestation verification, and the known first-failure checks from the completed runs.  The documented generic path runs any checked-in example under `arb/examples/<name>`; external case packets still need an agreed S3 input schema before implementation.
 
-`attest/run-arb-attested.py` is now the preferred local runner for this path.  It launches the existing exec AMI through `dev`, polls the S3 output prefix, writes local `progress.log` and `launcher.log`, downloads all terminal artifacts into the requested local directory, extracts the AAR archive, and can verify the manifest, archive hashes, attestation user data, and selected PCR values.  If terminal S3 artifacts appear while `exec.sh` is still polling, the runner terminates only the instance ID that `exec.sh` launched and stops the remote launcher.
+`tools/run-arb-attested.py` is now the preferred local runner for this path.  It launches the existing exec AMI through `dev`, polls the S3 output prefix, writes local `progress.log` and `launcher.log`, downloads all terminal artifacts into the requested local directory, extracts the AAR archive, and can verify the manifest, archive hashes, attestation user data, and selected PCR values.  If terminal S3 artifacts appear while `exec.sh` is still polling, the runner terminates only the instance ID that `exec.sh` launched and stops the remote launcher.
+
+The AAR-specific runner scripts live in `tools/`: `run-aar.sh`, `run-arb-attested.py`, and `run-container-poc.sh`.  The `attest` repository keeps generic exec AMI and attestation utilities.  `/home/ec2-user/attest` on `dev` remains a runtime directory that can contain copied scripts from both source repositories.
 
 ## 2026-06-11
 
