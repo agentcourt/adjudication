@@ -902,3 +902,63 @@ from stdout and stderr close errors.  `stopAgents` waits up to 30 seconds after
 stopping each live process, treats the process exit from an intentional stop as
 expected, and still reports log-close errors.  `TestStopAgentsWaitsForProcessExit`
 covers the ordering.
+
+## 2026-06-12
+
+### Attested `ex03` run
+
+Reference: [AAR Docker image runbook](Dockerfile.md)
+
+The `ex03` attested run used the checked-in driver at
+`tools/run-arb-attested.py` with verification enabled.  The first build command
+body was accidentally invoked locally instead of through `ssh dev`; it failed at
+`cd /home/ec2-user/adjudication-build-2361886` and changed no remote state.  The
+corrected remote build used `/home/ec2-user/adjudication-build-2361886` on
+branch `arbattest`, rebuilt `arbattest-aar:dev` and `arb-glue:poc` with Docker
+cache disabled, and uploaded `s3://agentcourt-data/arbattest/images/arb-glue-poc.tar`
+with SHA-384 `1b3e3a9a1bae75dbe527d12591d95d526b4b4f7a063e72ba1e9239e709e752c7f1f1c5884f722fc5fff94f1cf3695f50`.
+
+The staged input prefix is
+`s3://agentcourt-data/arbattest/aar-inputs/ex03-20260612T031231Z`, containing
+`auth.json` and `keys.sh`.  The rebuilt image validated
+`examples/ex03/complaint.md` before input staging.  The runtime launcher files in
+`/home/ec2-user/attest` matched the checked-in `exec.sh`,
+`parse_attestation.py`, and `tools/run-aar.sh` by SHA-384 before the EC2 run
+started.
+
+The run id is `aar-ex03-20260612T031231Z`.  It used exec AMI
+`ami-011f957fe91cf7b81`, instance `i-0f3bb32a380fdd053`, and output prefix
+`s3://agentcourt-data/arbattest/aar-runs/aar-ex03-20260612T031231Z`.  The local
+output directory is `/media/hd2/src/arbattest/aar-attested/aar-ex03-20260612T031231Z`.
+
+The S3 output prefix contains exactly five success objects: `run.log`,
+`manifest.json`, `manifest.sha384`, `attestation.b64`, and
+`aar-output.tar.gz`.  The AAR result in `aar-output/local-run.json` is
+`status=ok`, `resolution=demonstrated`, with case id
+`arb-ex03-20260612031530`.  The manifest reports
+`started_at=2026-06-12T03:14:48Z` and `finished_at=2026-06-12T03:33:00Z`.
+
+Verification passed locally.  `manifest.sha384` is
+`8a8c4260fbc8657221baba08af1c9f150eac12e728437ef8572e705d998c7170d3f97b7361727befd99e7ed8311dc10e`,
+the archive is 3,132,979 bytes with SHA-384
+`839565dd0f92ab86fef012f1b80873e3f5cf9653cbcbc1b4ace8cb7463b7acc967f530f63490ad2e1611ce88b2f91ce7`,
+and `run.log` SHA-384 is
+`02acf50cc09728289099519757884602629c5c597e84ccc32d45648e24342c27c99c0a54682604dbfc50d20af70b6c40`.
+The manifest records container image id
+`sha256:30858a2901b6f61cd0d4cb5ac96edee2ca34bb82f194c5ab807104064ecc82df`
+and container image tar SHA-384
+`1b3e3a9a1bae75dbe527d12591d95d526b4b4f7a063e72ba1e9239e709e752c7f1f1c5884f722fc5fff94f1cf3695f50`.
+
+The attestation signature and certificate chain validated.  The attestation
+user data equals the manifest hash.  PCR4 matched
+`83AC49DFAA5D76939970E1568472FF463FBE90C4038D000D31F6C0520F583D1DD51CE0C103CEB26E4B773AAD99A4B3B4`,
+PCR7 matched
+`98441C7F7625D10058C47683AEC486CE311C633235EB555593A7EE791121E3578AE72D04ECEF661F272D59058B77AF35`,
+and PCR12 was all zeros.
+
+The local driver terminated instance `i-0f3bb32a380fdd053` after it saw the
+complete S3 artifact set, downloaded the artifacts, verified the manifest and
+attestation, and extracted the archive.  EC2 reported the instance as
+`shutting-down` with reason `Client.UserInitiatedShutdown: User initiated
+shutdown` immediately after the run.  The run therefore used S3 artifacts as the
+completion record and did not require manual cleanup of the launched instance.
