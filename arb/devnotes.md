@@ -14,6 +14,12 @@ The success manifest now records `aar_archive_key`, `aar_archive_sha384`, and `a
 
 The dev rebuild used commit `d338c32`.  The rebuilt AAR image is `sha256:72775dddf4cc1b3dcf77970443801d98c2f9740d6576bf655c4fa33cc41c035f`; the rebuilt glue image is `sha256:07ee87e51928468e382851ac72ec92062ea7794116652a312a5c32bfab26c2a1`.  The uploaded tar `s3://agentcourt-data/arbattest/images/arb-glue-poc.tar` has SHA-384 `fbfb459dd3b5b2e73763ac98e424342a56b5a82fe3624bc0c940db7d2e3d95f628a7e9d99e212ab28bb680ad9d040133`.
 
+The attested AAR run `aar-ex01-20260612T001855Z` completed on exec instance `i-028821ebeaaf19674`.  Output prefix `s3://agentcourt-data/arbattest/aar-runs/aar-ex01-20260612T001855Z` contains `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, and `aar-output.tar.gz`.  The run result was `status=ok`, `resolution=demonstrated`, and the archive contains the case packet, logs, evidence store, event log, work notes, transcript, digest, and submitted evidence while excluding `pi-*` homes and staged OpenClaw Codex directories.
+
+The manifest hash is `ae52d9b5acccd76a45ce0e6c8f3cabf8e775ddb20e0761702fa1d73e15dffdcab080a0be859556170aaa3a23e9971f41`, and `sha384sum manifest.json` matches `manifest.sha384`.  The archive hash is `ce42ae939df866a2919f20ff8ccd5ffc86df0ffc0f7376b84811f9ae0a44dac8b664b4aaf0a7913b25677a2a7fc75bb0`, matching `manifest.json`.  The attestation signature and certificate chain validated; attestation user data equals the manifest hash.  PCR4 is `83AC49DFAA5D76939970E1568472FF463FBE90C4038D000D31F6C0520F583D1DD51CE0C103CEB26E4B773AAD99A4B3B4`, PCR7 is `98441C7F7625D10058C47683AEC486CE311C633235EB555593A7EE791121E3578AE72D04ECEF661F272D59058B77AF35`, and PCR12 is all zeros.
+
+The dev-side `exec.sh` launcher did not detect the successful run from EC2 console output.  S3 had the complete success result, but `get-console-output` did not expose `ATTESTATION END`, and `exec.sh` kept polling.  After verification, the temporary instance was terminated manually and the stale launcher process was killed.  Future launcher work should use S3 artifacts as the success record.
+
 ### Exec AMI OpenClaw networking
 
 Reference: `arb-glue:poc`, Docker-enabled exec AMI `ami-011f957fe91cf7b81`, AAR run `s3://agentcourt-data/arbattest/aar-runs/ex01-20260611T212020Z`
