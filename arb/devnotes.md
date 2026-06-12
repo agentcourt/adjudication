@@ -1,5 +1,15 @@
 # Development Notes
 
+## 2026-06-12
+
+### Generic attested AAR example runs
+
+Reference: `glue/arb-glue.sh`, `Dockerfile.md`, `attest/run-aar.sh`
+
+The glue script now accepts `AAR_EXAMPLE`, validates it with the same path-safety boundary as `aar run`, defaults to `ex01`, and records the selected example in `manifest.json`.  If `RUN_ID` is absent in AAR mode, the default run ID is `aar-$AAR_EXAMPLE-$STAMP`; non-AAR glue modes keep the existing `run-$STAMP` default.  The `attest/run-aar.sh` launcher now passes `AAR_EXAMPLE` into the glue container and names default runs from the selected example.
+
+`Dockerfile.md` now documents the current attested execution path end to end.  It covers the base image, glue image, dev build and upload flow, launcher installation, S3 input staging, the exec AMI command, artifact download, manifest and archive verification, attestation verification, and the known first-failure checks from the completed runs.  The documented generic path runs any checked-in example under `arb/examples/<name>`; external case packets still need an agreed S3 input schema before implementation.
+
 ## 2026-06-11
 
 ### AAR S3 archive output

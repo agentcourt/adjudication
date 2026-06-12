@@ -3,9 +3,30 @@ set -eu
 
 mode="${ARB_GLUE_MODE:-attest-only}"
 work_root="${ARB_GLUE_WORK_ROOT:-/var/lib/arb-glue}"
-run_id="${RUN_ID:-run-$(date -u +%Y%m%dT%H%M%SZ)}"
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 output_prefix="${OUTPUT_PREFIX:?OUTPUT_PREFIX is required}"
 input_prefix="${INPUT_PREFIX:-}"
+aar_example=""
+
+case "$mode" in
+    aar)
+        aar_example="${AAR_EXAMPLE:-ex01}"
+        case "$aar_example" in
+            ""|.*|*/*|*..*)
+                echo "error: invalid AAR_EXAMPLE: $aar_example" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+esac
+
+run_id="${RUN_ID:-}"
+if [ -z "$run_id" ]; then
+    case "$mode" in
+        aar) run_id="aar-$aar_example-$stamp" ;;
+        *) run_id="run-$stamp" ;;
+    esac
+fi
 
 export TPM2TOOLS_TCTI="${TPM2TOOLS_TCTI:-device:/dev/tpmrm0}"
 export TSS2_TCTI="${TSS2_TCTI:-device:/dev/tpmrm0}"
@@ -102,7 +123,7 @@ case "$mode" in
             --docker docker \
             --podman docker \
             --pi-image agentcourt-pi-sandbox:latest \
-            ex01 \
+            "$aar_example" \
             > "$log" 2>&1
         aar_status=$?
         set -e
@@ -135,6 +156,7 @@ cat > "$manifest" <<EOF
 {
   "run_id": "$(json_string "$run_id")",
   "mode": "$(json_string "$mode")",
+  "aar_example": "$(json_string "$aar_example")",
   "started_at": "$(json_string "$start_time")",
   "finished_at": "$(json_string "$end_time")",
   "instance_id": "$(json_string "$instance_id")",

@@ -1,73 +1,55 @@
 # AAR Docker Image Runbook
 
-## Purpose
+## Scope
 
-This runbook describes the `aar` Docker image built from `adjudication/arb/Dockerfile`.  The image exists to run `aar` directly for arbitration cases such as `arb/examples/ex01`, including the OpenClaw lawyer containers and Pi council containers that `aar run` starts during a full run.  The image also embeds the Pi council root filesystem so a host does not need to build the Pi council image before running `aar`.
+This runbook covers the AAR base image from `arb/Dockerfile`, the AAR glue image from `arb/Dockerfile.glue`, and the attested exec run launched by `attest/run-aar.sh`.  The base image contains the compiled `aar` and `aarengine` binaries, the `adjudication` source tree, the Docker CLI, and an embedded Pi council root filesystem.  The glue image adds AWS CLI, `nitro-tpm-attest`, the TSS runtime libraries, and `glue/arb-glue.sh`.
 
-The image builds from the public `jsmorph/adjudication` repository and the `arbattest` branch by default.  It contains the cloned `adjudication` tree, the compiled `aar` and `aarengine` binaries, a Docker CLI, and an embedded Pi council root filesystem tar.  The image is independent of the `attest` repository; attestation work runs later through the `attest` tools and the exec AMI.
+The current generic path runs any checked-in example under `arb/examples/<name>`.  Select the example with `AAR_EXAMPLE`; when the variable is absent, both `run-aar.sh` and the glue script use `ex01`.  To run a new arb this way, add the case as a new checked-in example, push the `arbattest` branch, rebuild and upload the glue image tar, run the exec AMI with `AAR_EXAMPLE=<name>`, and verify the S3 artifacts.
 
-## Image Contents
+The current glue input schema contains only runtime secrets and the example name.  It reads `auth.json` and `keys.sh` from `INPUT_PREFIX` and passes one example argument to `aar run`.  External case packets that live outside the image need an agreed S3 input schema for complaint, files, policy, and optional run flags before implementation.
 
-| Item | Location in image | Source |
+## Files And Branches
+
+| Item | Location | Role |
 | --- | --- | --- |
-| `aar` binary | `/opt/adjudication/arb/.bin/aar` | Built by `make build` from `jsmorph/adjudication`, branch `arbattest`. |
-| `aarengine` binary | `/opt/adjudication/arb/.bin/aarengine` | Built by `make build` from `jsmorph/adjudication`, branch `arbattest`. |
-| `adjudication` source tree | `/opt/adjudication` | Cloned during the image build. |
-| Docker CLI | `/usr/local/bin/docker` | Copied from `docker:26-cli`. |
-| Pi root filesystem tar | `/opt/images/agentcourt-pi-sandbox-rootfs.tar` | Built from the Pi runtime recipe in the image build. |
-| Entrypoint | `/usr/local/bin/aar-entrypoint` | Imports the embedded Pi root filesystem into the host Docker daemon when needed, then execs `aar`. |
+| AAR base image | `adjudication/arb/Dockerfile` | Builds `aar`, `aarengine`, Docker CLI support, and the embedded Pi council root filesystem. |
+| Glue image | `adjudication/arb/Dockerfile.glue` | Adds AWS CLI, `nitro-tpm-attest`, TSS libraries, and the S3 artifact flow. |
+| Glue script | `adjudication/arb/glue/arb-glue.sh` | Runs the selected AAR example, archives output, writes the manifest, obtains the TPM attestation, and uploads artifacts to S3. |
+| Exec launcher | `attest/exec.sh` | Starts the Docker-enabled exec AMI with user-data from a script. |
+| AAR exec script | `attest/run-aar.sh` | Downloads the glue image tar on the exec AMI, loads it into Docker, and starts the glue container. |
+| Attestation parser | `attest/parse_attestation.py` | Verifies the attestation signature and certificate chain and prints user data and PCR values. |
+| Dev source checkout | `/home/ec2-user/adjudication-build-2361886` on `dev` | Source tree used for Docker builds on `dev`. |
+| Dev launcher directory | `/home/ec2-user/attest` on `dev` | Runtime directory for `exec.sh`, `run-aar.sh`, and helper scripts.  This directory is not the source-control checkout. |
 
-The Dockerfile accepts these build arguments:
+Use the `arbattest` branch in both `jsmorph/adjudication` and `jsmorph/attest`.  The current Docker-enabled exec AMI is `ami-011f957fe91cf7b81` in `us-east-2`.  Its expected PCR values are listed in the verification section and must be replaced when the exec AMI is rebuilt.
 
-| Build argument | Default | Meaning |
-| --- | --- | --- |
-| `ADJUDICATION_REPO` | `https://github.com/jsmorph/adjudication.git` | Git repository cloned during the build. |
-| `ADJUDICATION_REF` | `arbattest` | Branch or ref checked out during the build. |
-| `PI_CODING_AGENT_PACKAGE` | `@earendil-works/pi-coding-agent@0.78.0` | Pi package installed into the embedded council root filesystem. |
+## Attestation Record
 
-The final image has these runtime environment defaults:
+The attestation record lives in S3, not stdout.  Stdout from `exec.sh` is useful for launch progress and the instance ID, but verification reads the S3 prefix.  A completed AAR run writes exactly these objects under `OUTPUT_PREFIX`: `run.log`, `aar-output.tar.gz`, `manifest.json`, `manifest.sha384`, and `attestation.b64`.
 
-| Environment variable | Default | Meaning |
-| --- | --- | --- |
-| `AAR_PI_IMAGE` | `agentcourt-pi-sandbox:latest` | Host Docker image tag used for council member containers. |
-| `AAR_PI_ROOTFS_TAR` | `/opt/images/agentcourt-pi-sandbox-rootfs.tar` | Root filesystem tar imported into the host Docker daemon. |
+`manifest.sha384` contains the SHA-384 hash of `manifest.json`.  The glue script passes that file to `nitro-tpm-attest --user-data`, so the attestation `User Data` field must equal the manifest hash.  The manifest binds the selected example, input prefix, output prefix, exec AMI, instance ID, glue image ID, glue image tar hash, run log hash, and AAR archive hash.
 
-## Runtime Model
+If `aar run` exits nonzero, the glue image uploads `run.log` and `aar-partial.tar.gz`, then exits with the AAR status.  It does not create `manifest.json`, `manifest.sha384`, or `attestation.b64` for a failed AAR run.  A prefix with only the failure artifacts is a failed AAR run, and no attestation verification exists for that run.
 
-`aar run` starts child containers.  The `aar` process runs inside the `arbattest-aar` container, and the child OpenClaw and Pi containers run through the host Docker daemon.  The parent container therefore needs the host Docker socket mounted at `/var/run/docker.sock`.
+## Runtime Topology
 
-The run command passes `--docker docker` and `--podman docker`.  This makes both child-container roles use Docker through the mounted host socket.  OpenClaw uses `ghcr.io/openclaw/openclaw:latest`; Pi uses `agentcourt-pi-sandbox:latest`, which the entrypoint imports from the embedded root filesystem tar if the host Docker daemon lacks that tag.
+The exec AMI runs Docker on the host.  `run-aar.sh` downloads `s3://agentcourt-data/arbattest/images/arb-glue-poc.tar`, computes its SHA-384 hash, loads `arb-glue:poc`, records the Docker image ID, and starts the glue container.  The container receives `/var/run/docker.sock`, `/dev/tpm0`, `/dev/tpmrm0` when present, `INPUT_PREFIX`, `OUTPUT_PREFIX`, `RUN_ID`, `AAR_EXAMPLE`, and image identity fields.
 
-Use host networking for the parent container.  The AAR MCP server runs inside that parent container, and the parent must expose its local ports on the host network.  The proved local and direct `dev` commands both used `--network host` on the parent container.
+The glue container starts the parent `aar` process through `/usr/local/bin/aar-entrypoint`.  That parent process starts OpenClaw lawyer containers and Pi council containers through the host Docker daemon.  The parent container uses host networking, and the glue AAR command passes `--openclaw-network host` so OpenClaw uses `127.0.0.1` for the AAR MCP server.
 
-The child OpenClaw containers use Docker bridge networking by default.  The attested exec path is different: the Docker-enabled exec AMI reproduced a one-line embedded Codex stream failure when child OpenClaw used Docker bridge networking, and the same request succeeded when child OpenClaw used Docker host networking.  The glue AAR command therefore passes `--openclaw-network host`; in that mode `aar run` uses `127.0.0.1` as the default Docker MCP host.
-
-The output root must be mounted at the same absolute path inside the parent container that exists on the host.  `aar run` creates absolute paths for staged Codex homes and Pi homes, and the host Docker daemon then mounts those paths into child containers.  If the parent container sees `/out` but the host only has `/home/ec2-user/aar-out`, the child-container mounts will refer to the wrong host path.
-
-## Attested S3 Output
-
-The glue image writes a small S3 prefix for each attested run.  Successful AAR mode uploads `run.log`, `aar-output.tar.gz`, `manifest.json`, `manifest.sha384`, and `attestation.b64`.  The manifest records the AAR archive S3 key, byte count, and SHA-384 hash before the manifest hash is passed to `nitro-tpm-attest --user-data`.
-
-The AAR archive excludes per-agent working homes such as `pi-C*` and staged OpenClaw Codex directories.  It keeps the case packet, logs, evidence store, event log, transcript, digest, work notes, and `local-run.json`.  This keeps S3 object counts small while preserving the artifacts needed to inspect the run.
-
-If `aar run` exits nonzero, the glue image uploads `run.log` and `aar-partial.tar.gz`, then exits with the AAR status.  It does not create a manifest or attestation for a failed AAR run.
+The parent and child containers share paths through the host Docker daemon, so AAR output must live under a path that the host Docker daemon can mount into child containers.  The exec path uses `ARB_GLUE_WORK_ROOT=/var/lib/arbattest-aar`, mounted into the glue container at the same absolute path.  The local direct-run command below follows the same rule by mounting the output root at the identical path inside the parent container.
 
 ## Required Inputs
 
-The image does not contain runtime secrets.  A full `ex01` run needs a Codex auth JSON file for OpenClaw lawyers and an OpenRouter key for the Pi council.
+The glue image reads secrets from S3 so the attested instance does not depend on SSH file transfer at run time.  `INPUT_PREFIX` must contain `auth.json` and `keys.sh`.  `auth.json` is the Codex auth file used by OpenClaw, and `keys.sh` must assign or export `OPENROUTER_API_KEY` for the Pi council.
 
-| Input | Local path used so far | Remote path used so far | Use |
-| --- | --- | --- | --- |
-| Codex auth JSON | `/media/hd2/src/arbattest/tmp/auth.json` | `/home/ec2-user/arbattest-secrets/auth.json` | Mounted read-only as `/run/secrets/codex-auth.json`. |
-| OpenRouter key file | `/media/hd2/src/arbattest/tmp/keys.sh` | `/home/ec2-user/arbattest-secrets/keys.sh` | Sourced before `docker run`; provides `OPENROUTER_API_KEY`. |
-| Docker socket | `/var/run/docker.sock` | `/var/run/docker.sock` | Lets the parent `aar` container start child containers through the host daemon. |
-| Output root | `/media/hd2/src/arbattest/aar-out` | `/home/ec2-user/aar-out` | Stores run artifacts and logs. |
+The verified instance profile for the first version is the same profile used on `dev`, passed to `exec.sh` as `IAM_INSTANCE_PROFILE=ec2-nix-builder`.  The verified instance type is `m5.4xlarge`, because the exec AMI root filesystem is RAM-backed and Docker extracts image layers into that RAM-backed filesystem.  The verified region is `us-east-2`, and the verified S3 bucket prefix is `s3://agentcourt-data/arbattest/`.
 
-The `keys.sh` file must export or assign `OPENROUTER_API_KEY`.  The run command passes the variable by name with `-e OPENROUTER_API_KEY`, so the key value stays out of the command line.  On a remote host where `docker run` uses `sudo`, use `sudo --preserve-env=OPENROUTER_API_KEY docker run`; otherwise `sudo` can drop the sourced variable before Docker receives it.
+Valid `AAR_EXAMPLE` values are checked-in example directory names accepted by `aar run`: nonempty, no slash, no dot prefix, and no `..`.  Current examples include `ex01` through `ex12` and the long-form condition examples under `arb/examples`.  The glue script records the chosen example in `manifest.json` as `aar_example`.
 
-## Building Locally
+## Build The Base Image Locally
 
-Run the build from `/media/hd2/src/arbattest`.  The build does not copy local source into the image; it clones the public repository named by `ADJUDICATION_REPO` and `ADJUDICATION_REF`.  Use `--no-cache` after pushing branch changes, because a cached `git clone` layer can otherwise preserve an older branch tip.
+Run the base image build from `/media/hd2/src/arbattest`.  The Dockerfile clones the public repository named by `ADJUDICATION_REPO` and checks out `ADJUDICATION_REF`; it does not copy this local checkout into the image.  Use `--no-cache` after pushing branch changes, because a cached clone layer can retain an older branch tip.
 
 ```bash
 docker build --no-cache \
@@ -76,14 +58,13 @@ docker build --no-cache \
   adjudication/arb
 ```
 
-The proved local image after the cleanup fix was `sha256:eadf5c4f91c08653e604c9ce8049eaafd43a7098a097a1cc2fa721370fc5451b` on `arm64`.  The build installs Lean through `elan`, compiles `aar`, installs Node and the Pi package into a separate root filesystem stage, exports that root filesystem as a tar, and copies the Docker CLI into the final image.
-
-Validate that the image can run `aar`:
+Validate any checked-in example complaint with the selected image.  This command tests that the image contains the example and that the complaint parses.  Replace `ex01` with any checked-in example name.
 
 ```bash
+AAR_EXAMPLE=ex01
 docker run --rm \
   arbattest-aar:local \
-  validate --complaint examples/ex01/complaint.md
+  validate --complaint "examples/$AAR_EXAMPLE/complaint.md"
 ```
 
 The expected output is:
@@ -92,19 +73,19 @@ The expected output is:
 ok
 ```
 
-## Running `ex01` Locally
+## Run An Example Locally Without Attestation
 
-The workspace script `run-local-ex01.sh` contains the proved local command.  It checks that `tmp/auth.json`, `tmp/keys.sh`, and `/var/run/docker.sock` exist, sources `tmp/keys.sh`, creates a timestamped output directory under `aar-out`, and writes the `aar run` output to a sibling log file.
-
-```bash
-./run-local-ex01.sh
-```
-
-The script prints the output directory and log path before running.  A completed run prints those paths again.  The first completed local run used `/media/hd2/src/arbattest/aar-out/ex01-local-20260611T134840Z` and produced `status=ok` and `resolution=demonstrated`.
-
-The script expands to this command shape:
+The local direct run exercises the AAR image, OpenClaw lawyers, and Pi council containers without the exec AMI.  It needs a readable Codex auth file at `tmp/auth.json`, a key file at `tmp/keys.sh`, and the host Docker socket.  It writes a timestamped output directory under `aar-out` and a sibling log file.
 
 ```bash
+set -eu
+AAR_EXAMPLE="${AAR_EXAMPLE:-ex01}"
+. "$PWD/tmp/keys.sh"
+output_root="$PWD/aar-out"
+mkdir -p "$output_root"
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+out="$output_root/$AAR_EXAMPLE-local-$stamp"
+log="$output_root/$AAR_EXAMPLE-local-$stamp.log"
 docker run --rm --network host \
   --user "$(id -u):$(id -g)" \
   --group-add "$(stat -c '%g' /var/run/docker.sock)" \
@@ -117,84 +98,33 @@ docker run --rm --network host \
   --out-dir "$out" \
   --openclaw-auth codex \
   --openclaw-codex-auth /run/secrets/codex-auth.json \
+  --openclaw-network host \
   --docker docker \
   --podman docker \
   --pi-image agentcourt-pi-sandbox:latest \
-  ex01 \
+  "$AAR_EXAMPLE" \
   >"$log" 2>&1
+printf '%s\n' "$out"
+printf '%s\n' "$log"
 ```
 
-The `--user` and `--group-add` arguments make files in the output directory belong to the host user while preserving access to the mounted Docker socket.  The `--network host` argument applies to the parent `arbattest-aar` container.  The `--podman docker` argument makes the Pi council run through Docker, matching the embedded Pi image import performed by the entrypoint.
-
-## Inspecting Local Results
-
-Check the result file after the command exits:
+Read the local result after the command exits.  A completed run writes `local-run.json` with `status` and `resolution`.  The first completed local `ex01` run produced `status=ok` and `resolution=demonstrated`.
 
 ```bash
-sed -n '1,220p' aar-out/ex01-local-TIMESTAMP/local-run.json
+python3 -m json.tool "$out/local-run.json"
 ```
 
-A successful run has this shape:
-
-```json
-{
-  "error": "",
-  "failure": null,
-  "resolution": "demonstrated",
-  "status": "ok"
-}
-```
-
-The run output should contain `complaint.md`, `policy.json`, `runtime.json`, `run.json`, `evidence-manifest.json`, `state.json`, `council.json`, `transcript.md`, `digest.md`, `local-run.json`, `events.ndjson`, `work-notes.ndjson`, `logs/`, `evidence-store/`, OpenClaw PID files, and Pi member home directories.  The exact evidence hashes and model responses vary by run.  The cleanup code should remove runtime credential files from each new run output.
-
-Check for retained runtime credential files:
+Check that the cleanup code removed runtime credential files from a new output directory.  The command should print no paths for current runs.  Older completed directories can contain files created before the cleanup fix.
 
 ```bash
-find aar-out/ex01-local-TIMESTAMP \
+find "$out" \
   \( -name .mcp.json -o -path '*/.pi/agent/auth.json' \) \
   -print
 ```
 
-The command should print no paths for runs made with the cleanup commit.  Earlier completed output directories may still contain those files if they were created before the cleanup fix.  Do not treat older directories as evidence about the current image.
+## Build And Upload The Glue Image On `dev`
 
-## Building on `dev`
-
-The remote host used so far is `dev`, an Amazon Linux 2023 `amd64` instance.  Docker must be installed and running on that host.  The proved setup used Docker server version `25.0.13`.
-
-Build the image on `dev` from the public branch:
-
-```bash
-ssh dev 'set -eu
-tmpdir="$(mktemp -d /tmp/arbattest-adjudication.XXXXXX)"
-git clone --branch arbattest --depth 1 https://github.com/jsmorph/adjudication.git "$tmpdir/adjudication"
-sudo docker build --no-cache \
-  -t arbattest-aar:dev \
-  -f "$tmpdir/adjudication/arb/Dockerfile" \
-  "$tmpdir/adjudication/arb"
-sudo docker image inspect arbattest-aar:dev \
-  --format "{{.Id}} {{.Architecture}} {{.Size}}"
-'
-```
-
-The proved `dev` image was `sha256:c09ce383d82624ba40903780e18e82cab788cef4b81fb8e7ad7d797b59dcf9fe`, architecture `amd64`, size `1468421848`.  The first build attempt on `dev` failed because the root volume was full.  Nix garbage collection removed 1,959 unreferenced store paths and freed 84.9 GiB before the successful build.
-
-Validate the remote image:
-
-```bash
-ssh dev 'sudo docker run --rm \
-  arbattest-aar:dev \
-  validate --complaint examples/ex01/complaint.md'
-```
-
-The expected output is:
-
-```text
-ok
-```
-
-## Building the Glue Image on `dev`
-
-The attested exec path uses the glue image rather than the base AAR image by itself.  Run the build from the `arb` directory, or pass the `arb/Dockerfile` path and the `arb` directory as the Docker build context.
+Build the base and glue images on `dev` from the `arbattest` branch, then upload the Docker archive used by `run-aar.sh`.  Use the source checkout at `/home/ec2-user/adjudication-build-2361886`, not the launcher directory.  Record the printed SHA-384 hash because the glue manifest records the image tar hash for each run.
 
 ```bash
 ssh dev 'set -eu
@@ -219,109 +149,242 @@ AWS_DEFAULT_REGION=us-east-2 \
 '
 ```
 
-After upload, `s3://agentcourt-data/arbattest/images/arb-glue-poc.tar` is the image file used by `run-aar.sh` on the exec AMI.  Recompute and record the SHA-384 after every rebuild because the exec launcher uses the tar as the image input.
-
-The rebuild from commit `d338c32` produced `arbattest-aar:dev` as `sha256:72775dddf4cc1b3dcf77970443801d98c2f9740d6576bf655c4fa33cc41c035f` and `arb-glue:poc` as `sha256:07ee87e51928468e382851ac72ec92062ea7794116652a312a5c32bfab26c2a1`.  The uploaded glue tar has SHA-384 `fbfb459dd3b5b2e73763ac98e424342a56b5a82fe3624bc0c940db7d2e3d95f628a7e9d99e212ab28bb680ad9d040133`.
-
-## Preparing Remote Secrets
-
-Copy only the small runtime secret files to `dev`.  The paths used so far are under `/home/ec2-user/arbattest-secrets`.
-
-```bash
-ssh dev 'mkdir -p ~/arbattest-secrets && chmod 700 ~/arbattest-secrets'
-scp tmp/auth.json tmp/keys.sh dev:~/arbattest-secrets/
-ssh dev 'chmod 600 ~/arbattest-secrets/auth.json ~/arbattest-secrets/keys.sh'
-```
-
-The remote run command sources `keys.sh` on `dev` and mounts `auth.json` read-only into the parent container.  It does not copy the local `examples/ex01` tree, because the image already contains the `adjudication` checkout from the public branch.  It also does not copy large run data to `dev`.
-
-## Running `ex01` on `dev`
-
-Run the remote command through SSH.  It creates `/home/ec2-user/aar-out`, makes a timestamped run directory, preserves `OPENROUTER_API_KEY` across `sudo`, mounts the host Docker socket, and runs both OpenClaw and Pi child containers through host Docker.
+Validate the base image on `dev` after the build.  This command checks the selected example in the image that the glue image was based on.  It does not require runtime secrets.
 
 ```bash
 ssh dev 'set -eu
-. "$HOME/arbattest-secrets/keys.sh"
-output_root="$HOME/aar-out"
-mkdir -p "$output_root"
-stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-out="$output_root/ex01-dev-$stamp"
-log="$output_root/ex01-dev-$stamp.log"
-uid="$(id -u)"
-gid="$(id -g)"
-sock_gid="$(stat -c %g /var/run/docker.sock)"
-sudo --preserve-env=OPENROUTER_API_KEY docker run --rm --network host \
-  --user "$uid:$gid" \
-  --group-add "$sock_gid" \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v "$output_root:$output_root" \
-  -v "$HOME/arbattest-secrets/auth.json:/run/secrets/codex-auth.json:ro" \
-  -e OPENROUTER_API_KEY \
+AAR_EXAMPLE="${AAR_EXAMPLE:-ex01}"
+sudo docker run --rm \
   arbattest-aar:dev \
-  run \
-  --out-dir "$out" \
-  --openclaw-auth codex \
-  --openclaw-codex-auth /run/secrets/codex-auth.json \
-  --docker docker \
-  --podman docker \
-  --pi-image agentcourt-pi-sandbox:latest \
-  ex01 \
-  >"$log" 2>&1
-printf "%s\n" "$out"
-printf "%s\n" "$log"
+  validate --complaint "examples/$AAR_EXAMPLE/complaint.md"
 '
 ```
 
-The proved `dev` run completed under `/home/ec2-user/aar-out/ex01-dev-20260611T144804Z`.  Its `local-run.json` reported `status=ok` and `resolution=demonstrated`.  The run took long enough that the SSH command may produce no output until `aar` exits, because stdout and stderr from `aar` are redirected to the remote log.
+## Install The Exec Runner On `dev`
 
-## Inspecting Remote Results
-
-Read the recorded result:
+`/home/ec2-user/attest` on `dev` is the launcher directory used by the AMI runner.  It is not the source-control checkout, so update the runtime scripts there when the checked-in `attest` branch changes.  The current `run-aar.sh` accepts `AAR_EXAMPLE`, defaults to `ex01`, passes it to the glue container, and names default runs as `aar-$AAR_EXAMPLE-$STAMP`.
 
 ```bash
-ssh dev 'sed -n "1,220p" /home/ec2-user/aar-out/ex01-dev-TIMESTAMP/local-run.json'
+ssh dev 'mkdir -p /home/ec2-user/attest'
+scp attest/exec.sh attest/run-aar.sh attest/parse_attestation.py dev:/home/ec2-user/attest/
+ssh dev 'chmod 755 /home/ec2-user/attest/exec.sh /home/ec2-user/attest/run-aar.sh /home/ec2-user/attest/parse_attestation.py'
 ```
 
-Check for retained runtime credential files:
+Keep the source branch checked in as well.  The runtime copy on `dev` is for execution, while the `attest` repository records the script.  Commit and push `attest/run-aar.sh` when the launcher behavior changes.
+
+## Prepare The S3 Input Prefix
+
+Stage only the small runtime secret files in S3.  The input prefix is separate from the output prefix so a verifier can see exactly which S3 input location the manifest names.  The example name is part of the prefix for readability, but the manifest uses the explicit `AAR_EXAMPLE` field as the selected case.
 
 ```bash
-ssh dev 'find /home/ec2-user/aar-out/ex01-dev-TIMESTAMP \
-  \( -name .mcp.json -o -path "*/.pi/agent/auth.json" \) \
-  -print'
+ssh dev 'set -eu
+AAR_EXAMPLE="${AAR_EXAMPLE:-ex01}"
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+input_prefix="s3://agentcourt-data/arbattest/aar-inputs/$AAR_EXAMPLE-$stamp"
+AWS_DEFAULT_REGION=us-east-2 aws s3 cp \
+  /home/ec2-user/arbattest-secrets/auth.json \
+  "$input_prefix/auth.json"
+AWS_DEFAULT_REGION=us-east-2 aws s3 cp \
+  /home/ec2-user/arbattest-secrets/keys.sh \
+  "$input_prefix/keys.sh"
+printf "INPUT_PREFIX=%s\n" "$input_prefix"
+AWS_DEFAULT_REGION=us-east-2 aws s3 ls "$input_prefix/"
+'
 ```
 
-The cleanup check returned no paths for `/home/ec2-user/aar-out/ex01-dev-20260611T144804Z`.  The output directory still keeps the Pi home directories, logs, transcript, digest, evidence store, and run metadata, because those files are run artifacts rather than runtime credential files.  The remote Docker daemon keeps `agentcourt-pi-sandbox:latest` after the first run imports it from the embedded root filesystem tar.
+The `keys.sh` file must define `OPENROUTER_API_KEY`.  The glue script sources that file inside the container and exits before AAR starts if the variable is absent.  Do not place large case data under this prefix until the external case-packet input schema exists.
 
-Check the images on `dev`:
+## Run The Attested AAR
+
+Run the exec AMI from `/home/ec2-user/attest` on `dev`.  Pass `RUN_ID` and `OUTPUT_PREFIX` explicitly so the verifier does not need to recover them from console output.  Set `AAR_EXAMPLE` to any checked-in example name.
 
 ```bash
-ssh dev 'sudo docker images'
+ssh dev 'set -eu
+cd /home/ec2-user/attest
+AAR_EXAMPLE=ex01
+INPUT_PREFIX=s3://agentcourt-data/arbattest/aar-inputs/ex01-REPLACE_WITH_STAMP
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+RUN_ID="${RUN_ID:-aar-$AAR_EXAMPLE-$stamp}"
+OUTPUT_PREFIX="${OUTPUT_PREFIX:-s3://agentcourt-data/arbattest/aar-runs/$RUN_ID}"
+env \
+  AWS_DEFAULT_REGION=us-east-2 \
+  INSTANCE_TYPE=m5.4xlarge \
+  IAM_INSTANCE_PROFILE=ec2-nix-builder \
+  POLL_ATTEMPTS=1800 \
+  EXEC_ENV_VARS=INPUT_PREFIX,IMAGE_TAR_S3,AAR_EXAMPLE,RUN_ID,OUTPUT_PREFIX \
+  INPUT_PREFIX="$INPUT_PREFIX" \
+  IMAGE_TAR_S3=s3://agentcourt-data/arbattest/images/arb-glue-poc.tar \
+  AAR_EXAMPLE="$AAR_EXAMPLE" \
+  RUN_ID="$RUN_ID" \
+  OUTPUT_PREFIX="$OUTPUT_PREFIX" \
+  ./exec.sh ami-011f957fe91cf7b81 /home/ec2-user/attest/run-aar.sh
+printf "RUN_ID=%s\n" "$RUN_ID"
+printf "OUTPUT_PREFIX=%s\n" "$OUTPUT_PREFIX"
+'
 ```
 
-The expected images after a remote run are `arbattest-aar:dev` and `agentcourt-pi-sandbox:latest`.  The OpenClaw image may also appear if the host Docker daemon had to pull it during the run.  Docker build cache can consume several GiB after building the image, so record disk state before large follow-up work.
+`exec.sh` prints the EC2 instance ID after launch and terminates the instance on normal exit.  The current launcher still depends on EC2 console output to notice `ATTESTATION END`, while the attestation record lives in S3.  If S3 contains a complete verified result and the launcher keeps polling, use the printed instance ID to inspect or terminate that instance.
+
+## Download The Result For Verification
+
+Use local AWS credentials when available.  This path keeps verification in the local workspace where `uv` is available for the parser.  The same commands work for any `RUN_ID` and `OUTPUT_PREFIX`.
+
+```bash
+RUN_ID=aar-ex01-REPLACE_WITH_STAMP
+OUTPUT_PREFIX="s3://agentcourt-data/arbattest/aar-runs/$RUN_ID"
+LOCAL="/tmp/$RUN_ID"
+mkdir -p "$LOCAL"
+aws s3 cp "$OUTPUT_PREFIX/" "$LOCAL/" --recursive
+find "$LOCAL" -maxdepth 1 -type f -printf '%f\n' | sort
+```
+
+If only `dev` has S3 access, download there and copy the small artifact set back.  The successful archive path has five S3 objects, so this transfer should remain small.  A large object count means the archive path regressed and needs diagnosis before more runs.
+
+```bash
+RUN_ID=aar-ex01-REPLACE_WITH_STAMP
+OUTPUT_PREFIX="s3://agentcourt-data/arbattest/aar-runs/$RUN_ID"
+ssh dev "set -eu
+LOCAL=/tmp/$RUN_ID
+mkdir -p \"\$LOCAL\"
+AWS_DEFAULT_REGION=us-east-2 aws s3 cp '$OUTPUT_PREFIX/' \"\$LOCAL/\" --recursive
+find \"\$LOCAL\" -maxdepth 1 -type f -printf '%f\n' | sort
+"
+scp -r "dev:/tmp/$RUN_ID" /tmp/
+```
+
+The expected successful object list is:
+
+```text
+aar-output.tar.gz
+attestation.b64
+manifest.json
+manifest.sha384
+run.log
+```
+
+## Verify The Manifest And Archive
+
+Run these checks from the local workspace root.  Set `AAR_EXAMPLE`, `OUTPUT_PREFIX`, and `LOCAL` to the run under review.  The script checks the manifest hash, the selected example, the output prefix, the run log hash, the archive hash, and the archive byte count.
+
+```bash
+set -eu
+AAR_EXAMPLE=ex01
+RUN_ID=aar-ex01-REPLACE_WITH_STAMP
+OUTPUT_PREFIX="s3://agentcourt-data/arbattest/aar-runs/$RUN_ID"
+LOCAL="/tmp/$RUN_ID"
+cd "$LOCAL"
+python3 - "$AAR_EXAMPLE" "$OUTPUT_PREFIX" <<'PY'
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+expected_example, expected_output = sys.argv[1:3]
+
+def sha384(path: str) -> str:
+    h = hashlib.sha384()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+manifest = json.loads(Path("manifest.json").read_text())
+checks = [
+    ("manifest.sha384", sha384("manifest.json") == Path("manifest.sha384").read_text().strip()),
+    ("mode", manifest.get("mode") == "aar"),
+    ("aar_example", manifest.get("aar_example") == expected_example),
+    ("output_prefix", manifest.get("output_prefix") == expected_output),
+    ("archive_key", manifest.get("aar_archive_key") == expected_output.rstrip("/") + "/aar-output.tar.gz"),
+    ("run.log sha384", sha384("run.log") == manifest.get("log_sha384")),
+    ("archive sha384", sha384("aar-output.tar.gz") == manifest.get("aar_archive_sha384")),
+    ("archive bytes", str(Path("aar-output.tar.gz").stat().st_size) == manifest.get("aar_archive_bytes")),
+    ("container image id present", bool(manifest.get("container_image_id"))),
+    ("container tar hash present", bool(manifest.get("container_image_tar_sha384"))),
+]
+failed = [name for name, ok in checks if not ok]
+if failed:
+    for name in failed:
+        print(f"failed: {name}")
+    sys.exit(1)
+print("manifest and archive checks passed")
+PY
+```
+
+Inspect the AAR result inside the archive.  A completed run should report `status=ok`; the resolution depends on the case.  The verified `ex01` run reported `resolution=demonstrated`.
+
+```bash
+tar -xOf aar-output.tar.gz ./local-run.json | python3 -m json.tool
+```
+
+Confirm that the archive excludes the large per-agent homes and staged OpenClaw Codex directories.  This check should print only `archive exclusion check passed`.  Any printed path means the archive contains data that should have stayed out of S3.
+
+```bash
+if tar -tzf aar-output.tar.gz | grep -E '^\./(pi-|openclaw-[^/]+-codex)(/|$)'; then
+  echo "error: archive contains excluded runtime directory" >&2
+  exit 1
+fi
+echo "archive exclusion check passed"
+```
+
+## Verify The Attestation
+
+Run the attestation parser from the local workspace root.  The parser verifies the COSE signature and certificate chain, then prints the `User Data` field and all NitroTPM PCR values.  The current parser uses `uv`; `uv` is available locally at `/home/somebody/.local/bin/uv` in the verified environment and is absent on `dev`.
+
+```bash
+set -eu
+RUN_ID=aar-ex01-REPLACE_WITH_STAMP
+LOCAL="/tmp/$RUN_ID"
+UV="${UV:-/home/somebody/.local/bin/uv}"
+cd /media/hd2/src/arbattest
+"$UV" run attest/parse_attestation.py "$LOCAL/attestation.b64" > "$LOCAL/attestation.txt"
+sed -n '1,40p' "$LOCAL/attestation.txt"
+```
+
+Compare the attestation output against the manifest hash and the expected exec AMI PCR values.  These values apply to `ami-011f957fe91cf7b81`; replace them after rebuilding the exec AMI.  PCR12 is all zeros for the current verified run.
+
+```bash
+set -eu
+RUN_ID=aar-ex01-REPLACE_WITH_STAMP
+LOCAL="/tmp/$RUN_ID"
+EXPECTED_PCR4=83AC49DFAA5D76939970E1568472FF463FBE90C4038D000D31F6C0520F583D1DD51CE0C103CEB26E4B773AAD99A4B3B4
+EXPECTED_PCR7=98441C7F7625D10058C47683AEC486CE311C633235EB555593A7EE791121E3578AE72D04ECEF661F272D59058B77AF35
+EXPECTED_PCR12=000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+MANIFEST_SHA384="$(cat "$LOCAL/manifest.sha384")"
+grep -q '^Signature: VALID' "$LOCAL/attestation.txt"
+grep -q "^User Data: $MANIFEST_SHA384$" "$LOCAL/attestation.txt"
+grep -q "^PCR  4: $EXPECTED_PCR4$" "$LOCAL/attestation.txt"
+grep -q "^PCR  7: $EXPECTED_PCR7$" "$LOCAL/attestation.txt"
+grep -q "^PCR 12: $EXPECTED_PCR12$" "$LOCAL/attestation.txt"
+echo "attestation checks passed"
+```
+
+The reference `ex01` run `aar-ex01-20260612T001855Z` verified with manifest SHA-384 `ae52d9b5acccd76a45ce0e6c8f3cabf8e775ddb20e0761702fa1d73e15dffdcab080a0be859556170aaa3a23e9971f41` and archive SHA-384 `ce42ae939df866a2919f20ff8ccd5ffc86df0ffc0f7376b84811f9ae0a44dac8b664b4aaf0a7913b25677a2a7fc75bb0`.  Its attestation `User Data` matched the manifest hash.  That run predates the `aar_example` manifest field; use the manifest script above for runs made with the current glue image.
+
+## Run Any Checked-In Arb
+
+Add or select an example directory under `arb/examples/<name>` with a valid `complaint.md` and any case files needed by that complaint.  Push the `adjudication` `arbattest` branch so the Docker build can clone it, then rebuild and upload the glue image tar from `dev`.  Install the current `attest/run-aar.sh` in `/home/ec2-user/attest`, stage `auth.json` and `keys.sh` under a new S3 input prefix, run the exec AMI with `AAR_EXAMPLE=<name>`, and run the verification commands above against the resulting output prefix.
+
+Use a fresh `RUN_ID` and `OUTPUT_PREFIX` for every run.  The recommended naming form is `aar-$AAR_EXAMPLE-$STAMP`, with `STAMP` from `date -u +%Y%m%dT%H%M%SZ`.  Timestamped prefixes keep failed, partial, and verified runs separate and make S3 cleanup decisions explicit.
+
+The manifest is the boundary for later verification.  It names the selected example, input prefix, output prefix, image identity, image tar hash, log hash, and archive hash.  Verification should treat the manifest hash in the attestation `User Data` field, plus matching PCR values, as the link between the attested exec AMI and the exact S3 artifacts.
 
 ## First-Failure Checks
 
-If `aar run` exits nonzero, read the run log first:
+Read `run.log` first.  For a successful run, read it from the downloaded artifact directory.  For a failed AAR run, download `run.log` and `aar-partial.tar.gz` from the output prefix and inspect `local-run.json` inside the partial archive if it exists.
 
-```bash
-sed -n '1,220p' aar-out/ex01-local-TIMESTAMP.log
-```
+Use the first concrete failing line as the diagnostic start.  An output prefix without `manifest.json`, `manifest.sha384`, and `attestation.b64` has no verified attestation.  Do not infer success from console output when S3 artifacts disagree.
 
-For `dev`:
-
-```bash
-ssh dev 'sed -n "1,220p" /home/ec2-user/aar-out/ex01-dev-TIMESTAMP.log'
-```
-
-A failure before case start may leave no `local-run.json`.  A failure after case start may write `local-run.json` with `status`, `error`, and `failure` fields.  Use the first concrete error in the log or result file as the diagnostic starting point.
-
-These problems have already occurred:
-
-| Symptom | Root cause | Fix |
+| Symptom | Cause already diagnosed | Fix already used |
 | --- | --- | --- |
-| Docker build failed with `No space left on device` on `dev`. | The root filesystem was nearly full. | Free disk space on `dev`; the completed fix was Nix garbage collection of unreferenced store paths. |
-| Remote run failed with `OPENROUTER_API_KEY is required for Pi council`. | `sudo docker run` did not preserve the sourced environment variable. | Use `sudo --preserve-env=OPENROUTER_API_KEY docker run`. |
-| New image build used old branch contents. | Docker reused the cached `git clone` build layer. | Build with `--no-cache` after pushing branch changes. |
+| Docker layer extraction fails with `no space left on device` on the exec AMI. | The exec AMI root filesystem is RAM-backed, and Docker writes into that RAM-backed filesystem. | Use `m5.4xlarge` for the verified path. |
+| `OPENROUTER_API_KEY is required`. | `keys.sh` was absent from `INPUT_PREFIX`, unreadable, or did not define the variable. | Upload `keys.sh` to the input prefix and verify it defines `OPENROUTER_API_KEY`. |
+| OpenClaw cannot read `/aar-codex/auth.json`. | The child container runs as user `node` and needs world-readable staged Codex auth in this private AMI flow. | Current AAR code stages the Codex home with mode `0777` and `auth.json` with mode `0666`. |
+| OpenClaw reports a stream disconnect on the exec AMI while the same request works on `dev`. | The diagnosed exec path failed when child OpenClaw used Docker bridge networking and passed when it used host networking. | Current glue passes `--openclaw-network host`. |
+| S3 prefix contains tens of thousands of AAR objects. | The old glue success path recursively uploaded the AAR output tree, including Pi package trees. | Current glue uploads one `aar-output.tar.gz` or one `aar-partial.tar.gz`. |
+| `exec.sh` keeps polling after S3 has complete artifacts. | EC2 console output did not show the final marker even though S3 had the verified record. | Verify the S3 artifacts, then use the printed instance ID to inspect or terminate the instance. |
 
-Do not delete or sanitize completed output directories unless that is the selected task.  For the current branch, the code removes runtime credential files from new run outputs during cleanup.
+## Cleanup
+
+Keep completed output prefixes that have been cited in notes or commits.  Delete failed experimental prefixes only after recording the cause and confirming that no later diagnosis depends on them.  The old recursive upload prefix was deleted after it was identified as an obsolete failure mode and the archive upload path replaced it.
+
+Docker build cache and old image tars on `dev` can consume the root volume used by builds.  Check disk usage before a rebuild, especially after repeated `--no-cache` builds.  Remove obsolete rebuild artifacts only after confirming the current uploaded glue tar hash and the current source commit.
