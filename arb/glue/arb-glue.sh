@@ -24,6 +24,9 @@ log="$run_dir/run.log"
 manifest="$run_dir/manifest.json"
 manifest_hash_file="$run_dir/manifest.sha384"
 attestation="$run_dir/attestation.b64"
+aar_archive_key=""
+aar_archive_sha384=""
+aar_archive_bytes=""
 
 imds_token="$(curl -fsS -X PUT \
     -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' \
@@ -40,6 +43,30 @@ imds_get() {
 
 json_string() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+create_aar_archive() {
+    src_dir="$1"
+    archive="$2"
+    rm -f "$archive"
+    tar -czf "$archive" \
+        --exclude='./pi-*' \
+        --exclude='./openclaw-*-codex' \
+        -C "$src_dir" \
+        .
+}
+
+upload_aar_archive() {
+    src_dir="$1"
+    object_name="$2"
+    archive="$run_dir/$object_name"
+    create_aar_archive "$src_dir" "$archive"
+    set -- $(sha384sum "$archive")
+    aar_archive_sha384="$1"
+    set -- $(wc -c < "$archive")
+    aar_archive_bytes="$1"
+    aar_archive_key="$output_prefix/$object_name"
+    aws s3 cp "$archive" "$aar_archive_key" --no-progress
 }
 
 start_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -81,18 +108,16 @@ case "$mode" in
         set -e
         if [ "$aar_status" -ne 0 ]; then
             aws s3 cp "$log" "$output_prefix/run.log" --no-progress
-            partial_upload_status=0
-            aws s3 cp --recursive "$aar_out" "$output_prefix/aar-partial/" --no-progress || partial_upload_status=$?
-            if [ "$partial_upload_status" -ne 0 ]; then
-                echo "error: failed to upload partial AAR output after aar exit status $aar_status" >&2
-                exit "$partial_upload_status"
+            if ! upload_aar_archive "$aar_out" "aar-partial.tar.gz"; then
+                echo "error: failed to upload partial AAR archive after aar exit status $aar_status" >&2
+                exit 1
             fi
             echo "error: aar failed with exit status $aar_status" >&2
             exit "$aar_status"
         fi
-        if ! aws s3 cp --recursive "$aar_out" "$output_prefix/aar/" --no-progress; then
+        if ! upload_aar_archive "$aar_out" "aar-output.tar.gz"; then
             aws s3 cp "$log" "$output_prefix/run.log" --no-progress
-            echo "error: failed to upload AAR output" >&2
+            echo "error: failed to upload AAR archive" >&2
             exit 1
         fi
         ;;
@@ -116,6 +141,9 @@ cat > "$manifest" <<EOF
   "ami_id": "$(json_string "$ami_id")",
   "input_prefix": "$(json_string "$input_prefix")",
   "output_prefix": "$(json_string "$output_prefix")",
+  "aar_archive_key": "$(json_string "$aar_archive_key")",
+  "aar_archive_sha384": "$(json_string "$aar_archive_sha384")",
+  "aar_archive_bytes": "$(json_string "$aar_archive_bytes")",
   "container_image_id": "$(json_string "${ARB_GLUE_IMAGE_ID:-}")",
   "container_image_tar_sha384": "$(json_string "${ARB_GLUE_IMAGE_TAR_SHA384:-}")",
   "log_sha384": "$(json_string "$log_sha384")"

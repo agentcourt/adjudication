@@ -44,6 +44,14 @@ The child OpenClaw containers use Docker bridge networking by default.  The atte
 
 The output root must be mounted at the same absolute path inside the parent container that exists on the host.  `aar run` creates absolute paths for staged Codex homes and Pi homes, and the host Docker daemon then mounts those paths into child containers.  If the parent container sees `/out` but the host only has `/home/ec2-user/aar-out`, the child-container mounts will refer to the wrong host path.
 
+## Attested S3 Output
+
+The glue image writes a small S3 prefix for each attested run.  Successful AAR mode uploads `run.log`, `aar-output.tar.gz`, `manifest.json`, `manifest.sha384`, and `attestation.b64`.  The manifest records the AAR archive S3 key, byte count, and SHA-384 hash before the manifest hash is passed to `nitro-tpm-attest --user-data`.
+
+The AAR archive excludes per-agent working homes such as `pi-C*` and staged OpenClaw Codex directories.  It keeps the case packet, logs, evidence store, event log, transcript, digest, work notes, and `local-run.json`.  This keeps S3 object counts small while preserving the artifacts needed to inspect the run.
+
+If `aar run` exits nonzero, the glue image uploads `run.log` and `aar-partial.tar.gz`, then exits with the AAR status.  It does not create a manifest or attestation for a failed AAR run.
+
 ## Required Inputs
 
 The image does not contain runtime secrets.  A full `ex01` run needs a Codex auth JSON file for OpenClaw lawyers and an OpenRouter key for the Pi council.

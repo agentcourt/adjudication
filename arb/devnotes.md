@@ -2,6 +2,16 @@
 
 ## 2026-06-11
 
+### AAR S3 archive output
+
+Reference: `glue/arb-glue.sh`, AAR run `s3://agentcourt-data/arbattest/aar-runs/aar-ex01-20260611T230151Z`
+
+The old glue success path ran `aws s3 cp --recursive "$aar_out" "$output_prefix/aar/"`.  That copied Pi council working homes into S3.  The obsolete `aar-ex01-20260611T230151Z` prefix reached 92,834 objects because it included package trees under paths such as `aar/pi-C4/pi-extensions/npm/.../node_modules/...`.
+
+The glue script now uploads AAR output as one archive object instead of recursively copying the working tree.  A successful AAR run uploads `aar-output.tar.gz`; a failed AAR run uploads `aar-partial.tar.gz` with `run.log` and then exits with the AAR status.  The archive excludes `pi-*` homes and staged `openclaw-*-codex` directories, while retaining the case packet, logs, evidence store, event log, transcript, digest, work notes, and `local-run.json`.
+
+The success manifest now records `aar_archive_key`, `aar_archive_sha384`, and `aar_archive_bytes`.  The manifest hash remains the value passed to `nitro-tpm-attest --user-data`, so the attestation binds the single AAR archive object rather than thousands of individual S3 keys.
+
 ### Exec AMI OpenClaw networking
 
 Reference: `arb-glue:poc`, Docker-enabled exec AMI `ami-011f957fe91cf7b81`, AAR run `s3://agentcourt-data/arbattest/aar-runs/ex01-20260611T212020Z`
