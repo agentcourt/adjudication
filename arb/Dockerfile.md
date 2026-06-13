@@ -198,7 +198,13 @@ The `keys.sh` file must define `OPENROUTER_API_KEY`.  The glue script sources th
 
 ## Run The Attested AAR
 
-The preferred local driver is `adjudication/arb/tools/run-arb-attested.py`.  It starts the exec AMI through `dev`, polls the S3 output prefix, writes progress and launcher logs under the local output directory, downloads all S3 artifacts into that directory, extracts the AAR archive, and can run verification.  If a terminal S3 artifact set appears while `exec.sh` is still polling, the driver terminates only the EC2 instance ID launched for that run and stops the remote launcher.
+The preferred command for a normal checked-in example is `adjudication/arb/tools/run-one-attested-arb.sh`.  It takes one argument, an example directory such as `examples/ex03`.  It validates that the directory exists and contains `complaint.md`, stages `auth.json` and `keys.sh` into a fresh S3 input prefix, chooses timestamped input and output prefixes, starts the exec AMI through the local driver, downloads the S3 artifacts, extracts the AAR archive, and verifies the attestation.
+
+```bash
+adjudication/arb/tools/run-one-attested-arb.sh examples/ex03
+```
+
+The lower-level local driver is `adjudication/arb/tools/run-arb-attested.py`.  It starts the exec AMI through `dev`, polls the S3 output prefix, writes progress and launcher logs under the local output directory, downloads all S3 artifacts into that directory, extracts the AAR archive, and can run verification.  If a terminal S3 artifact set appears while `exec.sh` is still polling, the driver terminates only the EC2 instance ID launched for that run and stops the remote launcher.
 
 ```bash
 uv run adjudication/arb/tools/run-arb-attested.py \
