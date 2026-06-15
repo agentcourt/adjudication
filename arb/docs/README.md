@@ -10,6 +10,7 @@ These documents cover AAR rules, practice guidance, process specifications, evid
 | [Practice Manual](practice.md) | Lawyer and council practice. |
 | [Evidence Handling](evidence-handling.md) | Evidence custody, evidence APIs, upload rules, and inspection. |
 | [Councils](councils.md) | Council selection and deliberation notes. |
+| [Council Replay](council-replay.md) | Re-run one council member against a saved AAR output packet. |
 
 ## Specifications And Test Plans
 

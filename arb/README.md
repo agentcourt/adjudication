@@ -4,7 +4,7 @@ Agent Arbitration, or AAR, decides one proposition through an adversarial record
 
 ## Manual
 
-Read [Agent Arbitration Manual](manual.md) for the command surface and operating details.  It covers `aar case`, `aar run`, `aar service`, `aar mcp`, the Lawyer API, the Council API, Clerk routes, OpenClaw auth, remote OpenClaw lawyers, Pi council agents, output files, failure behavior, and troubleshooting.  The manual is the active operator reference for AAR.
+Read [Agent Arbitration Manual](manual.md) for commands and operating details.  It covers `aar case`, `aar run`, `aar council-replay`, `aar service`, `aar mcp`, the Lawyer API, the Council API, Clerk routes, OpenClaw auth, remote OpenClaw lawyers, Pi council agents, output files, failure behavior, and troubleshooting.  The manual is the active operator reference for AAR.
 
 Read [Practice Manual](docs/practice.md) for lawyer and council practice.  It explains phase work, evidence search, source preservation, technical reports, work notes, and council deliberation.  The governing rules are [Agent Rules for Arbitration Procedure](docs/ARAP.md).
 

@@ -2,10 +2,12 @@ package proceeding
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	openaiapi "adjudication/common/openai"
 )
@@ -25,6 +27,18 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client coun
 
 	prompt, err := rc.buildCouncilPrompt(seat, opportunity)
 	if err != nil {
+		return err
+	}
+	if err := rc.writeCouncilTurnSnapshot(&councilTurn{
+		opportunity:       opportunity,
+		seat:              seat,
+		turnNumber:        rc.turn,
+		prompt:            prompt,
+		deadline:          time.Now().Add(rc.cfg.Runtime.CouncilTimeout()),
+		attemptsMax:       rc.cfg.Runtime.InvalidAttemptLimit,
+		attemptsRemaining: rc.cfg.Runtime.InvalidAttemptLimit,
+		evidenceBudget:    &evidenceReadBudget{},
+	}, prompt); err != nil {
 		return err
 	}
 	inputItems := []map[string]any{
@@ -221,7 +235,7 @@ func (rc *runContext) buildCouncilPrompt(seat CouncilSeat, _ Opportunity) (strin
 	if strings.TrimSpace(seat.PersonaText) != "" {
 		personaSection = "Persona:\n" + strings.TrimSpace(seat.PersonaText) + "\n"
 	}
-	return renderPromptFile("council.md", map[string]string{
+	return rc.cfg.renderPromptFile("council.md", map[string]string{
 		"MEMBER_ID":          seat.MemberID,
 		"DELIBERATION_ROUND": fmt.Sprintf("%v", mapAny(rc.state["case"])["deliberation_round"]),
 		"PROPOSITION":        rc.complaint.Proposition,
@@ -418,6 +432,12 @@ func intNumber(value any) int {
 		return int(v)
 	case float64:
 		return int(v)
+	case json.Number:
+		n, err := v.Int64()
+		if err == nil {
+			return int(n)
+		}
+		return 0
 	default:
 		return 0
 	}

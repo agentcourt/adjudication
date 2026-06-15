@@ -140,12 +140,14 @@ Use `--file` to provide explicit initial evidence.  The flag may be repeated.  S
 | `aar case` | Run one case and expose the private Lawyer and optional Council APIs. |
 | `aar mcp` | Run an MCP server that forwards tools to a Case API or service API base. |
 | `aar run` | Run one full local arbitration with OpenClaw lawyers and Pi council agents. |
+| `aar council-replay` | Re-run one council member against a saved AAR output packet. |
 | `aar service` | Run the long-lived HTTP service, including Clerk APIs for full `aar run` cases. |
 
 Use command help to see current flags:
 
 ```bash
 .bin/aar help run
+.bin/aar help council-replay
 .bin/aar help service
 ```
 
@@ -363,6 +365,90 @@ Important run flags:
 The council output limit is enforced by the local `aar run` process while it monitors Pi stdout and stderr byte counts.  A runaway council process can write more than the configured limit before the next monitor check kills it.  Pi stdout logs compact repeated accumulated `message_update` content fields when a new event contains the previous content as a prefix; the log line then keeps only the tail and adds `aar_log_filter.message: "earlier repeated message_update events dropped"`.  The failure event records the configured limit, actual bytes written, stdout bytes, stderr bytes, process name, process error, and failed council member.
 
 `aar run` writes one pid file per child process in the output directory.  It writes MCP logs under `logs/mcp.stderr`, lawyer and council process logs under `logs/`, final case artifacts in the output root, and `local-run.json` with run-level settings.  After completion, it prints one final JSON result to stdout.  The process exits when the case reaches a terminal state or when an agent/process error requires termination.
+
+## `aar council-replay`
+
+`aar council-replay` runs one Pi council member against a saved AAR output packet.  The command starts a frozen local Council API server, starts an MCP server for that replay, starts one Pi council container, and waits for that member to submit one vote.  It writes a replay packet under `--out-dir`; it does not modify the source AAR output directory.
+
+Replay has two bases.  `reconstructed_first_round` supports completed output packets that predate council-turn snapshots.  It reads `run.json`, `state.json`, `policy.json`, `runtime.json`, `evidence-manifest.json`, and `evidence-store/`, restores the case to deliberation round 1, clears council votes and the resolution, seats the supplied single member, and renders a fresh first-round council prompt.  `snapshot` supports newer output packets that contain `council-turns/turn-NNNNNN-MEMBER/input.json`; it reads the saved turn state and opportunity, then renders a fresh prompt with the supplied model config.
+
+Basic reconstructed replay from `arb/`:
+
+```bash
+source="../../aar-attested/aar-ex03-20260613T210952Z/aar-output"
+member=C1
+arb_dir="$(pwd)"
+
+jq --arg member "$member" --arg arb "$arb_dir" '
+  .[] | select(.member_id == $member) |
+  .request_spec + {
+    persona: (
+      if ((.persona_file // .request_spec.persona) | startswith("/"))
+      then (.persona_file // .request_spec.persona)
+      else $arb + "/" + (.persona_file // .request_spec.persona)
+      end
+    )
+  }
+' "$source/council.json" >"/tmp/aar-replay-$member.json"
+
+.bin/aar council-replay \
+  --basis reconstructed_first_round \
+  --source-output "$source" \
+  --config "/tmp/aar-replay-$member.json" \
+  --out-dir "../aar-replays/aar-ex03-$member-same" \
+  --member-id "$member" \
+  --podman docker \
+  --pi-image agentcourt-pi-sandbox:latest
+```
+
+The config file must contain one JSON request-spec record.  Same-spec replay should derive that file from the member's `request_spec` in the original `council.json`, and the `persona` field must point to a readable persona file.  The example above uses an absolute persona path so the parser does not depend on the temporary config file's directory.
+
+Snapshot replay uses a captured turn directory from a newer AAR output packet:
+
+```bash
+.bin/aar council-replay \
+  --basis snapshot \
+  --source-output out/ex03-new \
+  --snapshot out/ex03-new/council-turns/turn-000009-C1 \
+  --config /tmp/aar-replay-C1.json \
+  --out-dir out/replays/ex03-C1-snapshot \
+  --podman docker \
+  --pi-image agentcourt-pi-sandbox:latest
+```
+
+Important replay flags:
+
+| Flag | Meaning |
+| --- | --- |
+| `--basis` | `reconstructed_first_round` or `snapshot`.  Required. |
+| `--source-output` | Extracted AAR output directory, or a run directory containing `aar-output` or `aar-partial`.  Required. |
+| `--snapshot` | Snapshot directory or `input.json`.  Required for `snapshot`. |
+| `--config` | Single council JSON request-spec record.  Required. |
+| `--out-dir` | Replay output directory.  Required. |
+| `--member-id` | Council member id for `reconstructed_first_round`.  Default: `C1`. |
+| `--prompt-dir` | Prompt directory override.  From `arb/`, the default `prompts/` is correct. |
+| `--council-instructions` | Pi council instruction template.  From `arb/`, the default `agent-instructions/pi-council.md.tmpl` is correct. |
+| `--podman` | Container command for Pi council.  Use `--podman docker` when Docker runs the Pi image. |
+| `--pi-image` | Pi container image. |
+| `--timeout-seconds` | Replay council timeout.  Default: 900 seconds. |
+| `--council-output-limit-bytes` | Total stdout plus stderr limit for the replay Pi process.  Default: 128 MiB. |
+
+When running from the repository root with `go run`, pass prompt and instruction paths explicitly because the defaults are relative to the process working directory:
+
+```bash
+go run ./arb/runtime/cmd/aar council-replay \
+  --basis reconstructed_first_round \
+  --source-output ../aar-attested/aar-ex03-20260613T210952Z/aar-output \
+  --config /tmp/aar-replay-C1.json \
+  --out-dir ../aar-replays/aar-ex03-C1-same \
+  --member-id C1 \
+  --prompt-dir arb/prompts \
+  --council-instructions arb/agent-instructions/pi-council.md.tmpl \
+  --podman docker \
+  --pi-image agentcourt-pi-sandbox:latest
+```
+
+The replay output directory contains `input.json`, `prompt.txt`, `result.json`, `tool-calls.ndjson`, one Pi pid file, and logs under `logs/`.  `result.json` records the replay status, vote, rationale, model, source output directory, tool calls, and the replay input.  `tool-calls.ndjson` records each Council API tool call in order, which is the fastest way to see whether the member read evidence bytes before voting.
 
 ## OpenClaw Lawyer Auth
 
@@ -648,6 +734,7 @@ Every completed or failed case writes a run packet under its output directory.  
 | `evidence-manifest.json` | Evidence metadata and custody information. |
 | `evidence-store/` | Stored evidence bytes. |
 | `submitted-evidence/` | Accepted lawyer-submitted evidence copies. |
+| `council-turns/` | Council turn snapshots written before each council member acts. |
 | `local-run.json` | `aar run` summary and run-level options. |
 | `clerk.json` | Clerk service record when the run was started through Clerk. |
 

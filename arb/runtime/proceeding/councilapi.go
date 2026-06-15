@@ -152,6 +152,9 @@ func (rc *runContext) executeCouncilAPIOpportunity(ctx context.Context, opportun
 		evidenceBudget:    &evidenceReadBudget{},
 		done:              make(chan error, 1),
 	}
+	if err := rc.writeCouncilTurnSnapshot(turn, prompt); err != nil {
+		return err
+	}
 	if err := rc.councilAPI.startTurn(turn); err != nil {
 		return err
 	}
