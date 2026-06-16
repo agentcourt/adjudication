@@ -60,6 +60,15 @@ def require_s3_prefix(name: str, value: str) -> str:
     return value.rstrip("/")
 
 
+def split_s3_uri(value: str) -> tuple[str, str]:
+    value = require_s3_prefix("S3 URI", value)
+    bucket_key = value[len("s3://") :]
+    bucket, sep, key = bucket_key.partition("/")
+    if not bucket or not sep:
+        raise RunnerError(f"S3 URI must include a bucket and key prefix: {value}")
+    return bucket, key.rstrip("/") + "/"
+
+
 def sha384_file(path: Path) -> str:
     h = hashlib.sha384()
     with path.open("rb") as f:
@@ -237,16 +246,29 @@ def start_launcher(args: argparse.Namespace, run_id: str, output_prefix: str, la
 
 
 def list_s3_objects(args: argparse.Namespace, output_prefix: str, progress_log: Path) -> set[str]:
-    remote = (
-        f"AWS_DEFAULT_REGION={quote(args.aws_region)} "
-        f"aws s3 ls {quote(output_prefix.rstrip('/') + '/')}"
+    bucket, prefix = split_s3_uri(output_prefix)
+    remote = " ".join(
+        [
+            f"AWS_DEFAULT_REGION={quote(args.aws_region)}",
+            "aws s3api list-objects-v2",
+            f"--bucket {quote(bucket)}",
+            f"--prefix {quote(prefix)}",
+            "--output json",
+        ]
     )
     result = ssh(args, remote, log_path=progress_log)
     objects: set[str] = set()
-    for line in result.stdout.splitlines():
-        parts = line.split()
-        if len(parts) >= 4 and parts[0] != "PRE":
-            objects.add(parts[3])
+    try:
+        listing = json.loads(result.stdout)
+    except json.JSONDecodeError as e:
+        raise RunnerError(f"parse S3 listing JSON for {output_prefix}: {e}") from e
+    for item in listing.get("Contents", []):
+        key = item.get("Key", "")
+        if not isinstance(key, str) or not key.startswith(prefix):
+            continue
+        name = key[len(prefix) :]
+        if name and "/" not in name:
+            objects.add(name)
     return objects
 
 

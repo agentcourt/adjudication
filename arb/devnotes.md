@@ -1047,3 +1047,21 @@ PCR7 matched
 and PCR12 was all zeros.  The local driver terminated instance
 `i-00fb5acdf339f2592` after it saw the complete S3 artifact set, downloaded the
 artifacts, verified the manifest and attestation, and extracted the archive.
+
+## 2026-06-16
+
+### README runbook references
+
+`arb/README.md` now points operators to the three documents needed for attested Clerk runs: `manual.md`, `Dockerfile.md`, and `docs/attested-dev-host.md`.  The README names the `aar service` and Clerk API sections, the attested Docker image runbook, the S3 artifact layout, live `events.ndjson`, and verification.  The layout table lists `Dockerfile.md` as the attested Docker image and exec runbook.
+
+### Clerk-attested `ex01` run
+
+The Clerk-attested `ex01` run used `aar service` with the checked-in attested driver, verification enabled, exec AMI `ami-011f957fe91cf7b81`, and instance type `m5.4xlarge`.  The accepted case id was `clerk-ex01-20260616T221531Z`, and the accepted run id was `aar-clerk-ex01-20260616T221531Z`.  The input prefix was `s3://agentcourt-data/arbattest/aar-inputs/clerk-ex01-20260616T221531Z`, and the output prefix was `s3://agentcourt-data/arbattest/aar-runs/aar-clerk-ex01-20260616T221531Z`.
+
+The Clerk monitoring endpoint `/clerk/v1/cases/clerk-ex01-20260616T221531Z/attestation/events` read the live `events.ndjson` object while the exec container wrote it to S3.  The endpoint first became available after the event object existed, then returned the live event stream through council deliberation.  The event stream recorded a council-member failure for `C1`, followed by completed votes from `C2`, `C3`, `C4`, and `C5`.
+
+The final Clerk case record reported `status=completed`, process exit code `0`, AAR `status=ok`, and `resolution=no_majority`.  The result endpoint showed `C2` and `C4` voting `demonstrated`, while `C3` and `C5` voted `not_demonstrated`; `C1` exited before completing deliberation and was removed.  The driver terminated instance `i-01d3a6fc4495a2b62` after it saw the complete S3 artifact set.
+
+Verification passed through the Clerk-attested path.  The verification log recorded `ok` for `manifest.sha384`, run id, mode, input mode, input prefix, AAR case id, output prefix, archive key, `run.log` SHA-384, archive SHA-384, archive byte count, container image id, container tar hash, `aar_example`, signature, user data, PCR4, PCR7, and PCR12.  The manifest SHA-384 was `c86a0ce5faae268d6fafb5359a8ce3dc4f72f4d608a679bc75c5d28a56c389423880be966ea4b0132df8ada9fbb82955`, and the extracted output directory was `/tmp/arb-clerk-ex01-20260616T215547Z/clerk-ex01-20260616T221531Z/aar-output`.
+
+Two earlier attempts identified setup defects before the accepted run.  The driver treated an empty S3 output prefix as a fatal error because it used `aws s3 ls`; `tools/run-arb-attested.py` now lists the prefix with `s3api list-objects-v2` and accepts an empty object set.  The runtime launcher on `dev` was stale and passed `ARB_GLUE_MODE=aar`, while the current container entrypoint expects `ARB_EXEC_MODE=aar`; `/home/ec2-user/attest/run-aar.sh` was replaced with the checked-in launcher and verified by SHA-384 before the accepted run.

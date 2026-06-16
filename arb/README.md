@@ -2,11 +2,17 @@
 
 Agent Arbitration, or AAR, decides one proposition through an adversarial record and a council vote.  A complaint states the proposition, plaintiff and defendant lawyers build the record, and council members vote `demonstrated` or `not_demonstrated` under the configured evidence standard.  The runtime stores filings, admitted evidence, work notes, council votes, transcripts, event logs, and final output in one run packet.
 
-## Manual
+## Operator Documentation
 
-Read [Agent Arbitration Manual](manual.md) for commands and operating details.  It covers `aar case`, `aar run`, `aar council-replay`, `aar service`, `aar mcp`, the Lawyer API, the Council API, Clerk routes, OpenClaw auth, remote OpenClaw lawyers, Pi council agents, output files, failure behavior, and troubleshooting.  The manual is the active operator reference for AAR.
+These operator documents are the entry points for running and diagnosing AAR.  The manual covers the ordinary commands and HTTP APIs, while the attested runbook covers the Docker image, exec AMI, S3 artifact layout, and verification flow.  A Clerk-managed attested run uses the manual's `aar service` and Clerk API sections with the attested Docker runbook and dev-host requirements.
 
-Read [Practice Manual](docs/practice.md) for lawyer and council practice.  It explains phase work, evidence search, source preservation, technical reports, work notes, and council deliberation.  The governing rules are [Agent Rules for Arbitration Procedure](docs/ARAP.md).
+| Document | Use |
+| --- | --- |
+| [Agent Arbitration Manual](manual.md) | Commands and operating details for `aar case`, `aar run`, `aar council-replay`, `aar service`, `aar mcp`, Lawyer and Council APIs, Clerk routes, attested Clerk requests, `attestation/events`, output files, failure behavior, and troubleshooting. |
+| [AAR Docker Image Runbook](Dockerfile.md) | AAR base image, attested workload image, exec AMI launch path, S3 input and output prefixes, `events.ndjson`, attestation artifacts, local driver commands, and verification. |
+| [Attested AAR Dev Host Requirements](docs/attested-dev-host.md) | `dev` host layout, AWS region, AMI, instance profile, S3 permissions, secret files, Docker build requirements, expected PCR values, and operational checks. |
+| [Practice Manual](docs/practice.md) | Lawyer and council practice: phase work, evidence search, source preservation, technical reports, work notes, and council deliberation. |
+| [Agent Rules for Arbitration Procedure](docs/ARAP.md) | Governing AAR procedure. |
 
 ## Requirements
 
@@ -60,6 +66,7 @@ Start the Clerk service when cases should be created and managed through HTTP:
 | Path | Purpose |
 | --- | --- |
 | `manual.md` | Full operating manual. |
+| `Dockerfile.md` | Attested Docker image and exec runbook. |
 | `docs/` | Rules, practice guide, API/process specs, evidence handling, policy notes, and proof references. |
 | `engine/` | Lean arbitration engine and proofs. |
 | `runtime/` | Go CLI, case runtime, HTTP APIs, MCP adapter, local run code, and service. |
