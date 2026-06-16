@@ -177,6 +177,20 @@ type councilStatusTurn struct {
 	OpportunityID string `json:"opportunity_id"`
 }
 
+type lawyerStatusResponse struct {
+	Status             string                    `json:"status"`
+	Phase              string                    `json:"phase"`
+	CaseStatus         string                    `json:"case_status"`
+	CurrentOpportunity *lawyerCurrentOpportunity `json:"current_opportunity"`
+	Error              any                       `json:"error"`
+}
+
+type lawyerCurrentOpportunity struct {
+	OpportunityID string `json:"opportunity_id"`
+	RoleID        string `json:"role_id"`
+	Phase         string `json:"phase"`
+}
+
 type processOutputSize struct {
 	Stdout int64
 	Stderr int64
@@ -1156,6 +1170,66 @@ func (s *runState) councilStatus(ctx context.Context, memberID string) (councilS
 	return status, nil
 }
 
+func (s *runState) lawyerStatus(ctx context.Context, roleID string) (lawyerStatusResponse, error) {
+	statusURL := s.caseBase + "/lawyerapi/v1/status?case_id=" + url.QueryEscape(s.opts.CaseID) + "&role_id=" + url.QueryEscape(roleID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
+	if err != nil {
+		return lawyerStatusResponse{}, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return lawyerStatusResponse{}, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return lawyerStatusResponse{}, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return lawyerStatusResponse{}, fmt.Errorf("lawyer status for %s returned HTTP %d: %s", roleID, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var status lawyerStatusResponse
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber()
+	if err := dec.Decode(&status); err != nil {
+		return lawyerStatusResponse{}, err
+	}
+	return status, nil
+}
+
+func (s *runState) handleOpenClawLawyerExit(ctx context.Context, name string) error {
+	roleID := strings.TrimPrefix(name, "openclaw-")
+	if roleID == name || strings.TrimSpace(roleID) == "" {
+		return fmt.Errorf("docker process %s exited before case completion", name)
+	}
+	status, err := s.lawyerStatus(ctx, roleID)
+	if err != nil {
+		return fmt.Errorf("check lawyer status after %s exit: %w", name, err)
+	}
+	if openClawLawyerExitAllowed(status) {
+		return nil
+	}
+	return fmt.Errorf("docker process %s exited before case completion", name)
+}
+
+func openClawLawyerExitAllowed(status lawyerStatusResponse) bool {
+	switch strings.TrimSpace(status.Status) {
+	case "done", "failed":
+		return true
+	}
+	switch strings.TrimSpace(status.CaseStatus) {
+	case "closed", "failed":
+		return true
+	}
+	if strings.TrimSpace(status.Phase) == "deliberation" && strings.TrimSpace(status.Status) == "waiting" {
+		return true
+	}
+	if strings.TrimSpace(status.Phase) == "closed" {
+		return true
+	}
+	return false
+}
+
 func (s *runState) startPiCouncil(ctx context.Context, entry councilRosterEntry, mcpPort string, opportunityID string) error {
 	if strings.TrimSpace(entry.MemberID) == "" {
 		return fmt.Errorf("council roster entry has empty member_id")
@@ -1395,6 +1469,12 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 		}
 		if waitErr != nil {
 			s.agentErrs <- fmt.Errorf("%s process %s failed: %w", kind, name, waitErr)
+			return
+		}
+		if kind == "docker" && strings.HasPrefix(name, "openclaw-") {
+			if err := s.handleOpenClawLawyerExit(ctx, name); err != nil {
+				s.agentErrs <- err
+			}
 			return
 		}
 		s.agentErrs <- fmt.Errorf("%s process %s exited before case completion", kind, name)

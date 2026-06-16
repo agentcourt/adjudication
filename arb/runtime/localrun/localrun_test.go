@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -68,6 +70,49 @@ func TestPiCouncilInstructionsUseProxyToolNames(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("rendered instructions missing stop rule %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestHandleOpenClawLawyerExitAllowsDeliberation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/lawyerapi/v1/status" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		if r.URL.Query().Get("case_id") != "case-1" || r.URL.Query().Get("role_id") != "defendant" {
+			t.Fatalf("query = %q", r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte(`{"status":"waiting","phase":"deliberation","case_status":"open","current_opportunity":null}`)); err != nil {
+			t.Fatalf("write response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	state := &runState{
+		opts:     Options{CaseID: "case-1"},
+		caseBase: server.URL,
+	}
+	if err := state.handleOpenClawLawyerExit(context.Background(), "openclaw-defendant"); err != nil {
+		t.Fatalf("handle exit: %v", err)
+	}
+}
+
+func TestHandleOpenClawLawyerExitRejectsAttorneyPhase(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte(`{"status":"waiting","phase":"closings","case_status":"open","current_opportunity":{"opportunity_id":"closings:plaintiff","role_id":"plaintiff","phase":"closings"}}`)); err != nil {
+			t.Fatalf("write response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	state := &runState{
+		opts:     Options{CaseID: "case-1"},
+		caseBase: server.URL,
+	}
+	err := state.handleOpenClawLawyerExit(context.Background(), "openclaw-defendant")
+	if err == nil || !strings.Contains(err.Error(), "exited before case completion") {
+		t.Fatalf("error = %v", err)
 	}
 }
 
