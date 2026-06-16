@@ -108,6 +108,67 @@ func TestWriteCasePacketRejectsDuplicateExplicitBaseNames(t *testing.T) {
 	}
 }
 
+func TestWriteCasePacketRejectsOutputPathOverSource(t *testing.T) {
+	dir := t.TempDir()
+	complaint := filepath.Join(dir, "complaint.md")
+	original := "# Proposition\n\nP\n"
+	writePacketTestFile(t, complaint, original)
+
+	_, err := WriteCasePacket(CasePacketOptions{
+		ComplaintPath: complaint,
+		PacketPath:    complaint,
+		ManifestPath:  filepath.Join(dir, "case-packet.json"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "conflicts with source file") {
+		t.Fatalf("WriteCasePacket error = %v, want source conflict error", err)
+	}
+	raw, readErr := os.ReadFile(complaint)
+	if readErr != nil {
+		t.Fatalf("read complaint after failed packet: %v", readErr)
+	}
+	if string(raw) != original {
+		t.Fatalf("complaint changed after failed packet: %q", string(raw))
+	}
+}
+
+func TestWriteCasePacketRejectsOutputPathCollision(t *testing.T) {
+	dir := t.TempDir()
+	complaint := filepath.Join(dir, "complaint.md")
+	writePacketTestFile(t, complaint, "# Proposition\n\nP\n")
+	output := filepath.Join(dir, "case-output")
+
+	_, err := WriteCasePacket(CasePacketOptions{
+		ComplaintPath: complaint,
+		PacketPath:    output,
+		ManifestPath:  output,
+	})
+	if err == nil || !strings.Contains(err.Error(), "packet and manifest") {
+		t.Fatalf("WriteCasePacket error = %v, want output collision error", err)
+	}
+	if _, statErr := os.Stat(output); !os.IsNotExist(statErr) {
+		t.Fatalf("output exists after failed packet, stat error = %v", statErr)
+	}
+}
+
+func TestWriteCasePacketDoesNotPublishManifestWhenPacketCannotBeCreated(t *testing.T) {
+	dir := t.TempDir()
+	complaint := filepath.Join(dir, "complaint.md")
+	writePacketTestFile(t, complaint, "# Proposition\n\nP\n")
+	manifest := filepath.Join(dir, "case-packet.json")
+
+	_, err := WriteCasePacket(CasePacketOptions{
+		ComplaintPath: complaint,
+		PacketPath:    filepath.Join(dir, "missing", "case.tar.gz"),
+		ManifestPath:  manifest,
+	})
+	if err == nil {
+		t.Fatalf("WriteCasePacket returned nil error for missing packet directory")
+	}
+	if _, statErr := os.Stat(manifest); !os.IsNotExist(statErr) {
+		t.Fatalf("manifest exists after failed packet, stat error = %v", statErr)
+	}
+}
+
 func writePacketTestFile(t *testing.T, path string, data string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {

@@ -259,6 +259,9 @@ func TestClerkCreateAttestedExampleCompletesAfterVerification(t *testing.T) {
 	if !ok || attestation["status"] != "verified" {
 		t.Fatalf("attestation = %#v", execution["attestation"])
 	}
+	if attestation["input_prefix"] != "s3://agentcourt-data/arbattest/aar-inputs/aar-ex03-test" || attestation["output_prefix"] != "s3://agentcourt-data/arbattest/aar-runs/aar-ex03-test" {
+		t.Fatalf("attestation prefixes = %#v", execution["attestation"])
+	}
 	if !strings.Contains(mapString(attestation["local_output_dir"]), "aar-output") {
 		t.Fatalf("local_output_dir = %#v", attestation["local_output_dir"])
 	}
@@ -1000,7 +1003,7 @@ if [ -n "$complaint" ]; then
 else
   input_mode="example"
 fi
-printf 'AAR_INPUT_MODE=%s\nAAR_INPUT_PREFIX=%s\nAAR_OUTPUT_PREFIX=%s\nEXEC_AMI=%s\nCOMPLAINT=%s\nFILES=%s\nCASE_ID=%s\n' "$input_mode" "$input_prefix" "$output_prefix" "$exec_ami" "$complaint" "$files" "$case_id" > "$out_dir/run.env"
+printf 'AAR_INPUT_MODE=%s\nINPUT_PREFIX=%s\nOUTPUT_PREFIX=%s\nEXEC_AMI=%s\nCOMPLAINT=%s\nFILES=%s\nCASE_ID=%s\n' "$input_mode" "$input_prefix" "$output_prefix" "$exec_ami" "$complaint" "$files" "$case_id" > "$out_dir/run.env"
 printf 'moving\n' > "$out_dir/progress.log"
 printf 'launch\n' > "$out_dir/launcher.log"
 printf '{"files":[]}\n' > "$out_dir/manifest.json"

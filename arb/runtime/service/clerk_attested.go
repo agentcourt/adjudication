@@ -443,8 +443,8 @@ func buildAttestedClerkUpdate(rec *ClerkRecord, exitCode int) attestedClerkUpdat
 
 	att := &ClerkAttestationRecord{
 		Status:       attestationStatusFailed,
-		InputPrefix:  firstNonEmpty(env["AAR_INPUT_PREFIX"], cfg.InputPrefix),
-		OutputPrefix: firstNonEmpty(env["AAR_OUTPUT_PREFIX"], cfg.OutputPrefix),
+		InputPrefix:  firstNonEmpty(env["INPUT_PREFIX"], env["AAR_INPUT_PREFIX"], cfg.InputPrefix),
+		OutputPrefix: firstNonEmpty(env["OUTPUT_PREFIX"], env["AAR_OUTPUT_PREFIX"], cfg.OutputPrefix),
 		ExecAMI:      firstNonEmpty(env["EXEC_AMI"], cfg.ExecAMI),
 		RunEnv:       existingPath(runEnvPath),
 		ProgressLog:  existingPath(filepath.Join(outDir, "progress.log")),

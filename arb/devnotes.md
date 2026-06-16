@@ -22,6 +22,14 @@ The exec container entrypoint now rejects empty, absolute, newline-bearing, and 
 
 The local attested driver no longer treats a failed S3 listing as an empty output prefix.  Remote temporary-directory cleanup and launched-instance termination now return errors; when cleanup fails during another failure, the driver reports both failures in one error.  The Clerk service no longer discards `clerk.json` persistence errors: synchronous paths return them, and asynchronous completion paths mark the in-memory record as failed when the final write fails.
 
+### Attested review fixes
+
+Reference: `runtime/proceeding/case_packet.go`, `runtime/service/clerk_attested.go`, `runtime/service/service_test.go`, `tools/run-arb-attested.py`
+
+The case-packet writer now resolves packet, manifest, and source paths before opening any generated output.  It rejects packet or manifest paths that overlap the complaint, case files, or each other, and it writes generated files through temporary files before publishing them.  The proceeding tests cover the complaint-clobbering case, packet/manifest output collision, and a failed packet path that must not publish a manifest.
+
+The Clerk attestation record now reads the real driver keys `INPUT_PREFIX` and `OUTPUT_PREFIX`, while retaining the older `AAR_INPUT_PREFIX` and `AAR_OUTPUT_PREFIX` names as fallbacks for existing local test artifacts.  The service fake driver now writes the same prefix keys as `tools/run-arb-attested.py`, so the service test catches a mismatch between the driver and the Clerk record parser.  The attested driver also verifies `run_id`, `input_prefix`, and `aar_case_id` from `manifest.json` before accepting a completed attestation.
+
 ## 2026-06-12
 
 ### Generic attested AAR example runs

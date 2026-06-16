@@ -339,7 +339,7 @@ def extract_archives(out_dir: Path, status: str) -> None:
         safe_extract(out_dir / "aar-partial.tar.gz", out_dir / "aar-partial")
 
 
-def verify_manifest_and_archive(args: argparse.Namespace, out_dir: Path, output_prefix: str, verification_log: Path) -> None:
+def verify_manifest_and_archive(args: argparse.Namespace, out_dir: Path, run_id: str, output_prefix: str, verification_log: Path) -> None:
     manifest_path = out_dir / "manifest.json"
     manifest_hash_path = out_dir / "manifest.sha384"
     archive_path = out_dir / "aar-output.tar.gz"
@@ -347,8 +347,11 @@ def verify_manifest_and_archive(args: argparse.Namespace, out_dir: Path, output_
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     checks = [
         ("manifest.sha384", sha384_file(manifest_path) == manifest_hash_path.read_text(encoding="utf-8").strip()),
+        ("run_id", manifest.get("run_id") == run_id),
         ("mode", manifest.get("mode") == "aar"),
         ("input_mode", manifest.get("input_mode") == args.input_mode),
+        ("input_prefix", manifest.get("input_prefix") == args.input_prefix),
+        ("aar_case_id", manifest.get("aar_case_id") == (args.case_id or "")),
         ("output_prefix", manifest.get("output_prefix") == output_prefix),
         ("archive_key", manifest.get("aar_archive_key") == output_prefix.rstrip("/") + "/aar-output.tar.gz"),
         ("run.log sha384", sha384_file(run_log_path) == manifest.get("log_sha384")),
@@ -410,9 +413,9 @@ def verify_attestation(args: argparse.Namespace, out_dir: Path, verification_log
         raise RunnerError("attestation verification failed: " + ", ".join(failed))
 
 
-def verify_success(args: argparse.Namespace, out_dir: Path, output_prefix: str) -> None:
+def verify_success(args: argparse.Namespace, out_dir: Path, run_id: str, output_prefix: str) -> None:
     verification_log = out_dir / "verification.log"
-    verify_manifest_and_archive(args, out_dir, output_prefix, verification_log)
+    verify_manifest_and_archive(args, out_dir, run_id, output_prefix, verification_log)
     verify_attestation(args, out_dir, verification_log)
 
 
@@ -563,7 +566,7 @@ def main(argv: list[str]) -> int:
             status, objects = poll_until_terminal(args, proc, state, output_prefix, progress_log)
             downloaded = download_artifacts(args, run_id, output_prefix, args.out_dir, objects, progress_log)
             if status == "success" and args.verify:
-                verify_success(args, args.out_dir, output_prefix)
+                verify_success(args, args.out_dir, run_id, output_prefix)
             extract_archives(args.out_dir, status)
             cleanup_err = cleanup_launcher(args, proc, state, progress_log)
             if cleanup_err:
