@@ -2,6 +2,14 @@
 
 ## 2026-06-16
 
+### Attested live event monitoring
+
+Reference: `attest/exec-container-entrypoint.sh`, `runtime/service/clerk.go`, `runtime/service/service_test.go`, `Dockerfile.md`, `docs/attested-dev-host.md`
+
+The exec container now starts `aar run` in the background and refreshes `events.ndjson` at `OUTPUT_PREFIX/events.ndjson` while the run is active.  It uploads that object only when the local event file changes, and it performs a final refresh before uploading the terminal archive.  If the live upload fails, the entrypoint terminates the AAR process, writes the failure into `run.log`, uploads the failed-run archive path, and exits with an error.
+
+The Clerk service now exposes `GET /clerk/v1/cases/{case_id}/attestation/events` for attested AAR runs.  The handler serves `events.ndjson` from extracted local output when that file exists, falls back to the top-level downloaded S3 object, and then reads the live S3 object through the configured `dev` host with the configured AWS region.  The endpoint returns the raw NDJSON stream, so callers can tail the same lifecycle events that `aar run` writes without parsing launcher stdout.
+
 ### Attested Clerk case packets
 
 Reference: `runtime/proceeding/case_packet.go`, `runtime/cmd/aar/case_packet.go`, `runtime/service/clerk_attested.go`, `tools/run-arb-attested.py`, `tools/run-aar.sh`, `attest/exec-container-entrypoint.sh`, `Dockerfile.md`

@@ -33,11 +33,11 @@ The AAR-specific requirements live in [Attested AAR Dev Host Requirements](docs/
 
 ## Attestation Record
 
-The attestation record lives in S3, not stdout.  Stdout from `exec.sh` is useful for launch progress and the instance ID, but verification reads the S3 prefix.  A completed AAR run writes exactly these objects under `OUTPUT_PREFIX`: `run.log`, `aar-output.tar.gz`, `manifest.json`, `manifest.sha384`, and `attestation.b64`.
+The attestation record lives in S3, not stdout.  Stdout from `exec.sh` is useful for launch progress and the instance ID, but verification reads the S3 prefix.  During AAR execution, the exec container refreshes `events.ndjson` under `OUTPUT_PREFIX`; a completed run leaves that live event object with the terminal objects `run.log`, `aar-output.tar.gz`, `manifest.json`, `manifest.sha384`, and `attestation.b64`.
 
-`manifest.sha384` contains the SHA-384 hash of `manifest.json`.  The exec container entrypoint passes that file to `nitro-tpm-attest --user-data`, so the attestation `User Data` field must equal the manifest hash.  The manifest binds the input mode, selected example or case-packet hashes, input prefix, output prefix, exec AMI, instance ID, attested workload image ID, attested workload image tar hash, run log hash, and AAR archive hash.
+`events.ndjson` at the S3 prefix exists for live monitoring.  The verified event log remains the `events.ndjson` file inside `aar-output.tar.gz`, because the manifest binds the archive hash.  `manifest.sha384` contains the SHA-384 hash of `manifest.json`, and the exec container entrypoint passes that file to `nitro-tpm-attest --user-data`, so the attestation `User Data` field must equal the manifest hash.
 
-If `aar run` exits nonzero, the attested workload image uploads `run.log` and `aar-partial.tar.gz`, then exits with the AAR status.  It does not create `manifest.json`, `manifest.sha384`, or `attestation.b64` for a failed AAR run.  A prefix with only the failure artifacts is a failed AAR run, and no attestation verification exists for that run.
+The manifest binds the input mode, selected example or case-packet hashes, input prefix, output prefix, exec AMI, instance ID, attested workload image ID, attested workload image tar hash, run log hash, and AAR archive hash.  If `aar run` exits nonzero, the attested workload image uploads `events.ndjson` if AAR created it, uploads `run.log` and `aar-partial.tar.gz`, then exits with the AAR status.  It does not create `manifest.json`, `manifest.sha384`, or `attestation.b64` for a failed AAR run, so no attestation verification exists for that run.
 
 ## Runtime Topology
 
@@ -212,7 +212,7 @@ The preferred command for a normal checked-in example is `adjudication/arb/tools
 adjudication/arb/tools/run-one-attested-arb.sh examples/ex03
 ```
 
-The lower-level local driver is `adjudication/arb/tools/run-arb-attested.py`.  It starts the exec AMI through `dev`, polls the S3 output prefix, writes progress and launcher logs under the local output directory, downloads all S3 artifacts into that directory, extracts the AAR archive, and can run verification.  If a terminal S3 artifact set appears while `exec.sh` is still polling, the driver terminates only the EC2 instance ID launched for that run and stops the remote launcher.
+The lower-level local driver is `adjudication/arb/tools/run-arb-attested.py`.  It starts the exec AMI through `dev`, polls the S3 output prefix, writes progress and launcher logs under the local output directory, downloads all S3 artifacts into that directory, extracts the AAR archive, and can run verification.  The driver treats `run.log`, `aar-output.tar.gz`, `manifest.json`, `manifest.sha384`, and `attestation.b64` as the successful terminal set; `events.ndjson` can appear before that set and continues to be downloaded with the final artifacts.
 
 ```bash
 uv run adjudication/arb/tools/run-arb-attested.py \
@@ -241,7 +241,7 @@ uv run adjudication/arb/tools/run-arb-attested.py \
   --expected-pcr7 98441C7F7625D10058C47683AEC486CE311C633235EB555593A7EE791121E3578AE72D04ECEF661F272D59058B77AF35
 ```
 
-The output directory receives `run.env`, `progress.log`, `launcher.log`, the downloaded S3 artifacts, `attestation.txt` when verification runs, `verification.log` when verification runs, and either `aar-output/` or `aar-partial/` extracted from the archive.  The driver defaults to `DEV_HOST=dev`, `AWS_REGION=us-east-2`, `INSTANCE_TYPE=m5.4xlarge`, `IAM_INSTANCE_PROFILE=ec2-nix-builder`, `IMAGE_TAR_S3=s3://agentcourt-data/arbattest/images/arb-glue-poc.tar`, and `REMOTE_ATTEST_DIR=/home/ec2-user/attest`.
+The output directory receives `run.env`, `progress.log`, `launcher.log`, the downloaded S3 artifacts, `attestation.txt` when verification runs, `verification.log` when verification runs, and either `aar-output/` or `aar-partial/` extracted from the archive.  When the exec container has published live events, the top-level downloaded artifacts include `events.ndjson`; after archive extraction, the canonical event log is also present under `aar-output/events.ndjson` or `aar-partial/events.ndjson`.  The driver defaults to `DEV_HOST=dev`, `AWS_REGION=us-east-2`, `INSTANCE_TYPE=m5.4xlarge`, `IAM_INSTANCE_PROFILE=ec2-nix-builder`, `IMAGE_TAR_S3=s3://agentcourt-data/arbattest/images/arb-glue-poc.tar`, and `REMOTE_ATTEST_DIR=/home/ec2-user/attest`.
 
 The manual command below is the same example execution path without the local driver.  Run the exec AMI from `/home/ec2-user/attest` on `dev`.  Pass `RUN_ID` and `OUTPUT_PREFIX` explicitly so the verifier does not need to recover them from console output.  Set `AAR_EXAMPLE` to any checked-in example name.
 
@@ -286,7 +286,7 @@ aws s3 cp "$OUTPUT_PREFIX/" "$LOCAL/" --recursive
 find "$LOCAL" -maxdepth 1 -type f -printf '%f\n' | sort
 ```
 
-If only `dev` has S3 access, download there and copy the small artifact set back.  The successful archive path has five S3 objects, so this transfer should remain small.  A large object count means the archive path regressed and needs diagnosis before more runs.
+If only `dev` has S3 access, download there and copy the small artifact set back.  The successful archive path has five terminal S3 objects plus `events.ndjson`, so this transfer should remain small.  A large object count means the archive path regressed and needs diagnosis before more runs.
 
 ```bash
 RUN_ID=aar-ex01-REPLACE_WITH_STAMP
@@ -305,6 +305,7 @@ The expected successful object list is:
 ```text
 aar-output.tar.gz
 attestation.b64
+events.ndjson
 manifest.json
 manifest.sha384
 run.log

@@ -274,7 +274,7 @@ func TestClerkCreateAttestedExampleCompletesAfterVerification(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("artifacts status = %d, body = %#v", status, got)
 	}
-	for _, name := range []string{"run.json", "digest.md", "verification.log", "manifest.sha384"} {
+	for _, name := range []string{"run.json", "digest.md", "events.ndjson", "verification.log", "manifest.sha384"} {
 		if !artifactListContains(got["artifacts"], name) {
 			t.Fatalf("missing artifact %s in %#v", name, got["artifacts"])
 		}
@@ -290,6 +290,69 @@ func TestClerkCreateAttestedExampleCompletesAfterVerification(t *testing.T) {
 	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/attested-1/evidence/EV1")
 	if rawStatus != http.StatusOK || string(body) != "evidence text\n" {
 		t.Fatalf("evidence status = %d body = %q", rawStatus, string(body))
+	}
+	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/attested-1/attestation/events")
+	if rawStatus != http.StatusOK || string(body) != "{\"event\":\"completed\",\"case_id\":\"attested-1\"}\n" {
+		t.Fatalf("events status = %d body = %q", rawStatus, string(body))
+	}
+}
+
+func TestClerkAttestationEventsFetchesLiveS3Object(t *testing.T) {
+	root := t.TempDir()
+	fakeBin := t.TempDir()
+	sshPath := filepath.Join(fakeBin, "ssh")
+	sshScript := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$FAKE_SSH_LOG\"\nprintf '{\"event\":\"live\"}\\n'\n"
+	if err := os.WriteFile(sshPath, []byte(sshScript), 0o755); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	logPath := filepath.Join(t.TempDir(), "ssh.log")
+	t.Setenv("PATH", fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKE_SSH_LOG", logPath)
+
+	outDir := filepath.Join(root, "live-attested")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatalf("create output dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "run.env"), []byte("OUTPUT_PREFIX=s3://bucket/run\n"), 0o644); err != nil {
+		t.Fatalf("write run.env: %v", err)
+	}
+	s := newClerkTestServerWithConfig(t, Config{
+		RegistryDir: filepath.Join(t.TempDir(), "registry"),
+		OutputRoot:  root,
+		AARBin:      writeFakeAAR(t, "#!/bin/sh\nexit 64\n"),
+	})
+	s.mu.Lock()
+	if s.clerkCases == nil {
+		s.clerkCases = map[string]*ClerkRecord{}
+	}
+	s.clerkCases["live-attested"] = &ClerkRecord{
+		CaseID:    "live-attested",
+		RunID:     "run-live",
+		Status:    "running",
+		OutDir:    outDir,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		Execution: &ClerkExecutionRecord{
+			Mode: clerkExecutionAttested,
+			Resolved: &AttestedClerkConfig{
+				DevHost:   "dev-test",
+				AWSRegion: "region-test",
+			},
+			Attestation: &ClerkAttestationRecord{Status: attestationStatusPending},
+		},
+	}
+	s.mu.Unlock()
+
+	rawStatus, body := serviceRawGet(t, s, "/clerk/v1/cases/live-attested/attestation/events")
+	if rawStatus != http.StatusOK || string(body) != "{\"event\":\"live\"}\n" {
+		t.Fatalf("events status = %d body = %q", rawStatus, string(body))
+	}
+	raw, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read fake ssh log: %v", err)
+	}
+	logText := string(raw)
+	if !strings.Contains(logText, "dev-test") || !strings.Contains(logText, "AWS_DEFAULT_REGION='region-test' aws s3 cp 's3://bucket/run/events.ndjson' - --no-progress") {
+		t.Fatalf("ssh command = %q", logText)
 	}
 }
 
@@ -1010,12 +1073,14 @@ printf '{"files":[]}\n' > "$out_dir/manifest.json"
 printf 'sha384 test\n' > "$out_dir/manifest.sha384"
 printf 'attestation text\n' > "$out_dir/attestation.txt"
 printf 'verified\n' > "$out_dir/verification.log"
+printf '{"event":"live","case_id":"%s"}\n' "$case_id" > "$out_dir/events.ndjson"
 if [ "__EXIT_CODE__" != "0" ]; then
   exit __EXIT_CODE__
 fi
 mkdir -p "$out_dir/aar-output/submitted-evidence"
 printf '{"case_id":"%s","run_id":"%s","status":"completed","phase":"complete","resolution":"demonstrated","example":"%s","complaint":"%s","files":%s}\n' "$case_id" "$run_id" "$example" "$complaint" "$files" > "$out_dir/aar-output/run.json"
 printf 'digest text\n' > "$out_dir/aar-output/digest.md"
+printf '{"event":"completed","case_id":"%s"}\n' "$case_id" > "$out_dir/aar-output/events.ndjson"
 printf '[{"evidence_id":"EV1","name":"ev1.txt"}]\n' > "$out_dir/aar-output/evidence-manifest.json"
 printf 'evidence text\n' > "$out_dir/aar-output/submitted-evidence/ev1.txt"
 exit 0

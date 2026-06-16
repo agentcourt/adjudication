@@ -133,6 +133,30 @@ upload_aar_archive() {
     aws s3 cp "$archive" "$aar_archive_key" --no-progress
 }
 
+upload_events_if_changed() {
+    events_path="$1"
+    events_key="$2"
+    stamp_file="$3"
+    if [ ! -f "$events_path" ]; then
+        return 0
+    fi
+    set -- $(stat -c '%s %Y' "$events_path")
+    events_stamp="$1:$2"
+    previous_stamp=""
+    if [ -f "$stamp_file" ]; then
+        previous_stamp="$(cat "$stamp_file")"
+    fi
+    if [ "$events_stamp" != "$previous_stamp" ]; then
+        if ! aws s3 cp "$events_path" "$events_key" --no-progress; then
+            return 1
+        fi
+        if ! printf '%s\n' "$events_stamp" > "$stamp_file"; then
+            return 1
+        fi
+    fi
+    return 0
+}
+
 reject_packet_path() {
     echo "error: invalid case packet path: $1" >&2
     exit 1
@@ -287,6 +311,13 @@ case "$mode" in
         : "${INPUT_PREFIX:?INPUT_PREFIX is required for ARB_EXEC_MODE=aar}"
         secrets_dir="$run_dir/secrets"
         aar_out="$run_dir/aar"
+        event_upload_interval="${AAR_EVENTS_UPLOAD_INTERVAL_SECONDS:-60}"
+        case "$event_upload_interval" in
+            ""|0|*[!0-9]*)
+                echo "error: invalid AAR_EVENTS_UPLOAD_INTERVAL_SECONDS: $event_upload_interval" >&2
+                exit 1
+                ;;
+        esac
         mkdir -p "$secrets_dir" "$aar_out"
         aws s3 cp "$input_prefix/auth.json" "$secrets_dir/auth.json" --no-progress
         aws s3 cp "$input_prefix/keys.sh" "$secrets_dir/keys.sh" --no-progress
@@ -336,14 +367,56 @@ case "$mode" in
                 exit 1
                 ;;
         esac
+        events_path="$aar_out/events.ndjson"
+        events_key="$output_prefix/events.ndjson"
+        events_stamp_file="$run_dir/events.ndjson.stamp"
+        events_error_file="$run_dir/events.ndjson.err"
         set +e
-        "$@" > "$log" 2>&1
+        "$@" > "$log" 2>&1 &
+        aar_pid=$!
+        set -e
+        next_event_upload=0
+        while kill -0 "$aar_pid" 2>/dev/null; do
+            now_epoch="$(date -u +%s)"
+            if [ "$now_epoch" -ge "$next_event_upload" ]; then
+                if ! upload_events_if_changed "$events_path" "$events_key" "$events_stamp_file"; then
+                    printf 'error: failed to upload %s\n' "$events_key" > "$events_error_file"
+                    if kill -0 "$aar_pid" 2>/dev/null; then
+                        if ! kill "$aar_pid" 2>/dev/null; then
+                            printf 'error: failed to terminate aar after events upload failure\n' >> "$events_error_file"
+                        fi
+                    fi
+                    break
+                fi
+                next_event_upload=$((now_epoch + event_upload_interval))
+            fi
+            sleep 5
+        done
+        set +e
+        wait "$aar_pid"
         aar_status=$?
         set -e
+        events_failed=0
+        if [ -f "$events_error_file" ]; then
+            events_failed=1
+            cat "$events_error_file" >> "$log"
+        fi
+        if ! upload_events_if_changed "$events_path" "$events_key" "$events_stamp_file"; then
+            events_failed=1
+            echo "error: failed to upload final events.ndjson" >> "$events_error_file"
+            echo "error: failed to upload final events.ndjson" >> "$log"
+        fi
+        if [ "$events_failed" -ne 0 ] && [ "$aar_status" -eq 0 ]; then
+            aar_status=1
+        fi
         if [ "$aar_status" -ne 0 ]; then
             aws s3 cp "$log" "$output_prefix/run.log" --no-progress
             if ! upload_aar_archive "$aar_out" "aar-partial.tar.gz"; then
                 echo "error: failed to upload partial AAR archive after aar exit status $aar_status" >&2
+                exit 1
+            fi
+            if [ "$events_failed" -ne 0 ]; then
+                cat "$events_error_file" >&2
                 exit 1
             fi
             echo "error: aar failed with exit status $aar_status" >&2

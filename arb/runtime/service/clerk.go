@@ -1,6 +1,8 @@
 package service
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +18,13 @@ import (
 const (
 	clerkRecordName = "clerk.json"
 	clerkKillGrace  = 10 * time.Second
+
+	defaultAttestedDevHost       = "dev"
+	defaultAttestedAWSRegion     = "us-east-2"
+	attestedEventsFetchTimeout   = 20 * time.Second
+	attestedEventsArtifactName   = "events.ndjson"
+	attestedEventsContentType    = "application/x-ndjson"
+	attestedEventsMissingMessage = "attestation events are not available yet"
 )
 
 type ClerkCreateRequest struct {
@@ -116,6 +125,10 @@ func (s *Server) handleClerkCase(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) == 2 && parts[1] == "result" && r.Method == http.MethodGet {
 		s.handleClerkCaseResult(w, caseID)
+		return
+	}
+	if len(parts) == 3 && parts[1] == "attestation" && parts[2] == "events" && r.Method == http.MethodGet {
+		s.handleClerkAttestationEvents(w, r, caseID)
 		return
 	}
 	if len(parts) >= 2 && parts[1] == "artifacts" && r.Method == http.MethodGet {
@@ -589,6 +602,133 @@ func (s *Server) handleClerkEvidence(w http.ResponseWriter, r *http.Request, cas
 		return
 	}
 	serveEvidenceFile(w, r, caseID, clerkEffectiveOutputDir(rec), evidenceID)
+}
+
+func (s *Server) handleClerkAttestationEvents(w http.ResponseWriter, r *http.Request, caseID string) {
+	rec, ok := s.getClerkRecord(caseID)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_case", "unknown case_id")})
+		return
+	}
+	if rec.Execution == nil || rec.Execution.Mode != clerkExecutionAttested {
+		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("attestation_events_unavailable", "case is not an attested execution")})
+		return
+	}
+	if path, ok, err := clerkLocalAttestationEventsPath(rec); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "case_id": caseID, "error": apiError("attestation_events_failed", err.Error())})
+		return
+	} else if ok {
+		w.Header().Set("Content-Type", attestedEventsContentType)
+		http.ServeFile(w, r, path)
+		return
+	}
+	raw, err := clerkFetchAttestationEventsFromS3(rec)
+	if err != nil {
+		status := http.StatusBadGateway
+		code := "attestation_events_fetch_failed"
+		if isAttestedEventsMissing(err) {
+			status = http.StatusNotFound
+			code = "attestation_events_unavailable"
+		}
+		writeJSON(w, status, map[string]any{"ok": false, "case_id": caseID, "error": apiError(code, err.Error())})
+		return
+	}
+	w.Header().Set("Content-Type", attestedEventsContentType)
+	http.ServeContent(w, r, attestedEventsArtifactName, time.Time{}, bytes.NewReader(raw))
+}
+
+func clerkLocalAttestationEventsPath(rec ClerkRecord) (string, bool, error) {
+	for _, root := range []string{clerkEffectiveOutputDir(rec), rec.OutDir} {
+		path := filepath.Join(root, attestedEventsArtifactName)
+		st, err := os.Stat(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return "", false, err
+		}
+		if st.IsDir() {
+			return "", false, fmt.Errorf("%s is a directory", path)
+		}
+		safe, err := safeArtifactPath(root, attestedEventsArtifactName)
+		if err != nil {
+			return "", false, err
+		}
+		return safe, true, nil
+	}
+	return "", false, nil
+}
+
+func clerkFetchAttestationEventsFromS3(rec ClerkRecord) ([]byte, error) {
+	outputPrefix, err := clerkAttestedOutputPrefix(rec)
+	if err != nil {
+		return nil, err
+	}
+	if outputPrefix == "" {
+		return nil, &attestedEventsMissingError{message: "attested output prefix is unknown"}
+	}
+	devHost, awsRegion := clerkAttestedReaderConfig(rec)
+	eventsKey := strings.TrimRight(outputPrefix, "/") + "/" + attestedEventsArtifactName
+	ctx, cancel := context.WithTimeout(context.Background(), attestedEventsFetchTimeout)
+	defer cancel()
+	remote := fmt.Sprintf("AWS_DEFAULT_REGION=%s aws s3 cp %s - --no-progress", shellQuote(awsRegion), shellQuote(eventsKey))
+	cmd := exec.CommandContext(ctx, "ssh", devHost, remote)
+	raw, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("fetch %s via %s timed out: %w", eventsKey, devHost, ctx.Err())
+	}
+	if err != nil {
+		message := strings.TrimSpace(string(raw))
+		if message == "" {
+			message = err.Error()
+		}
+		if strings.Contains(message, "NoSuchKey") || strings.Contains(message, "(404)") || strings.Contains(message, "Not Found") {
+			return nil, &attestedEventsMissingError{message: fmt.Sprintf("%s: %s", attestedEventsMissingMessage, message)}
+		}
+		return nil, fmt.Errorf("fetch %s via %s: %w: %s", eventsKey, devHost, err, message)
+	}
+	return raw, nil
+}
+
+func clerkAttestedOutputPrefix(rec ClerkRecord) (string, error) {
+	env, err := readSimpleEnvFile(filepath.Join(rec.OutDir, "run.env"))
+	if err != nil {
+		return "", err
+	}
+	cfg := AttestedClerkConfig{}
+	if rec.Execution != nil && rec.Execution.Resolved != nil {
+		cfg = *rec.Execution.Resolved
+	}
+	recordPrefix := ""
+	if rec.Execution != nil && rec.Execution.Attestation != nil {
+		recordPrefix = rec.Execution.Attestation.OutputPrefix
+	}
+	return firstNonEmpty(env["OUTPUT_PREFIX"], env["AAR_OUTPUT_PREFIX"], recordPrefix, cfg.OutputPrefix), nil
+}
+
+func clerkAttestedReaderConfig(rec ClerkRecord) (string, string) {
+	cfg := AttestedClerkConfig{}
+	if rec.Execution != nil && rec.Execution.Resolved != nil {
+		cfg = *rec.Execution.Resolved
+	}
+	return firstNonEmpty(cfg.DevHost, defaultAttestedDevHost), firstNonEmpty(cfg.AWSRegion, defaultAttestedAWSRegion)
+}
+
+type attestedEventsMissingError struct {
+	message string
+}
+
+func (e *attestedEventsMissingError) Error() string {
+	return e.message
+}
+
+func isAttestedEventsMissing(err error) bool {
+	var missing *attestedEventsMissingError
+	return errors.As(err, &missing)
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 func (s *Server) getClerkRecordPtr(caseID string) (*ClerkRecord, bool) {

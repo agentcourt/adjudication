@@ -44,11 +44,13 @@ The verified bucket is `s3://agentcourt-data` in `us-east-2`, with all AAR attes
 | --- | --- | --- | --- |
 | `s3://agentcourt-data/arbattest/images/` | `dev` Docker build step | Exec AMI | `arb-glue-poc.tar`, the Docker archive loaded by `run-aar.sh`. |
 | `s3://agentcourt-data/arbattest/aar-inputs/<example>-<stamp>/` | `dev` staging step | Exec workload container on exec AMI | `auth.json` and `keys.sh`. |
-| `s3://agentcourt-data/arbattest/aar-runs/<run-id>/` | Exec workload container on exec AMI | `dev` polling and download steps | `run.log`, `aar-output.tar.gz`, `manifest.json`, `manifest.sha384`, and `attestation.b64` on success. |
-| `s3://agentcourt-data/arbattest/aar-runs/<run-id>/` | Exec workload container on exec AMI | `dev` polling and download steps | `run.log` and `aar-partial.tar.gz` on current AAR failure paths. |
+| `s3://agentcourt-data/arbattest/aar-runs/<run-id>/` | Exec workload container on exec AMI | `dev` polling, Clerk monitoring, and download steps | `events.ndjson` during execution, plus `run.log`, `aar-output.tar.gz`, `manifest.json`, `manifest.sha384`, and `attestation.b64` on success. |
+| `s3://agentcourt-data/arbattest/aar-runs/<run-id>/` | Exec workload container on exec AMI | `dev` polling, Clerk monitoring, and download steps | `events.ndjson` if AAR created it, plus `run.log` and `aar-partial.tar.gz` on current AAR failure paths. |
 | `s3://agentcourt-data/arbattest/container-poc/` | Container proof runs | Operator verification | Small proof outputs for the attested workload image in attestation-only mode. |
 
-The output prefix is the attestation record location.  The launcher console output is not the record.  Verification reads the downloaded S3 files, checks the manifest hash, checks archive hashes, parses `attestation.b64`, and verifies that Nitro TPM user data equals `manifest.sha384`.
+The output prefix is the attestation record location.  The launcher console output is not the record.  Clerk reads `events.ndjson` from this prefix while an attested run is active, then uses the downloaded local copy or extracted archive after the run completes.
+
+Verification reads the downloaded S3 files, checks the manifest hash, checks archive hashes, parses `attestation.b64`, and verifies that Nitro TPM user data equals `manifest.sha384`.  The live `events.ndjson` object supports monitoring, but the verified event log is the copy inside the manifest-bound archive.  A complete success prefix has a small object count: five terminal objects plus the live event log.
 
 ## S3 Permissions
 
