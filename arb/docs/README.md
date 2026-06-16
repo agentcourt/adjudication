@@ -22,6 +22,7 @@ These documents cover AAR rules, practice guidance, process specifications, evid
 | [AAR Case Failures](case-failures.md) | Case and council failure rules. |
 | [AAR Case Failure Test Plan](case-failures-testing.md) | Process and HTTP failure tests. |
 | [OpenClaw Codex Auth](openclaw-auth.md) | OpenClaw Codex `auth.json` path. |
+| [Attested AAR Dev Host](attested-dev-host.md) | `dev` host, AWS, S3, Docker, secret, and verification requirements for attested AAR runs. |
 
 ## Proof And Analysis References
 

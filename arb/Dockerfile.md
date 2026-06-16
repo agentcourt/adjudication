@@ -25,6 +25,12 @@ The current glue input schema contains only runtime secrets and the example name
 
 Use the `arbattest` branch in both `jsmorph/adjudication` and `jsmorph/attest`.  The current Docker-enabled exec AMI is `ami-011f957fe91cf7b81` in `us-east-2`.  Its expected PCR values are listed in the verification section and must be replaced when the exec AMI is rebuilt.
 
+## Dev Host And AWS Requirements
+
+The generic `dev` host requirements for the exec AMI launcher live in [Dev Host Requirements](../../attest/dev-host.md).  Read that document before building or launching through `attest/exec.sh`.  It covers the base x86_64 host, Nix daemon setup, AWS CLI, EC2 permissions, EBS direct snapshot permissions, role passing, default VPC assumptions, disk requirements, and verification commands.
+
+The AAR-specific requirements live in [Attested AAR Dev Host Requirements](docs/attested-dev-host.md).  That document adds the Docker build checkout, launcher directory, secret file locations, S3 prefixes, S3 permissions, `ec2-nix-builder` instance profile, expected PCR values, and operational checks for attested AAR runs.  The short form is that `dev` must build and upload `arb-glue:poc`, stage `auth.json` and `keys.sh` under `s3://agentcourt-data/arbattest/aar-inputs/`, launch the exec AMI, poll `s3://agentcourt-data/arbattest/aar-runs/`, download terminal artifacts, and support verification.
+
 ## Attestation Record
 
 The attestation record lives in S3, not stdout.  Stdout from `exec.sh` is useful for launch progress and the instance ID, but verification reads the S3 prefix.  A completed AAR run writes exactly these objects under `OUTPUT_PREFIX`: `run.log`, `aar-output.tar.gz`, `manifest.json`, `manifest.sha384`, and `attestation.b64`.

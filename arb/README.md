@@ -18,6 +18,7 @@ Read [Practice Manual](docs/practice.md) for lawyer and council practice.  It ex
 | Podman | Runs Pi council containers in `aar run`. |
 | Codex `auth.json` or `OPENAI_API_KEY` | Authenticates OpenClaw lawyers. |
 | `OPENROUTER_API_KEY` | Authenticates current local Pi council pool entries that use OpenRouter. |
+| Attested AAR `dev` host | See [Attested AAR Dev Host](docs/attested-dev-host.md) for the remote Docker, S3, IAM, secret, and verification requirements. |
 
 ## Build
 
