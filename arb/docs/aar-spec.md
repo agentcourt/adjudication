@@ -20,7 +20,7 @@ A nonzero `aar case` exit status reports process or runtime failure.  Examples i
 
 The direct service starts one `aar case` child for each created `/api/v1` case.  The service assigns the child's private case API address before startup, records the child process id, private case API base URL, stdout and stderr log paths, child exit code, parsed stdout summary, and service-level status.  After starting the child, the service polls `GET /health` on the assigned private case API base.  A successful health response marks the case `running`; startup timeout marks it `failed`.
 
-The Clerk service starts one full `aar run` child for each created `/clerk/v1` case.  A Clerk-started run starts the case process, MCP server, local OpenClaw lawyers when configured, and Pi council agents when deliberation begins.  The service records run status in `clerk.json` under the run output directory.
+The Clerk service starts one full local `aar run` child for each ordinary `/clerk/v1` case.  A local Clerk-started run starts the case process, MCP server, local OpenClaw lawyers when configured, and Pi council agents when deliberation begins.  The service records run status in `clerk.json` under the run output directory, including attested execution metadata when the request uses attested mode.
 
 ## Common HTTP Rules
 
@@ -58,11 +58,17 @@ If a child has no final artifact yet, the result endpoint returns `ok: true`, th
 
 ### Clerk API
 
-`POST /clerk/v1/cases` starts a full `aar run` child.  The JSON request mirrors `aar run` options in structured form.  Common fields include `example`, `complaint_path`, `case_files`, `out_dir`, `policy_path`, `council_size`, `evidence_standard`, `council_pool_path`, `openclaw_auth`, `openclaw_codex_auth_path`, `auto_lawyers`, `mcp_public_base_url`, `pi_image`, `pi_mcp_adapter`, and council output limits.
+`POST /clerk/v1/cases` starts a full local `aar run` child unless the request asks for another execution mode.  The ordinary JSON request mirrors `aar run` options in structured form.  Common fields include `example`, `complaint_path`, `case_files`, `out_dir`, `policy_path`, `council_size`, `evidence_standard`, `council_pool_path`, `openclaw_auth`, `openclaw_codex_auth_path`, `auto_lawyers`, `mcp_public_base_url`, `pi_image`, `pi_mcp_adapter`, and council output limits.
 
-`GET /clerk/v1/cases` lists Clerk cases.  `GET /clerk/v1/cases/{case_id}` returns one Clerk record.  `GET /clerk/v1/cases/{case_id}/result` returns the final or pending run result.  `POST /clerk/v1/cases/{case_id}/kill` stops an attached active child process and records the resulting service status.
+The request may include `execution`.  If `execution` is omitted, the service uses local execution for compatibility with existing clients.  If `execution` is present, `execution.mode` is required and must be `local` or `attested`; local execution rejects nested attestation config.
 
-`GET /clerk/v1/cases/{case_id}/artifacts` lists primary run artifacts.  `GET /clerk/v1/cases/{case_id}/artifacts/{name}` serves one exact listed artifact name.  `GET /clerk/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted submitted evidence by evidence id when the run manifest maps that id to a readable file.
+Attested Clerk execution currently accepts examples only.  An attested request must set `example`, `execution.mode: "attested"`, and `execution.attestation`, and it must not set ordinary local `aar run` fields such as complaint paths, case files, policy paths, council pools, agent settings, or timeout overrides.  The attestation config must provide, either in the request or through service defaults, the attested driver path, input S3 prefix, exec AMI, expected PCR4, and expected PCR7.
+
+Attested Clerk execution requires verification.  The service rejects `verify: false`, passes `--verify` to the attested driver, and records `completed` only if the driver exits successfully, writes `verification.log`, extracts `aar-output/`, and leaves a readable `aar-output/run.json`.  A failed remote run or a verification failure produces a failed Clerk record even when downloaded artifacts remain available for inspection.
+
+`GET /clerk/v1/cases` lists Clerk cases.  `GET /clerk/v1/cases/{case_id}` returns one Clerk record, including the execution object for attested cases.  `GET /clerk/v1/cases/{case_id}/result` returns the final or pending run result, reading `run.json` from `aar-output/` for verified attested cases.  `POST /clerk/v1/cases/{case_id}/kill` stops an attached active child process and records the resulting service status.
+
+`GET /clerk/v1/cases/{case_id}/artifacts` lists primary run artifacts.  For attested records, the list also includes downloaded top-level attestation files when present, including `run.env`, `progress.log`, `launcher.log`, `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, `attestation.txt`, `verification.log`, `aar-output.tar.gz`, and `aar-partial.tar.gz`.  `GET /clerk/v1/cases/{case_id}/artifacts/{name}` serves one exact listed artifact name.  `GET /clerk/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted submitted evidence by evidence id from the local output packet or the extracted attested output packet.
 
 The service role proxy routes are for direct `/api/v1/cases` records.  A Clerk-started run has its own case process and MCP server inside the child `aar run` process.
 

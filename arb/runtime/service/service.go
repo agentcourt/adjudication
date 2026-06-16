@@ -39,6 +39,7 @@ type Config struct {
 	CommonRoot  string
 	EnginePath  string
 	BearerToken string
+	Attested    AttestedClerkConfig
 	StartupWait time.Duration
 	Log         io.Writer
 }
@@ -1077,26 +1078,54 @@ func serveEvidenceFile(w http.ResponseWriter, r *http.Request, caseID string, ou
 		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("manifest_missing", err.Error())})
 		return
 	}
-	var manifest []map[string]any
-	if err := json.Unmarshal(raw, &manifest); err != nil {
+	manifest, err := parseEvidenceManifest(raw)
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "case_id": caseID, "error": apiError("bad_manifest", err.Error())})
 		return
 	}
 	for _, item := range manifest {
 		if mapString(item["evidence_id"]) == evidenceID {
-			name := mapString(item["name"])
-			if name == "" {
-				name = mapString(item["original_name"])
-			}
+			name := evidenceFileArtifactName(item)
 			if name == "" {
 				writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "evidence_id": evidenceID, "error": apiError("evidence_path_missing", "manifest item has no readable file name")})
 				return
 			}
-			serveOutputFile(w, r, caseID, outDir, filepath.Join("submitted-evidence", name))
+			serveOutputFile(w, r, caseID, outDir, name)
 			return
 		}
 	}
 	writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "evidence_id": evidenceID, "error": apiError("unknown_evidence", "unknown evidence_id")})
+}
+
+func parseEvidenceManifest(raw []byte) ([]map[string]any, error) {
+	var legacy []map[string]any
+	if err := json.Unmarshal(raw, &legacy); err == nil {
+		return legacy, nil
+	}
+	var current struct {
+		Evidence []map[string]any `json:"evidence"`
+	}
+	if err := json.Unmarshal(raw, &current); err != nil {
+		return nil, err
+	}
+	if current.Evidence == nil {
+		return nil, fmt.Errorf("manifest has no evidence array")
+	}
+	return current.Evidence, nil
+}
+
+func evidenceFileArtifactName(item map[string]any) string {
+	if storageName := mapString(item["storage_name"]); storageName != "" {
+		return filepath.Join("evidence-store", storageName)
+	}
+	name := mapString(item["name"])
+	if name == "" {
+		name = mapString(item["original_name"])
+	}
+	if name == "" {
+		return ""
+	}
+	return filepath.Join("submitted-evidence", name)
 }
 
 func (s *Server) serveCaseFile(w http.ResponseWriter, r *http.Request, rec *CaseRecord, name string) {
