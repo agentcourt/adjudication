@@ -23,6 +23,7 @@ A case process owns the arbitration.  It owns the current phase, turn order, dea
 | Goal | Command |
 | --- | --- |
 | Run one complete local case with OpenClaw lawyers and Pi council agents. | `aar run EXAMPLE` or `aar run --complaint FILE`. |
+| Build a deterministic case packet for attested complaint input. | `aar case-packet --complaint FILE --packet case.tar.gz --manifest case-packet.json`. |
 | Run one complete case where one lawyer is an independently running OpenClaw. | `aar run --auto-lawyers defendant` for a remote plaintiff, or `aar run --auto-lawyers plaintiff` for a remote defendant. |
 | Start and track many full runs from an HTTP service. | `aar service`, then `POST /clerk/v1/cases`. |
 | Drive lawyers or council members by direct HTTP instead of local agents. | `aar case`, or `aar service` with `POST /api/v1/cases`. |
@@ -131,12 +132,15 @@ Use `--file` to provide explicit initial evidence.  The flag may be repeated.  S
   --out-dir out/my-case
 ```
 
+`aar case-packet` packages the same complaint and initial evidence selection into the attested-run input format.  It writes a deterministic `case.tar.gz` and a `case-packet.json` manifest, using the proceeding package's automatic scan and explicit-file validation.  The attested local driver calls this command before uploading packet objects to S3, so local and attested Clerk complaint input share one case-file implementation.
+
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
 | `aar complain` | Write a canonical complaint from a situation markdown file. |
 | `aar validate` | Validate that a complaint parses. |
+| `aar case-packet` | Build `case.tar.gz` and `case-packet.json` for attested complaint input. |
 | `aar case` | Run one case and expose the private Lawyer and optional Council APIs. |
 | `aar mcp` | Run an MCP server that forwards tools to a Case API or service API base. |
 | `aar run` | Run one full local arbitration with OpenClaw lawyers and Pi council agents. |
@@ -554,7 +558,7 @@ Important flags:
 | `--attested-aws-region` | Default AWS region. |
 | `--attested-instance-type` | Default EC2 instance type. |
 | `--attested-iam-instance-profile` | Default exec instance profile. |
-| `--attested-image-tar-s3` | Default S3 URI for the arb glue image tar. |
+| `--attested-image-tar-s3` | Default S3 URI for the arb attested workload image tar. |
 | `--attested-root-volume-size-gb` | Default exec root volume size in GiB. |
 | `--attested-exec-poll-attempts` | Default exec host poll attempts. |
 | `--attested-poll-interval-seconds` | Default attested driver poll interval. |
@@ -641,7 +645,29 @@ curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases \
 EOF
 ```
 
-Attested Clerk execution currently supports checked-in examples.  An attested request must set `example` and must not set local `aar run` fields such as `complaint_path`, `case_files`, `policy_path`, `council_pool_path`, OpenClaw settings, Pi settings, or timeout overrides.  General Clerk inputs need an S3 case-packet format before the service can send arbitrary complaint and evidence packets to the exec AMI.
+Create an attested run from an explicit complaint:
+
+```bash
+curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases \
+  -H 'content-type: application/json' \
+  --data @- <<EOF
+{
+    "case_id": "attested-custom-20260616123000",
+    "run_id": "aar-custom-20260616123000",
+    "complaint_path": "work/my-case/complaint.md",
+    "case_files": ["work/my-case/source-a.txt", "work/my-case/source-b.pdf"],
+    "execution": {
+        "mode": "attested",
+        "attestation": {
+            "input_prefix": "s3://agentcourt-data/arbattest/aar-inputs/aar-custom-20260616123000",
+            "output_prefix": "s3://agentcourt-data/arbattest/aar-runs/aar-custom-20260616123000"
+        }
+    }
+}
+EOF
+```
+
+Attested Clerk execution accepts the same case selectors as local Clerk execution: either `example`, or `complaint_path` with optional `case_files`.  For complaint input, the attested driver calls `aar case-packet` on the service host, uploads `case.tar.gz` and `case-packet.json` under the S3 input prefix through `dev`, and sends packet hashes to the exec AMI.  Attested mode still rejects unsupported runtime overrides such as `policy_path`, `council_pool_path`, OpenClaw settings, Pi settings, and timeout overrides.
 
 The `execution` object is optional for existing local Clerk clients.  If it is present, `execution.mode` is required and must be `local` or `attested`; local mode rejects nested attestation config.  Attested mode requires `execution.attestation`, an S3 `input_prefix`, an exec AMI, expected PCR4, expected PCR7, and the attested driver path, with those values supplied by service flags or by the request.
 
@@ -689,7 +715,7 @@ curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases/arb-custom-20260603123000
 
 Kill sends interrupt, waits 10 seconds, and then kills the child process if it has not exited.  If the case record is active on disk but the current service process has no process handle, the endpoint returns HTTP `409` with error code `case_not_attached`.  Terminal disk-only records return unchanged because there is no live process to kill.
 
-Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, and `evidence-manifest.json`.  For attested Clerk records, the same endpoint also lists downloaded top-level attestation files when present: `run.env`, `progress.log`, `launcher.log`, `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, `attestation.txt`, `verification.log`, `aar-output.tar.gz`, and `aar-partial.tar.gz`.  Artifact routes do not serve arbitrary output files, process logs outside the listed set, generated remote-lawyer skill files, or staged Codex auth directories.
+Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, and `evidence-manifest.json`.  For attested Clerk records, the same endpoint also lists downloaded top-level attestation files when present: `run.env`, `progress.log`, `launcher.log`, `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, `attestation.txt`, `verification.log`, `case.tar.gz`, `case-packet.json`, `aar-output.tar.gz`, and `aar-partial.tar.gz`.  Artifact routes do not serve arbitrary output files, process logs outside the listed set, generated remote-lawyer skill files, or staged Codex auth directories.
 
 The result and evidence routes read from the materialized AAR output packet.  Local Clerk runs use the run output directory directly.  Attested Clerk runs use the extracted `aar-output/` directory after verification, or the extracted `aar-partial/` directory for inspection after a failed remote run.
 
@@ -759,7 +785,7 @@ Attested request fields live under `execution.attestation`:
 | `aws_region` | AWS region. |
 | `instance_type` | EC2 instance type. |
 | `iam_instance_profile` | Exec instance profile. |
-| `image_tar_s3` | S3 URI for the arb glue image tar. |
+| `image_tar_s3` | S3 URI for the arb attested workload image tar. |
 | `root_volume_size_gb` | Exec root volume size in GiB. |
 | `exec_poll_attempts` | Exec host poll attempts. |
 | `poll_interval_seconds` | Attested driver poll interval. |

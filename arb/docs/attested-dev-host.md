@@ -2,9 +2,9 @@
 
 ## Scope
 
-Attested AAR runs use the generic exec AMI launcher from the `attest` repository and add AAR-specific Docker, S3, secret, and verification requirements.  Start with [Dev Host Requirements](../../../attest/dev-host.md), which defines the generic `dev` host, Nix, EC2, IAM, and launched-instance assumptions for `attest`.  This document adds the requirements for building the AAR glue image, staging inputs, launching the Docker-enabled exec AMI, collecting S3 artifacts, and verifying an AAR attestation.
+Attested AAR runs use the generic exec AMI launcher from the `attest` repository and add AAR-specific Docker, S3, secret, and verification requirements.  Start with [Dev Host Requirements](../../../attest/dev-host.md), which defines the generic `dev` host, Nix, EC2, IAM, and launched-instance assumptions for `attest`.  This document adds the requirements for building the AAR attested workload image, staging inputs, launching the Docker-enabled exec AMI, collecting S3 artifacts, and verifying an AAR attestation.
 
-The current attested AAR path runs checked-in examples.  The selected example lives inside the AAR Docker image and is selected with `AAR_EXAMPLE`.  External case packets need a separate S3 input schema before the glue can run arbitrary Clerk-style cases.
+The attested AAR path supports checked-in examples and Clerk-style local case inputs.  Example mode selects a case inside the AAR Docker image with `AAR_EXAMPLE`.  Case-packet mode packages a local `complaint_path` and optional `case_files` into `case.tar.gz` and `case-packet.json`, uploads them under the S3 input prefix through `dev`, and records their hashes in the attestation manifest.
 
 ## Host Layout
 
@@ -24,15 +24,15 @@ The `dev` host performs three AAR jobs.  It builds Docker images from a source c
 
 The AAR build host inherits the generic `attest` requirements and adds Docker.  The verified host runs Amazon Linux 2023 with `aws`, `git`, `docker`, and Nix installed.  The `ec2-user` account must be able to run `sudo docker build`, `sudo docker save`, and `sudo chown` without an interactive password prompt.
 
-Docker builds need enough root filesystem capacity for the AAR base image, the glue image, the saved glue archive, and build cache.  A 32 GiB root volume with about 20 GiB free has worked after cleanup.  If the build fails because `/` is full, remove old Docker build cache, obsolete local images, and stale image tar files before rebuilding.
+Docker builds need enough root filesystem capacity for the AAR base image, the attested workload image, the saved image archive, and build cache.  A 32 GiB root volume with about 20 GiB free has worked after cleanup.  If the build fails because `/` is full, remove old Docker build cache, obsolete local images, and stale image tar files before rebuilding.
 
-The local driver uses SSH and SCP to make `dev` read from S3 and copy artifacts back to the local output directory.  The current driver defaults to `DEV_HOST=dev` and `REMOTE_ATTEST_DIR=/home/ec2-user/attest`.  The caller also needs `uv` locally because verification runs `uv run attest/parse_attestation.py` after downloading the attestation.
+The local driver uses SSH and SCP to make `dev` read from S3, write case-packet inputs to S3, and copy artifacts back to the local output directory.  The current driver defaults to `DEV_HOST=dev` and `REMOTE_ATTEST_DIR=/home/ec2-user/attest`.  The caller also needs `uv` locally because verification runs `uv run attest/parse_attestation.py` after downloading the attestation.
 
 ## AWS Region, AMI, And Instance Profile
 
 The verified region is `us-east-2`.  The current Docker-enabled exec AMI is `ami-011f957fe91cf7b81`, and the expected PCR values in the runbook correspond to that AMI.  Rebuilding the exec AMI requires recording the new AMI id and PCR values in the runbook and in commands that pass `--expected-pcr4` and `--expected-pcr7`.
 
-The verified exec instance type is `m5.4xlarge`.  The exec AMI root filesystem is RAM-backed, and Docker extracts image layers into that RAM-backed filesystem.  Smaller instances can fail while loading the glue image because they do not have enough RAM-backed storage.
+The verified exec instance type is `m5.4xlarge`.  The exec AMI root filesystem is RAM-backed, and Docker extracts image layers into that RAM-backed filesystem.  Smaller instances can fail while loading the attested workload image because they do not have enough RAM-backed storage.
 
 The verified instance profile is `ec2-nix-builder`.  The `dev` host role must be able to pass the role behind that instance profile when it launches the exec AMI.  The launched exec instance profile must have S3 permissions for the image tar, staged inputs, and run-output prefix.
 
@@ -43,10 +43,10 @@ The verified bucket is `s3://agentcourt-data` in `us-east-2`, with all AAR attes
 | Prefix | Producer | Consumer | Contents |
 | --- | --- | --- | --- |
 | `s3://agentcourt-data/arbattest/images/` | `dev` Docker build step | Exec AMI | `arb-glue-poc.tar`, the Docker archive loaded by `run-aar.sh`. |
-| `s3://agentcourt-data/arbattest/aar-inputs/<example>-<stamp>/` | `dev` staging step | Glue container on exec AMI | `auth.json` and `keys.sh`. |
-| `s3://agentcourt-data/arbattest/aar-runs/<run-id>/` | Glue container on exec AMI | `dev` polling and download steps | `run.log`, `aar-output.tar.gz`, `manifest.json`, `manifest.sha384`, and `attestation.b64` on success. |
-| `s3://agentcourt-data/arbattest/aar-runs/<run-id>/` | Glue container on exec AMI | `dev` polling and download steps | `run.log` and `aar-partial.tar.gz` on current AAR failure paths. |
-| `s3://agentcourt-data/arbattest/container-poc/` | Container proof runs | Operator verification | Small proof outputs for the glue image in attestation-only mode. |
+| `s3://agentcourt-data/arbattest/aar-inputs/<example>-<stamp>/` | `dev` staging step | Exec workload container on exec AMI | `auth.json` and `keys.sh`. |
+| `s3://agentcourt-data/arbattest/aar-runs/<run-id>/` | Exec workload container on exec AMI | `dev` polling and download steps | `run.log`, `aar-output.tar.gz`, `manifest.json`, `manifest.sha384`, and `attestation.b64` on success. |
+| `s3://agentcourt-data/arbattest/aar-runs/<run-id>/` | Exec workload container on exec AMI | `dev` polling and download steps | `run.log` and `aar-partial.tar.gz` on current AAR failure paths. |
+| `s3://agentcourt-data/arbattest/container-poc/` | Container proof runs | Operator verification | Small proof outputs for the attested workload image in attestation-only mode. |
 
 The output prefix is the attestation record location.  The launcher console output is not the record.  Verification reads the downloaded S3 files, checks the manifest hash, checks archive hashes, parses `attestation.b64`, and verifies that Nitro TPM user data equals `manifest.sha384`.
 
@@ -62,7 +62,7 @@ The `dev` host role needs S3 permissions for staging inputs, uploading images, p
 | `arn:aws:s3:::agentcourt-data/arbattest/aar-runs/*` | `s3:GetObject`, `s3:PutObject` for manual diagnostics, `s3:AbortMultipartUpload`, `s3:ListMultipartUploadParts`, and optional `s3:DeleteObject`. |
 | `arn:aws:s3:::agentcourt-data/arbattest/container-poc/*` | `s3:GetObject`, `s3:PutObject`, and optional `s3:DeleteObject`. |
 
-The launched exec instance profile needs narrower S3 permissions.  It reads the glue image tar and input secrets, then writes terminal run artifacts.  Grant list permission only for prefixes used by diagnostics or future scripts that enumerate objects.
+The launched exec instance profile needs narrower S3 permissions.  It reads the attested workload image tar and input secrets, then writes terminal run artifacts.  Grant list permission only for prefixes used by diagnostics or future scripts that enumerate objects.
 
 | Prefix | Required launched-instance actions |
 | --- | --- |
@@ -81,15 +81,15 @@ The `dev` host role needs all generic `attest` runner permissions because the lo
 | --- | --- |
 | `dev` host role | Generic `attest` build and runner actions from [Dev Host Requirements](../../../attest/dev-host.md), plus the S3 actions above. |
 | `dev` host role when passing `ec2-nix-builder` | `iam:PassRole` on the role attached to the `ec2-nix-builder` instance profile. |
-| Launched exec instance profile | S3 read/write actions above; no EC2 launch action is required by the current glue path. |
+| Launched exec instance profile | S3 read/write actions above; no EC2 launch action is required by the current AAR exec path. |
 
 The launched exec instance needs outbound network access.  It reads S3, starts Docker, runs OpenClaw lawyer containers, runs Pi council containers, and those agents call their configured providers.  The current run path uses `OPENROUTER_API_KEY` for the Pi council pool and Codex auth for OpenClaw.
 
 ## Secret Files
 
-`/home/ec2-user/arbattest-secrets/auth.json` must be the Codex auth file OpenClaw can import.  The staging command copies it to `INPUT_PREFIX/auth.json`, and the glue script mounts it into the OpenClaw Codex home.  The file should remain outside Git and outside served artifact directories.
+`/home/ec2-user/arbattest-secrets/auth.json` must be the Codex auth file OpenClaw can import.  The staging command copies it to `INPUT_PREFIX/auth.json`, and the exec container entrypoint mounts it into the OpenClaw Codex home.  The file should remain outside Git and outside served artifact directories.
 
-`/home/ec2-user/arbattest-secrets/keys.sh` must assign or export `OPENROUTER_API_KEY`.  The glue script sources it before running AAR and exits if the key is absent.  Add further provider keys there only when the selected council pool or lawyers require them.
+`/home/ec2-user/arbattest-secrets/keys.sh` must assign or export `OPENROUTER_API_KEY`.  The exec container entrypoint sources it before running AAR and exits if the key is absent.  Add further provider keys there only when the selected council pool or lawyers require them.
 
 The input S3 prefix currently stores these secret files as plain S3 objects subject to bucket policy and optional bucket encryption.  Limit read access to the launched exec instance profile and operators who need to diagnose a run.  Remove obsolete input prefixes when they are no longer needed, unless the run must preserve inputs for audit.
 
@@ -111,7 +111,7 @@ Successful AAR verification checks `manifest.sha384`, the archive SHA-384, `run.
 
 ## Operational Checks
 
-Run these checks before rebuilding the glue image or launching a long run.  They verify the host layout, tool paths, source checkout, launcher directory, secrets, Docker access, AWS identity, and free disk capacity.  They do not launch EC2 instances or write S3 objects.
+Run these checks before rebuilding the attested workload image or launching a long run.  They verify the host layout, tool paths, source checkout, launcher directory, secrets, Docker access, AWS identity, and free disk capacity.  They do not launch EC2 instances or write S3 objects.
 
 ```bash
 ssh dev 'set -eu

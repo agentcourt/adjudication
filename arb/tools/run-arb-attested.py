@@ -27,6 +27,8 @@ SUCCESS_OBJECTS = {
 }
 PARTIAL_OBJECTS = {"run.log", "aar-partial.tar.gz"}
 DEFAULT_PCR12 = "0" * 96
+CASE_PACKET_OBJECT = "case.tar.gz"
+CASE_PACKET_MANIFEST_OBJECT = "case-packet.json"
 
 
 class RunnerError(Exception):
@@ -47,6 +49,11 @@ def validate_run_id(value: str) -> None:
         raise RunnerError(f"invalid run ID: {value}")
 
 
+def validate_case_id(value: str) -> None:
+    if value and (value.startswith(".") or "/" in value or ".." in value or "\n" in value):
+        raise RunnerError(f"invalid case ID: {value}")
+
+
 def require_s3_prefix(name: str, value: str) -> str:
     if not value.startswith("s3://"):
         raise RunnerError(f"{name} must start with s3://")
@@ -61,14 +68,71 @@ def sha384_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def local_path_selector(value: str) -> str:
+    path = Path(value)
+    if path.is_absolute():
+        return value
+    return str(Path.cwd() / path)
+
+
+def stage_case_packet(args: argparse.Namespace, run_id: str, progress_log: Path) -> None:
+    packet_path = args.out_dir / CASE_PACKET_OBJECT
+    manifest_path = args.out_dir / CASE_PACKET_MANIFEST_OBJECT
+    write_line(progress_log, f"{utc_stamp()} preparing case packet")
+    cmd = [
+        args.go,
+        "run",
+        "./arb/runtime/cmd/aar",
+        "case-packet",
+        "--complaint",
+        local_path_selector(args.complaint),
+        "--packet",
+        str(packet_path),
+        "--manifest",
+        str(manifest_path),
+    ]
+    for case_file in args.files:
+        cmd.extend(["--file", local_path_selector(case_file)])
+    run_command(cmd, log_path=progress_log, cwd=args.repo_root)
+    args.case_packet = CASE_PACKET_OBJECT
+    args.case_manifest = CASE_PACKET_MANIFEST_OBJECT
+    args.case_packet_sha384 = sha384_file(packet_path)
+    args.case_manifest_sha384 = sha384_file(manifest_path)
+    remote_tmp = f"/tmp/run-arb-attested-input-{run_id}-{os.getpid()}"
+    ssh(args, f"mkdir -p {quote(remote_tmp)}", log_path=progress_log)
+    try:
+        run_command(["scp", str(packet_path), f"{args.dev_host}:{remote_tmp}/{CASE_PACKET_OBJECT}"], log_path=progress_log)
+        run_command(["scp", str(manifest_path), f"{args.dev_host}:{remote_tmp}/{CASE_PACKET_MANIFEST_OBJECT}"], log_path=progress_log)
+        remote = "\n".join(
+            [
+                "set -eu",
+                f"AWS_DEFAULT_REGION={quote(args.aws_region)} aws s3 cp {quote(remote_tmp + '/' + CASE_PACKET_OBJECT)} {quote(args.input_prefix + '/' + CASE_PACKET_OBJECT)} --no-progress",
+                f"AWS_DEFAULT_REGION={quote(args.aws_region)} aws s3 cp {quote(remote_tmp + '/' + CASE_PACKET_MANIFEST_OBJECT)} {quote(args.input_prefix + '/' + CASE_PACKET_MANIFEST_OBJECT)} --no-progress",
+            ]
+        )
+        ssh(args, remote, log_path=progress_log)
+    except BaseException as e:
+        cleanup_err = remove_remote_tmp(args, remote_tmp, progress_log)
+        if cleanup_err:
+            raise combine_errors(e, cleanup_err) from e
+        raise
+    cleanup_err = remove_remote_tmp(args, remote_tmp, progress_log)
+    if cleanup_err:
+        raise cleanup_err
+    write_line(progress_log, f"{utc_stamp()} staged case packet sha384={args.case_packet_sha384}")
+
+
 def write_line(path: Path, line: str) -> None:
     with path.open("a", encoding="utf-8") as f:
         f.write(line.rstrip("\n"))
         f.write("\n")
 
 
-def run_command(cmd: list[str], log_path: Path | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+def run_command(cmd: list[str], log_path: Path | None = None, check: bool = True, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    try:
+        result = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=cwd)
+    except OSError as e:
+        raise RunnerError(f"start command {shlex.join(cmd)}: {e}") from e
     if log_path is not None and result.stdout:
         with log_path.open("a", encoding="utf-8") as f:
             f.write(result.stdout)
@@ -87,14 +151,33 @@ def quote(value: str) -> str:
 
 def build_remote_exec_command(args: argparse.Namespace, run_id: str, output_prefix: str) -> str:
     remote_runner = f"{args.remote_attest_dir.rstrip('/')}/run-aar.sh"
+    exec_env_vars = [
+        "INPUT_PREFIX",
+        "IMAGE_TAR_S3",
+        "AAR_INPUT_MODE",
+        "AAR_EXAMPLE",
+        "AAR_CASE_ID",
+        "AAR_CASE_PACKET",
+        "AAR_CASE_MANIFEST",
+        "AAR_CASE_PACKET_SHA384",
+        "AAR_CASE_MANIFEST_SHA384",
+        "RUN_ID",
+        "OUTPUT_PREFIX",
+    ]
     env = {
         "AWS_DEFAULT_REGION": args.aws_region,
         "INSTANCE_TYPE": args.instance_type,
         "POLL_ATTEMPTS": str(args.exec_poll_attempts),
-        "EXEC_ENV_VARS": "INPUT_PREFIX,IMAGE_TAR_S3,AAR_EXAMPLE,RUN_ID,OUTPUT_PREFIX",
+        "EXEC_ENV_VARS": ",".join(exec_env_vars),
         "INPUT_PREFIX": args.input_prefix,
         "IMAGE_TAR_S3": args.image_tar_s3,
-        "AAR_EXAMPLE": args.example,
+        "AAR_INPUT_MODE": args.input_mode,
+        "AAR_EXAMPLE": args.example or "",
+        "AAR_CASE_ID": args.case_id or "",
+        "AAR_CASE_PACKET": args.case_packet,
+        "AAR_CASE_MANIFEST": args.case_manifest,
+        "AAR_CASE_PACKET_SHA384": args.case_packet_sha384,
+        "AAR_CASE_MANIFEST_SHA384": args.case_manifest_sha384,
         "RUN_ID": run_id,
         "OUTPUT_PREFIX": output_prefix,
     }
@@ -110,6 +193,20 @@ def build_remote_exec_command(args: argparse.Namespace, run_id: str, output_pref
             f"env {env_text} ./exec.sh {quote(args.exec_ami)} {quote(remote_runner)}",
         ]
     )
+
+
+def remove_remote_tmp(args: argparse.Namespace, remote_tmp: str, progress_log: Path) -> RunnerError | None:
+    result = ssh(args, f"rm -rf {quote(remote_tmp)}", log_path=progress_log, check=False)
+    if result.returncode == 0:
+        return None
+    return RunnerError(f"remote cleanup failed with exit status {result.returncode}: {remote_tmp}")
+
+
+def combine_errors(primary: BaseException, cleanup: BaseException) -> BaseException:
+    if isinstance(primary, RunnerError):
+        return RunnerError(f"{primary}; cleanup failed: {cleanup}")
+    primary.add_note(f"cleanup failed: {cleanup}")
+    return primary
 
 
 def start_launcher(args: argparse.Namespace, run_id: str, output_prefix: str, launcher_log: Path) -> tuple[subprocess.Popen[str], dict[str, str | None], threading.Thread]:
@@ -139,14 +236,12 @@ def start_launcher(args: argparse.Namespace, run_id: str, output_prefix: str, la
     return proc, state, thread
 
 
-def list_s3_objects(args: argparse.Namespace, output_prefix: str) -> set[str]:
+def list_s3_objects(args: argparse.Namespace, output_prefix: str, progress_log: Path) -> set[str]:
     remote = (
         f"AWS_DEFAULT_REGION={quote(args.aws_region)} "
         f"aws s3 ls {quote(output_prefix.rstrip('/') + '/')}"
     )
-    result = ssh(args, remote, check=False)
-    if result.returncode != 0:
-        return set()
+    result = ssh(args, remote, log_path=progress_log)
     objects: set[str] = set()
     for line in result.stdout.splitlines():
         parts = line.split()
@@ -169,7 +264,7 @@ def terminate_instance(args: argparse.Namespace, instance_id: str, progress_log:
         f"AWS_DEFAULT_REGION={quote(args.aws_region)} "
         f"aws ec2 terminate-instances --instance-ids {quote(instance_id)} >/dev/null"
     )
-    ssh(args, remote, check=False)
+    ssh(args, remote, log_path=progress_log)
 
 
 def stop_launcher(proc: subprocess.Popen[str], progress_log: Path) -> None:
@@ -182,6 +277,25 @@ def stop_launcher(proc: subprocess.Popen[str], progress_log: Path) -> None:
     except subprocess.TimeoutExpired:
         proc.kill()
         proc.wait(timeout=15)
+
+
+def cleanup_launcher(args: argparse.Namespace, proc: subprocess.Popen[str], state: dict[str, str | None], progress_log: Path) -> RunnerError | None:
+    if proc.poll() is not None:
+        return None
+    errors: list[str] = []
+    instance_id = state.get("instance_id")
+    if instance_id:
+        try:
+            terminate_instance(args, instance_id, progress_log)
+        except RunnerError as e:
+            errors.append(str(e))
+    try:
+        stop_launcher(proc, progress_log)
+    except Exception as e:
+        errors.append(f"stop remote launcher: {e}")
+    if errors:
+        return RunnerError("; ".join(errors))
+    return None
 
 
 def download_artifacts(args: argparse.Namespace, run_id: str, output_prefix: str, out_dir: Path, objects: set[str], progress_log: Path) -> set[str]:
@@ -201,7 +315,9 @@ def download_artifacts(args: argparse.Namespace, run_id: str, output_prefix: str
         if "/" in name or name.startswith("."):
             continue
         run_command(["scp", f"{args.dev_host}:{remote_tmp}/{name}", str(out_dir / name)], log_path=progress_log)
-    ssh(args, f"rm -rf {quote(remote_tmp)}", check=False)
+    cleanup_err = remove_remote_tmp(args, remote_tmp, progress_log)
+    if cleanup_err:
+        raise cleanup_err
     return names
 
 
@@ -232,7 +348,7 @@ def verify_manifest_and_archive(args: argparse.Namespace, out_dir: Path, output_
     checks = [
         ("manifest.sha384", sha384_file(manifest_path) == manifest_hash_path.read_text(encoding="utf-8").strip()),
         ("mode", manifest.get("mode") == "aar"),
-        ("aar_example", manifest.get("aar_example") == args.example),
+        ("input_mode", manifest.get("input_mode") == args.input_mode),
         ("output_prefix", manifest.get("output_prefix") == output_prefix),
         ("archive_key", manifest.get("aar_archive_key") == output_prefix.rstrip("/") + "/aar-output.tar.gz"),
         ("run.log sha384", sha384_file(run_log_path) == manifest.get("log_sha384")),
@@ -241,6 +357,17 @@ def verify_manifest_and_archive(args: argparse.Namespace, out_dir: Path, output_
         ("container image id present", bool(manifest.get("container_image_id"))),
         ("container tar hash present", bool(manifest.get("container_image_tar_sha384"))),
     ]
+    if args.input_mode == "example":
+        checks.append(("aar_example", manifest.get("aar_example") == args.example))
+    else:
+        checks.extend(
+            [
+                ("case_packet_key", manifest.get("case_packet_key") == args.input_prefix + "/" + CASE_PACKET_OBJECT),
+                ("case_packet sha384", manifest.get("case_packet_sha384") == args.case_packet_sha384),
+                ("case_manifest_key", manifest.get("case_manifest_key") == args.input_prefix + "/" + CASE_PACKET_MANIFEST_OBJECT),
+                ("case_manifest sha384", manifest.get("case_manifest_sha384") == args.case_manifest_sha384),
+            ]
+        )
     failed = [name for name, ok in checks if not ok]
     for name, ok in checks:
         write_line(verification_log, f"{name}: {'ok' if ok else 'failed'}")
@@ -297,7 +424,14 @@ def prepare_out_dir(path: Path, allow_nonempty: bool) -> None:
 
 def write_run_env(args: argparse.Namespace, out_dir: Path, run_id: str, output_prefix: str) -> None:
     values = {
-        "AAR_EXAMPLE": args.example,
+        "AAR_INPUT_MODE": args.input_mode,
+        "AAR_EXAMPLE": args.example or "",
+        "AAR_CASE_ID": args.case_id or "",
+        "AAR_COMPLAINT": args.complaint or "",
+        "AAR_CASE_PACKET": args.case_packet,
+        "AAR_CASE_PACKET_SHA384": args.case_packet_sha384,
+        "AAR_CASE_MANIFEST": args.case_manifest,
+        "AAR_CASE_MANIFEST_SHA384": args.case_manifest_sha384,
         "INPUT_PREFIX": args.input_prefix,
         "RUN_ID": run_id,
         "OUTPUT_PREFIX": output_prefix,
@@ -308,6 +442,8 @@ def write_run_env(args: argparse.Namespace, out_dir: Path, run_id: str, output_p
         "INSTANCE_TYPE": args.instance_type,
         "IAM_INSTANCE_PROFILE": args.iam_instance_profile,
         "IMAGE_TAR_S3": args.image_tar_s3,
+        "GO": args.go,
+        "REPO_ROOT": str(args.repo_root),
     }
     with (out_dir / "run.env").open("w", encoding="utf-8") as f:
         for name, value in values.items():
@@ -318,7 +454,7 @@ def poll_until_terminal(args: argparse.Namespace, proc: subprocess.Popen[str], s
     deadline = time.monotonic() + args.timeout_seconds
     last_objects: set[str] = set()
     while True:
-        objects = list_s3_objects(args, output_prefix)
+        objects = list_s3_objects(args, output_prefix, progress_log)
         if objects:
             last_objects = objects
         status = classify_objects(objects)
@@ -331,7 +467,7 @@ def poll_until_terminal(args: argparse.Namespace, proc: subprocess.Popen[str], s
             return status, objects
         exit_code = proc.poll()
         if exit_code is not None:
-            objects = list_s3_objects(args, output_prefix)
+            objects = list_s3_objects(args, output_prefix, progress_log)
             status = classify_objects(objects)
             if status is not None:
                 return status, objects
@@ -355,12 +491,19 @@ def default_parser_path() -> Path:
     return candidates[0]
 
 
+def default_repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser_path = default_parser_path()
-    p = argparse.ArgumentParser(description="Run an attested AAR example through the exec AMI.")
-    p.add_argument("--example", required=True)
+    p = argparse.ArgumentParser(description="Run an attested AAR through the exec AMI.")
+    p.add_argument("--example")
+    p.add_argument("--complaint")
+    p.add_argument("--file", dest="files", action="append", default=[])
     p.add_argument("--input-prefix", required=True)
     p.add_argument("--exec-ami", required=True)
+    p.add_argument("--case-id")
     p.add_argument("--out-dir", required=True, type=Path)
     p.add_argument("--run-id")
     p.add_argument("--output-prefix")
@@ -378,6 +521,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--allow-nonempty-out-dir", action="store_true")
     p.add_argument("--verify", action="store_true")
     p.add_argument("--uv", default=os.environ.get("UV") or shutil.which("uv") or "uv")
+    p.add_argument("--go", default=os.environ.get("GO") or shutil.which("go") or "go")
+    p.add_argument("--repo-root", type=Path, default=Path(os.environ.get("REPO_ROOT", str(default_repo_root()))))
     p.add_argument("--parser", default=os.environ.get("ATTESTATION_PARSER", str(parser_path)))
     p.add_argument("--expected-pcr4", default=os.environ.get("EXPECTED_PCR4", ""))
     p.add_argument("--expected-pcr7", default=os.environ.get("EXPECTED_PCR7", ""))
@@ -388,19 +533,31 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str]) -> int:
     try:
         args = parse_args(argv)
-        validate_example(args.example)
+        args.input_mode = "case-packet" if args.complaint else "example"
+        args.case_packet = ""
+        args.case_manifest = ""
+        args.case_packet_sha384 = ""
+        args.case_manifest_sha384 = ""
+        if args.example:
+            validate_example(args.example)
+        if args.input_mode == "example" and not args.example:
+            raise RunnerError("--example is required unless --complaint is set")
+        validate_case_id(args.case_id or "")
         args.input_prefix = require_s3_prefix("input prefix", args.input_prefix)
         args.image_tar_s3 = require_s3_prefix("image tar S3 path", args.image_tar_s3)
         output_root = require_s3_prefix("output root", args.output_root)
-        run_id = args.run_id or f"aar-{args.example}-{utc_stamp()}"
+        run_name = args.example or "case"
+        run_id = args.run_id or f"aar-{run_name}-{utc_stamp()}"
         validate_run_id(run_id)
         output_prefix = args.output_prefix.rstrip("/") if args.output_prefix else f"{output_root}/{run_id}"
         output_prefix = require_s3_prefix("output prefix", output_prefix)
         prepare_out_dir(args.out_dir, args.allow_nonempty_out_dir)
         progress_log = args.out_dir / "progress.log"
         launcher_log = args.out_dir / "launcher.log"
-        write_run_env(args, args.out_dir, run_id, output_prefix)
         write_line(progress_log, f"{utc_stamp()} starting run {run_id}")
+        if args.input_mode == "case-packet":
+            stage_case_packet(args, run_id, progress_log)
+        write_run_env(args, args.out_dir, run_id, output_prefix)
         proc, state, thread = start_launcher(args, run_id, output_prefix, launcher_log)
         try:
             status, objects = poll_until_terminal(args, proc, state, output_prefix, progress_log)
@@ -408,23 +565,19 @@ def main(argv: list[str]) -> int:
             if status == "success" and args.verify:
                 verify_success(args, args.out_dir, output_prefix)
             extract_archives(args.out_dir, status)
-            if proc.poll() is None:
-                instance_id = state.get("instance_id")
-                if instance_id:
-                    terminate_instance(args, instance_id, progress_log)
-                stop_launcher(proc, progress_log)
+            cleanup_err = cleanup_launcher(args, proc, state, progress_log)
+            if cleanup_err:
+                raise cleanup_err
             thread.join(timeout=5)
             write_line(progress_log, f"{utc_stamp()} completed with status {status}")
             print(f"completed: status={status} out_dir={args.out_dir}", flush=True)
             if downloaded:
                 print("downloaded: " + ",".join(sorted(downloaded)), flush=True)
             return 0 if status == "success" else 1
-        except BaseException:
-            if proc.poll() is None:
-                instance_id = state.get("instance_id")
-                if instance_id:
-                    terminate_instance(args, instance_id, progress_log)
-                stop_launcher(proc, progress_log)
+        except BaseException as e:
+            cleanup_err = cleanup_launcher(args, proc, state, progress_log)
+            if cleanup_err:
+                raise combine_errors(e, cleanup_err) from e
             raise
     except RunnerError as e:
         print(f"error: {e}", file=sys.stderr)

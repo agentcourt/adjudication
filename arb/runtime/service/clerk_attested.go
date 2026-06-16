@@ -123,10 +123,7 @@ func (s *Server) resolveClerkExecution(req ClerkCreateRequest) (*ClerkExecutionR
 }
 
 func (s *Server) resolveAttestedClerkExecution(req ClerkCreateRequest) (*ClerkExecutionRecord, error) {
-	if req.Example == "" {
-		return nil, fmt.Errorf("attested execution requires an example")
-	}
-	if err := validateAttestedExamplesOnly(req); err != nil {
+	if err := validateAttestedClerkRequest(req); err != nil {
 		return nil, err
 	}
 	if req.Execution.Attestation == nil {
@@ -176,14 +173,8 @@ func (s *Server) resolveAttestedClerkExecution(req ClerkCreateRequest) (*ClerkEx
 	}, nil
 }
 
-func validateAttestedExamplesOnly(req ClerkCreateRequest) error {
+func validateAttestedClerkRequest(req ClerkCreateRequest) error {
 	var fields []string
-	if req.ComplaintPath != "" {
-		fields = append(fields, "complaint_path")
-	}
-	if len(req.CaseFiles) > 0 {
-		fields = append(fields, "case_files")
-	}
 	if req.PolicyPath != "" {
 		fields = append(fields, "policy_path")
 	}
@@ -296,7 +287,7 @@ func validateAttestedExamplesOnly(req ClerkCreateRequest) error {
 		fields = append(fields, "podman_mcp_host")
 	}
 	if len(fields) > 0 {
-		return fmt.Errorf("attested execution supports examples only; unsupported fields: %s", strings.Join(fields, ", "))
+		return fmt.Errorf("attested execution does not support these local run fields yet: %s", strings.Join(fields, ", "))
 	}
 	return nil
 }
@@ -364,21 +355,30 @@ func validateAttestedNumbers(cfg AttestedClerkConfig) error {
 	return nil
 }
 
-func attestedClerkCommand(rec *ClerkRecord, outDir string) (string, []string, error) {
+func attestedClerkCommand(req ClerkCreateRequest, rec *ClerkRecord, outDir string) (string, []string, error) {
 	if rec.Execution == nil || rec.Execution.Resolved == nil {
 		return "", nil, fmt.Errorf("attested execution config is missing")
 	}
 	cfg := *rec.Execution.Resolved
 	args := []string{
-		"--example", rec.Example,
 		"--input-prefix", cfg.InputPrefix,
 		"--exec-ami", cfg.ExecAMI,
+		"--case-id", rec.CaseID,
 		"--run-id", rec.RunID,
 		"--out-dir", outDir,
 		"--allow-nonempty-out-dir",
 		"--verify",
 		"--expected-pcr4", cfg.ExpectedPCR4,
 		"--expected-pcr7", cfg.ExpectedPCR7,
+	}
+	if rec.Example != "" {
+		args = append(args, "--example", rec.Example)
+	}
+	if req.ComplaintPath != "" {
+		args = append(args, "--complaint", req.ComplaintPath)
+		for _, file := range req.CaseFiles {
+			args = append(args, "--file", file)
+		}
 	}
 	if cfg.OutputPrefix != "" {
 		args = append(args, "--output-prefix", cfg.OutputPrefix)
@@ -641,6 +641,8 @@ func listedClerkTopArtifactNames() []string {
 		"attestation.b64",
 		"attestation.txt",
 		"verification.log",
+		"case.tar.gz",
+		"case-packet.json",
 		"aar-output.tar.gz",
 		"aar-partial.tar.gz",
 	}

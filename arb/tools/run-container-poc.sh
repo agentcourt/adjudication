@@ -47,10 +47,10 @@ docker run --rm \
     -e AWS_DEFAULT_REGION \
     -e OUTPUT_PREFIX="$output_prefix" \
     -e RUN_ID="container-poc-$stamp" \
-    -e ARB_GLUE_MODE=attest-only \
-    -e ARB_GLUE_WORK_ROOT="$work_root" \
-    -e ARB_GLUE_IMAGE_ID="$image_id" \
-    -e ARB_GLUE_IMAGE_TAR_SHA384="$image_tar_sha384" \
+    -e ARB_EXEC_MODE=attest-only \
+    -e ARB_EXEC_WORK_ROOT="$work_root" \
+    -e ARB_EXEC_IMAGE_ID="$image_id" \
+    -e ARB_EXEC_IMAGE_TAR_SHA384="$image_tar_sha384" \
     "$image_ref"
 
 printf 'OUTPUT_PREFIX=%s\n' "$output_prefix"

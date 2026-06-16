@@ -225,7 +225,7 @@ func (s *Server) startClerkCase(req ClerkCreateRequest) (ClerkRecord, error) {
 	args := s.clerkRunArgs(req, caseID, runID, outDir, example)
 	if execution != nil && execution.Mode == clerkExecutionAttested {
 		var err error
-		commandPath, args, err = attestedClerkCommand(rec, outDir)
+		commandPath, args, err = attestedClerkCommand(req, rec, outDir)
 		if err != nil {
 			s.unreserveClerkCase(caseID)
 			return ClerkRecord{}, err
@@ -272,10 +272,13 @@ func (s *Server) startClerkCase(req ClerkCreateRequest) (ClerkRecord, error) {
 		return ClerkRecord{}, err
 	}
 	if err := cmd.Start(); err != nil {
-		s.markClerkFailed(rec, fmt.Sprintf("start child: %v", err))
+		persistErr := s.markClerkFailed(rec, fmt.Sprintf("start child: %v", err))
 		close(rec.done)
 		_ = stdoutFile.Close()
 		_ = stderrFile.Close()
+		if persistErr != nil {
+			return ClerkRecord{}, fmt.Errorf("start child: %w; persist clerk record: %v", err, persistErr)
+		}
 		return ClerkRecord{}, fmt.Errorf("start child: %w", err)
 	}
 	s.mu.Lock()
@@ -284,7 +287,9 @@ func (s *Server) startClerkCase(req ClerkCreateRequest) (ClerkRecord, error) {
 	rec.Status = "running"
 	s.cond.Broadcast()
 	s.mu.Unlock()
-	s.persistClerkRecordBestEffort(rec)
+	if err := s.persistClerkRecord(rec); err != nil {
+		s.markClerkPersistenceFailed(rec, err)
+	}
 	stdoutDone := make(chan error, 1)
 	stderrDone := make(chan error, 1)
 	go func() {
@@ -455,7 +460,9 @@ func (s *Server) waitClerkChild(rec *ClerkRecord, stdoutDone <-chan error, stder
 	}
 	s.cond.Broadcast()
 	s.mu.Unlock()
-	s.persistClerkRecordBestEffort(rec)
+	if err := s.persistClerkRecord(rec); err != nil {
+		s.markClerkPersistenceFailed(rec, err)
+	}
 }
 
 func (s *Server) handleKillClerkCase(w http.ResponseWriter, caseID string) {
@@ -491,7 +498,10 @@ func (s *Server) handleKillClerkCase(w http.ResponseWriter, caseID string) {
 	done := rec.done
 	s.cond.Broadcast()
 	s.mu.Unlock()
-	s.persistClerkRecordBestEffort(rec)
+	if err := s.persistClerkRecord(rec); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "case_id": caseID, "error": apiError("persist_case_failed", err.Error())})
+		return
+	}
 	if cmd != nil && cmd.Process != nil {
 		if err := cmd.Process.Signal(os.Interrupt); err != nil && !clerkDone(done) {
 			writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "case_id": caseID, "error": apiError("kill_failed", err.Error())})
@@ -599,13 +609,21 @@ func (s *Server) getClerkRecord(caseID string) (ClerkRecord, bool) {
 	return disk, true
 }
 
-func (s *Server) markClerkFailed(rec *ClerkRecord, message string) {
+func (s *Server) markClerkFailed(rec *ClerkRecord, message string) error {
 	s.mu.Lock()
 	rec.Status = "failed"
 	rec.Error = message
 	s.cond.Broadcast()
 	s.mu.Unlock()
-	s.persistClerkRecordBestEffort(rec)
+	return s.persistClerkRecord(rec)
+}
+
+func (s *Server) markClerkPersistenceFailed(rec *ClerkRecord, err error) {
+	s.mu.Lock()
+	rec.Status = "failed"
+	rec.Error = fmt.Sprintf("persist clerk record: %v", err)
+	s.cond.Broadcast()
+	s.mu.Unlock()
 }
 
 func (s *Server) listClerkRecords() ([]ClerkRecord, error) {
@@ -658,10 +676,6 @@ func (s *Server) persistClerkRecord(rec *ClerkRecord) error {
 		return err
 	}
 	return os.Rename(tmp, final)
-}
-
-func (s *Server) persistClerkRecordBestEffort(rec *ClerkRecord) {
-	_ = s.persistClerkRecord(rec)
 }
 
 func publicClerkRecord(rec *ClerkRecord) ClerkRecord {

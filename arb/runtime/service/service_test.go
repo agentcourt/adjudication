@@ -290,7 +290,60 @@ func TestClerkCreateAttestedExampleCompletesAfterVerification(t *testing.T) {
 	}
 }
 
-func TestClerkCreateAttestedRejectsLocalRunFields(t *testing.T) {
+func TestClerkCreateAttestedComplaintCompletesAfterVerification(t *testing.T) {
+	root := t.TempDir()
+	caseDir := t.TempDir()
+	complaint := filepath.Join(caseDir, "complaint.md")
+	if err := os.WriteFile(complaint, []byte("# Complaint\n"), 0o644); err != nil {
+		t.Fatalf("write complaint: %v", err)
+	}
+	caseFile := filepath.Join(caseDir, "evidence.txt")
+	if err := os.WriteFile(caseFile, []byte("case evidence\n"), 0o644); err != nil {
+		t.Fatalf("write case file: %v", err)
+	}
+	s := newClerkTestServerWithConfig(t, Config{
+		RegistryDir: filepath.Join(t.TempDir(), "registry"),
+		OutputRoot:  root,
+		AARBin:      writeFakeAAR(t, "#!/bin/sh\nexit 64\n"),
+		Attested: AttestedClerkConfig{
+			DriverPath:   writeFakeAttestedDriver(t, 0),
+			ExecAMI:      "ami-test",
+			ExpectedPCR4: "pcr4-test",
+			ExpectedPCR7: "pcr7-test",
+		},
+	})
+
+	status, got := servicePost(t, s, "/clerk/v1/cases", map[string]any{
+		"case_id":        "attested-complaint",
+		"run_id":         "aar-complaint-test",
+		"complaint_path": complaint,
+		"case_files":     []string{caseFile},
+		"execution": map[string]any{
+			"mode": "attested",
+			"attestation": map[string]any{
+				"input_prefix":  "s3://agentcourt-data/arbattest/aar-inputs/aar-complaint-test",
+				"output_prefix": "s3://agentcourt-data/arbattest/aar-runs/aar-complaint-test",
+			},
+		},
+	})
+	if status != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusAccepted, got)
+	}
+	rec := waitClerkStatus(t, s, "attested-complaint", "completed")
+	summary, ok := rec["summary"].(map[string]any)
+	if !ok || summary["complaint"] != complaint || intNumber(summary["files"]) != 1 || summary["case_id"] != "attested-complaint" {
+		t.Fatalf("summary = %#v", rec["summary"])
+	}
+	runEnv, err := os.ReadFile(filepath.Join(root, "attested-complaint", "run.env"))
+	if err != nil {
+		t.Fatalf("read run.env: %v", err)
+	}
+	if !strings.Contains(string(runEnv), "AAR_INPUT_MODE=case-packet\n") || !strings.Contains(string(runEnv), "FILES=1\n") {
+		t.Fatalf("run.env = %q", string(runEnv))
+	}
+}
+
+func TestClerkCreateAttestedRejectsUnsupportedRunFields(t *testing.T) {
 	root := t.TempDir()
 	complaint := filepath.Join(t.TempDir(), "complaint.md")
 	if err := os.WriteFile(complaint, []byte("# Complaint\n"), 0o644); err != nil {
@@ -310,12 +363,12 @@ func TestClerkCreateAttestedRejectsLocalRunFields(t *testing.T) {
 
 	status, got := servicePost(t, s, "/clerk/v1/cases", map[string]any{
 		"case_id":        "attested-reject",
-		"example":        "ex03",
 		"complaint_path": complaint,
+		"policy_path":    "policy.json",
 		"execution": map[string]any{
 			"mode": "attested",
 			"attestation": map[string]any{
-				"input_prefix": "s3://agentcourt-data/arbattest/aar-inputs/aar-ex03-test",
+				"input_prefix": "s3://agentcourt-data/arbattest/aar-inputs/aar-complaint-test",
 			},
 		},
 	})
@@ -323,7 +376,7 @@ func TestClerkCreateAttestedRejectsLocalRunFields(t *testing.T) {
 		t.Fatalf("status = %d, want %d: %#v", status, http.StatusBadRequest, got)
 	}
 	errObj, ok := got["error"].(map[string]any)
-	if !ok || !strings.Contains(mapString(errObj["message"]), "unsupported fields: complaint_path") {
+	if !ok || !strings.Contains(mapString(errObj["message"]), "policy_path") {
 		t.Fatalf("error = %#v", got["error"])
 	}
 
@@ -901,8 +954,11 @@ func writeFakeAttestedDriver(t *testing.T, exitCode int) string {
 	}
 	script := strings.ReplaceAll(`#!/bin/sh
 out_dir=""
+case_id=""
 run_id=""
 example=""
+complaint=""
+files=0
 input_prefix=""
 output_prefix=""
 exec_ami=""
@@ -912,7 +968,10 @@ expected4=""
 expected7=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --case-id) case_id="$2"; shift 2 ;;
     --example) example="$2"; shift 2 ;;
+    --complaint) complaint="$2"; shift 2 ;;
+    --file) files=$((files + 1)); shift 2 ;;
     --input-prefix) input_prefix="$2"; shift 2 ;;
     --output-prefix) output_prefix="$2"; shift 2 ;;
     --exec-ami) exec_ami="$2"; shift 2 ;;
@@ -926,14 +985,22 @@ while [ "$#" -gt 0 ]; do
     *) shift ;;
   esac
 done
-if [ -z "$out_dir" ] || [ -z "$run_id" ] || [ -z "$example" ] || [ -z "$input_prefix" ] || [ -z "$exec_ami" ]; then
+if [ -z "$out_dir" ] || [ -z "$run_id" ] || [ -z "$input_prefix" ] || [ -z "$exec_ami" ]; then
+  exit 64
+fi
+if [ -z "$example" ] && [ -z "$complaint" ]; then
   exit 64
 fi
 if [ "$verify" != "1" ] || [ "$allow_nonempty" != "1" ] || [ -z "$expected4" ] || [ -z "$expected7" ]; then
   exit 65
 fi
 mkdir -p "$out_dir"
-printf 'AAR_INPUT_PREFIX=%s\nAAR_OUTPUT_PREFIX=%s\nEXEC_AMI=%s\n' "$input_prefix" "$output_prefix" "$exec_ami" > "$out_dir/run.env"
+if [ -n "$complaint" ]; then
+  input_mode="case-packet"
+else
+  input_mode="example"
+fi
+printf 'AAR_INPUT_MODE=%s\nAAR_INPUT_PREFIX=%s\nAAR_OUTPUT_PREFIX=%s\nEXEC_AMI=%s\nCOMPLAINT=%s\nFILES=%s\nCASE_ID=%s\n' "$input_mode" "$input_prefix" "$output_prefix" "$exec_ami" "$complaint" "$files" "$case_id" > "$out_dir/run.env"
 printf 'moving\n' > "$out_dir/progress.log"
 printf 'launch\n' > "$out_dir/launcher.log"
 printf '{"files":[]}\n' > "$out_dir/manifest.json"
@@ -944,7 +1011,7 @@ if [ "__EXIT_CODE__" != "0" ]; then
   exit __EXIT_CODE__
 fi
 mkdir -p "$out_dir/aar-output/submitted-evidence"
-printf '{"run_id":"%s","status":"completed","phase":"complete","resolution":"demonstrated","example":"%s"}\n' "$run_id" "$example" > "$out_dir/aar-output/run.json"
+printf '{"case_id":"%s","run_id":"%s","status":"completed","phase":"complete","resolution":"demonstrated","example":"%s","complaint":"%s","files":%s}\n' "$case_id" "$run_id" "$example" "$complaint" "$files" > "$out_dir/aar-output/run.json"
 printf 'digest text\n' > "$out_dir/aar-output/digest.md"
 printf '[{"evidence_id":"EV1","name":"ev1.txt"}]\n' > "$out_dir/aar-output/evidence-manifest.json"
 printf 'evidence text\n' > "$out_dir/aar-output/submitted-evidence/ev1.txt"

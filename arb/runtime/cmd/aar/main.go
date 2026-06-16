@@ -29,6 +29,8 @@ func dispatch(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 	switch args[0] {
 	case "case":
 		return runCase(ctx, args[1:], stdout, stderr)
+	case "case-packet":
+		return runCasePacket(ctx, args[1:], stdout, stderr)
 	case "council-replay":
 		return runCouncilReplay(ctx, args[1:], stdout, stderr)
 	case "mcp":
@@ -49,6 +51,8 @@ func dispatch(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 		switch args[1] {
 		case "case":
 			return runCase(ctx, []string{"-h"}, stdout, stderr)
+		case "case-packet":
+			return runCasePacket(ctx, []string{"-h"}, stdout, stderr)
 		case "council-replay":
 			return runCouncilReplay(ctx, []string{"-h"}, stdout, stderr)
 		case "mcp":
@@ -76,6 +80,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Subcommands:")
 	fmt.Fprintln(w, "  case       Initialize an arbitration case from a complaint")
+	fmt.Fprintln(w, "  case-packet  Build an attested-run case packet")
 	fmt.Fprintln(w, "  council-replay  Re-run one council member against saved AAR output")
 	fmt.Fprintln(w, "  mcp        Run the AAR MCP service")
 	fmt.Fprintln(w, "  run        Run one local case with OpenClaw lawyers and Pi council")

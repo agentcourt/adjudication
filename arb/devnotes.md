@@ -1,14 +1,36 @@
 # Development Notes
 
+## 2026-06-16
+
+### Attested Clerk case packets
+
+Reference: `runtime/proceeding/case_packet.go`, `runtime/cmd/aar/case_packet.go`, `runtime/service/clerk_attested.go`, `tools/run-arb-attested.py`, `tools/run-aar.sh`, `attest/exec-container-entrypoint.sh`, `Dockerfile.md`
+
+Attested Clerk execution now accepts the same case selectors as local Clerk execution: `example`, or `complaint_path` with optional `case_files`.  The service still rejects runtime overrides that the exec path does not carry yet, including policy paths, council pools, OpenClaw settings, Pi settings, and timeout overrides.  Verification remains mandatory before an attested Clerk record reaches `completed`.
+
+The local attested driver uses `AAR_INPUT_MODE=example` for checked-in examples and `AAR_INPUT_MODE=case-packet` for explicit complaints.  In case-packet mode, it invokes `go run ./arb/runtime/cmd/aar case-packet` from the repository root, then uploads `case.tar.gz` and `case-packet.json` to `INPUT_PREFIX` through `dev` and passes their SHA-384 hashes into the exec AMI.  The packet builder lives in the Go proceeding package, so automatic case-file selection and explicit `case_files` validation use the same functions as non-attested `aar run`.
+
+Explicit `case_files` use the same glob expansion, duplicate-basename rejection, and prohibited extension checks as local `aar run`.  The packet stores explicit files under per-file subdirectories so their basenames remain the evidence ids after extraction.  The exec workload container verifies packet and manifest hashes, extracts the packet, and runs `aar run --complaint` with repeated `--file` arguments only when the original Clerk request used explicit case files.
+
+The attestation manifest now records `input_mode`, `aar_case_id`, `case_packet_key`, `case_packet_sha384`, `case_packet_bytes`, `case_manifest_key`, and `case_manifest_sha384`.  The verifier checks the packet keys and hashes for case-packet mode and continues to check `aar_example` for example mode.  The S3 input prefix still must contain `auth.json` and `keys.sh`; the driver stages case objects but does not stage runtime secrets.
+
+### Attested error handling cleanup
+
+Reference: `attest/exec-container-entrypoint.sh`, `tools/run-arb-attested.py`, `runtime/service/clerk.go`
+
+The exec container entrypoint now rejects empty, absolute, newline-bearing, and bad-segment packet paths with a named validator rather than a literal-newline shell pattern.  It also requires EC2 metadata reads for `instance_id` and `ami_id`, so the attested manifest no longer records empty instance identity fields after an IMDS failure.  IMDSv2 token failure still falls back to tokenless IMDS because the host can permit IMDSv1, but the metadata read itself must succeed.
+
+The local attested driver no longer treats a failed S3 listing as an empty output prefix.  Remote temporary-directory cleanup and launched-instance termination now return errors; when cleanup fails during another failure, the driver reports both failures in one error.  The Clerk service no longer discards `clerk.json` persistence errors: synchronous paths return them, and asynchronous completion paths mark the in-memory record as failed when the final write fails.
+
 ## 2026-06-12
 
 ### Generic attested AAR example runs
 
-Reference: `glue/arb-glue.sh`, `tools/run-aar.sh`, `tools/run-arb-attested.py`, `Dockerfile.md`
+Reference: `attest/exec-container-entrypoint.sh`, `tools/run-aar.sh`, `tools/run-arb-attested.py`, `Dockerfile.md`
 
-The glue script now accepts `AAR_EXAMPLE`, validates it with the same path-safety boundary as `aar run`, defaults to `ex01`, and records the selected example in `manifest.json`.  If `RUN_ID` is absent in AAR mode, the default run ID is `aar-$AAR_EXAMPLE-$STAMP`; non-AAR glue modes keep the existing `run-$STAMP` default.  The AAR-owned `tools/run-aar.sh` launcher now passes `AAR_EXAMPLE` into the glue container and names default runs from the selected example.
+The exec container entrypoint now accepts `AAR_EXAMPLE`, validates it with the same path-safety boundary as `aar run`, defaults to `ex01`, and records the selected example in `manifest.json`.  If `RUN_ID` is absent in AAR mode, the default run ID is `aar-$AAR_EXAMPLE-$STAMP`; non-AAR modes keep the existing `run-$STAMP` default.  The AAR-owned `tools/run-aar.sh` launcher now passes `AAR_EXAMPLE` into the exec workload container and names default runs from the selected example.
 
-`Dockerfile.md` now documents the current attested execution path end to end.  It covers the base image, glue image, dev build and upload flow, launcher installation, S3 input staging, the exec AMI command, artifact download, manifest and archive verification, attestation verification, and the known first-failure checks from the completed runs.  The documented generic path runs any checked-in example under `arb/examples/<name>`; external case packets still need an agreed S3 input schema before implementation.
+`Dockerfile.md` now documents the current attested execution path end to end.  It covers the base image, attested workload image, dev build and upload flow, launcher installation, S3 input staging, example input, local complaint packet input, the exec AMI command, artifact download, manifest and archive verification, attestation verification, and the known first-failure checks from the completed runs.  The documented generic path runs any checked-in example under `arb/examples/<name>` or any local complaint plus optional case files through the Go case-packet builder.
 
 `tools/run-arb-attested.py` is now the preferred local runner for this path.  It launches the existing exec AMI through `dev`, polls the S3 output prefix, writes local `progress.log` and `launcher.log`, downloads all terminal artifacts into the requested local directory, extracts the AAR archive, and can verify the manifest, archive hashes, attestation user data, and selected PCR values.  If terminal S3 artifacts appear while `exec.sh` is still polling, the runner terminates only the instance ID that `exec.sh` launched and stops the remote launcher.
 
@@ -18,15 +40,15 @@ The AAR-specific runner scripts live in `tools/`: `run-aar.sh`, `run-arb-atteste
 
 ### AAR S3 archive output
 
-Reference: `glue/arb-glue.sh`, AAR run `s3://agentcourt-data/arbattest/aar-runs/aar-ex01-20260611T230151Z`
+Reference: `attest/exec-container-entrypoint.sh`, AAR run `s3://agentcourt-data/arbattest/aar-runs/aar-ex01-20260611T230151Z`
 
-The old glue success path ran `aws s3 cp --recursive "$aar_out" "$output_prefix/aar/"`.  That copied Pi council working homes into S3.  The obsolete `aar-ex01-20260611T230151Z` prefix reached 92,834 objects because it included package trees under paths such as `aar/pi-C4/pi-extensions/npm/.../node_modules/...`.
+The old entrypoint success path ran `aws s3 cp --recursive "$aar_out" "$output_prefix/aar/"`.  That copied Pi council working homes into S3.  The obsolete `aar-ex01-20260611T230151Z` prefix reached 92,834 objects because it included package trees under paths such as `aar/pi-C4/pi-extensions/npm/.../node_modules/...`.
 
-The glue script now uploads AAR output as one archive object instead of recursively copying the working tree.  A successful AAR run uploads `aar-output.tar.gz`; a failed AAR run uploads `aar-partial.tar.gz` with `run.log` and then exits with the AAR status.  The archive excludes `pi-*` homes and staged `openclaw-*-codex` directories, while retaining the case packet, logs, evidence store, event log, transcript, digest, work notes, and `local-run.json`.
+The exec container entrypoint now uploads AAR output as one archive object instead of recursively copying the working tree.  A successful AAR run uploads `aar-output.tar.gz`; a failed AAR run uploads `aar-partial.tar.gz` with `run.log` and then exits with the AAR status.  The archive excludes `pi-*` homes and staged `openclaw-*-codex` directories, while retaining the case packet, logs, evidence store, event log, transcript, digest, work notes, and `local-run.json`.
 
 The success manifest now records `aar_archive_key`, `aar_archive_sha384`, and `aar_archive_bytes`.  The manifest hash remains the value passed to `nitro-tpm-attest --user-data`, so the attestation binds the single AAR archive object rather than thousands of individual S3 keys.
 
-The dev rebuild used commit `d338c32`.  The rebuilt AAR image is `sha256:72775dddf4cc1b3dcf77970443801d98c2f9740d6576bf655c4fa33cc41c035f`; the rebuilt glue image is `sha256:07ee87e51928468e382851ac72ec92062ea7794116652a312a5c32bfab26c2a1`.  The uploaded tar `s3://agentcourt-data/arbattest/images/arb-glue-poc.tar` has SHA-384 `fbfb459dd3b5b2e73763ac98e424342a56b5a82fe3624bc0c940db7d2e3d95f628a7e9d99e212ab28bb680ad9d040133`.
+The dev rebuild used commit `d338c32`.  The rebuilt AAR image is `sha256:72775dddf4cc1b3dcf77970443801d98c2f9740d6576bf655c4fa33cc41c035f`; the rebuilt attested workload image is `sha256:07ee87e51928468e382851ac72ec92062ea7794116652a312a5c32bfab26c2a1`.  The uploaded tar `s3://agentcourt-data/arbattest/images/arb-glue-poc.tar` has SHA-384 `fbfb459dd3b5b2e73763ac98e424342a56b5a82fe3624bc0c940db7d2e3d95f628a7e9d99e212ab28bb680ad9d040133`.
 
 The attested AAR run `aar-ex01-20260612T001855Z` completed on exec instance `i-028821ebeaaf19674`.  Output prefix `s3://agentcourt-data/arbattest/aar-runs/aar-ex01-20260612T001855Z` contains `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, and `aar-output.tar.gz`.  The run result was `status=ok`, `resolution=demonstrated`, and the archive contains the case packet, logs, evidence store, event log, work notes, transcript, digest, and submitted evidence while excluding `pi-*` homes and staged OpenClaw Codex directories.
 
@@ -38,13 +60,13 @@ The dev-side `exec.sh` launcher did not detect the successful run from EC2 conso
 
 Reference: `arb-glue:poc`, Docker-enabled exec AMI `ami-011f957fe91cf7b81`, AAR run `s3://agentcourt-data/arbattest/aar-runs/ex01-20260611T212020Z`
 
-The `ex01-20260611T212020Z` AAR exec run failed in the plaintiff OpenClaw container after three retries.  Each attempt failed after about 229 to 233 seconds with `stream disconnected before completion` from `https://chatgpt.com/backend-api/codex/responses`, before the plaintiff submitted an opening.  The failing run uploaded `run.log` and `aar-partial/`, but no manifest or attestation, because the glue script writes those artifacts only after a successful AAR run.
+The `ex01-20260611T212020Z` AAR exec run failed in the plaintiff OpenClaw container after three retries.  Each attempt failed after about 229 to 233 seconds with `stream disconnected before completion` from `https://chatgpt.com/backend-api/codex/responses`, before the plaintiff submitted an opening.  The failing run uploaded `run.log` and `aar-partial/`, but no manifest or attestation, because the exec container entrypoint writes those artifacts only after a successful AAR run.
 
 The auth placement was checked in the same container topology.  Direct OpenClaw in Docker on `dev` can read `/aar-codex/auth.json`, import the token with `openclaw models auth paste-token`, and complete a one-line `openclaw agent --local` request.  The same check also passes when `arb-glue:poc` starts the child OpenClaw container through the host Docker socket on `dev`, proving the staged path under the shared work root is visible to the child container.
 
 The same nested check failed on the Docker-enabled exec AMI when the child OpenClaw container used Docker bridge networking.  Exec instance `i-031896be76d384d75` mounted `/aar-codex/auth.json`, imported the token, then the one-line `openclaw agent --local` request failed after 227,809 ms with the same stream-disconnect error.  This reproduced the AAR failure without AAR prompts, MCP tools, lawyer concurrency, or council containers.
 
-The host-network variant succeeded on the same exec AMI.  Exec instance `i-0c51749a2ab6e1876` used the same glue image tar, AAR input `auth.json`, OpenClaw image digest, and one-line OpenClaw request, but started the child OpenClaw container with `--network host`; the diagnostic completed and the launcher saw `ATTESTATION END`.  The fix adds an explicit `aar run --openclaw-network` option and makes the glue AAR invocation pass `--openclaw-network host`; when that mode is selected and no Docker MCP host is specified, `aar run` uses `127.0.0.1` for Docker-launched OpenClaw containers.
+The host-network variant succeeded on the same exec AMI.  Exec instance `i-0c51749a2ab6e1876` used the same attested workload image tar, AAR input `auth.json`, OpenClaw image digest, and one-line OpenClaw request, but started the child OpenClaw container with `--network host`; the diagnostic completed and the launcher saw `ATTESTATION END`.  The fix adds an explicit `aar run --openclaw-network` option and makes the entrypoint AAR invocation pass `--openclaw-network host`; when that mode is selected and no Docker MCP host is specified, `aar run` uses `127.0.0.1` for Docker-launched OpenClaw containers.
 
 ## 2026-06-06
 
@@ -839,14 +861,14 @@ classification, and exits immediately for auth, MCP, configuration, or other
 OpenClaw failures.  The localrun package test covers the generated command, and
 `go test ./arb/runtime/localrun` passes.
 
-### Glue completion marker
+### Exec completion marker
 
-Reference: [AAR glue script](glue/arb-glue.sh)
+Reference: [AAR exec container entrypoint](attest/exec-container-entrypoint.sh)
 
 The exec launcher waits for an `ATTESTATION END` marker in the application
-console output.  The AAR glue path wrote the attestation to S3 but printed only
+console output.  The AAR exec entrypoint path wrote the attestation to S3 but printed only
 `OUTPUT_PREFIX` and `MANIFEST_SHA384`, which would leave a successful run
-waiting until the launcher timeout.  The glue script now prints `ATTESTATION END`
+waiting until the launcher timeout.  The exec container entrypoint now prints `ATTESTATION END`
 after it uploads `run.log`, `manifest.json`, `manifest.sha384`, and
 `attestation.b64`.
 
@@ -854,7 +876,7 @@ after it uploads `run.log`, `manifest.json`, `manifest.sha384`, and
 
 Reference: [Local run launcher](runtime/localrun/localrun.go)
 
-The rebuilt post-retry glue image tar was uploaded to
+The rebuilt post-retry attested workload image tar was uploaded to
 `s3://agentcourt-data/arbattest/images/arb-glue-poc.tar` with SHA-384
 `4586edeca3246f471aa446b536736cbf7d6d6843447f6955a5f2f81016c7784f408f92869eb916adabb7fb624808acb8`.
 The follow-up exec run used instance `i-0237488429308a6e0` and wrote partial
@@ -871,8 +893,8 @@ because the plaintiff container exited.
 The partial AAR state shows the case waiting at `openings:plaintiff`.  `run.log`
 reports `docker process openclaw-plaintiff exited before case completion`, and
 the S3 prefix contains `run.log` plus `aar-partial/` only.  No `manifest.json`,
-`manifest.sha384`, or `attestation.b64` exists for this run because the glue
-script creates those files only after `aar run` exits successfully.
+`manifest.sha384`, or `attestation.b64` exists for this run because the exec
+container entrypoint creates those files only after `aar run` exits successfully.
 
 The follow-up diagnostics reproduced the failure without AAR prompts, MCP
 tools, lawyer concurrency, or council containers.  A one-line nested OpenClaw
@@ -893,8 +915,8 @@ S3 copy output.  That led to a cleanup-ordering check in the localrun package.
 
 `stopAgents` stopped live child processes but did not wait for the original
 `docker run` or child process to finish `cmd.Wait()` and close redirected
-stdout and stderr.  The glue script could therefore begin uploading the AAR
-output tree while the final process log bytes were still being flushed.  The
+stdout and stderr.  The exec container entrypoint could therefore begin uploading
+the AAR output tree while the final process log bytes were still being flushed.  The
 uploaded output tree can then race the process log closure.
 
 The process completion channel now carries the process wait error separately
@@ -974,7 +996,7 @@ the expected runtime path by SHA-384 before the EC2 run started.
 
 The staged input prefix is
 `s3://agentcourt-data/arbattest/aar-inputs/ex06-20260612T042346Z`, containing
-`auth.json` and `keys.sh`.  The run reused the uploaded glue-image tar at
+`auth.json` and `keys.sh`.  The run reused the uploaded attested-workload-image tar at
 `s3://agentcourt-data/arbattest/images/arb-glue-poc.tar` with SHA-384
 `1b3e3a9a1bae75dbe527d12591d95d526b4b4f7a063e72ba1e9239e709e752c7f1f1c5884f722fc5fff94f1cf3695f50`.
 
