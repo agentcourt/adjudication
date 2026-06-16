@@ -28,6 +28,7 @@ A case process owns the arbitration.  It owns the current phase, turn order, dea
 | Drive lawyers or council members by direct HTTP instead of local agents. | `aard case`, or `aard service` with `POST /api/v1/cases`. |
 | Give an MCP client access to an existing case or service role API. | `aard mcp --caseapi-base URL`. |
 | Normalize or check a complaint file. | `aard complain` and `aard validate`. |
+| Build a deterministic case packet for attested complaint input. | `aard case-packet --complaint FILE --packet case.tar.gz --manifest case-packet.json`. |
 
 ## Core Concepts
 
@@ -135,12 +136,15 @@ Use `--file` to provide explicit initial evidence.  The flag may be repeated.  S
   --out-dir out/my-case
 ```
 
+`aard case-packet` packages the same complaint and initial evidence selection into the attested-run input format.  It writes a deterministic `case.tar.gz` and a `case-packet.json` manifest, using the proceeding package's automatic scan and explicit-file validation.  The attested local driver calls this command before uploading packet objects to S3, so local and attested Clerk complaint input share one case-file implementation.
+
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
 | `aard complain` | Write a canonical complaint from a situation markdown file. |
 | `aard validate` | Validate that a complaint parses. |
+| `aard case-packet` | Build `case.tar.gz` and `case-packet.json` for attested complaint input. |
 | `aard case` | Run one case and expose the private Lawyer and optional Council APIs. |
 | `aard mcp` | Run an MCP server that forwards tools to a Case API or service API base. |
 | `aard run` | Run one full local arbitration with OpenClaw lawyers and Pi council agents. |
@@ -458,6 +462,26 @@ Important flags:
 | `--engine` | Lean engine binary passed to child cases when requested. |
 | `--bearer-token` | Optional service bearer token. |
 | `--case-startup-timeout` | Startup wait for `/api/v1/cases` child Case API health. |
+| `--attested-driver` | Path to `arbd/tools/run-arbd-attested.py` for attested Clerk runs. |
+| `--attested-uv` | Optional `uv` executable used as `uv run <attested-driver>`. |
+| `--attested-parser` | Optional attestation parser path passed to the attested driver. |
+| `--attested-input-prefix` | Default S3 input prefix for attested Clerk runs. |
+| `--attested-output-prefix` | Default S3 output prefix for attested Clerk runs. |
+| `--attested-output-root` | Default S3 output root for attested Clerk runs. |
+| `--attested-exec-ami` | Default exec AMI for attested Clerk runs. |
+| `--attested-dev-host` | Default `dev` host used by the attested driver. |
+| `--attested-remote-attest-dir` | Default launcher directory on `dev`. |
+| `--attested-aws-region` | Default AWS region. |
+| `--attested-instance-type` | Default EC2 instance type. |
+| `--attested-iam-instance-profile` | Default exec instance profile. |
+| `--attested-image-tar-s3` | Default S3 URI for the AARD attested workload image tar. |
+| `--attested-root-volume-size-gb` | Default exec root volume size in GiB. |
+| `--attested-exec-poll-attempts` | Default exec host poll attempts. |
+| `--attested-poll-interval-seconds` | Default attested driver poll interval. |
+| `--attested-timeout-seconds` | Default attested driver timeout. |
+| `--attested-expected-pcr4` | Expected PCR4 for attested Clerk verification. |
+| `--attested-expected-pcr7` | Expected PCR7 for attested Clerk verification. |
+| `--attested-expected-pcr12` | Expected PCR12 for attested Clerk verification. |
 
 If `--bearer-token` is set, every service request must include `Authorization: Bearer TOKEN`.  This token protects Clerk, case-management, role-proxy, artifact, and evidence routes alike.  The private `aard case` APIs started by child processes do not enforce the service bearer token.
 
@@ -504,6 +528,67 @@ curl -sS -X POST http://127.0.0.1:19790/clerk/v1/cases \
 EOF
 ```
 
+Create an attested example run:
+
+```bash
+.bin/aard service \
+  --listen 127.0.0.1:19790 \
+  --out-root out/service \
+  --aard-bin .bin/aard \
+  --attested-driver "$(pwd)/tools/run-arbd-attested.py" \
+  --attested-exec-ami ami-REPLACE \
+  --attested-output-root s3://agentcourt-data/arbattest/aard-runs \
+  --attested-expected-pcr4 PCR4_HEX \
+  --attested-expected-pcr7 PCR7_HEX
+```
+
+```bash
+curl -sS -X POST http://127.0.0.1:19790/clerk/v1/cases \
+  -H 'content-type: application/json' \
+  --data @- <<EOF
+{
+    "case_id": "attested-ex3-20260616120000",
+    "run_id": "aard-ex3-20260616120000",
+    "example": "ex3",
+    "execution": {
+        "mode": "attested",
+        "attestation": {
+            "input_prefix": "s3://agentcourt-data/arbattest/aard-inputs/aard-ex3-20260616120000",
+            "output_prefix": "s3://agentcourt-data/arbattest/aard-runs/aard-ex3-20260616120000"
+        }
+    }
+}
+EOF
+```
+
+Create an attested run from an explicit complaint:
+
+```bash
+curl -sS -X POST http://127.0.0.1:19790/clerk/v1/cases \
+  -H 'content-type: application/json' \
+  --data @- <<EOF
+{
+    "case_id": "attested-custom-20260616123000",
+    "run_id": "aard-custom-20260616123000",
+    "complaint_path": "work/my-case/complaint.md",
+    "case_files": ["work/my-case/source-a.txt", "work/my-case/source-b.pdf"],
+    "execution": {
+        "mode": "attested",
+        "attestation": {
+            "input_prefix": "s3://agentcourt-data/arbattest/aard-inputs/aard-custom-20260616123000",
+            "output_prefix": "s3://agentcourt-data/arbattest/aard-runs/aard-custom-20260616123000"
+        }
+    }
+}
+EOF
+```
+
+Attested Clerk execution accepts the same case selectors as local Clerk execution: either `example`, or `complaint_path` with optional `case_files`.  For complaint input, the attested driver calls `aard case-packet` on the service host, uploads `case.tar.gz` and `case-packet.json` under the S3 input prefix through `dev`, and sends packet hashes to the exec AMI.  Attested mode rejects unsupported runtime overrides such as `policy_path`, `council_pool_path`, OpenClaw settings, Pi settings, and timeout overrides.
+
+The `execution` object is optional for existing local Clerk clients.  If it is present, `execution.mode` is required and must be `local` or `attested`; local mode rejects nested attestation config.  Attested mode requires `execution.attestation`, an S3 `input_prefix`, an exec AMI, expected PCR4, expected PCR7, and the attested driver path, with those values supplied by service flags or by the request.
+
+Attested mode verifies before completion.  The service passes `--verify` to the attested driver and rejects `verify: false`.  The Clerk record reaches `completed` only after the driver exits successfully, writes `verification.log`, extracts `aard-output/`, and leaves a readable `aard-output/run.json`.
+
 The `out_dir` field, when present, must name an immediate child of the service output root.  If it is omitted, Clerk uses `<out-root>/<case_id>`.  Clerk refuses to start a run in a nonempty output directory.
 
 List Clerk cases:
@@ -523,6 +608,12 @@ Read final result or pending status:
 
 ```bash
 curl -sS http://127.0.0.1:19790/clerk/v1/cases/arbd-custom-20260603123000/result
+```
+
+Read live or final attestation events for an attested case:
+
+```bash
+curl -sS http://127.0.0.1:19790/clerk/v1/cases/attested-ex3-20260616120000/attestation/events
 ```
 
 List and read output artifacts:
@@ -546,7 +637,9 @@ curl -sS -X POST http://127.0.0.1:19790/clerk/v1/cases/arbd-custom-2026060312300
 
 Kill sends interrupt, waits 10 seconds, and then kills the child process if it has not exited.  If the case record is active on disk but the current service process has no process handle, the endpoint returns HTTP `409` with error code `case_not_attached`.  Terminal disk-only records return unchanged because there is no live process to kill.
 
-Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, and `evidence-manifest.json`.  They do not serve arbitrary output files, process logs, generated remote-lawyer skill files, or staged Codex auth directories.  The evidence route reads `evidence-manifest.json` and serves submitted evidence by evidence id when the manifest maps that id to a readable file.
+Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, and `evidence-manifest.json`.  For attested Clerk records, the same endpoint also lists downloaded top-level attestation files when present: `run.env`, `progress.log`, `launcher.log`, `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, `attestation.txt`, `verification.log`, `case.tar.gz`, `case-packet.json`, `aard-output.tar.gz`, and `aard-partial.tar.gz`.  Artifact routes do not serve arbitrary output files, process logs outside the listed set, generated remote-lawyer skill files, or staged Codex auth directories.
+
+The result and evidence routes read from the materialized AARD output packet.  Local Clerk runs use the run output directory directly.  Attested Clerk runs use the extracted `aard-output/` directory after verification, or the extracted `aard-partial/` directory for inspection after a failed remote run.
 
 Clerk create request fields mirror `aard run` options in structured JSON:
 
@@ -595,8 +688,35 @@ Clerk create request fields mirror `aard run` options in structured JSON:
 | `council_output_limit_bytes` | Total stdout plus stderr limit per Pi council process. |
 | `docker_mcp_host` | Host name Docker containers use to reach MCP. |
 | `podman_mcp_host` | Host name Podman containers use to reach MCP. |
+| `execution` | Optional execution object.  Omit for local execution, or set `mode` to `local` or `attested`. |
 
-`clerk.json` contains `case_id`, `run_id`, `example`, `pid`, `status`, `out_dir`, `stdout_log`, `stderr_log`, timestamps, exit code, final summary, and error text.  `clerk.stdout` captures the child `aard run` stdout, which includes the final JSON result.  `clerk.stderr` captures the child process stderr.
+Attested request fields live under `execution.attestation`:
+
+| JSON field | Meaning |
+| --- | --- |
+| `verify` | Optional verification request.  `false` is rejected. |
+| `driver_path` | Attested driver path. |
+| `uv` | Optional `uv` executable used as `uv run <driver_path>`. |
+| `parser` | Optional attestation parser path. |
+| `input_prefix` | S3 prefix containing staged attested inputs. |
+| `output_prefix` | S3 prefix for this run's terminal artifacts. |
+| `output_root` | S3 parent prefix used when `output_prefix` is omitted. |
+| `exec_ami` | Exec AMI. |
+| `dev_host` | Host used by the attested driver to start the exec AMI. |
+| `remote_attest_dir` | Launcher directory on `dev`. |
+| `aws_region` | AWS region. |
+| `instance_type` | EC2 instance type. |
+| `iam_instance_profile` | Exec instance profile. |
+| `image_tar_s3` | S3 URI for the AARD attested workload image tar. |
+| `root_volume_size_gb` | Exec root volume size in GiB. |
+| `exec_poll_attempts` | Exec host poll attempts. |
+| `poll_interval_seconds` | Attested driver poll interval. |
+| `timeout_seconds` | Attested driver timeout. |
+| `expected_pcr4` | Expected PCR4. |
+| `expected_pcr7` | Expected PCR7. |
+| `expected_pcr12` | Expected PCR12. |
+
+`clerk.json` contains `case_id`, `run_id`, `example`, `pid`, `status`, `out_dir`, `stdout_log`, `stderr_log`, timestamps, exit code, final summary, and error text.  Attested records also contain `execution.mode`, the requested execution object, the resolved attested config after service defaults, and an attestation record with status, S3 prefixes, local archive paths, extracted output path, manifest hash, attestation text path, and verification log path.  `clerk.stdout` captures the child stdout, which is `aard run` for local Clerk cases and the attested driver for attested Clerk cases.
 
 ## Direct Case Service API
 

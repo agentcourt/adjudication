@@ -19,66 +19,68 @@ const (
 )
 
 type ClerkCreateRequest struct {
-	Example                    string   `json:"example,omitempty"`
-	CaseID                     string   `json:"case_id,omitempty"`
-	RunID                      string   `json:"run_id,omitempty"`
-	ComplaintPath              string   `json:"complaint_path,omitempty"`
-	CaseFiles                  []string `json:"case_files,omitempty"`
-	OutputDir                  string   `json:"out_dir,omitempty"`
-	PolicyPath                 string   `json:"policy_path,omitempty"`
-	CouncilSize                int      `json:"council_size,omitempty"`
-	JudgmentStandard           string   `json:"judgment_standard,omitempty"`
-	AttorneyInstructionsPath   string   `json:"attorney_instructions,omitempty"`
-	PromptDir                  string   `json:"prompt_dir,omitempty"`
-	AttorneyCommonPromptPath   string   `json:"attorney_common_prompt,omitempty"`
-	AttorneyArgumentPromptPath string   `json:"attorney_arguments_prompt,omitempty"`
-	AttorneyRebuttalPromptPath string   `json:"attorney_rebuttals_prompt,omitempty"`
-	CommonRoot                 string   `json:"common_root,omitempty"`
-	CouncilPoolPath            string   `json:"council_pool_path,omitempty"`
-	CaseAPIAddr                string   `json:"caseapi_addr,omitempty"`
-	MCPListenAddr              string   `json:"mcp_listen,omitempty"`
-	MCPBearerToken             string   `json:"mcp_bearer_token,omitempty"`
-	CouncilTimeoutSeconds      int      `json:"council_timeout_seconds,omitempty"`
-	LawyerTimeoutSeconds       int      `json:"lawyer_timeout_seconds,omitempty"`
-	MaxResponseBytes           int      `json:"max_response_bytes,omitempty"`
-	InvalidAttemptLimit        int      `json:"invalid_attempt_limit,omitempty"`
-	EnginePath                 string   `json:"engine_path,omitempty"`
-	LawyerInstructionsPath     string   `json:"lawyer_instructions,omitempty"`
-	RemoteLawyerSkillPath      string   `json:"remote_lawyer_skill,omitempty"`
-	CouncilInstructionsPath    string   `json:"council_instructions,omitempty"`
-	AutoLawyers                string   `json:"auto_lawyers,omitempty"`
-	MCPPublicBaseURL           string   `json:"mcp_public_base_url,omitempty"`
-	DockerCommand              string   `json:"docker_command,omitempty"`
-	PodmanCommand              string   `json:"podman_command,omitempty"`
-	OpenClawImage              string   `json:"openclaw_image,omitempty"`
-	OpenClawModel              string   `json:"openclaw_model,omitempty"`
-	OpenClawThinking           string   `json:"openclaw_thinking,omitempty"`
-	OpenClawTimeoutSeconds     int      `json:"openclaw_timeout_seconds,omitempty"`
-	OpenClawAuth               string   `json:"openclaw_auth,omitempty"`
-	OpenClawCodexAuthPath      string   `json:"openclaw_codex_auth_path,omitempty"`
-	OpenClawStartDelaySeconds  *int     `json:"openclaw_lawyer_start_delay_seconds,omitempty"`
-	PiImage                    string   `json:"pi_image,omitempty"`
-	PiMCPAdapter               string   `json:"pi_mcp_adapter,omitempty"`
-	CouncilOutputLimitBytes    int64    `json:"council_output_limit_bytes,omitempty"`
-	DockerMCPHost              string   `json:"docker_mcp_host,omitempty"`
-	PodmanMCPHost              string   `json:"podman_mcp_host,omitempty"`
+	Example                    string                 `json:"example,omitempty"`
+	CaseID                     string                 `json:"case_id,omitempty"`
+	RunID                      string                 `json:"run_id,omitempty"`
+	ComplaintPath              string                 `json:"complaint_path,omitempty"`
+	CaseFiles                  []string               `json:"case_files,omitempty"`
+	OutputDir                  string                 `json:"out_dir,omitempty"`
+	PolicyPath                 string                 `json:"policy_path,omitempty"`
+	CouncilSize                int                    `json:"council_size,omitempty"`
+	JudgmentStandard           string                 `json:"judgment_standard,omitempty"`
+	AttorneyInstructionsPath   string                 `json:"attorney_instructions,omitempty"`
+	PromptDir                  string                 `json:"prompt_dir,omitempty"`
+	AttorneyCommonPromptPath   string                 `json:"attorney_common_prompt,omitempty"`
+	AttorneyArgumentPromptPath string                 `json:"attorney_arguments_prompt,omitempty"`
+	AttorneyRebuttalPromptPath string                 `json:"attorney_rebuttals_prompt,omitempty"`
+	CommonRoot                 string                 `json:"common_root,omitempty"`
+	CouncilPoolPath            string                 `json:"council_pool_path,omitempty"`
+	CaseAPIAddr                string                 `json:"caseapi_addr,omitempty"`
+	MCPListenAddr              string                 `json:"mcp_listen,omitempty"`
+	MCPBearerToken             string                 `json:"mcp_bearer_token,omitempty"`
+	CouncilTimeoutSeconds      int                    `json:"council_timeout_seconds,omitempty"`
+	LawyerTimeoutSeconds       int                    `json:"lawyer_timeout_seconds,omitempty"`
+	MaxResponseBytes           int                    `json:"max_response_bytes,omitempty"`
+	InvalidAttemptLimit        int                    `json:"invalid_attempt_limit,omitempty"`
+	EnginePath                 string                 `json:"engine_path,omitempty"`
+	LawyerInstructionsPath     string                 `json:"lawyer_instructions,omitempty"`
+	RemoteLawyerSkillPath      string                 `json:"remote_lawyer_skill,omitempty"`
+	CouncilInstructionsPath    string                 `json:"council_instructions,omitempty"`
+	AutoLawyers                string                 `json:"auto_lawyers,omitempty"`
+	MCPPublicBaseURL           string                 `json:"mcp_public_base_url,omitempty"`
+	DockerCommand              string                 `json:"docker_command,omitempty"`
+	PodmanCommand              string                 `json:"podman_command,omitempty"`
+	OpenClawImage              string                 `json:"openclaw_image,omitempty"`
+	OpenClawModel              string                 `json:"openclaw_model,omitempty"`
+	OpenClawThinking           string                 `json:"openclaw_thinking,omitempty"`
+	OpenClawTimeoutSeconds     int                    `json:"openclaw_timeout_seconds,omitempty"`
+	OpenClawAuth               string                 `json:"openclaw_auth,omitempty"`
+	OpenClawCodexAuthPath      string                 `json:"openclaw_codex_auth_path,omitempty"`
+	OpenClawStartDelaySeconds  *int                   `json:"openclaw_lawyer_start_delay_seconds,omitempty"`
+	PiImage                    string                 `json:"pi_image,omitempty"`
+	PiMCPAdapter               string                 `json:"pi_mcp_adapter,omitempty"`
+	CouncilOutputLimitBytes    int64                  `json:"council_output_limit_bytes,omitempty"`
+	DockerMCPHost              string                 `json:"docker_mcp_host,omitempty"`
+	PodmanMCPHost              string                 `json:"podman_mcp_host,omitempty"`
+	Execution                  *ClerkExecutionRequest `json:"execution,omitempty"`
 }
 
 type ClerkRecord struct {
-	CaseID     string         `json:"case_id"`
-	RunID      string         `json:"run_id"`
-	Example    string         `json:"example,omitempty"`
-	PID        int            `json:"pid,omitempty"`
-	Status     string         `json:"status"`
-	OutDir     string         `json:"out_dir"`
-	StdoutLog  string         `json:"stdout_log"`
-	StderrLog  string         `json:"stderr_log"`
-	CreatedAt  string         `json:"created_at"`
-	StartedAt  string         `json:"started_at,omitempty"`
-	FinishedAt string         `json:"finished_at,omitempty"`
-	ExitCode   *int           `json:"exit_code,omitempty"`
-	Summary    map[string]any `json:"summary,omitempty"`
-	Error      string         `json:"error,omitempty"`
+	CaseID     string                `json:"case_id"`
+	RunID      string                `json:"run_id"`
+	Example    string                `json:"example,omitempty"`
+	PID        int                   `json:"pid,omitempty"`
+	Status     string                `json:"status"`
+	OutDir     string                `json:"out_dir"`
+	StdoutLog  string                `json:"stdout_log"`
+	StderrLog  string                `json:"stderr_log"`
+	CreatedAt  string                `json:"created_at"`
+	StartedAt  string                `json:"started_at,omitempty"`
+	FinishedAt string                `json:"finished_at,omitempty"`
+	ExitCode   *int                  `json:"exit_code,omitempty"`
+	Summary    map[string]any        `json:"summary,omitempty"`
+	Error      string                `json:"error,omitempty"`
+	Execution  *ClerkExecutionRecord `json:"execution,omitempty"`
 
 	killing bool
 	cmd     *exec.Cmd
@@ -114,6 +116,10 @@ func (s *Server) handleClerkCase(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) == 2 && parts[1] == "result" && r.Method == http.MethodGet {
 		s.handleClerkCaseResult(w, caseID)
+		return
+	}
+	if len(parts) == 3 && parts[1] == "attestation" && parts[2] == "events" && r.Method == http.MethodGet {
+		s.handleClerkAttestationEvents(w, r, caseID)
 		return
 	}
 	if len(parts) >= 2 && parts[1] == "artifacts" && r.Method == http.MethodGet {
@@ -189,6 +195,10 @@ func (s *Server) startClerkCase(req ClerkCreateRequest) (ClerkRecord, error) {
 	if err := validateClerkNumbers(req); err != nil {
 		return ClerkRecord{}, err
 	}
+	execution, err := s.resolveClerkExecution(req)
+	if err != nil {
+		return ClerkRecord{}, err
+	}
 	outDir, err := resolveClerkOutDir(s.cfg.OutputRoot, caseID, req.OutputDir)
 	if err != nil {
 		return ClerkRecord{}, err
@@ -204,7 +214,26 @@ func (s *Server) startClerkCase(req ClerkCreateRequest) (ClerkRecord, error) {
 		s.unreserveClerkCase(caseID)
 		return ClerkRecord{}, err
 	}
+	commandPath := s.cfg.AardBin
 	args := s.clerkRunArgs(req, caseID, runID, outDir, example)
+	rec := &ClerkRecord{
+		CaseID:    caseID,
+		RunID:     runID,
+		Example:   example,
+		Status:    "starting",
+		OutDir:    outDir,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		Execution: execution,
+		done:      make(chan struct{}),
+	}
+	if execution != nil && execution.Mode == clerkExecutionAttested {
+		var err error
+		commandPath, args, err = attestedClerkCommand(req, rec, outDir)
+		if err != nil {
+			s.unreserveClerkCase(caseID)
+			return ClerkRecord{}, err
+		}
+	}
 	stdoutPath := filepath.Join(outDir, "clerk.stdout")
 	stderrPath := filepath.Join(outDir, "clerk.stderr")
 	stdoutFile, err := os.Create(stdoutPath)
@@ -218,7 +247,7 @@ func (s *Server) startClerkCase(req ClerkCreateRequest) (ClerkRecord, error) {
 		_ = stdoutFile.Close()
 		return ClerkRecord{}, fmt.Errorf("create clerk stderr log: %w", err)
 	}
-	cmd := exec.Command(s.cfg.AardBin, args...)
+	cmd := exec.Command(commandPath, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		s.unreserveClerkCase(caseID)
@@ -233,19 +262,9 @@ func (s *Server) startClerkCase(req ClerkCreateRequest) (ClerkRecord, error) {
 		_ = stderrFile.Close()
 		return ClerkRecord{}, fmt.Errorf("stderr pipe: %w", err)
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
-	rec := &ClerkRecord{
-		CaseID:    caseID,
-		RunID:     runID,
-		Example:   example,
-		Status:    "starting",
-		OutDir:    outDir,
-		StdoutLog: stdoutPath,
-		StderrLog: stderrPath,
-		CreatedAt: now,
-		cmd:       cmd,
-		done:      make(chan struct{}),
-	}
+	rec.StdoutLog = stdoutPath
+	rec.StderrLog = stderrPath
+	rec.cmd = cmd
 	s.mu.Lock()
 	s.clerkCases[caseID] = rec
 	s.mu.Unlock()
@@ -391,9 +410,18 @@ func (s *Server) waitClerkChild(rec *ClerkRecord, stdoutDone <-chan error, stder
 		}
 	}
 	var summary map[string]any
-	stdoutRaw, readErr := os.ReadFile(rec.StdoutLog)
-	if readErr == nil {
-		summary = parseLastJSON(string(stdoutRaw))
+	var readErr error
+	isAttested := rec.Execution != nil && rec.Execution.Mode == clerkExecutionAttested
+	attested := attestedClerkUpdate{}
+	if isAttested {
+		attested = buildAttestedClerkUpdate(rec, exitCode)
+		summary = attested.summary
+	} else {
+		var stdoutRaw []byte
+		stdoutRaw, readErr = os.ReadFile(rec.StdoutLog)
+		if readErr == nil {
+			summary = parseLastJSON(string(stdoutRaw))
+		}
 	}
 	s.mu.Lock()
 	rec.FinishedAt = time.Now().UTC().Format(time.RFC3339)
@@ -401,6 +429,9 @@ func (s *Server) waitClerkChild(rec *ClerkRecord, stdoutDone <-chan error, stder
 	rec.PID = 0
 	rec.cmd = nil
 	rec.Summary = summary
+	if isAttested && rec.Execution != nil && attested.attestation != nil {
+		rec.Execution.Attestation = attested.attestation
+	}
 	switch {
 	case rec.killing:
 		rec.Status = "killed"
@@ -410,9 +441,12 @@ func (s *Server) waitClerkChild(rec *ClerkRecord, stdoutDone <-chan error, stder
 	case stderrErr != nil:
 		rec.Status = "failed"
 		rec.Error = stderrErr.Error()
-	case readErr != nil:
+	case !isAttested && readErr != nil:
 		rec.Status = "failed"
 		rec.Error = fmt.Sprintf("read stdout log: %v", readErr)
+	case isAttested && attested.err != "":
+		rec.Status = "failed"
+		rec.Error = attested.err
 	case exitCode == 0 && mapString(summary["status"]) == "failed":
 		rec.Status = "failed"
 		rec.Error = mapString(summary["error"])
@@ -502,7 +536,7 @@ func (s *Server) handleClerkCaseResult(w http.ResponseWriter, caseID string) {
 		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_case", "unknown case_id")})
 		return
 	}
-	run, err := readRunJSONFromDir(rec.OutDir)
+	run, err := readRunJSONFromDir(clerkEffectiveOutputDir(rec))
 	if err != nil {
 		if rec.Status == "failed" {
 			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "case_id": caseID, "status": "failed", "error": rec.Error})
@@ -521,7 +555,7 @@ func (s *Server) handleClerkArtifact(w http.ResponseWriter, r *http.Request, cas
 		return
 	}
 	if name == "" {
-		files, err := listArtifacts(rec.OutDir)
+		files, err := listClerkArtifacts(rec)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "case_id": caseID, "error": apiError("artifact_list_failed", err.Error())})
 			return
@@ -529,7 +563,16 @@ func (s *Server) handleClerkArtifact(w http.ResponseWriter, r *http.Request, cas
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "case_id": caseID, "artifacts": files})
 		return
 	}
-	serveListedArtifactFile(w, r, caseID, rec.OutDir, name)
+	if !listedArtifactName(name) && !listedClerkTopArtifactName(name) {
+		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_artifact", "unknown artifact")})
+		return
+	}
+	path, err := clerkArtifactPath(rec, name)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "case_id": caseID, "error": apiError("bad_artifact_path", err.Error())})
+		return
+	}
+	http.ServeFile(w, r, path)
 }
 
 func (s *Server) handleClerkEvidence(w http.ResponseWriter, r *http.Request, caseID string, evidenceID string) {
@@ -538,7 +581,7 @@ func (s *Server) handleClerkEvidence(w http.ResponseWriter, r *http.Request, cas
 		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_case", "unknown case_id")})
 		return
 	}
-	serveEvidenceFile(w, r, caseID, rec.OutDir, evidenceID)
+	serveEvidenceFile(w, r, caseID, clerkEffectiveOutputDir(rec), evidenceID)
 }
 
 func (s *Server) getClerkRecordPtr(caseID string) (*ClerkRecord, bool) {

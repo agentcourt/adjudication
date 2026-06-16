@@ -16,6 +16,22 @@ The Lean engine now represents opportunity failure directly.  A lawyer failure m
 - [x] Update `Makefile` and `README.md` for the supported API and local-run path.
 - [x] Run `go test ./...`, `lake build Proofs`, `lake build aardengine`, a direct case API process test, and a service API process test.
 
+## 2026-06-16
+
+### Attested Clerk execution
+
+AARD now mirrors AAR's attested Clerk execution path.  The service accepts `execution.mode: "attested"` for Clerk-created runs, resolves service-level attestation defaults, rejects unsupported local-run overrides, and requires verification before a Clerk record can reach `completed`.  Attested example input selects a checked-in `arbd/examples/<name>` case inside the image, while attested complaint input uses `aard case-packet` to package `complaint_path` and optional `case_files` into deterministic S3 input objects.
+
+The AARD attested workload uses `run-aard.sh`, `run-arbd-attested.py`, `arbd/attest/exec-container-entrypoint.sh`, `arbd/Dockerfile`, and `arbd/Dockerfile.glue`.  The S3 prefixes use `aard-inputs` and `aard-runs`, the workload archive is `aard-output.tar.gz`, and failed remote runs can leave `aard-partial.tar.gz` for diagnosis.  Clerk artifact, result, evidence, and `attestation/events` routes read from `aard-output/` after verification and from the top-level downloaded attestation files where appropriate.
+
+The AARD documentation now has the same operator entry points as AAR: `README.md`, `manual.md`, `Dockerfile.md`, and `docs/attested-dev-host.md`.  The AARD-specific wrapper `tools/run-one-attested-arbd.sh` stages secrets, chooses timestamped S3 prefixes, invokes `run-arbd-attested.py`, and verifies the attestation.  The container proof script `tools/run-container-poc.sh` was copied for the AARD image name so the runbook file table names existing files.
+
+- [x] Add `aard case-packet`.
+- [x] Add attested Clerk config, request validation, driver command construction, completion verification, artifact routing, evidence routing, and `attestation/events`.
+- [x] Add AARD Dockerfiles, exec entrypoint, local driver, exec runner, one-example wrapper, and container proof script.
+- [x] Add AARD service tests for attested example input, attested complaint input, live event reads, unsupported local-run fields, and failed attested execution.
+- [x] Run `sh -n` on the AARD shell scripts, `python3 -m py_compile` on `run-arbd-attested.py`, and `go test ./...` under `arbd/runtime`.
+
 ## 2026-05-02
 
 ### Initial fork from `arb`

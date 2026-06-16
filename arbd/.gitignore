@@ -2,4 +2,6 @@
 .cache/
 out/
 engine/.lake/
+__pycache__/
+*.pyc
 *~

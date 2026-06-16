@@ -217,6 +217,299 @@ func TestClerkCreateRejectsMissingComplaintWithoutExample(t *testing.T) {
 	}
 }
 
+func TestClerkCreateAttestedExampleCompletesAfterVerification(t *testing.T) {
+	root := t.TempDir()
+	driver := writeFakeAttestedDriver(t, 0)
+	s := newClerkTestServerWithConfig(t, Config{
+		RegistryDir: filepath.Join(t.TempDir(), "registry"),
+		OutputRoot:  root,
+		AardBin:     writeFakeAAR(t, "#!/bin/sh\nexit 64\n"),
+		Attested: AttestedClerkConfig{
+			DriverPath:   driver,
+			ExecAMI:      "ami-test",
+			ExpectedPCR4: "pcr4-test",
+			ExpectedPCR7: "pcr7-test",
+		},
+	})
+
+	status, got := servicePost(t, s, "/clerk/v1/cases", map[string]any{
+		"case_id": "attested-1",
+		"run_id":  "aard-ex3-test",
+		"example": "ex3",
+		"execution": map[string]any{
+			"mode": "attested",
+			"attestation": map[string]any{
+				"input_prefix":  "s3://agentcourt-data/arbattest/aard-inputs/aard-ex3-test",
+				"output_prefix": "s3://agentcourt-data/arbattest/aard-runs/aard-ex3-test",
+			},
+		},
+	})
+	if status != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusAccepted, got)
+	}
+	rec := waitClerkStatus(t, s, "attested-1", "completed")
+	summary, ok := rec["summary"].(map[string]any)
+	if !ok || summary["answers"] != "72" || summary["example"] != "ex3" {
+		t.Fatalf("summary = %#v", rec["summary"])
+	}
+	execution, ok := rec["execution"].(map[string]any)
+	if !ok || execution["mode"] != "attested" {
+		t.Fatalf("execution = %#v", rec["execution"])
+	}
+	attestation, ok := execution["attestation"].(map[string]any)
+	if !ok || attestation["status"] != "verified" {
+		t.Fatalf("attestation = %#v", execution["attestation"])
+	}
+	if attestation["input_prefix"] != "s3://agentcourt-data/arbattest/aard-inputs/aard-ex3-test" || attestation["output_prefix"] != "s3://agentcourt-data/arbattest/aard-runs/aard-ex3-test" {
+		t.Fatalf("attestation prefixes = %#v", execution["attestation"])
+	}
+	if !strings.Contains(mapString(attestation["local_output_dir"]), "aard-output") {
+		t.Fatalf("local_output_dir = %#v", attestation["local_output_dir"])
+	}
+
+	status, got = serviceGet(t, s, "/clerk/v1/cases/attested-1/result")
+	if status != http.StatusOK || got["status"] != "done" {
+		t.Fatalf("result status = %d, body = %#v", status, got)
+	}
+	status, got = serviceGet(t, s, "/clerk/v1/cases/attested-1/artifacts")
+	if status != http.StatusOK {
+		t.Fatalf("artifacts status = %d, body = %#v", status, got)
+	}
+	for _, name := range []string{"run.json", "digest.md", "events.ndjson", "verification.log", "manifest.sha384"} {
+		if !artifactListContains(got["artifacts"], name) {
+			t.Fatalf("missing artifact %s in %#v", name, got["artifacts"])
+		}
+	}
+	rawStatus, body := serviceRawGet(t, s, "/clerk/v1/cases/attested-1/artifacts/digest.md")
+	if rawStatus != http.StatusOK || string(body) != "digest text\n" {
+		t.Fatalf("digest status = %d body = %q", rawStatus, string(body))
+	}
+	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/attested-1/artifacts/verification.log")
+	if rawStatus != http.StatusOK || string(body) != "verified\n" {
+		t.Fatalf("verification status = %d body = %q", rawStatus, string(body))
+	}
+	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/attested-1/evidence/EV1")
+	if rawStatus != http.StatusOK || string(body) != "evidence text\n" {
+		t.Fatalf("evidence status = %d body = %q", rawStatus, string(body))
+	}
+	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/attested-1/attestation/events")
+	if rawStatus != http.StatusOK || string(body) != "{\"event\":\"completed\",\"case_id\":\"attested-1\"}\n" {
+		t.Fatalf("events status = %d body = %q", rawStatus, string(body))
+	}
+}
+
+func TestClerkAttestationEventsFetchesLiveS3Object(t *testing.T) {
+	root := t.TempDir()
+	fakeBin := t.TempDir()
+	sshPath := filepath.Join(fakeBin, "ssh")
+	sshScript := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$FAKE_SSH_LOG\"\nprintf '{\"event\":\"live\"}\\n'\n"
+	if err := os.WriteFile(sshPath, []byte(sshScript), 0o755); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	logPath := filepath.Join(t.TempDir(), "ssh.log")
+	t.Setenv("PATH", fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKE_SSH_LOG", logPath)
+
+	outDir := filepath.Join(root, "live-attested")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatalf("create output dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "run.env"), []byte("OUTPUT_PREFIX=s3://bucket/run\n"), 0o644); err != nil {
+		t.Fatalf("write run.env: %v", err)
+	}
+	s := newClerkTestServerWithConfig(t, Config{
+		RegistryDir: filepath.Join(t.TempDir(), "registry"),
+		OutputRoot:  root,
+		AardBin:     writeFakeAAR(t, "#!/bin/sh\nexit 64\n"),
+	})
+	s.mu.Lock()
+	if s.clerkCases == nil {
+		s.clerkCases = map[string]*ClerkRecord{}
+	}
+	s.clerkCases["live-attested"] = &ClerkRecord{
+		CaseID:    "live-attested",
+		RunID:     "run-live",
+		Status:    "running",
+		OutDir:    outDir,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		Execution: &ClerkExecutionRecord{
+			Mode: clerkExecutionAttested,
+			Resolved: &AttestedClerkConfig{
+				DevHost:   "dev-test",
+				AWSRegion: "region-test",
+			},
+			Attestation: &ClerkAttestationRecord{Status: attestationStatusPending},
+		},
+	}
+	s.mu.Unlock()
+
+	rawStatus, body := serviceRawGet(t, s, "/clerk/v1/cases/live-attested/attestation/events")
+	if rawStatus != http.StatusOK || string(body) != "{\"event\":\"live\"}\n" {
+		t.Fatalf("events status = %d body = %q", rawStatus, string(body))
+	}
+	raw, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read fake ssh log: %v", err)
+	}
+	logText := string(raw)
+	if !strings.Contains(logText, "dev-test") || !strings.Contains(logText, "AWS_DEFAULT_REGION='region-test' aws s3 cp 's3://bucket/run/events.ndjson' - --no-progress") {
+		t.Fatalf("ssh command = %q", logText)
+	}
+}
+
+func TestClerkCreateAttestedComplaintCompletesAfterVerification(t *testing.T) {
+	root := t.TempDir()
+	caseDir := t.TempDir()
+	complaint := filepath.Join(caseDir, "complaint.md")
+	if err := os.WriteFile(complaint, []byte("# Complaint\n"), 0o644); err != nil {
+		t.Fatalf("write complaint: %v", err)
+	}
+	caseFile := filepath.Join(caseDir, "evidence.txt")
+	if err := os.WriteFile(caseFile, []byte("case evidence\n"), 0o644); err != nil {
+		t.Fatalf("write case file: %v", err)
+	}
+	s := newClerkTestServerWithConfig(t, Config{
+		RegistryDir: filepath.Join(t.TempDir(), "registry"),
+		OutputRoot:  root,
+		AardBin:     writeFakeAAR(t, "#!/bin/sh\nexit 64\n"),
+		Attested: AttestedClerkConfig{
+			DriverPath:   writeFakeAttestedDriver(t, 0),
+			ExecAMI:      "ami-test",
+			ExpectedPCR4: "pcr4-test",
+			ExpectedPCR7: "pcr7-test",
+		},
+	})
+
+	status, got := servicePost(t, s, "/clerk/v1/cases", map[string]any{
+		"case_id":        "attested-complaint",
+		"run_id":         "aard-complaint-test",
+		"complaint_path": complaint,
+		"case_files":     []string{caseFile},
+		"execution": map[string]any{
+			"mode": "attested",
+			"attestation": map[string]any{
+				"input_prefix":  "s3://agentcourt-data/arbattest/aard-inputs/aard-complaint-test",
+				"output_prefix": "s3://agentcourt-data/arbattest/aard-runs/aard-complaint-test",
+			},
+		},
+	})
+	if status != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusAccepted, got)
+	}
+	rec := waitClerkStatus(t, s, "attested-complaint", "completed")
+	summary, ok := rec["summary"].(map[string]any)
+	if !ok || summary["complaint"] != complaint || intNumber(summary["files"]) != 1 || summary["case_id"] != "attested-complaint" {
+		t.Fatalf("summary = %#v", rec["summary"])
+	}
+	runEnv, err := os.ReadFile(filepath.Join(root, "attested-complaint", "run.env"))
+	if err != nil {
+		t.Fatalf("read run.env: %v", err)
+	}
+	if !strings.Contains(string(runEnv), "AARD_INPUT_MODE=case-packet\n") || !strings.Contains(string(runEnv), "FILES=1\n") {
+		t.Fatalf("run.env = %q", string(runEnv))
+	}
+}
+
+func TestClerkCreateAttestedRejectsUnsupportedRunFields(t *testing.T) {
+	root := t.TempDir()
+	complaint := filepath.Join(t.TempDir(), "complaint.md")
+	if err := os.WriteFile(complaint, []byte("# Complaint\n"), 0o644); err != nil {
+		t.Fatalf("write complaint: %v", err)
+	}
+	s := newClerkTestServerWithConfig(t, Config{
+		RegistryDir: filepath.Join(t.TempDir(), "registry"),
+		OutputRoot:  root,
+		AardBin:     writeFakeAAR(t, "#!/bin/sh\nexit 64\n"),
+		Attested: AttestedClerkConfig{
+			DriverPath:   writeFakeAttestedDriver(t, 0),
+			ExecAMI:      "ami-test",
+			ExpectedPCR4: "pcr4-test",
+			ExpectedPCR7: "pcr7-test",
+		},
+	})
+
+	status, got := servicePost(t, s, "/clerk/v1/cases", map[string]any{
+		"case_id":           "attested-reject",
+		"complaint_path":    complaint,
+		"judgment_standard": "test standard",
+		"execution": map[string]any{
+			"mode": "attested",
+			"attestation": map[string]any{
+				"input_prefix": "s3://agentcourt-data/arbattest/aard-inputs/aard-complaint-test",
+			},
+		},
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusBadRequest, got)
+	}
+	errObj, ok := got["error"].(map[string]any)
+	if !ok || !strings.Contains(mapString(errObj["message"]), "judgment_standard") {
+		t.Fatalf("error = %#v", got["error"])
+	}
+
+	verify := false
+	status, got = servicePost(t, s, "/clerk/v1/cases", map[string]any{
+		"case_id": "attested-unverified",
+		"example": "ex3",
+		"execution": map[string]any{
+			"mode": "attested",
+			"attestation": map[string]any{
+				"input_prefix": "s3://agentcourt-data/arbattest/aard-inputs/aard-ex3-test",
+				"verify":       verify,
+			},
+		},
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("verify status = %d, want %d: %#v", status, http.StatusBadRequest, got)
+	}
+	errObj, ok = got["error"].(map[string]any)
+	if !ok || !strings.Contains(mapString(errObj["message"]), "requires verification") {
+		t.Fatalf("verify error = %#v", got["error"])
+	}
+}
+
+func TestClerkCreateAttestedFailureDoesNotComplete(t *testing.T) {
+	root := t.TempDir()
+	s := newClerkTestServerWithConfig(t, Config{
+		RegistryDir: filepath.Join(t.TempDir(), "registry"),
+		OutputRoot:  root,
+		AardBin:     writeFakeAAR(t, "#!/bin/sh\nexit 64\n"),
+		Attested: AttestedClerkConfig{
+			DriverPath:   writeFakeAttestedDriver(t, 7),
+			ExecAMI:      "ami-test",
+			ExpectedPCR4: "pcr4-test",
+			ExpectedPCR7: "pcr7-test",
+		},
+	})
+
+	status, got := servicePost(t, s, "/clerk/v1/cases", map[string]any{
+		"case_id": "attested-fail",
+		"run_id":  "aard-ex3-fail",
+		"example": "ex3",
+		"execution": map[string]any{
+			"mode": "attested",
+			"attestation": map[string]any{
+				"input_prefix": "s3://agentcourt-data/arbattest/aard-inputs/aard-ex3-test",
+			},
+		},
+	})
+	if status != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusAccepted, got)
+	}
+	rec := waitClerkStatus(t, s, "attested-fail", "failed")
+	if intNumber(rec["exit_code"]) != 7 {
+		t.Fatalf("exit_code = %#v", rec["exit_code"])
+	}
+	execution, ok := rec["execution"].(map[string]any)
+	if !ok {
+		t.Fatalf("execution = %#v", rec["execution"])
+	}
+	attestation, ok := execution["attestation"].(map[string]any)
+	if !ok || attestation["status"] != "failed" {
+		t.Fatalf("attestation = %#v", execution["attestation"])
+	}
+}
+
 func TestDirectCreateRejectsOutputDirOutsideOutputRoot(t *testing.T) {
 	root := t.TempDir()
 	aardBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
@@ -683,13 +976,94 @@ func writeFakeAAR(t *testing.T, script string) string {
 	return path
 }
 
+func writeFakeAttestedDriver(t *testing.T, exitCode int) string {
+	t.Helper()
+	code := "0"
+	if exitCode != 0 {
+		code = "7"
+	}
+	script := strings.ReplaceAll(`#!/bin/sh
+out_dir=""
+case_id=""
+run_id=""
+example=""
+complaint=""
+files=0
+input_prefix=""
+output_prefix=""
+exec_ami=""
+verify=0
+allow_nonempty=0
+expected4=""
+expected7=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --case-id) case_id="$2"; shift 2 ;;
+    --example) example="$2"; shift 2 ;;
+    --complaint) complaint="$2"; shift 2 ;;
+    --file) files=$((files + 1)); shift 2 ;;
+    --input-prefix) input_prefix="$2"; shift 2 ;;
+    --output-prefix) output_prefix="$2"; shift 2 ;;
+    --exec-ami) exec_ami="$2"; shift 2 ;;
+    --run-id) run_id="$2"; shift 2 ;;
+    --out-dir) out_dir="$2"; shift 2 ;;
+    --verify) verify=1; shift ;;
+    --allow-nonempty-out-dir) allow_nonempty=1; shift ;;
+    --expected-pcr4) expected4="$2"; shift 2 ;;
+    --expected-pcr7) expected7="$2"; shift 2 ;;
+    --*) shift 2 ;;
+    *) shift ;;
+  esac
+done
+if [ -z "$out_dir" ] || [ -z "$run_id" ] || [ -z "$input_prefix" ] || [ -z "$exec_ami" ]; then
+  exit 64
+fi
+if [ -z "$example" ] && [ -z "$complaint" ]; then
+  exit 64
+fi
+if [ "$verify" != "1" ] || [ "$allow_nonempty" != "1" ] || [ -z "$expected4" ] || [ -z "$expected7" ]; then
+  exit 65
+fi
+mkdir -p "$out_dir"
+if [ -n "$complaint" ]; then
+  input_mode="case-packet"
+else
+  input_mode="example"
+fi
+printf 'AARD_INPUT_MODE=%s\nINPUT_PREFIX=%s\nOUTPUT_PREFIX=%s\nEXEC_AMI=%s\nCOMPLAINT=%s\nFILES=%s\nCASE_ID=%s\n' "$input_mode" "$input_prefix" "$output_prefix" "$exec_ami" "$complaint" "$files" "$case_id" > "$out_dir/run.env"
+printf 'moving\n' > "$out_dir/progress.log"
+printf 'launch\n' > "$out_dir/launcher.log"
+printf '{"files":[]}\n' > "$out_dir/manifest.json"
+printf 'sha384 test\n' > "$out_dir/manifest.sha384"
+printf 'attestation text\n' > "$out_dir/attestation.txt"
+printf 'verified\n' > "$out_dir/verification.log"
+printf '{"event":"live","case_id":"%s"}\n' "$case_id" > "$out_dir/events.ndjson"
+if [ "__EXIT_CODE__" != "0" ]; then
+  exit __EXIT_CODE__
+fi
+mkdir -p "$out_dir/aard-output/submitted-evidence"
+printf '{"case_id":"%s","run_id":"%s","status":"completed","phase":"complete","answers":"72","example":"%s","complaint":"%s","files":%s}\n' "$case_id" "$run_id" "$example" "$complaint" "$files" > "$out_dir/aard-output/run.json"
+printf 'digest text\n' > "$out_dir/aard-output/digest.md"
+printf '{"event":"completed","case_id":"%s"}\n' "$case_id" > "$out_dir/aard-output/events.ndjson"
+printf '[{"evidence_id":"EV1","name":"ev1.txt"}]\n' > "$out_dir/aard-output/evidence-manifest.json"
+printf 'evidence text\n' > "$out_dir/aard-output/submitted-evidence/ev1.txt"
+exit 0
+`, "__EXIT_CODE__", code)
+	return writeFakeAAR(t, script)
+}
+
 func newClerkTestServer(t *testing.T, outputRoot string, aarBin string) *Server {
 	t.Helper()
-	s, err := New(Config{
+	return newClerkTestServerWithConfig(t, Config{
 		RegistryDir: filepath.Join(t.TempDir(), "registry"),
 		OutputRoot:  outputRoot,
 		AardBin:     aarBin,
 	})
+}
+
+func newClerkTestServerWithConfig(t *testing.T, cfg Config) *Server {
+	t.Helper()
+	s, err := New(cfg)
 	if err != nil {
 		t.Fatalf("new service: %v", err)
 	}

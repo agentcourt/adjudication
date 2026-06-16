@@ -39,6 +39,7 @@ type Config struct {
 	CommonRoot  string
 	EnginePath  string
 	BearerToken string
+	Attested    AttestedClerkConfig
 	StartupWait time.Duration
 	Log         io.Writer
 }

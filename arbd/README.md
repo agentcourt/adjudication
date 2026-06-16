@@ -2,11 +2,17 @@
 
 Agent Arbitration Degree, or AARD, decides one degree question through an adversarial record and a council answer map.  A complaint states the question, plaintiff and defendant lawyers build and argue the record, and each council member submits one integer answer from `0` through `100` with a rationale.  The runtime stores filings, admitted evidence, work notes, council answers, transcripts, event logs, and final output in one run packet.
 
-## Manual
+## Operator Documentation
 
-Read [Agent Degree Arbitration Manual](manual.md) for the command surface and operating details.  It covers `aard case`, `aard run`, `aard service`, `aard mcp`, the Lawyer API, the Council API, Clerk routes, OpenClaw auth, remote OpenClaw lawyers, Pi council agents, output files, failure behavior, and troubleshooting.  The manual is the active operator reference for AARD.
+These operator documents are the entry points for running and diagnosing AARD.  The manual covers the ordinary commands and HTTP APIs, while the attested runbook covers the Docker image, exec AMI, S3 artifact layout, and verification flow.  A Clerk-managed attested run uses the manual's `aard service` and Clerk API sections with the attested Docker runbook and dev-host requirements.
 
-Read [Practice Manual](docs/practice.md) for lawyer and council practice.  It explains degree-question framing, evidence search, source preservation, technical reports, work notes, score advocacy, and council answer rationales.  The governing rules are [Agent Rules for Arbitration Degree Procedure](docs/ARAP.md).
+| Document | Use |
+| --- | --- |
+| [Agent Degree Arbitration Manual](manual.md) | Commands and operating details for `aard case`, `aard run`, `aard service`, `aard mcp`, Lawyer and Council APIs, Clerk routes, attested Clerk requests, `attestation/events`, output files, failure behavior, and troubleshooting. |
+| [AARD Docker Image Runbook](Dockerfile.md) | AARD base image, attested workload image, exec AMI launch path, S3 input and output prefixes, `events.ndjson`, attestation artifacts, local driver commands, and verification. |
+| [Attested AARD Dev Host Requirements](docs/attested-dev-host.md) | `dev` host layout, AWS region, AMI, instance profile, S3 permissions, secret files, Docker build requirements, expected PCR values, and operational checks. |
+| [Practice Manual](docs/practice.md) | Lawyer and council practice for degree questions: phase work, evidence search, source preservation, technical reports, work notes, score advocacy, and council answer rationales. |
+| [Agent Rules for Arbitration Degree Procedure](docs/ARAP.md) | Governing AARD procedure. |
 
 ## Requirements
 
@@ -18,6 +24,7 @@ Read [Practice Manual](docs/practice.md) for lawyer and council practice.  It ex
 | Podman | Runs Pi council containers in `aard run`. |
 | Codex `auth.json` or `OPENAI_API_KEY` | Authenticates OpenClaw lawyers. |
 | `OPENROUTER_API_KEY` | Authenticates current local Pi council pool entries that use OpenRouter. |
+| Attested AARD `dev` host | See [Attested AARD Dev Host Requirements](docs/attested-dev-host.md) for the remote Docker, S3, IAM, secret, and verification requirements. |
 
 ## Build
 
@@ -59,6 +66,7 @@ Start the Clerk service when cases should be created and managed through HTTP:
 | Path | Purpose |
 | --- | --- |
 | `manual.md` | Full operating manual. |
+| `Dockerfile.md` | Attested Docker image and exec runbook. |
 | `docs/` | Rules, practice guide, evidence handling, policy notes, and council references. |
 | `engine/` | Lean degree-arbitration engine and proofs. |
 | `runtime/` | Go CLI, case runtime, HTTP APIs, MCP adapter, local run code, and service. |
