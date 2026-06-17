@@ -37,7 +37,7 @@ func RunService(args []string, stdout io.Writer, stderr io.Writer) error {
 	attestedIAMInstanceProfile := fs.String("attested-iam-instance-profile", "ec2-nix-builder", "IAM instance profile for attested ADC runs")
 	attestedImageTarS3 := fs.String("attested-image-tar-s3", "s3://agentcourt-data/arbattest/images/adc-glue-poc.tar", "S3 object containing the attested ADC image tar")
 	attestedRootVolumeSizeGB := fs.Int("attested-root-volume-size-gb", 0, "Root volume size in GiB for attested ADC instances")
-	attestedExecPollAttempts := fs.Int("attested-exec-poll-attempts", 1800, "Exec launcher poll attempts for attested ADC runs")
+	attestedExecPollAttempts := fs.Int("attested-exec-poll-attempts", 0, "Exec launcher poll attempts for attested ADC runs; 0 derives the value from the driver timeout")
 	attestedPollIntervalSeconds := fs.Int("attested-poll-interval-seconds", 30, "Seconds between attested ADC output polls")
 	attestedTimeoutSeconds := fs.Int("attested-timeout-seconds", 10800, "Seconds before the attested ADC driver times out")
 	attestedExpectedPCR4 := fs.String("attested-expected-pcr4", "", "Expected attestation PCR 4")

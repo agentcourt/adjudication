@@ -29,6 +29,8 @@ PARTIAL_OBJECTS = {"run.log", "adc-partial.tar.gz"}
 DEFAULT_PCR12 = "0" * 96
 CASE_PACKET_OBJECT = "case.tar.gz"
 CASE_PACKET_MANIFEST_OBJECT = "case-packet.json"
+EXEC_CONSOLE_POLL_INTERVAL_SECONDS = 2
+EXEC_CONSOLE_POLL_HEADROOM_SECONDS = 600
 
 
 class RunnerError(Exception):
@@ -47,6 +49,22 @@ def validate_run_id(value: str) -> None:
 def validate_case_id(value: str) -> None:
     if value and (value.startswith(".") or "/" in value or ".." in value or "\n" in value):
         raise RunnerError(f"invalid case ID: {value}")
+
+
+def default_exec_poll_attempts(timeout_seconds: int) -> int:
+    seconds = timeout_seconds + EXEC_CONSOLE_POLL_HEADROOM_SECONDS
+    return (seconds + EXEC_CONSOLE_POLL_INTERVAL_SECONDS - 1) // EXEC_CONSOLE_POLL_INTERVAL_SECONDS
+
+
+def validate_timing(args: argparse.Namespace) -> None:
+    if args.timeout_seconds <= 0:
+        raise RunnerError("timeout seconds must be positive")
+    if args.poll_interval_seconds <= 0:
+        raise RunnerError("poll interval seconds must be positive")
+    if args.exec_poll_attempts is None:
+        args.exec_poll_attempts = default_exec_poll_attempts(args.timeout_seconds)
+    if args.exec_poll_attempts <= 0:
+        raise RunnerError("exec poll attempts must be positive")
 
 
 def require_s3_prefix(name: str, value: str) -> str:
@@ -509,6 +527,8 @@ def default_repo_root() -> Path:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser_path = default_parser_path()
+    poll_attempts_env = os.environ.get("POLL_ATTEMPTS")
+    poll_attempts_default = int(poll_attempts_env) if poll_attempts_env else None
     p = argparse.ArgumentParser(description="Run an attested ADC through the exec AMI.")
     p.add_argument("--complaint", required=True)
     p.add_argument("--input-prefix", required=True)
@@ -525,7 +545,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--iam-instance-profile", default=os.environ.get("IAM_INSTANCE_PROFILE", "ec2-nix-builder"))
     p.add_argument("--image-tar-s3", default=os.environ.get("IMAGE_TAR_S3", "s3://agentcourt-data/arbattest/images/adc-glue-poc.tar"))
     p.add_argument("--root-volume-size-gb", default=os.environ.get("ROOT_VOLUME_SIZE_GB", ""))
-    p.add_argument("--exec-poll-attempts", type=int, default=int(os.environ.get("POLL_ATTEMPTS", "1800")))
+    p.add_argument("--exec-poll-attempts", type=int, default=poll_attempts_default)
     p.add_argument("--poll-interval-seconds", type=int, default=int(os.environ.get("POLL_INTERVAL_SECONDS", "30")))
     p.add_argument("--timeout-seconds", type=int, default=int(os.environ.get("TIMEOUT_SECONDS", "10800")))
     p.add_argument("--allow-nonempty-out-dir", action="store_true")
@@ -543,6 +563,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str]) -> int:
     try:
         args = parse_args(argv)
+        validate_timing(args)
         args.input_mode = "case-packet"
         args.case_packet = ""
         args.case_manifest = ""

@@ -137,4 +137,4 @@ rm -f /tmp/arbattest-s3-probe.txt
 
 ## References
 
-The generic host and AMI requirements live in [Dev Host Requirements](../../../attest/dev-host.md).  The ADC image build and run sequence lives in [ADC Docker Image Runbook](../Dockerfile.md).  The lower-level attested runner is `adc/tools/run-adc-attested.py`, and the exec workload script is `adc/tools/run-adc.sh`.
+The generic host and AMI requirements live in [Dev Host Requirements](../../../attest/dev-host.md).  The ADC image build and run sequence lives in [ADC Docker Image Runbook](../Dockerfile.md).  The one-complaint helper is `adc/tools/run-one-attested-adc.sh`; it stages `auth.json` and `keys.sh` before invoking the lower-level `adc/tools/run-adc-attested.py` driver and `adc/tools/run-adc.sh` exec workload script.

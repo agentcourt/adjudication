@@ -15,6 +15,7 @@ The current ADC attested path supports complaint input only.  The local driver p
 | Exec container entrypoint | `adc/attest/exec-container-entrypoint.sh` | Runs ADC, uploads live events, archives output, writes the manifest, obtains the TPM attestation, and uploads artifacts to S3. |
 | Exec script | `adc/tools/run-adc.sh` | Loads `adc-glue:poc` on the exec AMI and starts the attested workload container. |
 | Local driver | `adc/tools/run-adc-attested.py` | Builds the complaint packet, starts `exec.sh` through `dev`, polls S3, downloads artifacts, extracts ADC output, and verifies the attestation. |
+| One-run helper | `adc/tools/run-one-attested-adc.sh` | Stages `auth.json` and `keys.sh`, chooses run-specific S3 prefixes, and invokes the local driver for one complaint. |
 | Container proof script | `adc/tools/run-container-poc.sh` | Runs the attested workload image in attestation-only mode. |
 | Clerk service | `adc runtime service` | Starts attested ADC through the same `/clerk/v1/cases` API used for local ADC cases. |
 
@@ -100,7 +101,7 @@ ssh dev 'chmod 755 /home/ec2-user/attest/exec.sh /home/ec2-user/attest/run-adc.s
 
 ## Prepare Inputs
 
-`INPUT_PREFIX` must contain `auth.json` and `keys.sh`.  `auth.json` is the Codex auth file used by OpenClaw, and `keys.sh` must assign or export `OPENROUTER_API_KEY` for Pi jurors.  The local driver uploads `case.tar.gz` and `case-packet.json` into the same prefix before launching the exec AMI.
+`INPUT_PREFIX` must contain `auth.json` and `keys.sh`.  `auth.json` is the Codex auth file used by OpenClaw, and `keys.sh` must assign or export `OPENROUTER_API_KEY` for Pi jurors.  The local driver uploads `case.tar.gz` and `case-packet.json` into the same prefix before launching the exec AMI.  The one-run helper stages both secret objects before invoking the driver.
 
 ```bash
 ssh dev 'set -eu
@@ -120,7 +121,12 @@ The complaint packet is deterministic for the same complaint and linked files.  
 
 ## Run Through The Local Driver
 
-The local driver is the normal operator path.  It builds the complaint packet locally, uploads packet objects through `dev`, starts the exec AMI, polls the output prefix, downloads terminal artifacts, extracts `adc-output.tar.gz`, and verifies the attestation when `--verify` is set.  Use fresh input and output prefixes for each run.
+The local driver is the normal operator path.  It builds the complaint packet locally, uploads packet objects through `dev`, starts the exec AMI, polls the output prefix, downloads terminal artifacts, extracts `adc-output.tar.gz`, and verifies the attestation when `--verify` is set.  Use the helper for ordinary one-complaint runs because it stages the two required secret objects before calling the driver.  Use fresh input and output prefixes for each run.
+
+```bash
+adjudication/adc/tools/run-one-attested-adc.sh \
+  PATH/TO/complaint.md
+```
 
 ```bash
 uv run adjudication/adc/tools/run-adc-attested.py \
