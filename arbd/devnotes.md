@@ -12,6 +12,8 @@ The second run used `case_id=clerk-attested-aard-ex1-20260617T010406Z` and `run_
 
 The third run used `case_id=clerk-attested-aard-ex1-20260617T012752Z` and `run_id=aard-ex1-20260617T012752Z`.  It reached the rebuilt image and failed with `read persona text personas/generic.md: open /opt/adjudication/common/data/personas/personas/generic.md: no such file or directory`.  The loader resolves pool-relative persona paths first under the pool directory and then under `common/etc`, so the prior fix put `generic.md` in the wrong common directory.  The corrected tree stores `generic.md` at `common/etc/personas/generic.md`.
 
+The fourth run used `case_id=clerk-attested-aard-ex1-20260617T013611Z` and `run_id=aard-ex1-20260617T013611Z`.  It reached OpenClaw and failed when the plaintiff container reported `EACCES` while reading `/aard-codex/auth.json`.  AARD still staged the mounted Codex home with mode `0700` and the token file with mode `0600`, while the working AAR path stages the directory as `0777` and `auth.json` as `0666` because OpenClaw reads the mounted files as a different container user.
+
 ## 2026-06-04
 
 ### Service and agent runtime migration
