@@ -1016,8 +1016,11 @@ func (s *runState) stageOpenClawCodexAuth(role string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve OpenClaw Codex home path: %w", err)
 	}
-	if err := os.MkdirAll(home, 0o700); err != nil {
+	if err := os.MkdirAll(home, 0o777); err != nil {
 		return "", fmt.Errorf("create OpenClaw Codex home: %w", err)
+	}
+	if err := os.Chmod(home, 0o777); err != nil {
+		return "", fmt.Errorf("chmod OpenClaw Codex home: %w", err)
 	}
 	raw, err := os.ReadFile(s.openClawAuth.CodexAuthPath)
 	if err != nil {
@@ -1025,13 +1028,13 @@ func (s *runState) stageOpenClawCodexAuth(role string) (string, error) {
 	}
 	target := filepath.Join(home, "auth.json")
 	tmp := target + ".tmp"
-	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+	if err := os.WriteFile(tmp, raw, 0o666); err != nil {
 		return "", fmt.Errorf("write staged Codex auth file: %w", err)
 	}
 	if err := os.Rename(tmp, target); err != nil {
 		return "", errors.Join(fmt.Errorf("install staged Codex auth file: %w", err), os.Remove(tmp))
 	}
-	if err := os.Chmod(target, 0o600); err != nil {
+	if err := os.Chmod(target, 0o666); err != nil {
 		return "", fmt.Errorf("chmod staged Codex auth file: %w", err)
 	}
 	s.mu.Lock()

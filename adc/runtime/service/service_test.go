@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestJoinBaseAndPathUsesRoleAPIPath(t *testing.T) {
@@ -294,6 +295,136 @@ func TestArtifactRouteServesOnlyListedArtifacts(t *testing.T) {
 	}
 }
 
+func TestCreateAttestedComplaintCompletesAfterVerification(t *testing.T) {
+	root := t.TempDir()
+	complaint := filepath.Join(root, "complaint.md")
+	if err := os.WriteFile(complaint, []byte("# Complaint\n"), 0o644); err != nil {
+		t.Fatalf("write complaint: %v", err)
+	}
+	outputRoot := filepath.Join(root, "service")
+	s, err := New(Config{
+		OutputRoot: outputRoot,
+		ADCBin:     "/bin/false",
+		Attested: AttestedClerkConfig{
+			DriverPath:   writeFakeAttestedADCDriver(t, 0),
+			InputPrefix:  "s3://bucket/adc-input",
+			OutputRoot:   "s3://bucket/adc-output",
+			ExecAMI:      "ami-123",
+			ExpectedPCR4: strings.Repeat("a", 96),
+			ExpectedPCR7: strings.Repeat("b", 96),
+		},
+	})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	status, got := servicePost(t, s, "/clerk/v1/cases", map[string]any{
+		"case_id":        "attested-1",
+		"complaint_path": complaint,
+		"execution": map[string]any{
+			"mode":        "attested",
+			"attestation": map[string]any{"verify": true},
+		},
+	})
+	if status != http.StatusAccepted {
+		t.Fatalf("status = %d body=%#v", status, got)
+	}
+	rec := waitCaseStatus(t, s, "attested-1", "completed")
+	if rec.Execution == nil || rec.Execution.Attestation == nil || rec.Execution.Attestation.Status != attestationStatusVerified {
+		t.Fatalf("execution = %#v", rec.Execution)
+	}
+	if rec.Summary["complaint"] != complaint || rec.Summary["case_id"] != "attested-1" {
+		t.Fatalf("summary = %#v", rec.Summary)
+	}
+	runEnv, err := os.ReadFile(filepath.Join(outputRoot, "attested-1", "run.env"))
+	if err != nil {
+		t.Fatalf("read run.env: %v", err)
+	}
+	if !strings.Contains(string(runEnv), "ADC_INPUT_MODE=case-packet\n") || strings.Contains(string(runEnv), "ADC_EXAMPLE=") {
+		t.Fatalf("run.env = %s", string(runEnv))
+	}
+	rawStatus, body := serviceRawGet(t, s, "/clerk/v1/cases/attested-1/artifacts/digest.md")
+	if rawStatus != http.StatusOK || string(body) != "digest text\n" {
+		t.Fatalf("digest status=%d body=%q", rawStatus, string(body))
+	}
+	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/attested-1/evidence/EV1")
+	if rawStatus != http.StatusOK || string(body) != "evidence text\n" {
+		t.Fatalf("evidence status=%d body=%q", rawStatus, string(body))
+	}
+	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/attested-1/attestation/events")
+	if rawStatus != http.StatusOK || string(body) != "{\"event\":\"completed\",\"case_id\":\"attested-1\"}\n" {
+		t.Fatalf("events status=%d body=%q", rawStatus, string(body))
+	}
+}
+
+func TestCreateAttestedRejectsScenario(t *testing.T) {
+	root := t.TempDir()
+	scenario := filepath.Join(root, "scenario.json")
+	if err := os.WriteFile(scenario, []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write scenario: %v", err)
+	}
+	s, err := New(Config{
+		OutputRoot: filepath.Join(root, "service"),
+		ADCBin:     "/bin/false",
+		Attested: AttestedClerkConfig{
+			DriverPath:   writeFakeAttestedADCDriver(t, 0),
+			InputPrefix:  "s3://bucket/adc-input",
+			OutputRoot:   "s3://bucket/adc-output",
+			ExecAMI:      "ami-123",
+			ExpectedPCR4: strings.Repeat("a", 96),
+			ExpectedPCR7: strings.Repeat("b", 96),
+		},
+	})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	status, got := servicePost(t, s, "/clerk/v1/cases", map[string]any{
+		"case_id":       "attested-scenario",
+		"scenario_path": scenario,
+		"execution": map[string]any{
+			"mode":        "attested",
+			"attestation": map[string]any{"verify": true},
+		},
+	})
+	if status != http.StatusBadRequest || !strings.Contains(errorMessage(got), "complaint_path only") {
+		t.Fatalf("status=%d body=%#v", status, got)
+	}
+}
+
+func TestCreateAttestedRejectsLocalRunFields(t *testing.T) {
+	root := t.TempDir()
+	complaint := filepath.Join(root, "complaint.md")
+	if err := os.WriteFile(complaint, []byte("# Complaint\n"), 0o644); err != nil {
+		t.Fatalf("write complaint: %v", err)
+	}
+	s, err := New(Config{
+		OutputRoot: filepath.Join(root, "service"),
+		ADCBin:     "/bin/false",
+		Attested: AttestedClerkConfig{
+			DriverPath:   writeFakeAttestedADCDriver(t, 0),
+			InputPrefix:  "s3://bucket/adc-input",
+			OutputRoot:   "s3://bucket/adc-output",
+			ExecAMI:      "ami-123",
+			ExpectedPCR4: strings.Repeat("a", 96),
+			ExpectedPCR7: strings.Repeat("b", 96),
+		},
+	})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	status, got := servicePost(t, s, "/clerk/v1/cases", map[string]any{
+		"case_id":        "attested-reject",
+		"complaint_path": complaint,
+		"model":          "model-1",
+		"execution": map[string]any{
+			"mode":        "attested",
+			"attestation": map[string]any{"verify": true},
+		},
+	})
+	if status != http.StatusBadRequest || !strings.Contains(errorMessage(got), "model") {
+		t.Fatalf("status=%d body=%#v", status, got)
+	}
+}
+
 func TestCaseProcessArgsForDirectExistingScenario(t *testing.T) {
 	s := &Server{cfg: Config{EnginePath: "lake exe adc-engine"}}
 	args := s.caseProcessArgs("direct", CaseCreateRequest{
@@ -316,6 +447,102 @@ func TestCaseProcessArgsForDirectExistingScenario(t *testing.T) {
 			t.Fatalf("scenario args contain case-only value %q: %#v", forbidden, args)
 		}
 	}
+}
+
+func waitCaseStatus(t *testing.T, s *Server, caseID string, want string) CaseRecord {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		rec, ok := s.getCase(caseID)
+		if ok && rec.Status == want {
+			return rec
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	rec, ok := s.getCase(caseID)
+	if !ok {
+		t.Fatalf("case %s missing", caseID)
+	}
+	t.Fatalf("case %s status = %q, want %q; error=%s", caseID, rec.Status, want, rec.Error)
+	return CaseRecord{}
+}
+
+func writeFakeAttestedADCDriver(t *testing.T, exitCode int) string {
+	t.Helper()
+	code := "0"
+	if exitCode != 0 {
+		code = "7"
+	}
+	script := strings.ReplaceAll(`#!/bin/sh
+out_dir=""
+case_id=""
+run_id=""
+complaint=""
+input_prefix=""
+output_prefix=""
+exec_ami=""
+verify=0
+allow_nonempty=0
+expected4=""
+expected7=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --case-id) case_id="$2"; shift 2 ;;
+    --complaint) complaint="$2"; shift 2 ;;
+    --example) exit 66 ;;
+    --input-prefix) input_prefix="$2"; shift 2 ;;
+    --output-prefix) output_prefix="$2"; shift 2 ;;
+    --exec-ami) exec_ami="$2"; shift 2 ;;
+    --run-id) run_id="$2"; shift 2 ;;
+    --out-dir) out_dir="$2"; shift 2 ;;
+    --verify) verify=1; shift ;;
+    --allow-nonempty-out-dir) allow_nonempty=1; shift ;;
+    --expected-pcr4) expected4="$2"; shift 2 ;;
+    --expected-pcr7) expected7="$2"; shift 2 ;;
+    --*) shift 2 ;;
+    *) shift ;;
+  esac
+done
+if [ -z "$out_dir" ] || [ -z "$run_id" ] || [ -z "$input_prefix" ] || [ -z "$exec_ami" ] || [ -z "$complaint" ]; then
+  exit 64
+fi
+if [ "$verify" != "1" ] || [ "$allow_nonempty" != "1" ] || [ -z "$expected4" ] || [ -z "$expected7" ]; then
+  exit 65
+fi
+mkdir -p "$out_dir"
+printf 'ADC_INPUT_MODE=case-packet\nINPUT_PREFIX=%s\nOUTPUT_PREFIX=%s\nEXEC_AMI=%s\nADC_COMPLAINT=%s\nADC_CASE_ID=%s\n' "$input_prefix" "$output_prefix" "$exec_ami" "$complaint" "$case_id" > "$out_dir/run.env"
+printf 'moving\n' > "$out_dir/progress.log"
+printf 'launch\n' > "$out_dir/launcher.log"
+printf '{"files":[]}\n' > "$out_dir/manifest.json"
+printf 'sha384 test\n' > "$out_dir/manifest.sha384"
+printf 'attestation text\n' > "$out_dir/attestation.txt"
+printf 'verified\n' > "$out_dir/verification.log"
+printf '{"event":"live","case_id":"%s"}\n' "$case_id" > "$out_dir/events.ndjson"
+if [ "__EXIT_CODE__" != "0" ]; then
+  exit __EXIT_CODE__
+fi
+mkdir -p "$out_dir/adc-output/submitted-evidence"
+printf '{"case_id":"%s","run_id":"%s","status":"completed","phase":"complete","complaint":"%s"}\n' "$case_id" "$run_id" "$complaint" > "$out_dir/adc-output/run.json"
+printf 'digest text\n' > "$out_dir/adc-output/digest.md"
+printf '{"event":"completed","case_id":"%s"}\n' "$case_id" > "$out_dir/adc-output/events.ndjson"
+printf '[{"evidence_id":"EV1","name":"ev1.txt"}]\n' > "$out_dir/adc-output/evidence-manifest.json"
+printf 'evidence text\n' > "$out_dir/adc-output/submitted-evidence/ev1.txt"
+exit 0
+`, "__EXIT_CODE__", code)
+	path := filepath.Join(t.TempDir(), "run-adc-attested")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake attested driver: %v", err)
+	}
+	return path
+}
+
+func errorMessage(got map[string]any) string {
+	errObj, ok := got["error"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	msg, _ := errObj["message"].(string)
+	return msg
 }
 
 func TestKillRouteMarksCaseKilling(t *testing.T) {

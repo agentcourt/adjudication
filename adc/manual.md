@@ -395,6 +395,7 @@ Endpoints:
 | `GET` | `/clerk/v1/cases/{case_id}/artifacts` | List primary artifacts. |
 | `GET` | `/clerk/v1/cases/{case_id}/artifacts/{name}` | Fetch one listed artifact from the case output directory. |
 | `GET` | `/clerk/v1/cases/{case_id}/evidence/{evidence_id}` | Fetch submitted evidence by evidence id when the manifest maps it to a file. |
+| `GET` | `/clerk/v1/cases/{case_id}/attestation/events` | Fetch live or downloaded NDJSON events for an attested child case. |
 | any | `/roleapi/v1/...` | Proxy Role API calls based on `case_id`. |
 
 The `/api/v1/cases` paths use the same implementation as `/clerk/v1/cases`.  They exist as service API aliases.  A bearer token can protect all service routes when `--bearer-token` is set.
@@ -406,6 +407,46 @@ The create request is structured JSON.  Common fields include `case_id`, `run_id
 For `mode: "run"`, the create request also accepts the local-agent fields used by `adc run`: `mcp_listen`, `mcp_public_base_url`, `mcp_bearer_token`, `lawyer_instructions`, `remote_lawyer_skill`, `juror_instructions`, `auto_lawyers`, `docker_command`, `podman_command`, `openclaw_auth`, `openclaw_codex_auth_path`, `openclaw_image`, `openclaw_model`, `openclaw_thinking`, `openclaw_timeout_seconds`, `openclaw_lawyer_start_delay_seconds`, `pi_image`, `pi_mcp_adapter`, `juror_output_limit_bytes`, `docker_mcp_host`, and `podman_mcp_host`.  `roleapi_timeout_seconds` can set both lawyer and juror opportunity timeouts unless `lawyer_timeout_seconds` or `juror_timeout_seconds` is provided.
 
 For `mode: "direct"`, the create request accepts `external_roles` to expose selected roles through the Role API while leaving agent startup to the caller.  Direct mode uses `roleapi_timeout_seconds` for external opportunities.  It does not start MCP, OpenClaw, or Pi processes.
+
+Attested ADC runs use the same `POST /clerk/v1/cases` input shape for the case itself: the request supplies `complaint_path`, optional `case_id`, optional `run_id`, and optional `out_dir`.  The request adds `execution.mode: "attested"` and an `execution.attestation` object, while the service supplies any defaults configured through `adc service --attested-*` flags.  The first attested ADC path supports complaint input only and rejects `scenario_path` and local runtime override fields until those fields have explicit attestation support.
+
+The attested driver packages the complaint and linked local files into a deterministic case packet before it starts the exec AMI.  The exec container downloads `auth.json`, `keys.sh`, `case.tar.gz`, and `case-packet.json` from `INPUT_PREFIX`, verifies the packet hashes, runs `adc run --complaint` inside the attested workload image, uploads live `events.ndjson`, and writes terminal artifacts to `OUTPUT_PREFIX`.  The service marks an attested case `completed` only after the driver verifies the attestation and extracts a readable `adc-output/run.json`.
+
+Start the service with attested defaults when callers should not repeat the driver path, S3 roots, AMI id, and PCR values in every request.  The service flags correspond to the lower-level `tools/run-adc-attested.py` options, and request-level attestation fields can override them when needed.  The detailed image build, S3 layout, and verification procedure live in [ADC Docker Image Runbook](Dockerfile.md) and [Attested ADC Dev Host Requirements](docs/attested-dev-host.md).
+
+```bash
+.bin/adc service \
+  --listen 127.0.0.1:19870 \
+  --output-root out/adc-service \
+  --adc-bin .bin/adc \
+  --engine .bin/adcengine \
+  --attested-driver "$(pwd)/tools/run-adc-attested.py" \
+  --attested-uv uv \
+  --attested-input-prefix s3://agentcourt-data/arbattest/adc-inputs/adc-REPLACE_WITH_STAMP \
+  --attested-output-root s3://agentcourt-data/arbattest/adc-runs \
+  --attested-exec-ami ami-011f957fe91cf7b81 \
+  --attested-expected-pcr4 83AC49DFAA5D76939970E1568472FF463FBE90C4038D000D31F6C0520F583D1DD51CE0C103CEB26E4B773AAD99A4B3B4 \
+  --attested-expected-pcr7 98441C7F7625D10058C47683AEC486CE311C633235EB555593A7EE791121E3578AE72D04ECEF661F272D59058B77AF35
+```
+
+Create an attested complaint-based child case with verification required.  The artifact and result endpoints read from the extracted `adc-output/` directory after completion.  The attestation events endpoint reads the live S3 event object while the driver is still running when no local event file exists.
+
+```bash
+curl -sS -X POST http://127.0.0.1:19870/clerk/v1/cases \
+  -H 'content-type: application/json' \
+  --data '{
+    "mode": "run",
+    "case_id": "adc-attested-ex1",
+    "complaint_path": "examples/ex1/complaint.md",
+    "out_dir": "out/adc-service/adc-attested-ex1",
+    "execution": {
+      "mode": "attested",
+      "attestation": {
+        "verify": true
+      }
+    }
+  }'
+```
 
 `POST /clerk/v1/cases/{case_id}/kill` applies only while the service has an attached active child process for that case.  Completed, failed, killed, or detached cases return a conflict response and keep their existing status.  The endpoint records the case as `killing` first, stops the child process, and lets the child watcher record the final `killed` status.
 

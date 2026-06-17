@@ -84,6 +84,43 @@ func TestOpenClawCodexAuthCommandImportsAccessToken(t *testing.T) {
 	}
 }
 
+func TestStageOpenClawCodexAuthUsesContainerReadableModes(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	authPath := filepath.Join(root, "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{"tokens":{"access_token":"token-1"}}`), 0o600); err != nil {
+		t.Fatalf("write auth: %v", err)
+	}
+	state := &runState{
+		opts: Options{
+			OutputDir: root,
+		},
+		openClawAuth: openClawAuthConfig{
+			Mode:          "codex",
+			CodexAuthPath: authPath,
+		},
+	}
+	home, err := state.stageOpenClawCodexAuth("plaintiff")
+	if err != nil {
+		t.Fatalf("stage auth: %v", err)
+	}
+	homeInfo, err := os.Stat(home)
+	if err != nil {
+		t.Fatalf("stat home: %v", err)
+	}
+	if got := homeInfo.Mode().Perm(); got != 0o777 {
+		t.Fatalf("home mode = %o, want 777", got)
+	}
+	authInfo, err := os.Stat(filepath.Join(home, "auth.json"))
+	if err != nil {
+		t.Fatalf("stat staged auth: %v", err)
+	}
+	if got := authInfo.Mode().Perm(); got != 0o666 {
+		t.Fatalf("auth mode = %o, want 666", got)
+	}
+}
+
 func TestIsConnectionRefused(t *testing.T) {
 	t.Parallel()
 

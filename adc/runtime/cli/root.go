@@ -13,6 +13,8 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) error {
 	switch args[0] {
 	case "case":
 		return RunCase(args[1:], stdout, stderr)
+	case "case-packet":
+		return RunCasePacket(args[1:], stdout, stderr)
 	case "complain":
 		return RunComplain(args[1:], stdout, stderr)
 	case "llm":
@@ -39,6 +41,8 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) error {
 		switch args[1] {
 		case "case":
 			return RunCase([]string{"-h"}, stdout, stderr)
+		case "case-packet":
+			return RunCasePacket([]string{"-h"}, stdout, stderr)
 		case "complain":
 			return RunComplain([]string{"-h"}, stdout, stderr)
 		case "llm":
@@ -72,6 +76,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Subcommands:")
 	fmt.Fprintln(w, "  case       Read a complaint, plan both sides, and run the case")
+	fmt.Fprintln(w, "  case-packet  Build an attested-run complaint packet")
 	fmt.Fprintln(w, "  complain   Draft complaint.md from a situation markdown file")
 	fmt.Fprintln(w, "  llm        Send one prompt through the runtime model client")
 	fmt.Fprintln(w, "  mcp        Run the ADC MCP adapter")

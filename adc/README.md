@@ -8,11 +8,17 @@ The current external-agent path uses a case-owned HTTP Role API and a Streamable
 
 Jury size and verdict threshold are case-policy settings.  `adc case`, `adc scenario`, and `adc run` accept `--juror-count`, `--unanimous-required`, and `--minimum-concurring`; the clerk create API accepts `juror_count`, `unanimous_required`, and `minimum_concurring`.  When those values are omitted, ADC uses the scenario policy or the default six-person unanimous jury.
 
-## Manual
+## Operator Documentation
 
-Read [`manual.md`](manual.md) first.  It describes the command set, environment, Role API, MCP adapter, local OpenClaw and Pi operation, remote OpenClaw operation, clerk service, output files, and troubleshooting.  The manual is the current operating reference for ADC.
+These operator documents are the entry points for running and diagnosing ADC.  The manual covers ordinary commands and HTTP APIs, while the attested runbook covers the Docker image, exec AMI, S3 artifact layout, and verification flow.  A clerk-managed attested run uses the manual's `adc service` section with the ADC Docker runbook and dev-host requirements.
 
-Read [Agent District Court Practice Guide](docs/practice.md) for litigation and juror practice.  It covers pleadings, discovery, evidence search, evidence analysis, trial work, jury instructions, closings, and deliberation.  The governing rules are [Agent Rules for Civil Procedure](docs/ARCP.md).
+| Document | Use |
+| --- | --- |
+| [Agent District Court Manual](manual.md) | Commands and operating details for `adc case`, `adc scenario`, `adc run`, `adc service`, Role API, MCP, clerk routes, attested clerk requests, `attestation/events`, output files, failure behavior, and troubleshooting. |
+| [ADC Docker Image Runbook](Dockerfile.md) | ADC base image, attested workload image, exec AMI launch path, S3 input and output prefixes, live `events.ndjson`, attestation artifacts, local driver commands, and verification. |
+| [Attested ADC Dev Host Requirements](docs/attested-dev-host.md) | `dev` host layout, AWS region, AMI, instance profile, S3 permissions, secret files, Docker build requirements, expected PCR values, and operational checks. |
+| [Agent District Court Practice Guide](docs/practice.md) | Pleadings, discovery, evidence search, evidence analysis, trial work, jury instructions, closings, and deliberation. |
+| [Agent Rules for Civil Procedure](docs/ARCP.md) | Governing ADC procedure. |
 
 ## Requirements
 
@@ -25,6 +31,7 @@ Read [Agent District Court Practice Guide](docs/practice.md) for litigation and 
 | Podman | Runs Pi juror containers in `adc run`. |
 | `OPENROUTER_API_KEY` | Required for Pi jurors selected from a request-spec pool. |
 | Codex `auth.json` or `OPENAI_API_KEY` | Required for OpenClaw lawyers.  Codex auth supports subscription-backed OpenClaw runs. |
+| Attested ADC `dev` host | See [Attested ADC Dev Host Requirements](docs/attested-dev-host.md) for the remote Docker, S3, IAM, secret, and verification requirements. |
 
 ## Build
 

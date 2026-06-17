@@ -1,5 +1,36 @@
 # Development Notes
 
+## 2026-06-17: Attested ADC complaint path
+
+### References
+
+- ADC Docker runbook: [`Dockerfile.md`](Dockerfile.md)
+- ADC dev-host requirements: [`docs/attested-dev-host.md`](docs/attested-dev-host.md)
+- Attested ADC driver: [`tools/run-adc-attested.py`](tools/run-adc-attested.py)
+- Exec workload script: [`tools/run-adc.sh`](tools/run-adc.sh)
+- Exec container entrypoint: [`attest/exec-container-entrypoint.sh`](attest/exec-container-entrypoint.sh)
+- Clerk service attestation support: [`runtime/service/attested.go`](runtime/service/attested.go)
+- Complaint packet builder: [`runtime/casepacket/case_packet.go`](runtime/casepacket/case_packet.go)
+
+### Decisions
+
+The first ADC attested path supports only `complaint_path`.  The driver packages the complaint and linked local files into `case.tar.gz` and `case-packet.json`, uploads those objects under `INPUT_PREFIX`, and requires verification before the clerk service can mark the case completed.  Scenario input and local runtime overrides remain rejected until each field has an explicit attested interpretation.
+
+ADC uses its own base image and glue image.  The base image builds `.bin/adc`, embeds a Pi juror root filesystem, and includes the Docker CLI.  The glue image adds AWS CLI, `nitro-tpm-attest`, TSS libraries, and the ADC exec entrypoint.
+
+The clerk service uses `execution.mode = "attested"` with an `execution.attestation` object.  It starts the Python driver, marks the service record running after the driver starts, exposes `/attestation/events`, and reads results, artifacts, and evidence from the extracted `adc-output/` directory after verification.  The service treats a zero driver exit without `verification.log` and readable `adc-output/run.json` as a failed service record.
+
+ADC local OpenClaw Codex auth staging now matches the working AAR and AARD behavior.  The staged Codex home is mode `0777`, and `auth.json` is mode `0666`, because OpenClaw reads the mounted file as a container user that may not match the host user.  The attested run still excludes those staged auth directories from uploaded ADC archives.
+
+### Verification
+
+- [x] `go test ./adc/runtime/casepacket`
+- [x] `go test ./adc/runtime/service`
+- [x] `go test ./adc/runtime/localrun`
+- [x] `go test ./adc/runtime/...`
+- [x] `sh -n adc/tools/run-adc.sh adc/tools/run-container-poc.sh adc/attest/exec-container-entrypoint.sh`
+- [x] `python3 -m py_compile adc/tools/run-adc-attested.py`
+
 ## 2026-06-06: ADC practice guide rewrite
 
 ### References
