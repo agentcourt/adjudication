@@ -2,6 +2,18 @@
 
 ## 2026-06-17
 
+### Manual review
+
+Reference: `manual.md`, `Dockerfile.md`, `docs/attested-dev-host.md`
+
+The manual states when AARD is the right procedure: one question, numeric answers from 0 through 100, and one output directory as the record for one run.  The guidance names the files an operator should preserve together, including `run.json`, `state.json`, `transcript.md`, `digest.md`, `events.ndjson`, `work-notes.ndjson`, and evidence files.  It also distinguishes AARD from AAR where the desired output is a binary demonstrated or not-demonstrated decision under an evidence standard.
+
+The attested Clerk text points to the AARD Docker runbook and dev-host requirements for the image build, S3 layout, expected PCR values, and verification checks.  The troubleshooting section includes attested Clerk diagnosis: inspect the Clerk record, `/attestation/events`, driver logs, the S3 input prefix, the S3 output prefix, and verification files before relying on console output.  The existing events endpoint documentation remains in the Clerk section and has matching troubleshooting guidance.
+
+### README review
+
+The README uses the same documentation table as ADC, AAR, and evals.  It links to the manual, Docker runbook, dev-host requirements, practice guide, and rules.  It also names the main output files and points attested output details to the Docker runbook.
+
 ### Attested Clerk AARD test
 
 The first real Clerk-managed attested AARD run used `case_id=clerk-attested-aard-ex1-20260617T005035Z` and `run_id=aard-ex1-20260617T005035Z`.  The exec instance `i-019f74892947bb713` loaded `arbd-glue:poc`, downloaded `auth.json` and `keys.sh` from the S3 input prefix, and then failed before AARD produced `events.ndjson` or a verifiable attestation.  The terminal S3 objects were `run.log` and `aard-partial.tar.gz`.
@@ -40,7 +52,7 @@ AARD now mirrors AAR's attested Clerk execution path.  The service accepts `exec
 
 The AARD attested workload uses `run-aard.sh`, `run-arbd-attested.py`, `arbd/attest/exec-container-entrypoint.sh`, `arbd/Dockerfile`, and `arbd/Dockerfile.glue`.  The S3 prefixes use `aard-inputs` and `aard-runs`, the workload archive is `aard-output.tar.gz`, and failed remote runs can leave `aard-partial.tar.gz` for diagnosis.  Clerk artifact, result, evidence, and `attestation/events` routes read from `aard-output/` after verification and from the top-level downloaded attestation files where appropriate.
 
-The AARD documentation now has the same operator entry points as AAR: `README.md`, `manual.md`, `Dockerfile.md`, and `docs/attested-dev-host.md`.  The AARD-specific wrapper `tools/run-one-attested-arbd.sh` stages secrets, chooses timestamped S3 prefixes, invokes `run-arbd-attested.py`, and verifies the attestation.  The container proof script `tools/run-container-poc.sh` was copied for the AARD image name so the runbook file table names existing files.
+The AARD documentation uses the same operator document set as AAR: `README.md`, `manual.md`, `Dockerfile.md`, and `docs/attested-dev-host.md`.  The AARD-specific wrapper `tools/run-one-attested-arbd.sh` stages secrets, chooses timestamped S3 prefixes, invokes `run-arbd-attested.py`, and verifies the attestation.  The container proof script `tools/run-container-poc.sh` was copied for the AARD image name so the runbook file table names existing files.
 
 - [x] Add `aard case-packet`.
 - [x] Add attested Clerk config, request validation, driver command construction, completion verification, artifact routing, evidence routing, and `attestation/events`.
@@ -52,17 +64,17 @@ The AARD documentation now has the same operator entry points as AAR: `README.md
 
 ### Initial fork from `arb`
 
-`arbd/` began as a bounded fork of `arb/`, but it does not preserve the binary decision model.  The fork keeps the same high-level merits sequence and the same council-member machinery.  It changes the complaint from `Proposition` to `Question`, changes the policy field from standard-of-evidence framing to `judgment_standard`, and changes the deliberation act from a binary vote to one integer answer in `[0,100]`.
+`arbd/` began as a bounded fork of `arb/`, but it does not preserve the binary decision model.  The fork keeps the same merits sequence and the same council-member machinery.  It changes the complaint from `Proposition` to `Question`, changes the policy field from standard-of-evidence framing to `judgment_standard`, and changes the deliberation act from a binary vote to one integer answer in `[0,100]`.
 
-The final result is the answer set itself.  The runtime exports that result as a Go map keyed by `member_id`.  The engine does not compute a threshold outcome, an aggregate, or a `no_majority` result.  Closure now follows one condition: every seated council member has answered once in the round.
+The final result is the answer set.  The runtime exports that result as a Go map keyed by `member_id`.  The engine does not compute a threshold outcome, an aggregate, or a `no_majority` result.  Closure now follows one condition: every seated council member has answered once in the round.
 
 ### Proof scope
 
-The copied `arb` proof surface was wrong for `arbd`, because those files proved properties of threshold closure, substantive-outcome viability, and binary neutrality.  The new proof set is narrow and direct.  It proves initialization rules, ordered merits flow, bounded council answers, answer completeness on closure, and the current removal guards.
+The copied `arb` proof files did not fit `arbd`, because those files proved properties of threshold closure, substantive-outcome viability, and binary neutrality.  The new proof set is narrow and direct.  It proves initialization rules, ordered merits sequence, bounded council answers, answer completeness on closure, and the current removal guards.
 
 ### Documentation boundary
 
-This first version keeps the new tree small on purpose.  It has one example, one proof batch, and one Makefile demo path.  It avoids importing `arb`'s binary-vote notes and examples under misleading names.
+This first version keeps the new tree limited.  It has one example, one proof batch, and one Makefile demo path.  It avoids importing `arb`'s binary-vote notes and examples under misleading names.
 
 ### Example 1 refresh
 
@@ -78,7 +90,7 @@ The current Council API accepts a numeric `answer` for `submit_council_answer` a
 
 `arbd/docs/` now mirrors the core non-proof `arb/docs/` set with procedure-specific replacements: `ARAP.md`, `councils.md`, `goals.md`, `params.md`, and `practice.md`.  The text stays close to the working implementation rather than speculating about later aggregation or convergence designs.
 
-The proof-oriented `arb/docs/` files were omitted on purpose.  `arbd` has a smaller proof surface, and the user asked for the procedural and practical documents first.  The documentation review pass focused on direct statement, explicit procedure description, and removal of binary-outcome phrasing that did not fit the degree model.
+The proof-oriented `arb/docs/` files were omitted.  `arbd` has a smaller proof tree, and the user asked for the procedural and practical documents first.  The documentation review pass focused on direct statement, explicit procedure description, and removal of binary-outcome phrasing that did not fit the degree model.
 
 ### Example 2
 
@@ -88,7 +100,7 @@ The proof-oriented `arb/docs/` files were omitted on purpose.  `arbd` has a smal
 
 ### Example 3
 
-`arbd/examples/ex3/` reuses the same 2024 base story as `ex2`, but pairs it with a 2025 story that is only loosely related.  The second story keeps some of the same named places and people, along with the same near-future municipal-AI setting, but changes the conflict, the central mechanism, the scene sequence, and most of the phrasing.  The point was to give `arbd` a case where common world-building and cast should not by themselves force a high score.
+`arbd/examples/ex3/` reuses the same 2024 base story as `ex2`, but pairs it with a 2025 story that is only loosely related.  The second story keeps some of the same named places and people, along with the same near-future municipal-AI setting, but changes the conflict, the central mechanism, the scene sequence, and most of the phrasing.  The example tests whether common world-building and cast alone yield a high score.
 
 `arbd/Makefile` now has an `ex3` target as well.  The live path is `aard run ex3`, because the direct case process waits for external clients.  Earlier live runs on this example produced lower answers than `ex2`, which fits the intended design of the example.
 

@@ -1,5 +1,9 @@
 # Development Notes
 
+## 2026-06-17 Manual Split
+
+Moved the detailed evals README content into `manual.md` and kept `README.md` as a short index.  The manual contains purpose, operator guidance, command reference material, endpoint-variant procedures, scoring model, scope, and troubleshooting.  The README links to the manual, sampling runbook, and model-inventory notes, and keeps validation commands, a deterministic local test, credential notes, and the main file map.
+
 ## 2026-05-31 End-To-End Sampling Test
 
 Goal: run a small end-to-end sampling test over five OpenRouter root models.  The test shape uses one eval trial, two genes, one sample per gene, the generic persona, PCA with dimensions capped by available rows, per-gene clustering, variant/persona aggregation, and tuple-uniform pool sampling.
@@ -12,7 +16,7 @@ Survivors: Mistral Large 2407 on Mistral, Qwen3 32B on DeepInfra, Qwen3 32B on N
 
 ## 2026-05-31 End-To-End Runner
 
-Added `tools/run_end_to_end.py`, a uv-runnable entry point for the full endpoint-variant pool pipeline.  It calls the existing inventory, eval, filter, gene inference, PCA, clustering, aggregation, and tuple-pool tools, and writes a single run directory with `manifest.json`, `commands.jsonl`, stage subdirectories, and `summary.json`.  The runner supports explicit `--model-id` values, sampled roots, resume, dry-run, stage stops, configurable filter criteria, configurable genes and samples, PCA dimension capping, and pool sampling parameters.
+Added `tools/run_end_to_end.py`, a uv-runnable command for the endpoint-variant pool pipeline.  It calls the existing inventory, eval, filter, gene inference, PCA, clustering, aggregation, and tuple-pool tools, and writes a single run directory with `manifest.json`, `commands.jsonl`, stage subdirectories, and `summary.json`.  The runner supports explicit `--model-id` values, sampled roots, resume, dry-run, stage stops, configurable filter criteria, configurable genes and samples, PCA dimension capping, and pool sampling parameters.
 
 Validation: `uv run --script tools/run_end_to_end.py --help` passed.  Dry-run over `/tmp/adjudication-evals-orchestrator-dry/dry` wrote the manifest and recorded the inventory command without calling OpenRouter.  Resume validation over `/tmp/adjudication-evals-orchestrator-resume-test/run` reused today’s completed inventory, eval, and gene inference artifacts, then ran filter, PCA, clustering, aggregation, and pool sampling to completion without live API calls.
 

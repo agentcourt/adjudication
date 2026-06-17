@@ -1,10 +1,10 @@
-# Agent Degree Arbitration Manual
+# Agent Arbitration Degree Manual
 
 ## Overview
 
-Agent Degree Arbitration, or AARD, runs an arbitration about one question and returns degree answers.  A complaint states the question, two lawyers build and argue the record, and a council answers with integers from 0 through 100 under the configured judgment standard.  The runtime keeps the case record, enforces turn order and limits, stores admitted evidence, records private lawyer work notes outside the record, and writes a final packet for later review.
+Agent Arbitration Degree, or AARD, runs an arbitration about one question and returns degree answers.  A complaint states the question, two lawyers build and argue the record, and a council answers with integers from 0 through 100 under the configured judgment standard.  The runtime keeps the case record, enforces turn order and limits, stores admitted evidence, records private lawyer work notes outside the record, and writes a final packet for later review.
 
-AARD supports several operating modes.  `aard case` runs one case and exposes HTTP APIs for lawyers, observers, and optional council members.  `aard run` starts a full local arbitration with OpenClaw lawyer containers, a local MCP server, and Pi council agents.  `aard service` runs a long-lived HTTP service that can start and track many `aard run` cases through the Clerk API.  `aard mcp` exposes the case and role APIs through MCP for lawyers, observers, and council members that use MCP instead of direct HTTP.
+AARD supports several operating modes.  `aard case` runs one case and exposes HTTP APIs for lawyers, observers, and optional council members.  `aard run` starts a complete local arbitration with OpenClaw lawyer containers, a local MCP server, and Pi council agents.  `aard service` runs a long-lived HTTP service that can start and track many `aard run` cases through the Clerk API.  `aard mcp` exposes the case and role APIs through MCP for lawyers, observers, and council members that use MCP instead of direct HTTP.
 
 The normal end-to-end path is `aard run`.  It starts the case process in Go, starts the AARD MCP server, starts OpenClaw lawyers unless a role is assigned to a remote OpenClaw, starts Pi council agents when deliberation begins, and writes final output under one run directory.  The service path uses the same `aard run` command as a child process; the Clerk API gives an operator HTTP endpoints to create, list, and kill those full runs.
 
@@ -40,14 +40,20 @@ The case proceeds through lawyer phases and then deliberation.  The lawyer phase
 
 The runtime distinguishes record evidence from work notes.  Evidence is part of the case record and may be cited by `evidence_id`.  Work notes are private operator-facing notes sent by lawyers through `send_work_notes`; they are stored in `work-notes.ndjson` and are not evidence, filings, or case events.
 
+## Operator Guidance
+
+Use AARD when the proceeding should answer one question with one or more scores from 0 through 100.  Keep the question narrow enough that lawyers can identify evidence, attack missing provenance, and argue an answer range within the configured filing limits.  Use AAR instead when the desired output is a binary demonstrated or not-demonstrated decision under an evidence standard.
+
+Treat the output directory as the case record for one run.  Preserve `run.json`, `state.json`, `transcript.md`, `digest.md`, `events.ndjson`, `work-notes.ndjson`, `evidence-manifest.json`, and `evidence-store/` together.  Use `events.ndjson` to reconstruct process sequence, `transcript.md` to read the record, `digest.md` to check the answer set, and `work-notes.ndjson` to review lawyer planning that stayed outside the evidentiary record.
+
 ## Repository Layout
 
 | Path | Meaning |
 | --- | --- |
-| `runtime/cmd/aard/` | Go command-line entry point for `aard`. |
+| `runtime/cmd/aard/` | Go command-line package for `aard`. |
 | `runtime/proceeding/` | Case runner, Lawyer API, Council API, evidence storage, rendering, and policy logic. |
 | `runtime/mcp/` | MCP server that forwards tool calls to the Lawyer and Council APIs. |
-| `runtime/localrun/` | `aard run`: full local run orchestration for OpenClaw lawyers, MCP, and Pi council agents. |
+| `runtime/localrun/` | `aard run`: local orchestration for OpenClaw lawyers, MCP, and Pi council agents. |
 | `runtime/service/` | `aard service`: long-running HTTP service, role API proxy, and Clerk API. |
 | `engine/` | Lean degree-arbitration engine used by the Go runtime. |
 | `prompts/` | Lawyer and council prompt files used by the case runner. |
@@ -86,7 +92,7 @@ lake build Proofs
 
 `aard run` uses Docker for OpenClaw lawyer containers and Podman for Pi council agents.  The default OpenClaw image is `ghcr.io/openclaw/openclaw:latest`.  The default Pi image is `agentcourt-pi-sandbox`, unless `PI_CONTAINER_IMAGE` is set and `--pi-image` is omitted.  The default Pi MCP adapter package is `npm:pi-mcp-adapter`.
 
-Pi council agents require `OPENROUTER_API_KEY`.  `aard run` validates that the variable exists before starting.  Council model, provider, quantization, request settings, and persona come from the selected entries in `pool.jsonl`.  AARD requires JSONL request-spec records; legacy model-string pool records are rejected.
+Pi council agents require `OPENROUTER_API_KEY`.  `aard run` validates that the variable exists before starting.  Council model, provider, quantization, request settings, and persona come from the selected council pool.  AARD requires JSONL request-spec records; legacy model-string pool records are rejected.
 
 OpenClaw lawyers can use a Codex auth file or `OPENAI_API_KEY`.  The usual local path is Codex auth: `--openclaw-auth codex --openclaw-codex-auth PATH`.  If `--openclaw-auth auto` is used, AARD first looks for a readable Codex auth file and then falls back to `OPENAI_API_KEY`.  The default Codex auth path is `$CODEX_HOME/auth.json` when `CODEX_HOME` is set, otherwise `$HOME/.codex/auth.json`.
 
@@ -147,7 +153,7 @@ Use `--file` to provide explicit initial evidence.  The flag may be repeated.  S
 | `aard case-packet` | Build `case.tar.gz` and `case-packet.json` for attested complaint input. |
 | `aard case` | Run one case and expose the private Lawyer and optional Council APIs. |
 | `aard mcp` | Run an MCP server that forwards tools to a Case API or service API base. |
-| `aard run` | Run one full local arbitration with OpenClaw lawyers and Pi council agents. |
+| `aard run` | Run one complete local arbitration with OpenClaw lawyers and Pi council agents. |
 | `aard service` | Run the long-lived HTTP service, including Clerk APIs for full `aard run` cases. |
 
 Use command help to see current flags:
@@ -315,7 +321,7 @@ set -a
 . path/to/aard-env.sh
 set +a
 
-pool="$(pwd)/pool.jsonl"
+pool="../common/data/personas/pool.jsonl"
 
 .bin/aard run \
   --openclaw-auth codex \
@@ -379,7 +385,7 @@ Codex auth mode copies only `auth.json` into a per-lawyer Codex home under the r
 Use this command shape for local runs:
 
 ```bash
-pool="$(pwd)/pool.jsonl"
+pool="../common/data/personas/pool.jsonl"
 
 .bin/aard run \
   --openclaw-auth codex \
@@ -407,7 +413,7 @@ Remote runs need a public MCP base URL that the remote OpenClaw process can reac
 ```bash
 out="out/ex1-remote-plaintiff-$(date -u +%Y%m%d%H%M%S)"
 AARD_HOST=aard-host.example
-pool="$(pwd)/pool.jsonl"
+pool="../common/data/personas/pool.jsonl"
 
 .bin/aard run \
   --out-dir "$out" \
@@ -494,7 +500,7 @@ The service role proxy routes are for direct `/api/v1/cases` records.  A Clerk-s
 Create a case:
 
 ```bash
-pool="$(pwd)/pool.jsonl"
+pool="../common/data/personas/pool.jsonl"
 
 curl -sS -X POST http://127.0.0.1:19790/clerk/v1/cases \
   -H 'content-type: application/json' \
@@ -511,7 +517,7 @@ EOF
 Create a case from an explicit complaint:
 
 ```bash
-pool="$(pwd)/pool.jsonl"
+pool="../common/data/personas/pool.jsonl"
 
 curl -sS -X POST http://127.0.0.1:19790/clerk/v1/cases \
   -H 'content-type: application/json' \
@@ -588,6 +594,8 @@ Attested Clerk execution accepts the same case selectors as local Clerk executio
 The `execution` object is optional for existing local Clerk clients.  If it is present, `execution.mode` is required and must be `local` or `attested`; local mode rejects nested attestation config.  Attested mode requires `execution.attestation`, an S3 `input_prefix`, an exec AMI, expected PCR4, expected PCR7, and the attested driver path, with those values supplied by service flags or by the request.
 
 Attested mode verifies before completion.  The service passes `--verify` to the attested driver and rejects `verify: false`.  The Clerk record reaches `completed` only after the driver exits successfully, writes `verification.log`, extracts `aard-output/`, and leaves a readable `aard-output/run.json`.
+
+[AARD Docker Image Runbook](Dockerfile.md) and [Attested AARD Dev Host Requirements](docs/attested-dev-host.md) document the image build, S3 layout, dev-host requirements, artifact set, and verification checks for attested execution.  The manual describes the Clerk API shape and service behavior, while those runbooks describe the remote execution environment.  Keep the AMI id, expected PCR values, image tar S3 path, input prefixes, and output prefixes in those runbooks current when rebuilding the exec AMI or attested workload image.
 
 The `out_dir` field, when present, must name an immediate child of the service output root.  If it is omitted, Clerk uses `<out-root>/<case_id>`.  Clerk refuses to start a run in a nonempty output directory.
 
@@ -815,7 +823,7 @@ set -a
 . path/to/aard-env.sh
 set +a
 
-pool="$(pwd)/pool.jsonl"
+pool="../common/data/personas/pool.jsonl"
 
 .bin/aard run \
   --openclaw-auth codex \
@@ -828,7 +836,7 @@ Run `ex3` with a dedicated output directory:
 
 ```bash
 out="out/ex3-$(date -u +%Y%m%d%H%M%S)"
-pool="$(pwd)/pool.jsonl"
+pool="../common/data/personas/pool.jsonl"
 
 .bin/aard run \
   --out-dir "$out" \
@@ -857,7 +865,7 @@ curl -sS -X POST http://127.0.0.1:19790/clerk/v1/cases \
     "example": "ex1",
     "openclaw_auth": "codex",
     "openclaw_codex_auth_path": "$HOME/.codex/auth.json",
-    "council_pool_path": "$(pwd)/pool.jsonl"
+    "council_pool_path": "../common/data/personas/pool.jsonl"
 }
 EOF
 ```
@@ -868,7 +876,7 @@ If `aard run` fails before starting agents, check environment variables first.  
 
 If OpenClaw containers cannot reach MCP, check the MCP URL from the same network context as the container or remote OpenClaw.  A direct terminal `curl` may not prove that an agent process has the same access.  Test `/health` on the MCP public base URL and fix any VM, NAT, firewall, or local-forward problem before starting the remote lawyer.
 
-If a remote OpenClaw says the MCP health endpoint disappeared after deliberation, check whether `aard run` already finished and shut down MCP.  Final results live in the local output directory, especially `run.json`, `digest.md`, and `transcript.md`.  The remote OpenClaw may not be able to retrieve the final result through MCP after the local run exits.
+If a remote OpenClaw says the MCP health endpoint disappeared after deliberation, check whether `aard run` already finished and shut down MCP.  Final results are in the local output directory, especially `run.json`, `digest.md`, and `transcript.md`.  The remote OpenClaw may not be able to retrieve the final result through MCP after the local run exits.
 
 If Clerk reports `case_not_attached` for `/kill`, the current service process found an active-looking `clerk.json` record but has no process handle for it.  This can happen after service restart.  Inspect the process table and the recorded `pid`, then decide outside the API whether a live child process still exists.
 
@@ -877,3 +885,9 @@ If a run directory is rejected as nonempty, choose a new output directory.  AARD
 If a lawyer fails by deadline or invalid attempts, inspect `events.ndjson`, `work-notes.ndjson`, `logs/mcp.stderr`, and the lawyer process logs under `logs/`.  The failure object in `run.json` identifies the role, phase, opportunity id, reason, and message.  Treat that failure as a case failure, not a council-member dismissal.
 
 If a council member fails, inspect `events.ndjson` for `council_member_removed` and related opportunity events.  Also inspect the corresponding Pi process stdout and stderr logs.  A single dismissed council member can be a valid case path if the remaining seated members produce final answers.
+
+If an attested Clerk run stays `running` or reaches `failed`, inspect the Clerk record before using SSH or EC2 console output.  The record contains the resolved `input_prefix`, `output_prefix`, exec AMI, local output directory, verification state, and driver logs.  Use `/attestation/events` to check whether `aard run` is still writing lifecycle events, then read `progress.log`, `launcher.log`, and the S3 output prefix named by the record.
+
+If an attested run fails before lawyers start, check the exact S3 input prefix first.  The prefix must contain `auth.json` and `keys.sh`, and complaint-packet mode also needs `case.tar.gz` and `case-packet.json` written by the driver.  Missing secrets, stale Codex auth, an old attested workload image, or an OpenClaw container that lacks host networking will fail before lawyer filings begin.
+
+If attestation verification fails, treat the run as unverified even when `aard-output.tar.gz` exists.  Compare `manifest.json`, `manifest.sha384`, `attestation.txt`, and `verification.log`, then check the expected PCR values in the AARD Docker runbook before accepting any AMI or image change.  A completed AARD output packet without verified attestation can support debugging, but the Clerk record should not be treated as an attested completion.

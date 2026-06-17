@@ -1,23 +1,23 @@
 # Agent District Court
 
-Agent District Court, or ADC, is an experimental civil-litigation runtime for AI legal agents.  The Go runtime manages intake, prompts, storage, role APIs, reports, and local agent processes.  The Lean engine enforces procedure and state transitions under the Agent Rules for Civil Procedure.
+Agent District Court (ADC) is an experimental civil-litigation runtime for AI legal agents.  The Go runtime manages intake, prompts, storage, role APIs, reports, and local agent processes.  The Lean engine enforces procedure and state transitions under the Agent Rules for Civil Procedure.
 
 ADC starts from either a situation file, a complaint, or a scenario JSON file.  A situation file can be turned into a complaint with `adc complain`.  A complaint can be turned into a one-claim case packet and then run through pleadings, motions, discovery, trial, verdict, and judgment.
 
 The current external-agent path uses a case-owned HTTP Role API and a Streamable HTTP MCP adapter.  OpenClaw lawyers connect through MCP.  Pi jurors connect through MCP when `adc run` starts a fresh juror agent for an active juror opportunity from a JSONL request-spec pool.  If a deliberating juror agent fails, ADC removes that juror from the effective concurrence count and derives any verdict from the eligible jurors who remain.
 
-Jury size and verdict threshold are case-policy settings.  `adc case`, `adc scenario`, and `adc run` accept `--juror-count`, `--unanimous-required`, and `--minimum-concurring`; the clerk create API accepts `juror_count`, `unanimous_required`, and `minimum_concurring`.  When those values are omitted, ADC uses the scenario policy or the default six-person unanimous jury.
+Jury size and verdict threshold are case-policy settings.  `adc case`, `adc scenario`, and `adc run` accept `--juror-count`, `--unanimous-required`, and `--minimum-concurring`; the Clerk create API accepts `juror_count`, `unanimous_required`, and `minimum_concurring`.  When those values are omitted, ADC uses the scenario policy or the default six-person unanimous jury.
 
-## Operator Documentation
+## Documentation
 
-These operator documents are the entry points for running and diagnosing ADC.  The manual covers ordinary commands and HTTP APIs, while the attested runbook covers the Docker image, exec AMI, S3 artifact layout, and verification flow.  A clerk-managed attested run uses the manual's `adc service` section with the ADC Docker runbook and dev-host requirements.
+The manual documents commands and HTTP APIs.  The attested runbook documents the Docker image, exec AMI, S3 artifact layout, and verification procedure.  A Clerk-managed attested run uses the manual's `adc service` section with the ADC Docker runbook and dev-host requirements.
 
 | Document | Use |
 | --- | --- |
-| [Agent District Court Manual](manual.md) | Commands and operating details for `adc case`, `adc scenario`, `adc run`, `adc service`, Role API, MCP, clerk routes, attested clerk requests, `attestation/events`, output files, failure behavior, and troubleshooting. |
+| [Agent District Court Manual](manual.md) | Commands and operating details for `adc case`, `adc scenario`, `adc run`, `adc service`, Role API, MCP, Clerk routes, attested Clerk requests, `attestation/events`, output files, failure behavior, and troubleshooting. |
 | [ADC Docker Image Runbook](Dockerfile.md) | ADC base image, attested workload image, exec AMI launch path, S3 input and output prefixes, live `events.ndjson`, attestation artifacts, local driver commands, Clerk service sequence, verification, and troubleshooting. |
 | [Attested ADC Dev Host Requirements](docs/attested-dev-host.md) | `dev` host layout, AWS region, AMI, instance profile, S3 permissions, secret files, Docker build requirements, expected PCR values, and operational checks. |
-| `tools/run-one-attested-adc.sh` | One-complaint attested run helper that stages `auth.json` and `keys.sh`, selects run-specific S3 prefixes, and invokes the verified local driver. |
+| [Attested ADC run helper](tools/run-one-attested-adc.sh) | One-complaint attested run helper that stages `auth.json` and `keys.sh`, selects run-specific S3 prefixes, and invokes the verified local driver. |
 | [Agent District Court Practice Guide](docs/practice.md) | Pleadings, discovery, evidence search, evidence analysis, trial work, jury instructions, closings, and deliberation. |
 | [Agent Rules for Civil Procedure](docs/ARCP.md) | Governing ADC procedure. |
 
@@ -83,7 +83,7 @@ export OPENROUTER_API_KEY=REPLACE_WITH_KEY
   --openclaw-codex-auth PATH/TO/auth.json
 ```
 
-Run the clerk service:
+Run the Clerk service:
 
 ```bash
 .bin/adc service \
@@ -93,7 +93,7 @@ Run the clerk service:
   --engine .bin/adcengine
 ```
 
-Create a full local-agent case through the clerk service:
+Create a local-agent case through the Clerk service:
 
 ```bash
 curl -sS -X POST http://127.0.0.1:19870/clerk/v1/cases \
@@ -114,18 +114,18 @@ curl -sS -X POST http://127.0.0.1:19870/clerk/v1/cases \
 | Path | Purpose |
 | --- | --- |
 | `engine/` | Lean rule engine, proofs, and Lake project. |
-| `runtime/` | Go CLI, runtime, Role API, MCP adapter, local run code, and clerk service. |
+| `runtime/` | Go CLI, runtime, Role API, MCP adapter, local run code, and Clerk service. |
 | `agent-instructions/` | Templates passed to OpenClaw lawyers and Pi jurors. |
 | `etc/` | Court profile files. |
 | `examples/` | Example case source documents. |
 | `docs/` | Rules, practice guide, reference notes, proof notes, and procedure analysis. |
 | `analysis/` | Mermaid diagrams and explanatory notes. |
-| `manual.md` | Current operating manual. |
+| [Agent District Court Manual](manual.md) | Commands, APIs, outputs, and troubleshooting. |
 
 ## Output
 
-Run output normally contains `run.json`, `runtime.json`, `events.ndjson`, `run.db`, `transcript.md`, `digest.md`, and `work-notes.ndjson`.  Complaint-driven runs also write `normalized-case.json`, `plaintiff-strategy.md`, `defense-strategy.md`, and `generated-scenario.json`.  `adc run` adds process logs and local-agent metadata under the selected output directory.
+Run output contains `run.json`, `runtime.json`, `events.ndjson`, `run.db`, `transcript.md`, `digest.md`, and `work-notes.ndjson`.  Complaint-driven runs also write `normalized-case.json`, `plaintiff-strategy.md`, `defense-strategy.md`, and `generated-scenario.json`.  `adc run` adds process logs and local-agent metadata under the selected output directory.
 
 ## License
 
-The software is released under the MIT License in `LICENSE`.  Trademark and related notice terms are in `NOTICES.md`.
+The software is released under the repository-level MIT License in [../LICENSE](../LICENSE).  Trademark and related notice terms are in [../NOTICES.md](../NOTICES.md).

@@ -1,5 +1,19 @@
 # Development Notes
 
+## 2026-06-17
+
+### Manual review
+
+Reference: `manual.md`, `Dockerfile.md`, `docs/attested-dev-host.md`
+
+The manual states when AAR is the right procedure: one proposition, a binary demonstrated or not-demonstrated outcome, and one output directory as the record for one run.  The guidance names the files an operator should preserve together, including `run.json`, `state.json`, `transcript.md`, `digest.md`, `events.ndjson`, `work-notes.ndjson`, evidence files, and council-turn snapshots.  It also distinguishes AAR from AARD where the desired output is a numeric answer or supported degree.
+
+The Clerk section documents the attested events endpoint that the service exposes.  The attested Clerk text points to the AAR Docker runbook and dev-host requirements for the image build, S3 layout, expected PCR values, and verification checks.  The troubleshooting section includes attested Clerk diagnosis: inspect the Clerk record, `/attestation/events`, driver logs, the S3 input prefix, the S3 output prefix, and verification files before relying on console output.
+
+### README review
+
+The README uses the same documentation table as ADC, AARD, and evals.  It links to the manual, Docker runbook, dev-host requirements, practice guide, and rules.  It also names the main output files and points attested output details to the Docker runbook.
+
 ## 2026-06-16
 
 ### Attested live event monitoring
@@ -26,7 +40,7 @@ The attestation manifest now records `input_mode`, `aar_case_id`, `case_packet_k
 
 Reference: `attest/exec-container-entrypoint.sh`, `tools/run-arb-attested.py`, `runtime/service/clerk.go`
 
-The exec container entrypoint now rejects empty, absolute, newline-bearing, and bad-segment packet paths with a named validator rather than a literal-newline shell pattern.  It also requires EC2 metadata reads for `instance_id` and `ami_id`, so the attested manifest no longer records empty instance identity fields after an IMDS failure.  IMDSv2 token failure still falls back to tokenless IMDS because the host can permit IMDSv1, but the metadata read itself must succeed.
+The exec container entrypoint now rejects empty, absolute, newline-bearing, and bad-segment packet paths with a named validator rather than a literal-newline shell pattern.  It also requires EC2 metadata reads for `instance_id` and `ami_id`, so the attested manifest no longer records empty instance identity fields after an IMDS failure.  IMDSv2 token failure still falls back to tokenless IMDS because the host can permit IMDSv1, but the metadata read must succeed.
 
 The local attested driver no longer treats a failed S3 listing as an empty output prefix.  Remote temporary-directory cleanup and launched-instance termination now return errors; when cleanup fails during another failure, the driver reports both failures in one error.  The Clerk service no longer discards `clerk.json` persistence errors: synchronous paths return them, and asynchronous completion paths mark the in-memory record as failed when the final write fails.
 
@@ -46,11 +60,11 @@ Reference: `attest/exec-container-entrypoint.sh`, `tools/run-aar.sh`, `tools/run
 
 The exec container entrypoint now accepts `AAR_EXAMPLE`, validates it with the same path-safety boundary as `aar run`, defaults to `ex01`, and records the selected example in `manifest.json`.  If `RUN_ID` is absent in AAR mode, the default run ID is `aar-$AAR_EXAMPLE-$STAMP`; non-AAR modes keep the existing `run-$STAMP` default.  The AAR-owned `tools/run-aar.sh` launcher now passes `AAR_EXAMPLE` into the exec workload container and names default runs from the selected example.
 
-`Dockerfile.md` now documents the current attested execution path end to end.  It covers the base image, attested workload image, dev build and upload flow, launcher installation, S3 input staging, example input, local complaint packet input, the exec AMI command, artifact download, manifest and archive verification, attestation verification, and the known first-failure checks from the completed runs.  The documented generic path runs any checked-in example under `arb/examples/<name>` or any local complaint plus optional case files through the Go case-packet builder.
+`Dockerfile.md` now documents the current attested execution path end to end.  It covers the base image, attested workload image, dev build and upload sequence, launcher installation, S3 input staging, example input, local complaint packet input, the exec AMI command, artifact download, manifest and archive verification, attestation verification, and the known first-failure checks from the completed runs.  The documented generic path runs any checked-in example under `arb/examples/<name>` or any local complaint plus optional case files through the Go case-packet builder.
 
 `tools/run-arb-attested.py` is now the preferred local runner for this path.  It launches the existing exec AMI through `dev`, polls the S3 output prefix, writes local `progress.log` and `launcher.log`, downloads all terminal artifacts into the requested local directory, extracts the AAR archive, and can verify the manifest, archive hashes, attestation user data, and selected PCR values.  If terminal S3 artifacts appear while `exec.sh` is still polling, the runner terminates only the instance ID that `exec.sh` launched and stops the remote launcher.
 
-The AAR-specific runner scripts live in `tools/`: `run-aar.sh`, `run-arb-attested.py`, and `run-container-poc.sh`.  The `attest` repository keeps generic exec AMI and attestation utilities.  `/home/ec2-user/attest` on `dev` remains a runtime directory that can contain copied scripts from both source repositories.
+The AAR-specific runner scripts are in `tools/`: `run-aar.sh`, `run-arb-attested.py`, and `run-container-poc.sh`.  The `attest` repository keeps generic exec AMI and attestation utilities.  `/home/ec2-user/attest` on `dev` remains a runtime directory that can contain copied scripts from both source repositories.
 
 ## 2026-06-11
 
@@ -216,7 +230,7 @@ Reference: [Council HTTP API](../scratch/arb/councilapi.md)
 
 The Council API follows the Lawyer API architecture but binds each active client to `case_id` and `member_id`.  The HTTP server exposes `get`, `wait`, and `do`, and the MCP adapter only brokers those calls over Streamable HTTP.  The API keeps vote validation, deadlines, attempts, and evidence read budgets in AAR rather than moving that state into an agent adapter.
 
-The adapter uses one MCP session per case-member.  A failed or expired MCP session can be re-created with the same URL because AAR remains the source of the active opportunity and turn budget.  The council tool set is small enough to expose dynamically from the current Council API status without adding adapter-side arbitration rules.
+The adapter uses one MCP session per case-member.  A failed or expired MCP session can be re-created with the same URL because AAR remains the source of the active opportunity and turn budget.  The current council tool set can be exposed dynamically from the Council API status without adding adapter-side arbitration rules.
 
 ## 2026-06-01
 
@@ -236,7 +250,7 @@ The handbook now gives remote clawyers one procedural and technical reference.  
 
 The unified MCP server implements the MCP path described in the handbook.  It serves Streamable HTTP at `/mcp`, binds each MCP session from `case_id` and either `role_id` or `member_id` query parameters, exposes assignment-specific tools, and forwards `tools/call` requests to the service role APIs.  It fetches the live opportunity before every forwarded mutating tool call, injects the active `opportunity_id`, and returns AAR failures as MCP tool results with structured content.  The runner remains the phase authority.
 
-OpenClaw onboarding now uses assignment text plus an MCP server definition.  The remote-user flow is the same for lawyers and council members: the operator gives OpenClaw the case id, assignment id, MCP URL, and token; the claw records the MCP server definition, verifies `wait_for_opportunity`, and enters the wait-tool operating loop.  The claw does not need a scheduled Gateway job to discover turns.
+OpenClaw onboarding now uses assignment text plus an MCP server definition.  The remote-user procedure is the same for lawyers and council members: the operator gives OpenClaw the case id, assignment id, MCP URL, and token; the claw records the MCP server definition, verifies `wait_for_opportunity`, and enters the wait-tool operating loop.  The claw does not need a scheduled Gateway job to discover turns.
 
 The Lawyer HTTP API now has `/lawyerapi/v1/wait`.  It returns the same status shape as `/get`, but it blocks until a role has work, case state changes, or the request timeout expires.  The response includes `wait.version`, so a runner can call the endpoint again with `after_version` and avoid choosing its own sleep interval.
 
@@ -316,7 +330,7 @@ the executable branching structure in `Main.lean`.
 - Prove stronger global facts about council composition and vote thresholds.
 - Prove more about opportunity selection from reachable states, not only about
   state preservation after a successful step.
-- Simplify some proof surfaces in `StepPreservation.lean` so the executable
+- Simplify some proof files in `StepPreservation.lean` so the executable
   branches and the proof branches line up more directly.
 
 ## 2026-04-02
@@ -325,7 +339,7 @@ the executable branching structure in `Main.lean`.
 
 Reference: [Verification](docs/verification.md)
 
-The proof work exposed a policy-space problem rather than a coding defect.
+The proof work exposed a policy problem rather than a coding defect.
 `currentResolution?` checks `demonstrated` before `not_demonstrated`.  That is
 acceptable only if both outcomes cannot simultaneously satisfy the configured
 threshold.  The validator previously allowed that overlap.
@@ -334,7 +348,7 @@ The engine now resolves that at the policy boundary.  `validatePolicy` in Lean
 and Go requires `2 * required_votes_for_decision > council_size`.  That keeps
 the current aggregation rule, removes the dual-threshold cases, and makes the
 planned deliberation-neutrality theorem a theorem about the whole validated
-policy space rather than a theorem with an extra side condition.
+validated policy rather than a theorem with an extra side condition.
 
 ### Deliberation-neutrality proof
 
@@ -362,7 +376,7 @@ That behavior is convenient for the examples, but it depends on a directory
 scan and a skip list.  The CLI now also accepts repeated `--file` arguments,
 including glob patterns, and passes the resolved file list into the runner.
 
-The explicit list replaces the directory scan entirely.  That keeps the old
+The explicit list replaces the directory scan.  That keeps the old
 default while giving the caller a precise file boundary for one run.  The CLI
 expands globs, rejects unmatched glob patterns, and rejects prohibited
 extensions: `.gitignore`, `.sh`, and `.sig`.  The runner then loads exactly
@@ -410,12 +424,12 @@ workspace filenames in `offered_files`.
 The prompt and attorney view now state the hard limits for the current
 opportunity.  That includes the text limit for the current filing, the per-file
 and per-side exhibit and technical-report caps, the amount already used by the
-current side, and the remaining capacity.  The prompt now also states the real
+current side, and the remaining capacity.  The prompt now also states the engine
 record rule: `offered_files` may name only visible case files by `file_id`;
 outside material enters through `technical_reports`.
 
 Attorney validation errors now carry the attempted count and the remaining
-side capacity.  That keeps the model close to the actual engine rule and avoids
+side capacity.  That keeps the model close to the engine rule and avoids
 wasting retries on blind correction attempts.
 
 ### Retired lawyer model configuration
@@ -448,7 +462,7 @@ do not apply to files that Git already tracks.
 
 ### Invalid-attempt limit errors now preserve reasons
 
-Reference: [Attorney tool helpers](runtime/runner/attorney_tools.go), [Council runner](runtime/runner/council.go)
+Reference: [Attorney tool helpers](runtime/proceeding/attorney_tools.go), [Council runner](runtime/proceeding/council.go)
 
 The attorney and council runners previously replaced the decisive validation
 message with a generic invalid-attempt ceiling error on the final failed
@@ -458,12 +472,12 @@ the correction loop.
 
 The runner now carries the invalid reasons forward and includes them in the
 final limit error in attempt order.  That keeps the stop condition the same,
-but it makes the terminal error match the actual rejection path instead of
+but it makes the terminal error match the runtime rejection path instead of
 hiding it behind a generic summary.
 
 ### Invalid submission feedback now explains the next step
 
-Reference: [Attorney tool helpers](runtime/runner/attorney_tools.go)
+Reference: [Attorney tool helpers](runtime/proceeding/attorney_tools.go)
 
 The attorney tool path previously returned only the bare validation error on
 each rejected submission.  That told the model what failed, but it did not say
@@ -486,7 +500,7 @@ note file write, opening submission, accepted filing.
 It did not fix the plaintiff arguments failure in `ex06`.  The plaintiff still
 stalled in the arguments phase.  The failure mode changed, which narrows the
 cause.  The old run spent its time rewriting notes around citation formatting
-and source packaging.  The new run used the full tool surface and reached the
+and source packaging.  The new run used the complete tool set and reached the
 substance faster.  It still kept rewriting `case-notes.md`, but the content now
 tracked the adverse merits directly: the notes concluded that the official
 record supports ground entry but likely not the territorial-objective element,
@@ -511,7 +525,7 @@ Lean engine can prove.
 
 ### Abstract verification structures
 
-Reference: [More verification notes](docs/more-verification-notes.md)
+Reference: [Verification](docs/verification.md)
 
 The next proof work now has a separate note about abstractions that the current
 engine already suggests.  The strongest candidates are a progress preorder over
@@ -524,7 +538,7 @@ the full case record.
 
 ### Deliberation summary proof layer
 
-Reference: [More verification notes](docs/more-verification-notes.md)
+Reference: [Verification](docs/verification.md)
 
 The first implementation step now spans
 `engine/Proofs/DeliberationSummaryCore.lean` and
@@ -548,7 +562,7 @@ for the reachable wrappers.  The summary layer now splits at that boundary:
 That change pulled the direct `currentResolution?` soundness facts into the
 summary core and let `OutcomeSoundness.lean` consume them directly.  The lower
 termination file now imports the core arithmetic instead of defining the same
-council-length and current-round-capacity lemmas itself.  The remaining import
+council-length and current-round-capacity lemmas.  The remaining import
 pressure is now on the liveness side rather than on outcome soundness.
 
 ### Summary-form liveness bridge
@@ -562,9 +576,8 @@ that turns that fact into `current_round_vote_count < seated_count`.  `NoStuck.l
 now uses those lower results to prove the summary-form round-capacity theorem
 for every reachable live deliberation state.
 
-This matters because it moves one real liveness theorem below
-`ViableOutcomes.lean` instead of leaving the whole summary bridge above the
-existing Stage 3 file.  The remaining pressure is now narrower: the viability
+The split moves one real liveness theorem below `ViableOutcomes.lean` instead
+of leaving the whole summary bridge above the existing Stage 3 file.  The remaining pressure is narrower: the viability
 and closure facts still sit above `NoStuck.lean`, but the basic summary view
 of live deliberation no longer does.
 
@@ -581,8 +594,8 @@ The viability layer now splits the same way the summary layer did:
 summary-only theorems, while `ViableOutcomes.lean` keeps the direct vote and
 removal update correspondences.
 
-This matters on the closure side.  `OutcomeSoundness.lean` now imports
-`ViableOutcomesCore.lean` and proves the `no_majority` branch through summary
+`OutcomeSoundness.lean` now imports `ViableOutcomesCore.lean` and proves the
+`no_majority` branch through summary
 non-viability instead of reopening the threshold arithmetic directly from
 `currentResolution? = none`.  The core file now also carries a summary closure
 predicate for `no_majority`, so the lower layer can package the executable
@@ -597,7 +610,7 @@ termination layer.
 
 ### Viable outcomes proof layer
 
-Reference: [More verification notes](docs/more-verification-notes.md)
+Reference: [Verification](docs/verification.md)
 
 The second implementation step now spans `engine/Proofs/ViableOutcomesCore.lean`
 and `engine/Proofs/ViableOutcomes.lean`.  The core file defines summary-level
@@ -611,7 +624,7 @@ deliberation states produced by direct vote and removal updates before
 
 ### Summary-based public wrappers
 
-Reference: [More verification notes](docs/more-verification-notes.md)
+Reference: [Verification](docs/verification.md)
 
 The first bridge theorems for the third stage now split across
 `engine/Proofs/OutcomeSoundness.lean`, `engine/Proofs/NoStuck.lean`,
@@ -643,16 +656,14 @@ bridge in both directions: if the source summary reports a closed resolution,
 `continueDeliberation` closes a deliberation-phase case, the source summary
 reports the same result.
 
-This matters because the summary layer no longer describes only the
-`no_majority` branch.  It now packages the whole closed-output boundary of
+The summary layer now defines the whole closed-output boundary of
 `continueDeliberation`, which is the right granularity for later monotonicity
-or inevitability theorems.  The remaining higher work is correspondingly
-narrower: the executable vote and removal update correspondences still sit
-above this layer, but the closure logic itself now has one proof-side shape.
+or inevitability theorems.  The remaining higher work is narrower: the executable vote and removal update correspondences still sit
+above this layer, but the closure logic now has one proof-side shape.
 
 ### Executable viability transport
 
-Reference: [More verification notes](docs/more-verification-notes.md)
+Reference: [Verification](docs/verification.md)
 
 The next step converted those remaining executable update correspondences into
 real viability statements.  `ViableOutcomes.lean` still uses the summary equalities
@@ -663,15 +674,15 @@ it now proves what those equalities mean for the engine state.  A vote for
 viability and preserves impossibility of `demonstrated`.  A seated-member
 removal preserves impossibility for both substantive outcomes.
 
-This matters because the higher viability file is no longer only a transport
-layer.  It now carries executable impossibility facts that the later public
-step theorems can consume without reopening the arithmetic in the summary core.
+The higher viability file now carries executable impossibility facts that the
+later public step theorems can consume without reopening the arithmetic in the
+summary core.
 
 ### Same-round final-state bridge
 
 Reference: [Verification](docs/verification.md)
 
-The next step pushed that transport across the `continueDeliberation` boundary
+The next step carried that transport across the `continueDeliberation` boundary
 when the round does not advance.  `ViableOutcomes.lean` now proves a compact
 congruence fact for `DeliberationSummary`: if `continueDeliberation` keeps the
 same deliberation round, then the final state has the same summary as the
@@ -689,11 +700,11 @@ when the round stays fixed.
 
 ### Progress-viability bridge
 
-Reference: [More verification notes](docs/more-verification-notes.md)
+Reference: [Verification](docs/verification.md)
 
 The next step connected those same-round deliberation facts to the structural
-progress layer without overstating what `fixedFrameProgress` can prove by
-itself.  `ProgressViability.lean` imports both `Progress.lean` and
+progress layer without overstating what `fixedFrameProgress` can prove alone.
+`ProgressViability.lean` imports both `Progress.lean` and
 `ViableOutcomes.lean` and proves two public bridge theorems.  A successful
 same-round council-vote step now yields both `fixedFrameProgress s t` and an
 existential `sameRoundVoteTransport` witness.  A successful same-round
@@ -701,7 +712,6 @@ council-member removal step now yields `fixedFrameProgress s t` together with
 an implication from source total substantive non-viability to target total
 substantive non-viability.
 
-This matters because it marks the boundary of the current abstraction honestly.
 The present preorder tracks case frame, materials, seats, phase rank, and
 round.  It does not track current-round votes.  The new bridge therefore pairs
 progress with viability transport on the concrete same-round deliberation steps
@@ -731,7 +741,7 @@ vote data.
 
 ### Same-round closure inevitability
 
-Reference: [More verification notes](docs/more-verification-notes.md)
+Reference: [Verification](docs/verification.md)
 
 The next step completed that same-round line.  `ProgressViability.lean` now
 proves that `sameRoundDeliberationProgress` preserves `no_majority` closure
@@ -752,7 +762,7 @@ progress agenda as a coherent proof line.
 
 ### Fixed-frame progress preorder
 
-Reference: [More verification notes](docs/more-verification-notes.md)
+Reference: [Verification](docs/verification.md)
 
 The next implementation step now lives in `engine/Proofs/Progress.lean`.  The
 file defines `fixedFrameProgress`, a state relation anchored to the source
@@ -780,7 +790,7 @@ the built-in default policy and the checked-in `etc/policy.json` that `make`
 targets load by default.  The target-length guidance now uses 75% of the hard
 cap again for both the first-submission prompt target and the retry hint.  That
 gives openings a `3750` target under a `5000` cap, while leaving the hard cap
-itself configurable through policy JSON.
+configurable through policy JSON.
 
 ## 2026-05-04
 

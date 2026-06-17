@@ -1,5 +1,23 @@
 # Development Notes
 
+## 2026-06-17: Manual review
+
+### References
+
+- ADC manual: [`manual.md`](manual.md)
+- ADC Docker runbook: [`Dockerfile.md`](Dockerfile.md)
+- ADC attested dev-host requirements: [`docs/attested-dev-host.md`](docs/attested-dev-host.md)
+
+### Decisions
+
+The manual distinguishes `adc case`, `adc scenario`, `adc run`, and `adc service` by the boundary under test.  It also records how to treat an output directory as the record for one case, with `events.ndjson`, `run.json`, `digest.md`, and `work-notes.ndjson` serving different review needs.  The command-selection table includes `adc case-packet`, because attested complaint runs depend on that deterministic input format.
+
+The manual documents utility commands for `adc case-packet`, `adc validate`, `adc pool`, `adc pacer`, and `adc llm`.  The troubleshooting section names complaint setup and case-packet failures as input-resolution problems before runtime settings should be changed.  Attested Clerk troubleshooting points to the ADC Docker runbook, which contains the service-run and verification sequence.
+
+### README review
+
+The README uses the same documentation table as AAR, AARD, and evals.  It links to the manual, Docker runbook, dev-host requirements, attested run helper, practice guide, and rules.  The license references point to the repository-level files.
+
 ## 2026-06-17: Attested ADC complaint path
 
 ### References
@@ -81,7 +99,7 @@ Jury size and verdict threshold are ADC case-policy values.  The scenario policy
 
 Direct case commands expose the policy through `--juror-count`, `--unanimous-required`, and `--minimum-concurring`.  Complaint-based commands write the selected values into the generated scenario.  Scenario-based commands apply the same values as startup overrides, leaving the scenario file unchanged.
 
-The clerk service exposes the same configuration through `juror_count`, `unanimous_required`, and `minimum_concurring` in the create-request JSON.  Those fields apply to full local-agent children and direct children.  The service checks simple numeric ranges before it starts a child process, and the Lean action validation remains the final rule check.
+The clerk service exposes the same configuration through `juror_count`, `unanimous_required`, and `minimum_concurring` in the create-request JSON.  Those fields apply to local-agent children and direct children.  The service checks simple numeric ranges before it starts a child process, and the Lean action validation remains the final rule check.
 
 ## 2026-06-06: Failed deliberating jurors
 
@@ -162,8 +180,8 @@ Entries below this section are historical development notes.  ACP and xproxy ent
 
 ### References
 
-- ACP role runtime: [`runtime/runner/acp_role.go`](runtime/runner/acp_role.go)
-- PI-home staging: [`runtime/runner/pi_container_home.go`](runtime/runner/pi_container_home.go)
+- ACP role runtime: `runtime/runner/acp_role.go`
+- PI-home staging: `runtime/runner/pi_container_home.go`
 - Agent documentation: [`docs/agents.md`](docs/agents.md)
 - Porting inventory: [`../scratch/adc/update.md`](../scratch/adc/update.md)
 
@@ -188,9 +206,9 @@ The ACP prompt now names current limits instead of relying only on static docume
 
 ### References
 
-- ACP CLI entrypoint: [`runtime/cli/acp.go`](runtime/cli/acp.go)
-- PI-home staging path: [`runtime/runner/pi_container_home.go`](runtime/runner/pi_container_home.go)
-- ACP role wrapper setup: [`runtime/runner/acp_role.go`](runtime/runner/acp_role.go)
+- ACP CLI entrypoint: `runtime/cli/acp.go`
+- PI-home staging path: `runtime/runner/pi_container_home.go`
+- ACP role wrapper setup: `runtime/runner/acp_role.go`
 - Podman ACP wrapper: [`../common/pi-container/acp-podman.sh`](../common/pi-container/acp-podman.sh)
 
 ### Decisions
@@ -209,7 +227,7 @@ The ACP prompt now names current limits instead of relying only on static docume
 
 ### References
 
-- ACP CLI entrypoint: [`runtime/cli/acp.go`](runtime/cli/acp.go)
+- ACP CLI entrypoint: `runtime/cli/acp.go`
 - CLI helper defaults: [`runtime/cli/helpers.go`](runtime/cli/helpers.go)
 
 ### Decisions
@@ -228,9 +246,9 @@ The ACP prompt now names current limits instead of relying only on static docume
 
 ### References
 
-- Local xproxy model and config parsing: [`runtime/xproxy/config.go`](runtime/xproxy/config.go)
-- Local persona record parsing and prompt text: [`runtime/persona/persona.go`](runtime/persona/persona.go)
-- Local xproxy startup and default port behavior: [`runtime/cli/xproxy.go`](runtime/cli/xproxy.go)
+- Local xproxy model and config parsing: `runtime/xproxy/config.go`
+- Local persona record parsing and prompt text: `runtime/persona/persona.go`
+- Local xproxy startup and default port behavior: `runtime/cli/xproxy.go`
 - OpenAI Python SDK Responses usage: https://github.com/openai/openai-python
 - OpenAI embeddings API reference: https://platform.openai.com/docs/api-reference/embeddings/create
 
@@ -259,8 +277,8 @@ The ACP prompt now names current limits instead of relying only on static docume
 ### References
 
 - Root CLI dispatch and help text: [`runtime/cli/root.go`](runtime/cli/root.go)
-- Existing xproxy helpers: [`runtime/cli/xproxy.go`](runtime/cli/xproxy.go)
-- xproxy server entrypoint: [`runtime/xproxy/xproxy.go`](runtime/xproxy/xproxy.go)
+- Existing xproxy helpers: `runtime/cli/xproxy.go`
+- xproxy server entrypoint: `runtime/xproxy/xproxy.go`
 
 ### Decisions
 
@@ -279,4 +297,4 @@ The ACP prompt now names current limits instead of relying only on static docume
 
 - Live test: `uv run ../common/tools/cluster-personas.py --personas-file /tmp/persona-sample-test.csv --genes-file /tmp/persona-sample-genes.json --num-samples 3 --gene-dim 3`
 - Live output: three `MP,G,C` rows for one persona and one gene through local xproxy plus direct embeddings.
-- Follow-up fix: `adc xproxy` initially returned an error on clean shutdown because the listener was already closed.  [`runtime/xproxy/xproxy.go`](runtime/xproxy/xproxy.go) now ignores `net.ErrClosed` in that path, and a live `Ctrl-C` shutdown now exits with status `0`.
+- Follow-up fix: `adc xproxy` initially returned an error on clean shutdown because the listener was already closed.  `runtime/xproxy/xproxy.go` now ignores `net.ErrClosed` in that path, and a live `Ctrl-C` shutdown now exits with status `0`.
