@@ -1075,3 +1075,13 @@ The final Clerk case record reported `status=completed`, process exit code `0`, 
 Verification passed through the Clerk-attested path.  The verification log recorded `ok` for `manifest.sha384`, run id, mode, input mode, input prefix, AAR case id, output prefix, archive key, `run.log` SHA-384, archive SHA-384, archive byte count, container image id, container tar hash, `aar_example`, signature, user data, PCR4, PCR7, and PCR12.  The manifest SHA-384 was `c86a0ce5faae268d6fafb5359a8ce3dc4f72f4d608a679bc75c5d28a56c389423880be966ea4b0132df8ada9fbb82955`, and the extracted output directory was `/tmp/arb-clerk-ex01-20260616T215547Z/clerk-ex01-20260616T221531Z/aar-output`.
 
 Two earlier attempts identified setup defects before the accepted run.  The driver treated an empty S3 output prefix as a fatal error because it used `aws s3 ls`; `tools/run-arb-attested.py` now lists the prefix with `s3api list-objects-v2` and accepts an empty object set.  The runtime launcher on `dev` was stale and passed `ARB_GLUE_MODE=aar`, while the current container entrypoint expects `ARB_EXEC_MODE=aar`; `/home/ec2-user/attest/run-aar.sh` was replaced with the checked-in launcher and verified by SHA-384 before the accepted run.
+
+## 2026-06-17
+
+### Pi container cleanup
+
+A local direct `ex01` run restored the signature and public key evidence, then closed with `status=ok` and `resolution=not_demonstrated`.  C4 looped while trying to submit a Pi MCP vote, exceeded the council output limit, and AAR removed the council member from the case.  The local `podman run --rm` client was killed, but the unnamed Pi container kept running because AAR had no container name to remove during cleanup.
+
+The runner now gives each Pi council container a deterministic AAR name and records that name with the process record.  Cleanup removes named containers through the same runtime command that launched them, even when the local client process has already exited.  The output-limit monitor removes the named container before it kills the local client process, which prevents the client-kill path from orphaning a live Pi container.
+
+The runtime test pass also corrected the `runtime/cmd/aar` service black-box fixture.  The service API requires `out_dir` to be an immediate child of the configured service output root, but those tests passed sibling directories under the broader fixture root.  The fixture now exposes the service output root and derives service case directories from it, so `go test ./runtime/...` exercises the current service path.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -570,6 +571,28 @@ func TestApplyDefaultsCouncilOutputLimit(t *testing.T) {
 	}
 }
 
+func TestPiRunArgsIncludesContainerName(t *testing.T) {
+	args := piRunArgs(Options{
+		PiImage:      "agentcourt-pi-sandbox",
+		PiMCPAdapter: "npm:pi-mcp-adapter",
+	}, "aar-case-1-c1", "/tmp/pi-C1", "model-1", "instructions")
+	got := "\x00" + strings.Join(args, "\x00") + "\x00"
+	for _, want := range []string{
+		"\x00run\x00",
+		"\x00--rm\x00",
+		"\x00--name\x00aar-case-1-c1\x00",
+		"\x00--network\x00host\x00",
+		"\x00agentcourt-pi-sandbox\x00",
+		"\x00--model\x00model-1\x00",
+		"\x00-e\x00npm:pi-mcp-adapter\x00",
+		"\x00-p\x00instructions\x00",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("Pi args missing %q in %#v", want, args)
+		}
+	}
+}
+
 func TestCouncilProcessOutputSizeCountsLogs(t *testing.T) {
 	dir := t.TempDir()
 	stdoutPath := filepath.Join(dir, "pi-C1.stdout")
@@ -644,13 +667,15 @@ func TestMonitorCouncilOutputKillsProcessOverLimit(t *testing.T) {
 		t.Fatalf("start sleep: %v", err)
 	}
 	proc := &processRecord{
-		name:       "pi-C1",
-		kind:       "podman",
-		command:    cmd,
-		done:       make(chan processExit, 1),
-		stdoutPath: stdoutPath,
-		stderrPath: stderrPath,
-		finished:   make(chan struct{}),
+		name:        "pi-C1",
+		kind:        "podman",
+		command:     cmd,
+		done:        make(chan processExit, 1),
+		stopCommand: fakeContainerRuntime(t, 0, ""),
+		stopName:    "aar-case-1-c1",
+		stdoutPath:  stdoutPath,
+		stderrPath:  stderrPath,
+		finished:    make(chan struct{}),
 	}
 	go func() {
 		exit := processExit{
@@ -692,6 +717,72 @@ func TestMonitorCouncilOutputKillsProcessOverLimit(t *testing.T) {
 	}
 	if details["output_bytes"] != int64(6) || details["output_limit_bytes"] != int64(5) {
 		t.Fatalf("details = %#v", details)
+	}
+	assertFakeRuntimeLog(t, "container rm -f aar-case-1-c1")
+}
+
+func TestStopAgentsRemovesNamedContainerAfterClientExit(t *testing.T) {
+	dir := t.TempDir()
+	stdoutPath := filepath.Join(dir, "client.stdout")
+	stderrPath := filepath.Join(dir, "client.stderr")
+	stdout, err := os.Create(stdoutPath)
+	if err != nil {
+		t.Fatalf("create stdout: %v", err)
+	}
+	stderr, err := os.Create(stderrPath)
+	if err != nil {
+		t.Fatalf("create stderr: %v", err)
+	}
+	cmd := exec.Command("true")
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start true: %v", err)
+	}
+	proc := &processRecord{
+		name:        "pi-C4",
+		kind:        "podman",
+		command:     cmd,
+		done:        make(chan processExit, 1),
+		stopCommand: fakeContainerRuntime(t, 0, ""),
+		stopName:    "aar-case-1-c4",
+		stdoutPath:  stdoutPath,
+		stderrPath:  stderrPath,
+		finished:    make(chan struct{}),
+	}
+	go func() {
+		exit := processExit{
+			waitErr:   cmd.Wait(),
+			stdoutErr: stdout.Close(),
+			stderrErr: stderr.Close(),
+		}
+		proc.markExited()
+		proc.done <- exit
+	}()
+	select {
+	case <-proc.finished:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("process did not exit")
+	}
+	state := &runState{processes: []*processRecord{proc}}
+	if err := state.stopAgents(); err != nil {
+		t.Fatalf("stopAgents returned error: %v", err)
+	}
+	assertFakeRuntimeLog(t, "container rm -f aar-case-1-c4")
+}
+
+func TestContainerRemovalMissingOutput(t *testing.T) {
+	for _, message := range []string{
+		"Error response from daemon: No such container: aar-case-1-c1",
+		"Error: no container with name or ID \"aar-case-1-c1\" found: no such container",
+		"container aar-case-1-c1 does not exist",
+	} {
+		if !containerRemovalMissingOutput(message) {
+			t.Fatalf("missing container output not recognized: %q", message)
+		}
+	}
+	if containerRemovalMissingOutput("permission denied") {
+		t.Fatalf("unexpected missing-container match")
 	}
 }
 
@@ -746,6 +837,39 @@ func TestStopAgentsWaitsForProcessExit(t *testing.T) {
 	case <-proc.finished:
 	default:
 		t.Fatalf("stopAgents returned before the process finished")
+	}
+}
+
+func fakeContainerRuntime(t *testing.T, exitCode int, output string) string {
+	t.Helper()
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "runtime.log")
+	t.Setenv("FAKE_CONTAINER_RUNTIME_LOG", logPath)
+	t.Setenv("FAKE_CONTAINER_RUNTIME_EXIT", fmt.Sprintf("%d", exitCode))
+	t.Setenv("FAKE_CONTAINER_RUNTIME_OUTPUT", output)
+	path := filepath.Join(dir, "container-runtime")
+	script := `#!/bin/sh
+printf '%s\n' "$*" >> "$FAKE_CONTAINER_RUNTIME_LOG"
+if [ -n "$FAKE_CONTAINER_RUNTIME_OUTPUT" ]; then
+    printf '%s\n' "$FAKE_CONTAINER_RUNTIME_OUTPUT" >&2
+fi
+exit "$FAKE_CONTAINER_RUNTIME_EXIT"
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake runtime: %v", err)
+	}
+	return path
+}
+
+func assertFakeRuntimeLog(t *testing.T, want string) {
+	t.Helper()
+	raw, err := os.ReadFile(os.Getenv("FAKE_CONTAINER_RUNTIME_LOG"))
+	if err != nil {
+		t.Fatalf("read fake runtime log: %v", err)
+	}
+	got := strings.TrimSpace(string(raw))
+	if got != want {
+		t.Fatalf("runtime log = %q, want %q", got, want)
 	}
 }
 

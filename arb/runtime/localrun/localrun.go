@@ -124,11 +124,12 @@ type instructionData struct {
 }
 
 type processRecord struct {
-	name     string
-	kind     string
-	command  *exec.Cmd
-	done     chan processExit
-	stopName string
+	name        string
+	kind        string
+	command     *exec.Cmd
+	done        chan processExit
+	stopCommand string
+	stopName    string
 
 	stdoutPath string
 	stderrPath string
@@ -1262,25 +1263,9 @@ func (s *runState) startPiCouncil(ctx context.Context, entry councilRosterEntry,
 	}
 	s.trackSecretFile(filepath.Join(home, ".mcp.json"))
 	s.trackSecretFile(filepath.Join(home, ".pi", "agent", "auth.json"))
-	args := []string{
-		"run", "--rm",
-		"--network", "host",
-		"--user", "0:0",
-		"-e", "HOME=/home/user",
-		"-e", "TMPDIR=/home/user",
-		"-e", "PI_CODING_AGENT_DIR=/home/user/.pi/agent",
-		"-e", "OPENROUTER_API_KEY",
-		"-e", "NODE_OPTIONS",
-		"-v", home + ":/home/user",
-		"-w", "/home/user",
-		s.opts.PiImage,
-		"--provider", "openrouter",
-		"--model", model,
-		"-e", s.opts.PiMCPAdapter,
-		"--mode", "json",
-		"-p", instructions,
-	}
-	proc, err := s.startProcess(ctx, "pi-"+entry.MemberID, "podman", s.opts.PodmanCommand, args, "", &councilProcessTarget{
+	name := piContainerName(s.opts.CaseID, entry.MemberID)
+	args := piRunArgs(s.opts, name, home, model, instructions)
+	proc, err := s.startProcess(ctx, "pi-"+entry.MemberID, "podman", s.opts.PodmanCommand, args, name, &councilProcessTarget{
 		memberID:      entry.MemberID,
 		opportunityID: opportunityID,
 	})
@@ -1291,6 +1276,32 @@ func (s *runState) startPiCouncil(ctx context.Context, entry councilRosterEntry,
 	s.processes = append(s.processes, proc)
 	s.mu.Unlock()
 	return nil
+}
+
+func piContainerName(caseID string, memberID string) string {
+	return containerName("aar-" + caseID + "-" + memberID)
+}
+
+func piRunArgs(opts Options, name string, home string, model string, instructions string) []string {
+	return []string{
+		"run", "--rm",
+		"--name", name,
+		"--network", "host",
+		"--user", "0:0",
+		"-e", "HOME=/home/user",
+		"-e", "TMPDIR=/home/user",
+		"-e", "PI_CODING_AGENT_DIR=/home/user/.pi/agent",
+		"-e", "OPENROUTER_API_KEY",
+		"-e", "NODE_OPTIONS",
+		"-v", home + ":/home/user",
+		"-w", "/home/user",
+		opts.PiImage,
+		"--provider", "openrouter",
+		"--model", model,
+		"-e", opts.PiMCPAdapter,
+		"--mode", "json",
+		"-p", instructions,
+	}
 }
 
 func outputSubdir(outputDir string, name string) (string, error) {
@@ -1438,14 +1449,15 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 		return nil, errors.Join(err, cmd.Process.Kill(), cmd.Wait(), closeStdout(), stderr.Close())
 	}
 	record := &processRecord{
-		name:       name,
-		kind:       kind,
-		command:    cmd,
-		done:       make(chan processExit, 1),
-		stopName:   stopName,
-		stdoutPath: stdoutPath,
-		stderrPath: stderrPath,
-		finished:   make(chan struct{}),
+		name:        name,
+		kind:        kind,
+		command:     cmd,
+		done:        make(chan processExit, 1),
+		stopCommand: command,
+		stopName:    stopName,
+		stdoutPath:  stdoutPath,
+		stderrPath:  stderrPath,
+		finished:    make(chan struct{}),
 
 		stdoutCounter: stdoutCounter,
 	}
@@ -1537,11 +1549,26 @@ func (s *runState) monitorCouncilOutput(ctx context.Context, proc *processRecord
 			}
 			message, details := councilOutputLimitFailure(proc.name, target, size, s.opts.CouncilOutputLimitBytes)
 			proc.setForcedFailure(councilFailureOutputLimit, message, details)
+			var stopErr error
+			if strings.TrimSpace(proc.stopName) != "" {
+				stopErr = removeProcessContainer(proc)
+				if stopErr == nil {
+					select {
+					case <-proc.finished:
+						return
+					case <-time.After(250 * time.Millisecond):
+					}
+				}
+			}
 			if err := proc.command.Process.Kill(); err != nil {
 				if proc.isExited() {
 					return
 				}
-				s.agentErrs <- fmt.Errorf("kill %s after council output limit exceeded: %w", proc.name, err)
+				s.agentErrs <- errors.Join(stopErr, fmt.Errorf("kill %s after council output limit exceeded: %w", proc.name, err))
+				return
+			}
+			if stopErr != nil {
+				s.agentErrs <- stopErr
 			}
 			return
 		case <-proc.finished:
@@ -1696,18 +1723,28 @@ func (s *runState) stopAgents() error {
 	s.mu.Unlock()
 	var errs []error
 	for _, proc := range processes {
-		proc.mu.Lock()
-		exited := proc.exited
-		proc.mu.Unlock()
-		if exited || proc.command.Process == nil {
-			continue
-		}
-		if proc.kind == "docker" && strings.TrimSpace(proc.stopName) != "" {
-			if err := exec.Command(s.opts.DockerCommand, "stop", proc.stopName).Run(); err != nil {
-				errs = append(errs, fmt.Errorf("docker stop %s: %w", proc.stopName, err))
+		if strings.TrimSpace(proc.stopName) != "" {
+			if err := removeProcessContainer(proc); err != nil {
+				errs = append(errs, err)
 				continue
 			}
-		} else if err := proc.command.Process.Kill(); err != nil {
+			if proc.isExited() || proc.command.Process == nil {
+				continue
+			}
+			exit, err := waitProcessExit(proc, agentStopWait)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			if closeErr := exit.closeErr(); closeErr != nil {
+				errs = append(errs, fmt.Errorf("close logs for %s: %w", proc.name, closeErr))
+			}
+			continue
+		}
+		if proc.isExited() || proc.command.Process == nil {
+			continue
+		}
+		if err := proc.command.Process.Kill(); err != nil {
 			errs = append(errs, fmt.Errorf("kill %s: %w", proc.name, err))
 			continue
 		}
@@ -1721,6 +1758,36 @@ func (s *runState) stopAgents() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func removeProcessContainer(proc *processRecord) error {
+	command := strings.TrimSpace(proc.stopCommand)
+	name := strings.TrimSpace(proc.stopName)
+	if name == "" {
+		return nil
+	}
+	if command == "" {
+		return fmt.Errorf("container runtime command is empty for %s", proc.name)
+	}
+	out, err := exec.Command(command, "container", "rm", "-f", name).CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	message := strings.TrimSpace(string(out))
+	if containerRemovalMissingOutput(message) {
+		return nil
+	}
+	if message != "" {
+		return fmt.Errorf("%s container rm -f %s: %w: %s", command, name, err, message)
+	}
+	return fmt.Errorf("%s container rm -f %s: %w", command, name, err)
+}
+
+func containerRemovalMissingOutput(message string) bool {
+	message = strings.ToLower(message)
+	return strings.Contains(message, "no such container") ||
+		strings.Contains(message, "no container with name or id") ||
+		strings.Contains(message, "does not exist")
 }
 
 func waitProcessExit(proc *processRecord, timeout time.Duration) (processExit, error) {

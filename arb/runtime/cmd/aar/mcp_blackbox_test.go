@@ -33,7 +33,7 @@ func TestBlackBoxMCPThroughService(t *testing.T) {
 	defer mcp.kill()
 
 	caseID := "bb-mcp-service"
-	outDir := filepath.Join(fx.dir, "mcp-service-case")
+	outDir := svc.outputDir("mcp-service-case")
 	caseFile := filepath.Join(fx.dir, "case", "source.txt")
 	mustWriteFile(t, caseFile, "Initial case-packet source text for MCP evidence reading.\n")
 	createCase(ctx, t, svc.baseURL, map[string]any{

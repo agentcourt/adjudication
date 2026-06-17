@@ -85,7 +85,7 @@ func TestBlackBoxLawyerAttemptFailureThroughService(t *testing.T) {
 	defer svc.kill()
 
 	caseID := "bb-lawyer-service"
-	outDir := filepath.Join(fx.dir, "service-lawyer-case")
+	outDir := svc.outputDir("service-lawyer-case")
 	createCase(ctx, t, svc.baseURL, map[string]any{
 		"case_id":                 caseID,
 		"run_id":                  "run-" + caseID,
@@ -175,7 +175,7 @@ func TestBlackBoxLawyerDeadlineFailureThroughService(t *testing.T) {
 	defer svc.kill()
 
 	caseID := "bb-lawyer-deadline-service"
-	outDir := filepath.Join(fx.dir, "service-lawyer-deadline-case")
+	outDir := svc.outputDir("service-lawyer-deadline-case")
 	createCase(ctx, t, svc.baseURL, map[string]any{
 		"case_id":                 caseID,
 		"run_id":                  "run-" + caseID,
@@ -211,7 +211,7 @@ func TestBlackBoxCouncilMemberAttemptFailureThroughService(t *testing.T) {
 	defer svc.kill()
 
 	caseID := "bb-council-service"
-	outDir := filepath.Join(fx.dir, "service-council-case")
+	outDir := svc.outputDir("service-council-case")
 	createCase(ctx, t, svc.baseURL, map[string]any{
 		"case_id":                 caseID,
 		"run_id":                  "run-" + caseID,
@@ -303,7 +303,7 @@ func TestBlackBoxCouncilMemberDeadlineFailureThroughService(t *testing.T) {
 	defer svc.kill()
 
 	caseID := "bb-council-deadline"
-	outDir := filepath.Join(fx.dir, "service-council-deadline-case")
+	outDir := svc.outputDir("service-council-deadline-case")
 	createCase(ctx, t, svc.baseURL, map[string]any{
 		"case_id":                 caseID,
 		"run_id":                  "run-" + caseID,
@@ -548,21 +548,27 @@ func (fx *blackBoxFixture) processLogPaths() (string, string) {
 type serviceProcess struct {
 	*testProcess
 	baseURL string
+	outRoot string
 }
 
 func (fx *blackBoxFixture) startService(ctx context.Context, t *testing.T) *serviceProcess {
 	t.Helper()
 	listen := freeListenAddr(t)
+	outRoot := filepath.Join(fx.dir, "service-out-"+strings.ReplaceAll(listen, ":", "-"))
 	proc := fx.startAAR(ctx, "service",
 		"--listen", listen,
 		"--registry-dir", filepath.Join(fx.dir, "registry-"+strings.ReplaceAll(listen, ":", "-")),
-		"--out-root", filepath.Join(fx.dir, "service-out-"+strings.ReplaceAll(listen, ":", "-")),
+		"--out-root", outRoot,
 		"--aar-bin", fx.aarBin,
 		"--common-root", fx.commonRoot,
 		"--engine", fx.enginePath,
 	)
 	proc.waitForStderrPrefix(ctx, t, "aar service listening on ")
-	return &serviceProcess{testProcess: proc, baseURL: "http://" + listen}
+	return &serviceProcess{testProcess: proc, baseURL: "http://" + listen, outRoot: outRoot}
+}
+
+func (svc *serviceProcess) outputDir(name string) string {
+	return filepath.Join(svc.outRoot, name)
 }
 
 type testProcess struct {
