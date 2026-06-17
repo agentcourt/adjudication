@@ -8,6 +8,8 @@ The first real Clerk-managed attested AARD run used `case_id=clerk-attested-aard
 
 The failure came from `arbd/attest/exec-container-entrypoint.sh` passing `--openclaw-network host` to `aard run`.  AARD lacked the corresponding AAR option, so the argument parser treated `host` as one example name and later treated `ex1` as a second example name.  The root error was `aard run accepts at most one example name`.  The fix is to add the AAR host-network option to AARD rather than remove it from the attested entrypoint, because the exec topology expects the OpenClaw lawyer containers to use host networking.
 
+The second run used `case_id=clerk-attested-aard-ex1-20260617T010406Z` and `run_id=aard-ex1-20260617T010406Z`.  It passed the argument parser, imported the embedded Pi image, and then failed because `/opt/adjudication/common/data/personas/pool.jsonl` was absent from the image.  The runtime default looks for `./pool.jsonl` first and then `<common-root>/data/personas/pool.jsonl`; the repository only had `arb/pool.jsonl`, whose records refer to `personas/generic.md`.  The fix is to add the JSONL pool and its generic persona under `common`, matching the documented runtime-pool default and avoiding an `arbd` dependency on `arb`.
+
 ## 2026-06-04
 
 ### Service and agent runtime migration
