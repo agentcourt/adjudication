@@ -40,6 +40,8 @@ The real Clerk-managed attested ADC run `case_id=adc-real-ex1-20260617T133710Z` 
 
 Verification passed for `manifest.sha384`, run id, mode, input mode, input prefix, ADC case id, output prefix, archive key, run-log hash, archive hash, archive size, container image identity, case-packet keys and hashes, attestation signature, attestation user data, PCR 4, PCR 7, and PCR 12.  The final ADC state was `status=judgment_entered`, `phase=post_verdict`, `trial_mode=jury`.  The jury returned a plaintiff verdict with damages `108000`, five votes for the verdict, and required votes `5`; juror `J6` timed out during deliberation, and ADC handled that timeout under the existing effective-threshold rule.
 
+The ADC runbook now documents the full Clerk service path as one sequence: choose fresh ids and prefixes, stage `auth.json` and `keys.sh` into the exact S3 input prefix, start `adc service` with attested defaults, post the create request, poll the case record and `/attestation/events`, inspect terminal artifacts, verify the attestation state, and stop the service.  The runbook also records the attestation troubleshooting map for the failures already diagnosed: missing staged secrets, expired or unreadable Codex auth, missing host networking for OpenClaw, an exec console polling limit shorter than the ADC runtime timeout, recursive S3 uploads, incomplete terminal artifacts, service output-directory validation, and PCR or manifest verification failures.  The README, manual, and dev-host requirements now point operators to that runbook for the Clerk-managed attested ADC process.
+
 ### Verification
 
 - [x] `go test ./adc/runtime/casepacket`

@@ -15,7 +15,7 @@ These operator documents are the entry points for running and diagnosing ADC.  T
 | Document | Use |
 | --- | --- |
 | [Agent District Court Manual](manual.md) | Commands and operating details for `adc case`, `adc scenario`, `adc run`, `adc service`, Role API, MCP, clerk routes, attested clerk requests, `attestation/events`, output files, failure behavior, and troubleshooting. |
-| [ADC Docker Image Runbook](Dockerfile.md) | ADC base image, attested workload image, exec AMI launch path, S3 input and output prefixes, live `events.ndjson`, attestation artifacts, local driver commands, and verification. |
+| [ADC Docker Image Runbook](Dockerfile.md) | ADC base image, attested workload image, exec AMI launch path, S3 input and output prefixes, live `events.ndjson`, attestation artifacts, local driver commands, Clerk service sequence, verification, and troubleshooting. |
 | [Attested ADC Dev Host Requirements](docs/attested-dev-host.md) | `dev` host layout, AWS region, AMI, instance profile, S3 permissions, secret files, Docker build requirements, expected PCR values, and operational checks. |
 | `tools/run-one-attested-adc.sh` | One-complaint attested run helper that stages `auth.json` and `keys.sh`, selects run-specific S3 prefixes, and invokes the verified local driver. |
 | [Agent District Court Practice Guide](docs/practice.md) | Pleadings, discovery, evidence search, evidence analysis, trial work, jury instructions, closings, and deliberation. |

@@ -143,53 +143,216 @@ uv run adjudication/adc/tools/run-adc-attested.py \
 
 The output directory receives `run.env`, `progress.log`, `launcher.log`, `case.tar.gz`, `case-packet.json`, downloaded S3 artifacts, `attestation.txt`, `verification.log`, and either `adc-output/` or `adc-partial/`.  A successful verified run has `adc-output/run.json`, `adc-output/events.ndjson`, `adc-output/digest.md`, and any submitted evidence files.  The driver defaults to `DEV_HOST=dev`, `AWS_REGION=us-east-2`, `INSTANCE_TYPE=m5.4xlarge`, `IAM_INSTANCE_PROFILE=ec2-nix-builder`, `IMAGE_TAR_S3=s3://agentcourt-data/arbattest/images/adc-glue-poc.tar`, and `REMOTE_ATTEST_DIR=/home/ec2-user/attest`.
 
-## Clerk Service
+## Clerk Service End-To-End
 
-The clerk service can start the same attested path with `execution.mode = "attested"`.  Start the service with attested defaults, then each create request supplies a complaint path and any per-run attestation overrides.  Verification is required before the service marks an attested ADC case `completed`.
+The clerk service can start the same attested path with `execution.mode = "attested"`.  The service runs the local driver as a child process, stores the driver output in the case output directory, exposes live attestation events through HTTP, and marks the case `completed` only after verification succeeds.  Run this sequence from `adjudication/adc` after building `.bin/adc` and `.bin/adcengine`.
+
+Prepare one run by choosing a case id, run id, local service output root, and S3 input prefix.  The input prefix must contain the secret files before the create request is posted, because the service driver writes only `case.tar.gz` and `case-packet.json` into that prefix.  The same prefix is recorded in `manifest.json`, so use a fresh prefix for each run.
+
+```bash
+cd /media/hd2/src/arbattest/adjudication/adc
+
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+case_id="adc-attested-ex1-$stamp"
+run_id="run-$case_id"
+service_root="/tmp/adc-attested-service-$stamp"
+input_prefix="s3://agentcourt-data/arbattest/adc-inputs/$case_id"
+output_root="s3://agentcourt-data/arbattest/adc-runs"
+
+mkdir -p "$service_root"
+
+ssh dev "set -eu
+AWS_DEFAULT_REGION=us-east-2 aws s3 cp /home/ec2-user/arbattest-secrets/auth.json '$input_prefix/auth.json' --no-progress
+AWS_DEFAULT_REGION=us-east-2 aws s3 cp /home/ec2-user/arbattest-secrets/keys.sh '$input_prefix/keys.sh' --no-progress
+AWS_DEFAULT_REGION=us-east-2 aws s3 ls '$input_prefix/'"
+```
+
+Start the service with attestation defaults.  Leave `--attested-exec-poll-attempts` unset unless a run has a specific reason to override it; the driver derives the exec console polling limit from `--attested-timeout-seconds` with ten minutes of headroom.  The service output root is local and separate from the S3 output root.
 
 ```bash
 .bin/adc service \
   --listen 127.0.0.1:19870 \
-  --output-root out/adc-service \
+  --output-root "$service_root" \
   --adc-bin .bin/adc \
   --engine .bin/adcengine \
   --attested-driver "$(pwd)/tools/run-adc-attested.py" \
   --attested-uv uv \
-  --attested-input-prefix s3://agentcourt-data/arbattest/adc-inputs/adc-REPLACE_WITH_STAMP \
-  --attested-output-root s3://agentcourt-data/arbattest/adc-runs \
+  --attested-input-prefix "$input_prefix" \
+  --attested-output-root "$output_root" \
   --attested-exec-ami ami-011f957fe91cf7b81 \
   --attested-expected-pcr4 83AC49DFAA5D76939970E1568472FF463FBE90C4038D000D31F6C0520F583D1DD51CE0C103CEB26E4B773AAD99A4B3B4 \
-  --attested-expected-pcr7 98441C7F7625D10058C47683AEC486CE311C633235EB555593A7EE791121E3578AE72D04ECEF661F272D59058B77AF35
+  --attested-expected-pcr7 98441C7F7625D10058C47683AEC486CE311C633235EB555593A7EE791121E3578AE72D04ECEF661F272D59058B77AF35 \
+  > "$service_root/service.log" 2>&1 &
+
+service_pid="$!"
+printf 'SERVICE_PID=%s\n' "$service_pid" > "$service_root/service.env"
+
+ready=0
+for attempt in $(seq 1 30); do
+  if curl -fsS http://127.0.0.1:19870/clerk/v1/cases > "$service_root/service-ready.json"; then
+    ready=1
+    break
+  fi
+  sleep 1
+done
+test "$ready" = 1
 ```
 
-Create an attested ADC case through the same service API.  The request shape matches the local clerk create API for the case input: `complaint_path` is the complaint path, `case_id` and `run_id` are optional, and `out_dir` must remain under the service output root.  The exec entrypoint starts OpenClaw lawyer containers with `--openclaw-network host`, matching the verified ARB and AARD exec topology.  Attested ADC currently rejects `scenario_path` and local runtime fields such as model overrides, Docker commands, jury overrides, and OpenClaw options.
+Create an attested ADC case through the same service API.  The request shape matches the local clerk create API for the case input: `complaint_path` is the complaint path, `case_id` and `run_id` are optional, and omitted `out_dir` makes the service use `OUTPUT_ROOT/CASE_ID`.  Attested ADC currently rejects `scenario_path` and local runtime fields such as model overrides, Docker commands, jury overrides, and OpenClaw options.
 
 ```bash
+cat > "$service_root/create.json" <<EOF
+{
+  "mode": "run",
+  "case_id": "$case_id",
+  "run_id": "$run_id",
+  "complaint_path": "examples/ex1/complaint.md",
+  "execution": {
+    "mode": "attested",
+    "attestation": {
+      "verify": true
+    }
+  }
+}
+EOF
+
 curl -sS -X POST http://127.0.0.1:19870/clerk/v1/cases \
   -H 'content-type: application/json' \
-  --data '{
-    "mode": "run",
-    "case_id": "adc-attested-ex1",
-    "complaint_path": "examples/ex1/complaint.md",
-    "out_dir": "out/adc-service/adc-attested-ex1",
-    "execution": {
-      "mode": "attested",
-      "attestation": {
-        "verify": true
-      }
-    }
-  }'
+  --data @"$service_root/create.json" \
+  > "$service_root/create-response.json"
 ```
 
-Monitor the service record and event stream through HTTP.  While the driver is running, `/attestation/events` reads the live S3 `events.ndjson` object when the local output copy is not present.  After completion, artifact, result, and evidence routes read from the extracted `adc-output/` directory.
+Monitor the service record and event stream through HTTP.  While the driver is running, `/attestation/events` reads the live S3 `events.ndjson` object when the local output copy is absent.  After completion, artifact, result, and evidence routes read from the extracted `adc-output/` directory.
 
 ```bash
-curl -sS http://127.0.0.1:19870/clerk/v1/cases/adc-attested-ex1
-curl -sS http://127.0.0.1:19870/clerk/v1/cases/adc-attested-ex1/attestation/events
-curl -sS http://127.0.0.1:19870/clerk/v1/cases/adc-attested-ex1/artifacts
-curl -sS http://127.0.0.1:19870/clerk/v1/cases/adc-attested-ex1/result
+curl -sS "http://127.0.0.1:19870/clerk/v1/cases/$case_id" \
+  > "$service_root/record.json"
+
+curl -sS "http://127.0.0.1:19870/clerk/v1/cases/$case_id/attestation/events" \
+  > "$service_root/events.ndjson"
+
+python3 -c 'import json, sys
+record = json.load(open(sys.argv[1]))
+att = ((record.get("execution") or {}).get("attestation") or {})
+print("status=" + str(record.get("status")))
+print("attestation=" + str(att.get("status")))
+print("exit_code=" + str(record.get("exit_code")))
+' "$service_root/record.json"
+```
+
+Poll manually until the record reaches `completed`, `failed`, or `killed`.  During a long run, compare the record status with the event count and with `progress.log`; an increasing event count means ADC is still making case progress.  The local case directory is `$service_root/$case_id`, and the driver logs are `$service_root/$case_id/progress.log` and `$service_root/$case_id/launcher.log`.
+
+```bash
+while :; do
+  curl -sS "http://127.0.0.1:19870/clerk/v1/cases/$case_id" \
+    > "$service_root/record.json"
+  curl -sS "http://127.0.0.1:19870/clerk/v1/cases/$case_id/attestation/events" \
+    > "$service_root/events.ndjson"
+  python3 -c 'import json, sys
+record = json.load(open(sys.argv[1]))
+att = ((record.get("execution") or {}).get("attestation") or {})
+print("status=" + str(record.get("status")) + " attestation=" + str(att.get("status")) + " exit_code=" + str(record.get("exit_code")))
+' "$service_root/record.json"
+  wc -l "$service_root/events.ndjson"
+  status="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1])).get("status", ""))' "$service_root/record.json")"
+  case "$status" in
+    completed|failed|killed)
+      break
+      ;;
+  esac
+  sleep 30
+done
+```
+
+Inspect the completed run through the service API and the local output directory.  A completed attested record must have `execution.attestation.status` equal to `verified`, an exit code of zero, a readable `verification.log`, and an extracted `adc-output/run.json`.  The terminal S3 prefix should contain a small object set: `events.ndjson`, `run.log`, `adc-output.tar.gz`, `manifest.json`, `manifest.sha384`, and `attestation.b64`.
+
+```bash
+curl -sS "http://127.0.0.1:19870/clerk/v1/cases/$case_id/artifacts" \
+  > "$service_root/artifacts.json"
+curl -sS "http://127.0.0.1:19870/clerk/v1/cases/$case_id/result" \
+  > "$service_root/result.json"
+
+test -f "$service_root/$case_id/verification.log"
+test -f "$service_root/$case_id/adc-output/run.json"
+
+python3 -c 'import json, sys
+record = json.load(open(sys.argv[1]))
+att = ((record.get("execution") or {}).get("attestation") or {})
+if record.get("status") != "completed":
+    raise SystemExit("case did not complete")
+if record.get("exit_code") != 0:
+    raise SystemExit("driver exit code was not zero")
+if att.get("status") != "verified":
+    raise SystemExit("attestation was not verified")
+print(att.get("output_prefix", ""))
+' "$service_root/record.json"
+```
+
+Stop the service after the run has reached a terminal state.  The service record remains on disk under `$service_root/$case_id`, and the attested artifacts remain in S3 under the recorded output prefix.  A later service process started with the same `--output-root` can load the saved record.
+
+```bash
+kill "$service_pid"
 ```
 
 ## Verification
 
 A verified ADC run checks the manifest hash, the ADC archive hash, `run.log` hash, the attestation signature and certificate chain, Nitro TPM user data, and expected PCR values.  The expected PCR values in this runbook correspond to the current Docker-enabled exec AMI and must change when that AMI changes.  The local driver writes `verification.log`; the service requires that file and a readable extracted `adc-output/run.json` before marking the case completed.
+
+Run these checks from the repository root when reviewing a downloaded run directory.  They verify the local materialization, the S3 object shape, and the attestation parser output without starting another exec instance.  Replace `LOCAL` with the case output directory used by the driver or service.
+
+```bash
+LOCAL=/tmp/adc-attested-service-REPLACE/adc-attested-ex1-REPLACE
+
+test -f "$LOCAL/run.env"
+test -f "$LOCAL/progress.log"
+test -f "$LOCAL/launcher.log"
+test -f "$LOCAL/run.log"
+test -f "$LOCAL/manifest.json"
+test -f "$LOCAL/manifest.sha384"
+test -f "$LOCAL/attestation.b64"
+test -f "$LOCAL/verification.log"
+test -f "$LOCAL/adc-output.tar.gz"
+test -f "$LOCAL/adc-output/run.json"
+test -f "$LOCAL/adc-output/events.ndjson"
+
+python3 -c 'import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+manifest = json.loads((root / "manifest.json").read_text())
+required = [
+    "run_id",
+    "input_mode",
+    "input_prefix",
+    "output_prefix",
+    "archive_key",
+    "archive_sha384",
+    "run_log_sha384",
+    "case_packet_key",
+    "case_packet_sha384",
+    "case_manifest_key",
+    "case_manifest_sha384",
+]
+missing = [name for name in required if not manifest.get(name)]
+if missing:
+    raise SystemExit("manifest missing fields: " + ", ".join(missing))
+print(manifest["output_prefix"])
+' "$LOCAL"
+```
+
+## Troubleshooting
+
+Use the first concrete failing line as the diagnostic start.  The service record tells whether the Clerk layer failed before launch, the driver logs tell whether staging or `exec.sh` failed, S3 tells whether the exec container reached terminal artifact upload, and `verification.log` tells whether the record was cryptographically accepted.  Console output alone is not the attestation record; the S3 prefix and downloaded artifacts are the record.
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| The readiness check cannot fetch `/clerk/v1/cases`. | The service did not start, the port is already occupied, or `.bin/adc` cannot find its required runtime files. | Read `$service_root/service.log`, check `ss -ltnp` for `127.0.0.1:19870`, and rebuild `.bin/adc` and `.bin/adcengine` from `adjudication/adc` if the binary paths are stale. |
+| `attested execution requires input_prefix`, `exec_ami`, `expected_pcr4`, or `expected_pcr7` appears in the create response. | The service was started without a required `--attested-*` default, and the request did not provide the value. | Restart the service with the required defaults or provide those fields in `execution.attestation`. |
+| The exec entrypoint reports that `auth.json`, `keys.sh`, or `OPENROUTER_API_KEY` is missing. | The selected S3 input prefix was fresh and contained only the case packet, or `keys.sh` did not assign or export the provider key. | Stage `/home/ec2-user/arbattest-secrets/auth.json` and `/home/ec2-user/arbattest-secrets/keys.sh` to the exact `--attested-input-prefix` before posting the create request, then confirm with `aws s3 ls`. |
+| OpenClaw cannot read `/adc-codex/auth.json` or fails while importing the Codex token. | ADC could not stage a container-readable Codex home from the downloaded `auth.json`, or the auth file no longer contains a valid token. | Inspect the lawyer stderr log in the extracted ADC output and verify that the source `auth.json` on `dev` is current.  The staged Codex home should be mode `0777`, and `auth.json` should be mode `0666` in this private exec-image path. |
+| OpenClaw imports Codex auth but later reports a Codex stream disconnect from the exec AMI. | The child OpenClaw container is using Docker bridge networking inside the exec-container topology. | Confirm that the attested image contains the current entrypoint and that `run.log` shows `--openclaw-network host`.  Rebuild and upload `adc-glue:poc` if the image predates that argument. |
+| The run fails near one hour while `events.ndjson` still shows active ADC progress. | `attest/exec.sh` reached its console polling limit and terminated the exec instance before ADC produced terminal S3 artifacts. | Leave `--attested-exec-poll-attempts` unset so the driver derives it from `--attested-timeout-seconds`, or set it high enough for the expected legal run.  The current driver adds ten minutes of headroom over the ADC timeout. |
+| The S3 output prefix has `events.ndjson` but no terminal artifacts. | ADC was still running, the exec instance was terminated, or the entrypoint failed before terminal upload. | Check `$LOCAL/progress.log`, `$LOCAL/launcher.log`, EC2 instance state from the launcher output, and any partial S3 objects.  If `adc-partial.tar.gz` exists, extract it and read the ADC logs before changing code or configuration. |
+| The S3 output prefix contains thousands of ADC output objects. | The entrypoint recursively uploaded the run directory instead of one archive. | Rebuild and upload the current `adc-glue:poc`; the current path uploads one `adc-output.tar.gz` on success or one `adc-partial.tar.gz` on failure. |
+| The service record reaches `failed` with driver exit code zero absent or nonzero. | The child driver failed, or it produced partial artifacts rather than a verified success archive. | Read `$service_root/$case_id/service-logs/adc.stdout`, `$service_root/$case_id/service-logs/adc.stderr`, `progress.log`, and `launcher.log`.  The driver error should name the failed command or missing terminal object. |
+| Verification fails on `manifest.sha384`, archive hash, run-log hash, user data, or PCR values. | The downloaded files do not match the manifest, the attestation user data does not equal the manifest hash, or the exec AMI changed. | Treat the run as unverified.  Compare `manifest.json`, `manifest.sha384`, `attestation.txt`, and the expected PCR values recorded in this runbook before updating any expected values. |
+| `/attestation/events` returns an HTTP error. | The case is not an attested record, the service cannot read the live S3 event object, or the driver has not yet uploaded events. | Inspect `GET /clerk/v1/cases/$case_id`, confirm `execution.attestation.output_prefix`, and check `$service_root/$case_id/progress.log` for the driver stage. |
+| The service rejects `out_dir` as outside the output root. | The supplied path does not resolve to an immediate child of `--output-root`. | Omit `out_dir` in the create request for the standard path, or use an immediate child such as `$service_root/$case_id`. |
