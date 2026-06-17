@@ -2,6 +2,14 @@
 
 ## 2026-06-17
 
+### Lawyer source-work prompts
+
+Reference: `prompts/attorney-common.md`, `prompts/attorney-arguments.md`, `prompts/attorney-rebuttals.md`, `prompts/attorney-surrebuttals.md`
+
+The prompt review added source-mapping, staged search, browser-use, local-tool-installation, media-extraction, and capture-failure guidance to the AAR lawyer prompts.  The common prompt now tells lawyers to identify decisive facts, likely primary sources, confirming sources, adverse sources, and extraction methods before searching.  It also tells lawyers when to use browser tools, when to install a focused local program, and what to record when installation, capture, or extraction fails.
+
+The argument, rebuttal, and surrebuttal prompts now restate the phase-specific search task in concrete terms.  Arguments focus on the proposition's decisive elements and primary source paths.  Rebuttals start from the opponent's evidence ids, quoted phrases, metadata, and source chain.  Surrebuttals keep the same methods limited to new factual points raised in rebuttal.
+
 ### Manual review
 
 Reference: `manual.md`, `Dockerfile.md`, `docs/attested-dev-host.md`

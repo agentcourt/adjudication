@@ -1027,6 +1027,13 @@ func TestBuildAttorneyPromptIncludesWorkGuidanceEveryTurn(t *testing.T) {
 		"use all accessible and available resources that can find or test material evidence",
 		"install useful programs, write and run scripts or small programs",
 		"use a browser for dynamic pages or visual inspection",
+		"Investigate before each substantive filing, including openings.",
+		"Build a source map before searching.",
+		"Use layered searches rather than one broad query.",
+		"Use a browser when the evidentiary content depends on rendering or interaction",
+		"When a missing local program would materially improve retrieval, extraction, or verification",
+		"create a transcript or timestamped notes for material passages",
+		"/aar-codex/aar-work-notes.md",
 		"Use list_evidence, stat_evidence, and read_evidence_range when exact evidence bytes matter.",
 	}
 

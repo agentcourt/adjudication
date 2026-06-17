@@ -117,6 +117,24 @@ func TestHandleOpenClawLawyerExitRejectsAttorneyPhase(t *testing.T) {
 	}
 }
 
+func TestOpenClawLawyerInstructionsIncludeInvestigationAndJournal(t *testing.T) {
+	path := filepath.Join("..", "..", "agent-instructions", "openclaw-lawyer.md.tmpl")
+	got, err := renderInstructions(path, instructionData{
+		CaseID:    "case-1",
+		RoleID:    "plaintiff",
+		MCPServer: "aar-case-1-plaintiff",
+		MCPURL:    "http://127.0.0.1:19780/mcp?case_id=case-1&role_id=plaintiff",
+	})
+	if err != nil {
+		t.Fatalf("render instructions: %v", err)
+	}
+	for _, want := range []string{"/aar-codex/aar-work-notes.md", "Investigate before each filing, including the opening statement", "Evidence admission and investigation are separate"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rendered instructions missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestRemoteLawyerSkillIncludesConnectionAndWorkLoop(t *testing.T) {
 	path := filepath.Join("..", "..", "agent-instructions", "openclaw-remote-lawyer-skill.md.tmpl")
 	mcpJSON := `{"url":"http://aar.example:8001/mcp?case_id=case-1&role_id=plaintiff","transport":"streamable-http","headers":{"Authorization":"Bearer token-1"}}`
@@ -130,7 +148,7 @@ func TestRemoteLawyerSkillIncludesConnectionAndWorkLoop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render instructions: %v", err)
 	}
-	for _, want := range []string{"openclaw mcp set", "aar-case-1-plaintiff", "Bearer token-1", "wait_for_opportunity", "send_work_notes", "submit_evidence", "submit_decision"} {
+	for _, want := range []string{"openclaw mcp set", "aar-case-1-plaintiff", "Bearer token-1", "wait_for_opportunity", "send_work_notes", "submit_evidence", "submit_decision", "/aar-codex/aar-work-notes.md", "Investigate before each filing, including the opening statement"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("rendered skill missing %q:\n%s", want, got)
 		}
