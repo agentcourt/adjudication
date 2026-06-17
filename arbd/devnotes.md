@@ -1,5 +1,13 @@
 # Development Notes
 
+## 2026-06-17
+
+### Attested Clerk AARD test
+
+The first real Clerk-managed attested AARD run used `case_id=clerk-attested-aard-ex1-20260617T005035Z` and `run_id=aard-ex1-20260617T005035Z`.  The exec instance `i-019f74892947bb713` loaded `arbd-glue:poc`, downloaded `auth.json` and `keys.sh` from the S3 input prefix, and then failed before AARD produced `events.ndjson` or a verifiable attestation.  The terminal S3 objects were `run.log` and `aard-partial.tar.gz`.
+
+The failure came from `arbd/attest/exec-container-entrypoint.sh` passing `--openclaw-network host` to `aard run`.  AARD lacked the corresponding AAR option, so the argument parser treated `host` as one example name and later treated `ex1` as a second example name.  The root error was `aard run accepts at most one example name`.  The fix is to add the AAR host-network option to AARD rather than remove it from the attested entrypoint, because the exec topology expects the OpenClaw lawyer containers to use host networking.
+
 ## 2026-06-04
 
 ### Service and agent runtime migration

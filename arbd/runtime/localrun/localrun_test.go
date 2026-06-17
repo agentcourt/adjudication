@@ -414,6 +414,57 @@ func TestApplyDefaultsRunTurnTimeouts(t *testing.T) {
 	}
 }
 
+func TestApplyDefaultsOpenClawNetworkHostMCPHost(t *testing.T) {
+	opts := applyDefaults(Options{OpenClawNetwork: "host"})
+	if opts.DockerMCPHost != "127.0.0.1" {
+		t.Fatalf("DockerMCPHost = %q", opts.DockerMCPHost)
+	}
+	opts = applyDefaults(Options{OpenClawNetwork: "host", DockerMCPHost: "custom"})
+	if opts.DockerMCPHost != "custom" {
+		t.Fatalf("custom DockerMCPHost = %q", opts.DockerMCPHost)
+	}
+	opts = applyDefaults(Options{})
+	if opts.DockerMCPHost != "host.docker.internal" {
+		t.Fatalf("default DockerMCPHost = %q", opts.DockerMCPHost)
+	}
+}
+
+func TestOpenClawDockerRunArgsNetworkHost(t *testing.T) {
+	args := openClawDockerRunArgs(Options{OpenClawNetwork: "host"}, "aard-test")
+	joined := strings.Join(args, "\n")
+	for _, want := range []string{"run", "--rm", "--name\naard-test", "--network\nhost"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("args missing %q: %#v", want, args)
+		}
+	}
+	if strings.Contains(joined, "host.docker.internal") {
+		t.Fatalf("host-network args contain add-host: %#v", args)
+	}
+}
+
+func TestValidateOptionsRejectsInvalidOpenClawNetwork(t *testing.T) {
+	dir := t.TempDir()
+	instruction := filepath.Join(dir, "instruction.md")
+	if err := os.WriteFile(instruction, []byte("instruction"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OPENROUTER_API_KEY", "key")
+	err := validateOptions(Options{
+		ComplaintPath:           "complaint.md",
+		OutputDir:               dir,
+		CaseID:                  "case",
+		AutoLawyers:             DefaultAutoLawyers,
+		CouncilOutputLimitBytes: 1,
+		LawyerInstructionsPath:  instruction,
+		RemoteLawyerSkillPath:   instruction,
+		CouncilInstructionsPath: instruction,
+		OpenClawNetwork:         "bridge",
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid OpenClaw network") {
+		t.Fatalf("validateOptions error = %v", err)
+	}
+}
+
 func TestApplyDefaultsCouncilOutputLimit(t *testing.T) {
 	if got := applyDefaults(Options{}).CouncilOutputLimitBytes; got != DefaultCouncilOutputLimitBytes {
 		t.Fatalf("default council output limit = %d", got)
