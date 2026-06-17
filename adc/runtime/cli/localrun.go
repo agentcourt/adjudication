@@ -71,6 +71,7 @@ func RunLocal(args []string, stdout io.Writer, stderr io.Writer) error {
 	openClawAuth := fs.String("openclaw-auth", "", "OpenClaw auth mode: auto, codex, or api-key")
 	openClawCodexAuth := fs.String("openclaw-codex-auth", "", "Codex auth.json path for OpenClaw")
 	openClawStartDelaySeconds := fs.Int("openclaw-lawyer-start-delay-seconds", -1, "Delay between plaintiff and defendant OpenClaw startup; 0 disables")
+	openClawNetwork := fs.String("openclaw-network", "", "Docker network for OpenClaw lawyer containers: host or empty")
 	piImage := fs.String("pi-image", "", "Pi container image")
 	piMCPAdapter := fs.String("pi-mcp-adapter", "", "Pi MCP adapter package")
 	jurorOutputLimitBytes := fs.Int64("juror-output-limit-bytes", localrun.DefaultJurorOutputLimitBytes, "Total stdout plus stderr byte limit per Pi juror agent")
@@ -192,6 +193,7 @@ func RunLocal(args []string, stdout io.Writer, stderr io.Writer) error {
 		OpenClawAuth:              *openClawAuth,
 		OpenClawCodexAuthPath:     *openClawCodexAuth,
 		OpenClawStartDelaySeconds: *openClawStartDelaySeconds,
+		OpenClawNetwork:           *openClawNetwork,
 		PiImage:                   *piImage,
 		PiMCPAdapter:              *piMCPAdapter,
 		JurorOutputLimitBytes:     *jurorOutputLimitBytes,

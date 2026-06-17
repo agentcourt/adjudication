@@ -121,6 +121,57 @@ func TestStageOpenClawCodexAuthUsesContainerReadableModes(t *testing.T) {
 	}
 }
 
+func TestApplyDefaultsOpenClawNetworkHostMCPHost(t *testing.T) {
+	opts := applyDefaults(Options{OpenClawNetwork: "host"})
+	if opts.DockerMCPHost != "127.0.0.1" {
+		t.Fatalf("DockerMCPHost = %q", opts.DockerMCPHost)
+	}
+	opts = applyDefaults(Options{OpenClawNetwork: "host", DockerMCPHost: "custom"})
+	if opts.DockerMCPHost != "custom" {
+		t.Fatalf("custom DockerMCPHost = %q", opts.DockerMCPHost)
+	}
+	opts = applyDefaults(Options{})
+	if opts.DockerMCPHost != "host.docker.internal" {
+		t.Fatalf("default DockerMCPHost = %q", opts.DockerMCPHost)
+	}
+}
+
+func TestOpenClawDockerRunArgsNetworkHost(t *testing.T) {
+	args := openClawDockerRunArgs(Options{OpenClawNetwork: "host"}, "adc-test")
+	joined := strings.Join(args, "\n")
+	for _, want := range []string{"run", "--rm", "--name\nadc-test", "--network\nhost"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("args missing %q: %#v", want, args)
+		}
+	}
+	if strings.Contains(joined, "host.docker.internal") {
+		t.Fatalf("host-network args contain add-host: %#v", args)
+	}
+}
+
+func TestValidateOptionsRejectsInvalidOpenClawNetwork(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "input.md")
+	if err := os.WriteFile(file, []byte("input"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OPENROUTER_API_KEY", "key")
+	err := validateOptions(Options{
+		ScenarioPath:           file,
+		OutputDir:              dir,
+		CaseID:                 "case",
+		JurorPersonasPath:      file,
+		AutoLawyers:            DefaultAutoLawyers,
+		LawyerInstructionsPath: file,
+		RemoteLawyerSkillPath:  file,
+		JurorInstructionsPath:  file,
+		OpenClawNetwork:        "bridge",
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid OpenClaw network") {
+		t.Fatalf("validateOptions error = %v", err)
+	}
+}
+
 func TestIsConnectionRefused(t *testing.T) {
 	t.Parallel()
 

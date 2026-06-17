@@ -156,7 +156,7 @@ The clerk service can start the same attested path with `execution.mode = "attes
   --attested-expected-pcr7 98441C7F7625D10058C47683AEC486CE311C633235EB555593A7EE791121E3578AE72D04ECEF661F272D59058B77AF35
 ```
 
-Create an attested ADC case through the same service API.  The request shape matches the local clerk create API for the case input: `complaint_path` is the complaint path, `case_id` and `run_id` are optional, and `out_dir` must remain under the service output root.  Attested ADC currently rejects `scenario_path` and local runtime fields such as model overrides, Docker commands, jury overrides, and OpenClaw options.
+Create an attested ADC case through the same service API.  The request shape matches the local clerk create API for the case input: `complaint_path` is the complaint path, `case_id` and `run_id` are optional, and `out_dir` must remain under the service output root.  The exec entrypoint starts OpenClaw lawyer containers with `--openclaw-network host`, matching the verified ARB and AARD exec topology.  Attested ADC currently rejects `scenario_path` and local runtime fields such as model overrides, Docker commands, jury overrides, and OpenClaw options.
 
 ```bash
 curl -sS -X POST http://127.0.0.1:19870/clerk/v1/cases \

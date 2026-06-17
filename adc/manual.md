@@ -208,6 +208,7 @@ Important local-agent flags:
 | `--openclaw-thinking` | OpenClaw thinking setting. |
 | `--openclaw-timeout-seconds` | Timeout passed to `openclaw agent`. |
 | `--openclaw-lawyer-start-delay-seconds` | Delay between plaintiff and defendant container startup.  The default is 15 seconds. |
+| `--openclaw-network` | Docker network for OpenClaw lawyer containers.  The supported non-empty value is `host`. |
 | `--pi-image` | Pi container image. |
 | `--pi-mcp-adapter` | Pi MCP adapter package. |
 | `--juror-output-limit-bytes` | Total stdout plus stderr byte cap per Pi juror process.  The default is 128 MiB. |
@@ -410,7 +411,7 @@ For `mode: "direct"`, the create request accepts `external_roles` to expose sele
 
 Attested ADC runs use the same `POST /clerk/v1/cases` input shape for the case itself: the request supplies `complaint_path`, optional `case_id`, optional `run_id`, and optional `out_dir`.  The request adds `execution.mode: "attested"` and an `execution.attestation` object, while the service supplies any defaults configured through `adc service --attested-*` flags.  The first attested ADC path supports complaint input only and rejects `scenario_path` and local runtime override fields until those fields have explicit attestation support.
 
-The attested driver packages the complaint and linked local files into a deterministic case packet before it starts the exec AMI.  The exec container downloads `auth.json`, `keys.sh`, `case.tar.gz`, and `case-packet.json` from `INPUT_PREFIX`, verifies the packet hashes, runs `adc run --complaint` inside the attested workload image, uploads live `events.ndjson`, and writes terminal artifacts to `OUTPUT_PREFIX`.  The service marks an attested case `completed` only after the driver verifies the attestation and extracts a readable `adc-output/run.json`.
+The attested driver packages the complaint and linked local files into a deterministic case packet before it starts the exec AMI.  The exec container downloads `auth.json`, `keys.sh`, `case.tar.gz`, and `case-packet.json` from `INPUT_PREFIX`, verifies the packet hashes, runs `adc run --complaint` inside the attested workload image, uploads live `events.ndjson`, and writes terminal artifacts to `OUTPUT_PREFIX`.  The exec entrypoint runs OpenClaw lawyer containers with `--openclaw-network host`, matching the verified ARB and AARD exec topology.  The service marks an attested case `completed` only after the driver verifies the attestation and extracts a readable `adc-output/run.json`.
 
 Start the service with attested defaults when callers should not repeat the driver path, S3 roots, AMI id, and PCR values in every request.  The service flags correspond to the lower-level `tools/run-adc-attested.py` options, and request-level attestation fields can override them when needed.  The detailed image build, S3 layout, and verification procedure live in [ADC Docker Image Runbook](Dockerfile.md) and [Attested ADC Dev Host Requirements](docs/attested-dev-host.md).
 

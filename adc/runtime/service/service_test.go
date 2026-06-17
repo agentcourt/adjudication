@@ -332,6 +332,9 @@ func TestCreateAttestedComplaintCompletesAfterVerification(t *testing.T) {
 	if rec.Execution == nil || rec.Execution.Attestation == nil || rec.Execution.Attestation.Status != attestationStatusVerified {
 		t.Fatalf("execution = %#v", rec.Execution)
 	}
+	if rec.Execution.Resolved.OutputPrefix != "s3://bucket/adc-output/run-attested-1" {
+		t.Fatalf("resolved output prefix = %q", rec.Execution.Resolved.OutputPrefix)
+	}
 	if rec.Summary["complaint"] != complaint || rec.Summary["case_id"] != "attested-1" {
 		t.Fatalf("summary = %#v", rec.Summary)
 	}

@@ -382,7 +382,7 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 			return CaseRecord{}, fmt.Errorf("scenario_path: %w", err)
 		}
 	}
-	execution, err := s.resolveCaseExecution(req, mode)
+	execution, err := s.resolveCaseExecution(req, mode, runID)
 	if err != nil {
 		return CaseRecord{}, err
 	}

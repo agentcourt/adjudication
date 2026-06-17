@@ -301,6 +301,7 @@ case "$mode" in
             --out-dir "$adc_out" \
             --openclaw-auth codex \
             --openclaw-codex-auth "$secrets_dir/auth.json" \
+            --openclaw-network host \
             --docker docker \
             --podman docker \
             --pi-image agentcourt-pi-sandbox:latest

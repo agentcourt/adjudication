@@ -22,6 +22,8 @@ The clerk service uses `execution.mode = "attested"` with an `execution.attestat
 
 ADC local OpenClaw Codex auth staging now matches the working AAR and AARD behavior.  The staged Codex home is mode `0777`, and `auth.json` is mode `0666`, because OpenClaw reads the mounted file as a container user that may not match the host user.  The attested run still excludes those staged auth directories from uploaded ADC archives.
 
+ADC now also matches the AAR and AARD OpenClaw networking fix.  In the exec AMI topology, a child OpenClaw container using Docker bridge networking can import Codex auth and still fail a Codex request with `stream disconnected before completion` from `https://chatgpt.com/backend-api/codex/responses`.  The recorded AAR diagnosis showed the same failure on the same Docker-enabled exec AMI and showed that `--network host` fixed it.  ADC therefore supports `--openclaw-network host`, uses `127.0.0.1` as the Docker MCP host in that mode, omits the bridge-only `host.docker.internal` mapping, and passes `--openclaw-network host` from the attested exec entrypoint.
+
 ### Verification
 
 - [x] `go test ./adc/runtime/casepacket`

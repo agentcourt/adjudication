@@ -78,6 +78,10 @@ If the bucket enforces SSE-KMS, add KMS permissions for the same actors.  Upload
 
 `/home/ec2-user/arbattest-secrets/keys.sh` must assign or export `OPENROUTER_API_KEY`.  The exec container entrypoint sources it before running ADC and exits if the key is absent.  Add further provider keys only when the selected runtime path requires them.
 
+## OpenClaw Networking
+
+Attested ADC runs start OpenClaw lawyer containers from inside the exec workload container through the host Docker socket.  Those child OpenClaw containers must use Docker host networking on the Docker-enabled exec AMI.  The ADC exec entrypoint passes `--openclaw-network host`, and `adc run` uses `127.0.0.1` as the Docker MCP host in that mode.
+
 ## Verification Configuration
 
 The current lower-level command verifies the exec AMI with PCR4 and PCR7.  PCR12 defaults to all zeroes unless a caller supplies another value.  Store the expected PCR values with the AMI id and replace them whenever the exec AMI changes.

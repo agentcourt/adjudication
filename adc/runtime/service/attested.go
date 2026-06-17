@@ -112,7 +112,7 @@ type attestedCaseUpdate struct {
 	err         string
 }
 
-func (s *Server) resolveCaseExecution(req CaseCreateRequest, mode string) (*ClerkExecutionRecord, error) {
+func (s *Server) resolveCaseExecution(req CaseCreateRequest, mode string, runID string) (*ClerkExecutionRecord, error) {
 	if req.Execution == nil {
 		return nil, nil
 	}
@@ -130,13 +130,13 @@ func (s *Server) resolveCaseExecution(req CaseCreateRequest, mode string) (*Cler
 		if normalizeCreateMode(mode) != "run" {
 			return nil, fmt.Errorf("attested execution supports mode=run only")
 		}
-		return s.resolveAttestedCaseExecution(req)
+		return s.resolveAttestedCaseExecution(req, runID)
 	default:
 		return nil, fmt.Errorf("unsupported execution mode %q", executionMode)
 	}
 }
 
-func (s *Server) resolveAttestedCaseExecution(req CaseCreateRequest) (*ClerkExecutionRecord, error) {
+func (s *Server) resolveAttestedCaseExecution(req CaseCreateRequest, runID string) (*ClerkExecutionRecord, error) {
 	if err := validateAttestedCaseRequest(req); err != nil {
 		return nil, err
 	}
@@ -172,6 +172,7 @@ func (s *Server) resolveAttestedCaseExecution(req CaseCreateRequest) (*ClerkExec
 	if err := validateAttestedS3Config(cfg); err != nil {
 		return nil, err
 	}
+	cfg.OutputPrefix = resolvedAttestedOutputPrefix(cfg.OutputPrefix, cfg.OutputRoot, runID)
 
 	requested := *req.Execution
 	return &ClerkExecutionRecord{
@@ -343,6 +344,16 @@ func validateAttestedCaseRequest(req CaseCreateRequest) error {
 		return fmt.Errorf("attested execution does not support these local run fields yet: %s", strings.Join(fields, ", "))
 	}
 	return nil
+}
+
+func resolvedAttestedOutputPrefix(outputPrefix string, outputRoot string, runID string) string {
+	if outputPrefix != "" {
+		return outputPrefix
+	}
+	if outputRoot == "" {
+		return ""
+	}
+	return strings.TrimRight(outputRoot, "/") + "/" + runID
 }
 
 func mergeAttestedRequest(cfg *AttestedClerkConfig, req *ClerkAttestationRequest) {
