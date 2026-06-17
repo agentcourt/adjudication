@@ -14,6 +14,8 @@ The third run used `case_id=clerk-attested-aard-ex1-20260617T012752Z` and `run_i
 
 The fourth run used `case_id=clerk-attested-aard-ex1-20260617T013611Z` and `run_id=aard-ex1-20260617T013611Z`.  It reached OpenClaw and failed when the plaintiff container reported `EACCES` while reading `/aard-codex/auth.json`.  AARD still staged the mounted Codex home with mode `0700` and the token file with mode `0600`, while the working AAR path stages the directory as `0777` and `auth.json` as `0666` because OpenClaw reads the mounted files as a different container user.
 
+The fifth run used `case_id=clerk-attested-aard-ex1-20260617T014658Z` and `run_id=aard-ex1-20260617T014658Z`.  The Clerk service completed the case, the driver downloaded `aard-output.tar.gz`, `attestation.b64`, `events.ndjson`, `manifest.json`, `manifest.sha384`, and `run.log`, and verification passed with PCR 4, PCR 7, PCR 12, signature, manifest hash, archive hash, and archive size checks.  The Clerk result reported answers `C1=74`, `C2=74`, `C3=83`, and `C4=76`; `C5` exited during deliberation and the AARD engine removed that council member, then closed the case with the remaining seated answers.  The exec instance `i-08a9c08482ca8408f` terminated after completion.
+
 ## 2026-06-04
 
 ### Service and agent runtime migration
