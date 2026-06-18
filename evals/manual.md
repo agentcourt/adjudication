@@ -1,121 +1,55 @@
 # Adjudication Evals Manual
 
-`evals/` contains adjudication eval tools and endpoint-variant sampling tools for juror and council model pools.  The checked-in eval sets are sized for manual audit: a 20-item core set and a 20-item deliberation set.  The directory also contains the current checked-in filtered endpoint-variant snapshot, gene-response clustering tools, and pool samplers.
+`evals/` selects OpenRouter provider endpoints for juror and council model pools.  It evaluates endpoints with JSON-scored question sets, filters endpoints by provider-error count and deliberation score, samples behavior prompts from accepted endpoints, clusters response embeddings, and samples endpoint/persona records for pool use.  Scripts write generated files under `results/`, while checked-in inputs live in `sets/`, `schemas/`, `rubrics/`, `prompts/`, `personas/`, `config/`, `genes.json`, and `sampled-genes.json`.
 
-The runner requests strict JSON responses and records raw outputs, parsed responses, tool traces, provider metadata, and timing data.  Generated run artifacts belong under `results/`, which is ignored except for `results/.gitkeep`.  The current checked-in endpoint-variant survivor set lives under `variants/filtered-20260529/`.
+Use `evals/` as the working directory unless a command says otherwise.  OpenRouter calls require `OPENROUTER_API_KEY` in the environment or an ignored `secrets/openrouter.api.txt` file.  Gene-response embedding calls also require `OPENAI_API_KEY` in the environment or an ignored `secrets/openai.api.txt` file.
+
+The runner requests strict JSON responses and records raw outputs, parsed responses, tool traces, provider metadata, timing data, and cost data.  Treat each directory under `results/` as a run record with enough data to audit the model behavior and reconstruct the command shape.  The current checked-in accepted endpoint set lives under `variants/filtered-20260529/`, and current-provider claims require a refreshed inventory and fresh evals.
 
 ## Purpose
 
-The eval tools answer two questions for adjudication model pools.  First, they check whether a model can follow the small adjudication response format, use bounded evidence, cite records, and avoid obvious reasoning failures.  Second, they build endpoint-variant and persona-cluster records that can feed juror and council selection in `adc/`, `arb/`, and `arbd/`.
+The eval tools serve two jobs for adjudication model pools.  They check whether a model can follow the adjudication response format, use bounded evidence, cite records, and avoid obvious reasoning failures.  They also build endpoint-variant and persona-cluster records that can feed juror and council selection in `adc/`, `arb/`, and `arbd/`.
 
-The eval set is sized for manual review.  A high score shows that a model behaved acceptably on these items under the recorded provider route, request parameters, and prompt wrapper.  Later OpenRouter routes, different provider endpoints, and changed model releases require fresh evaluation.
+The eval sets are sized for manual review.  A high score shows that a model behaved acceptably on these items under the recorded provider route, request parameters, and prompt wrapper.  Later OpenRouter routes, different provider endpoints, and changed model releases require fresh evaluation.
 
-## Operator Guidance
+## Task Guide
 
-Validate files before OpenRouter calls.  `tools/score_eval.py validate-items` checks the item files, and `tools/audit_eval.py --json` checks repository consistency.  If either command fails, fix the item, schema, fixture, or repository reference before running OpenRouter calls.
-
-Treat each directory under `results/` as one run record.  Preserve raw result rows, score output, logs, manifests, variant specs, and summaries together.  Use raw rows for model behavior, score files for deterministic evaluation, logs for provider or runner failures, and manifests for reconstructing the command shape.
-
-Refresh endpoint inventories when claims depend on current provider behavior.  The checked-in filtered variant set is a snapshot, and OpenRouter providers can change routing, availability, pricing, metadata, and serving behavior after the snapshot.  Run the inventory, batch eval, filtering, gene-response, clustering, and sampling tools in sequence when producing a new pool.
-
-## Contents
-
-| Path | Contents |
+| Task | Use |
 | --- | --- |
-| `sets/core20/questions.jsonl` | The canonical 20-item core eval set. |
-| `sets/deliberation/questions.jsonl` | A 20-item deliberation set used for `deliberation_score`. |
-| `sets/core20/fixtures/` | Bounded evidence records for tool/evidence items. |
-| `schemas/` | JSON Schemas for items, model responses, and run results. |
-| `rubrics/core20.md` | Deterministic scoring rules. |
-| `prompts/` | Single-juror and council-member prompt wrappers. |
-| `personas/generic.md` | The current generic persona for gene-response sampling. |
-| `config/` | Model-pool configuration files. |
-| `tools/run_eval.py` | The mock and OpenRouter runner, including function-tool mode for bounded-record items. |
-| `tools/score_eval.py` | The item validator and deterministic scorer. |
-| `tools/audit_eval.py` | The repository consistency audit. |
-| `tools/tool_server.py` | Local read-only evidence tools used by the runner. |
-| `tools/model_inventory.py` | The OpenRouter model/provider endpoint inventory tool. |
-| `tools/run_end_to_end.py` | The end-to-end pipeline runner that calls the inventory, eval, filtering, gene, PCA, clustering, aggregation, and pool tools. |
-| `tools/run_variant_batch.py` | The endpoint-variant batch evaluator. |
-| `tools/run_first_gene_inference_embeddings.py` | The gene-response and embedding runner. |
-| `tools/run_embedding_pca.py` | The embedding PCA reducer. |
-| `tools/run_gene_pca_clustering.py` | The per-gene PCA clustering tool. |
-| `tools/aggregate_variant_persona_clusters.py` | The cluster-vector aggregator for variant/persona rows. |
-| `variants/filtered-20260529/` | A 32-row survivor endpoint-variant snapshot with exact request specs. |
-| `genes.json` and `sampled-genes.json` | The source gene list and the sampled gene subset used by the clustering procedure. |
-| `tools/sample-pool.py`, `tools/sample-diverse-pool.py`, and `tools/sample-tuple-pool.py` | Pool samplers for variant/persona cluster rows. |
-| `docs/model-inventory.md` | Notes for OpenRouter endpoint inventory work. |
-| `docs/sampling-runbook.md` | The repeatable sampling procedure from root-model inventory through tuple-uniform pool sampling. |
+| Check one model or pinned provider endpoint against a question set. | [Question-Set Evaluation](#question-set-evaluation) |
+| Build a pool from OpenRouter model IDs. | [Full Selection Procedure](#full-selection-procedure) |
+| Refresh or inspect the accepted provider endpoint set. | [Provider Endpoint Selection](#provider-endpoint-selection) |
+| Understand behavior prompts, embeddings, PCA, clusters, and pool sampling. | [Behavior Clustering And Pool Sampling](#behavior-clustering-and-pool-sampling) |
+| Interpret score fields. | [Score Model](#score-model) |
+| Diagnose failed validation, endpoint, batch, or clustering runs. | [Troubleshooting](#troubleshooting) |
+| Find the meaning and purpose of a repository term. | [Glossary](#glossary) |
+| Find the file that stores a specific record. | [File Reference](#file-reference) |
 
-## Quick Start
+## Operating Rules
 
-Validate the core items:
+Validate checked-in inputs before OpenRouter calls.  `tools/score_eval.py validate-items` checks item files, and `tools/audit_eval.py --json` checks repository consistency.  If either command fails, fix the item, schema, fixture, or repository reference before running network calls.
 
-```bash
-uv run tools/score_eval.py validate-items --questions sets/core20/questions.jsonl
-```
+Preserve run artifacts as a unit.  Raw result rows show model behavior, score files show deterministic evaluation, logs show provider or runner failures, manifests record command shape, and copied specs record exact endpoint-routing requests.  Moving one file without the others makes later comparison harder and can hide provider-route differences.
 
-Validate the deliberation items:
+Refresh endpoint inventories when a claim depends on current provider behavior.  OpenRouter providers can change routing, availability, pricing, metadata, and serving behavior after the checked-in snapshot.  Rebuild the inventory, batch eval, filtered endpoint set, gene responses, PCA records, clusters, aggregate records, and sampled pool when producing a new pool for current runs.
 
-```bash
-uv run tools/score_eval.py validate-items --questions sets/deliberation/questions.jsonl
-```
+## Full Selection Procedure
 
-Run the internal consistency audit:
+Input: OpenRouter model IDs.  Output: `pool.jsonl`, a JSONL file of endpoint/persona records.  A provider endpoint is evaluated as its own unit because one OpenRouter model ID can route to multiple provider endpoints with different provider tags, quantization, context limits, supported parameters, pricing, and behavior.
 
-```bash
-uv run tools/audit_eval.py --json
-```
+| Step | Input | Script | Output |
+| --- | --- | --- | --- |
+| Select root models | Explicit OpenRouter model IDs, or `--root-count` plus `--root-seed` | `tools/run_end_to_end.py` or a recorded selection command | Selected OpenRouter model IDs |
+| Inventory provider endpoints | Selected OpenRouter model IDs | `tools/model_inventory.py` | Provider endpoint rows and raw OpenRouter catalog files |
+| Evaluate provider endpoints | Provider endpoint rows and a question file | `tools/run_variant_batch.py`, which calls `tools/run_eval.py` and `tools/score_eval.py` | Response files, score files, exact request specs, and per-endpoint summary rows |
+| Filter endpoints | Provider endpoint rows and evaluation summaries | `tools/run_end_to_end.py` filter stage, or the filter script in [Sampling Runbook](docs/sampling-runbook.md) | Accepted endpoint rows, rejected endpoint records, copied request specs, and filter summary |
+| Collect behavior responses | Accepted endpoint rows, sampled genes, persona file, sample count | `tools/run_first_gene_inference_embeddings.py` | Gene completions, OpenRouter metadata, embeddings, and per-gene summary |
+| Reduce embeddings | Gene completion records with embeddings | `tools/run_embedding_pca.py` | PCA coordinates and PCA summary |
+| Cluster responses | Per-gene PCA records | `tools/run_gene_pca_clustering.py` | Cluster assignments and clustering summary |
+| Aggregate cluster labels | Cluster assignments, cluster fit, and accepted endpoint rows | `tools/aggregate_variant_persona_clusters.py` | Endpoint/persona cluster records |
+| Sample pool | Endpoint/persona cluster records | `tools/sample-tuple-pool.py` | `pool.jsonl` and sampling diagnostics |
 
-Run and score a deterministic local baseline.  The runner defaults to three repeated trials per model/item, so the 20-item core set produces 60 result rows.
-
-```bash
-uv run tools/run_eval.py --mock perfect --models mock:perfect --out results/mock-perfect
-uv run tools/score_eval.py score --run results/mock-perfect
-```
-
-Run a minimal OpenRouter test:
-
-```bash
-uv run tools/run_eval.py --models openrouter://openai/gpt-4.1-mini --limit 2 --out results/openrouter-test
-uv run tools/score_eval.py score --run results/openrouter-test
-```
-
-Run a single exact OpenRouter endpoint variant from a JSON spec:
-
-```bash
-uv run tools/run_eval.py --model-spec variants/filtered-20260529/specs/03-openai-gpt-4o-mini-2024-07-18-openai-openai.json --limit 2 --out results/openrouter-variant-test
-uv run tools/score_eval.py score --run results/openrouter-variant-test
-```
-
-Run endpoint variants from JSONL inventory/spec rows:
-
-```bash
-uv run tools/run_eval.py --model-spec-jsonl variants/filtered-20260529/endpoint_variants.jsonl --limit 2 --out results/openrouter-variant-jsonl-test
-uv run tools/score_eval.py score --run results/openrouter-variant-jsonl-test
-```
-
-Run the deliberation eval view:
-
-```bash
-uv run tools/run_eval.py --questions sets/deliberation/questions.jsonl --models openrouter://openai/gpt-4.1-mini --out results/deliberation-openrouter-test
-uv run tools/score_eval.py score --questions sets/deliberation/questions.jsonl --run results/deliberation-openrouter-test
-```
-
-Use `--trials 1` for a single-pass test run.  The default of three trials supports stability fields in the scorer.
-
-Run one real function-tool test item:
-
-```bash
-uv run tools/run_eval.py --questions sets/core20/questions.jsonl --item-id core20.tool.001 --tool-mode function --models openrouter://openai/gpt-4.1-mini --out results/tool-function-openrouter-test
-uv run tools/score_eval.py score --questions sets/core20/questions.jsonl --run results/tool-function-openrouter-test
-```
-
-The OpenRouter tools read `OPENROUTER_API_KEY` from the environment first.  If the variable is absent, they check `secrets/openrouter.api.txt`, which is ignored.  The gene-response embedding runner also needs `OPENAI_API_KEY`; if that variable is absent, it checks ignored `secrets/openai.api.txt`.
-
-## End-To-End Runner
-
-`tools/run_end_to_end.py` runs the full endpoint-variant pool pipeline by calling the existing tools.  It writes one top-level run directory with `manifest.json`, `commands.jsonl`, stage subdirectories, and `summary.json`.
+`tools/run_end_to_end.py` executes those stages in one command.  It writes `manifest.json`, `commands.jsonl`, stage directories, and `summary.json` under one output directory.  Use the individual scripts when a stage needs inspection, a failed stage needs to be repeated, or the accepted endpoint snapshot under `variants/` needs to be rebuilt with explicit filter records.
 
 ```bash
 uv run --script tools/run_end_to_end.py \
@@ -131,34 +65,151 @@ uv run --script tools/run_end_to_end.py \
   --pool-size 5
 ```
 
-The default run uses five root models, one eval trial, two genes, and one sample per gene.  Use `--model-id` to evaluate explicit OpenRouter model IDs instead of sampling roots.  Use `--resume` to reuse completed stage outputs, `--stop-after` to stop at a stage boundary, and `--strict-pca-dimensions` to fail rather than cap PCA dimensions to the available row count.  The eval stage passes `--timeout` as the per-request timeout and uses `--eval-no-progress-timeout` to terminate a variant child process that stops writing output or result rows.
+This example evaluates five sampled root models, uses one trial per question, samples two genes, collects one response per accepted endpoint/gene pair, reduces embeddings to three PCA dimensions, searches K-means values from `2` through `4`, and writes five pool entries.  A production pool should set root model IDs or root sampling parameters, question file, trial count, filter criteria, gene selection, sample count, PCA dimensions, clustering range, pool size, and random seeds explicitly.  Use `--resume` to reuse completed stage files and `--stop-after` to stop after a named stage.
 
-## OpenRouter Endpoint Variants
+## Glossary
 
-`tools/model_inventory.py` builds a static OpenRouter endpoint inventory.  A variant row represents one provider endpoint configuration for one OpenRouter model ID.  The row preserves provider, endpoint tag, quantization, context limits, supported parameters, pricing, status fields when OpenRouter exposes them, raw JSON paths, and raw JSON hashes.
+| Term | Meaning | Purpose | Main files |
+| --- | --- | --- | --- |
+| Question | One ordinary question or record-based adjudication task. | Tests answer quality, JSON compliance, or record use. | `sets/*/questions.jsonl` |
+| Evidence record | Local evidence for a record-based adjudication question. | Limits what the model may cite when answering a record-based question. | `sets/core20/fixtures/*` |
+| Response | Strict JSON returned by a model for one question. | Gives the scorer fixed fields for answer, confidence, rationale, and evidence citations. | `schemas/response.schema.json` |
+| Evaluation output | Raw and parsed responses for a model or provider endpoint over questions and trials. | Preserves model output, tool trace, provider metadata, timing data, and errors before scoring. | `results/*/raw_results.jsonl`, `results/*/run.json` |
+| Score | Deterministic checks and aggregate metrics for an evaluation output. | Separates answer quality from formatting failures, provider errors, tool failures, latency, and cost. | `results/*/scores.json`, `results/*/scores.jsonl` |
+| Provider endpoint | One OpenRouter provider endpoint for one OpenRouter model ID. | Keeps provider routing, quantization, context limits, pricing, and supported parameters separate during evaluation. | `endpoint_variants.jsonl` |
+| Accepted endpoint | A provider endpoint that passed the current operational and deliberation filters. | Supplies eligible endpoints for behavior sampling and pool construction. | `variants/filtered-20260529/*` |
+| Gene | A behavior-eliciting prompt used after endpoint filtering. | Produces response variation used to compare accepted endpoints beyond question-set scores. | `genes.json`, `sampled-genes.json` |
+| Persona | Role text used while sampling gene responses. | Holds the role constant while comparing endpoint behavior on genes. | `personas/generic.md` |
+| Cluster assignment | One sampled completion assigned to a per-gene PCA cluster. | Records the behavior group for one endpoint response to one gene. | `clusters.jsonl` |
+| Cluster record | One endpoint/persona row with one cluster label per sampled gene. | Summarizes endpoint/persona behavior for pool sampling. | `variant-persona-clusters.jsonl` |
+| Pool entry | One selected endpoint/persona row for a model pool. | Provides endpoint/persona records to pool code. | `pool.jsonl` |
 
-Run a sampled inventory:
+## Question-Set Evaluation
+
+Question-set evaluation tests whether a model or pinned provider endpoint answers the question set correctly and returns the required JSON.  It also records formatting failures, provider errors, tool failures, latency, and cost as separate fields.  Pool filtering uses those separate fields instead of mixing operational failures with answer quality.
+
+| Input | Meaning |
+| --- | --- |
+| Question file | `sets/core20/questions.jsonl` or `sets/deliberation/questions.jsonl` |
+| Target endpoint | `--models openrouter://...`, `--model-spec ...`, `--model-spec-jsonl ...`, or a mock model |
+| Trial count | `--trials`, default `3` |
+| Evidence records | `sets/core20/fixtures/*` for record-based adjudication questions |
+| Output directory | `--out results/<name>` |
+
+| Output | Contents |
+| --- | --- |
+| `raw_results.jsonl` | One response row per target, trial, and question |
+| `run.json` | Response rows, model specs, question IDs, trial count, and timestamps |
+| `scores.jsonl` | One scored row per response after `tools/score_eval.py score` |
+| `scores.json` | Aggregate score summary by model or provider endpoint |
+
+Ordinary questions must return `answer`, `confidence`, `rationale`, and `evidence_ids`.  The evidence list is empty unless the question requires evidence.  Record-based adjudication questions must return `vote`, `confidence`, `rationale`, and `evidence_ids`, and cited evidence IDs must come from the evidence record.
+
+```json
+{"answer":"A","confidence":0.75,"rationale":"One to three sentences.","evidence_ids":[]}
+```
+
+```json
+{"vote":"demonstrated","confidence":0.75,"rationale":"One to three sentences.","evidence_ids":["E1"]}
+```
+
+`sets/core20/questions.jsonl` contains 20 questions: four human-knowledge questions, four science or quantitative questions, four reasoning questions, four instruction-following questions, and four record-based adjudication questions.  `sets/deliberation/questions.jsonl` contains the first twelve knowledge, science, and reasoning questions from `core20` plus eight juror-deliberation questions.  The juror-deliberation questions test burden of proof, evidentiary sufficiency, source reliability, conflicting records, temporal precision, alternative explanations, confidence calibration, and scope control.
+
+The local baseline needs no API key:
 
 ```bash
-uv run tools/model_inventory.py --sample-models 5
+uv run tools/score_eval.py validate-items --questions sets/core20/questions.jsonl
+uv run tools/score_eval.py validate-items --questions sets/deliberation/questions.jsonl
+uv run tools/audit_eval.py --json
+uv run tools/run_eval.py --mock perfect --models mock:perfect --out results/mock-perfect
+uv run tools/score_eval.py score --run results/mock-perfect
 ```
 
-Run a specific model:
+A two-question OpenRouter evaluation confirms credentials, request formatting, result writing, and scoring:
 
 ```bash
-uv run tools/model_inventory.py --model-id deepseek/deepseek-v4-flash
+uv run tools/run_eval.py \
+  --models openrouter://openai/gpt-4.1-mini \
+  --limit 2 \
+  --out results/openrouter-test
+
+uv run tools/score_eval.py score --run results/openrouter-test
 ```
 
-Outputs are written under `results/<run-id>/`:
+An exact provider-endpoint evaluation starts from a JSON spec.  `tools/run_eval.py` adds the OpenRouter metadata header, requests the pinned provider endpoint, disables fallbacks, and records returned generation metadata when OpenRouter provides it.  The spec files under `variants/filtered-20260529/specs/` show the request body used for the checked-in accepted endpoint set.
 
-```text
-endpoint_variants.jsonl
-endpoint_variants.csv
-summary.json
-summary.md
-raw/models.json
-raw/endpoints/*.json
+```bash
+uv run tools/run_eval.py \
+  --model-spec variants/filtered-20260529/specs/03-openai-gpt-4o-mini-2024-07-18-openai-openai.json \
+  --limit 2 \
+  --out results/openrouter-provider-endpoint-test
+
+uv run tools/score_eval.py score --run results/openrouter-provider-endpoint-test
 ```
+
+Endpoint rows can also be evaluated directly from JSONL:
+
+```bash
+uv run tools/run_eval.py \
+  --model-spec-jsonl variants/filtered-20260529/endpoint_variants.jsonl \
+  --limit 2 \
+  --out results/openrouter-variant-jsonl-test
+
+uv run tools/score_eval.py score --run results/openrouter-variant-jsonl-test
+```
+
+Run one record-backed function-tool item when changing evidence-tool behavior:
+
+```bash
+uv run tools/run_eval.py \
+  --questions sets/core20/questions.jsonl \
+  --item-id core20.tool.001 \
+  --tool-mode function \
+  --models openrouter://openai/gpt-4.1-mini \
+  --out results/tool-function-openrouter-test
+
+uv run tools/score_eval.py score \
+  --questions sets/core20/questions.jsonl \
+  --run results/tool-function-openrouter-test
+```
+
+Run the deliberation eval view when changing deliberation scoring or juror-facing prompts:
+
+```bash
+uv run tools/run_eval.py \
+  --questions sets/deliberation/questions.jsonl \
+  --models openrouter://openai/gpt-4.1-mini \
+  --out results/deliberation-openrouter-test
+
+uv run tools/score_eval.py score \
+  --questions sets/deliberation/questions.jsonl \
+  --run results/deliberation-openrouter-test
+```
+
+Use `--trials 1` for a single-pass test run.  The default of three trials supports stability fields in the scorer.  Preserve the trial count in run notes when comparing scores across runs.
+
+`deliberation_score` is the mean, across trials, of the fraction of deliberation questions answered correctly on the substantive issue.  Operational metrics report latency, provider failures, malformed JSON, schema violations, invalid votes, tool-call failures, context-limit errors, and cost.  The checked-in accepted endpoint set uses `provider_error_count == 0` and `deliberation_score >= 0.90`.
+
+## Provider Endpoint Selection
+
+Provider endpoint selection records the provider endpoints available for selected OpenRouter model IDs, evaluates each endpoint separately, and applies explicit filter criteria.  `tools/model_inventory.py` fetches the OpenRouter model catalog and endpoint metadata, then writes one normalized row per provider endpoint.  Each row preserves raw model JSON, raw endpoint JSON, provider name, endpoint tag, quantization, context limits, supported parameters, pricing, and status fields when OpenRouter returns them.
+
+```bash
+uv run tools/model_inventory.py \
+  --run-id model-roots-10-YYYYMMDDTHHMMSSZ \
+  --model-id deepseek/deepseek-v4-flash
+```
+
+Inventory outputs:
+
+| File | Contents |
+| --- | --- |
+| `endpoint_variants.jsonl` | One provider endpoint row per OpenRouter endpoint |
+| `endpoint_variants.csv` | Inspection table for endpoint rows |
+| `summary.json` | Counts, selected model IDs, provider counts, and endpoint-fetch errors |
+| `summary.md` | Markdown summary of the same inventory |
+| `raw/models.json` | Raw OpenRouter model catalog response |
+| `raw/endpoints/*.json` | Raw OpenRouter endpoint metadata responses |
 
 Use these fields from a variant JSON object when constructing an exact OpenRouter request:
 
@@ -170,7 +221,7 @@ Use these fields from a variant JSON object when constructing an exact OpenRoute
 | `quantization` | `provider.quantizations` when the value is known |
 | `supported_parameters` | Runtime parameters safe to send |
 
-For a known-quantization endpoint, the request shape is:
+Provider-endpoint evaluations use exact routing constraints.  For known quantization, the request includes `provider.only`, `allow_fallbacks: false`, `require_parameters: true`, and `provider.quantizations`.  For `quantization: "unknown"`, the request still pins the provider endpoint and omits the quantization list.
 
 ```json
 {
@@ -215,11 +266,7 @@ Exact-variant runs set this HTTP header:
 X-OpenRouter-Experimental-Metadata: enabled
 ```
 
-After each OpenRouter call, verify the routed endpoint from response metadata and `/api/v1/generation?id=<generation_id>`.  Record provider, endpoint, usage, cost, latency, native token counts, and upstream IDs when OpenRouter returns them.  The request measures the routed OpenRouter endpoint product, but it cannot establish exact weights, serving engine, GPU type, KV-cache precision, hidden provider prompt templates, or provider-side changes after the inventory snapshot.
-
-`tools/run_eval.py` supports variant rows through `--model-spec` for one JSON object or `--model-spec-jsonl` for JSONL.  Existing `--models openrouter://MODEL_ID` runs still measure the requested OpenRouter model ID without endpoint pinning.  A variant spec run adds provider constraints to the request body, enables the metadata header, stores requested provider/quantization policy in result metadata, and attempts to attach post-hoc generation metadata for each response.
-
-## Variant Batch Evals
+After each OpenRouter call, verify the routed endpoint from response metadata and `/api/v1/generation?id=<generation_id>`.  Record provider, endpoint, usage, cost, latency, native token counts, and upstream IDs when OpenRouter returns them.  The request measures the routed OpenRouter endpoint product, but exact weights, serving engine, GPU type, KV-cache precision, hidden provider prompts, and provider changes after the inventory snapshot require provider attestations or controlled deployments.
 
 Use `tools/run_variant_batch.py` to evaluate an endpoint inventory one variant at a time.  The batch runner writes one exact spec file per variant, calls `tools/run_eval.py`, scores each completed run with `tools/score_eval.py`, and writes per-variant summary rows.  It resumes variants already present in `progress.jsonl`.
 
@@ -244,30 +291,43 @@ The batch output includes these files:
 | `variant_summary.csv` | Tabular per-variant summary. |
 | `summary.json` | Batch status and aggregate counts. |
 
-The batch runner accepts `--no-progress-timeout` and `--variant-timeout`.  `--timeout` remains the per-request timeout passed to `tools/run_eval.py`; `--no-progress-timeout` terminates a child process that stops writing output or result rows.  A timed-out variant remains in `progress.jsonl` and `variant_summary.csv`, and downstream filtering excludes it before gene inference.  A child crash or scoring failure still makes the batch fail because it indicates an eval-tool failure rather than an endpoint timeout.
+The batch runner accepts `--no-progress-timeout` and `--variant-timeout`.  `--timeout` remains the per-request timeout passed to `tools/run_eval.py`; `--no-progress-timeout` terminates a child process that stops writing output or result rows.  A timed-out variant remains in `progress.jsonl` and `variant_summary.csv`, and downstream filtering excludes it before gene inference.
 
-To stop a long run, create the `STOP` file named in the runner's JSON status output.  The runner terminates the active child process and exits without starting another variant.  Use `--resume` after inspecting `progress.jsonl` if the remaining variants should continue.
+To stop a long batch run, create the `STOP` file named in the runner's JSON status output.  The runner terminates the active child process and exits without starting another variant.  Use `--resume` after inspecting `progress.jsonl` if the remaining variants should continue.
 
-## Filtered Variants
+The checked-in accepted endpoint set is `variants/filtered-20260529/`.  It contains 32 accepted provider endpoints from a 72-endpoint source set.  Its filter criteria are recorded in `summary.json`: `provider_error_count == 0` and `deliberation_score >= 0.90`.
 
-`variants/filtered-20260529/` contains the active checked-in survivor set.  `variants/filtered-20260529/summary.json` records the filter criteria: `provider_error_count == 0` and `deliberation_score >= 0.90`.
+Accepted endpoint files:
 
-The directory contains the full survivor rows, an inspection CSV, per-variant eval summaries, manifest rows, exact request specs, and a summary file:
+| File | Contents |
+| --- | --- |
+| `endpoint_variants.jsonl` | Full provider endpoint rows for accepted endpoints |
+| `endpoint_variants.csv` | Inspection table for accepted endpoints |
+| `variant_summary.jsonl` | Evaluation summaries for accepted endpoints |
+| `manifest.jsonl` | Accepted endpoint manifest rows |
+| `specs/*.json` | Exact request specs copied for accepted endpoints |
+| `summary.json` | Filter criteria, source paths, accepted endpoint count, and selected source indexes |
 
-```text
-variants/filtered-20260529/endpoint_variants.jsonl
-variants/filtered-20260529/endpoint_variants.csv
-variants/filtered-20260529/variant_summary.jsonl
-variants/filtered-20260529/manifest.jsonl
-variants/filtered-20260529/specs/*.json
-variants/filtered-20260529/summary.json
-```
+## Behavior Clustering And Pool Sampling
 
-OpenRouter endpoint availability and provider behavior can change after the snapshot.  Claims about current provider reliability or current model behavior require a refreshed inventory and fresh evals.  `docs/sampling-runbook.md` contains the repeatable procedure that produces a new filtered set.
+Behavior clustering compares accepted endpoints on behavior-eliciting prompts after question-set filtering.  A gene is one behavior prompt, and the current configuration uses `personas/generic.md` as the persona.  For each `gene + provider endpoint + persona`, `tools/run_first_gene_inference_embeddings.py` collects one or more completions and embeds the response text.
 
-## Gene Clustering And Pool Sampling
+| Input | Meaning |
+| --- | --- |
+| Accepted endpoints | `variants/filtered-20260529/endpoint_variants.jsonl` or a new filtered endpoint file |
+| Genes | `sampled-genes.json` or another sampled gene file |
+| Persona | `personas/generic.md` unless the evaluation config names another persona file |
+| Samples per gene | `--samples` for gene inference and `--expected-samples-per-gene` for aggregation |
 
-The sampling pipeline starts with filtered endpoint variants and ends with a JSONL pool sampled from variant/persona cluster vectors.  `docs/sampling-runbook.md` contains the procedure.  The commands below show the current script arguments.
+| File | Contents |
+| --- | --- |
+| `records.jsonl` | Gene completions and embedding vectors |
+| `pca-records.jsonl` | PCA coordinates for one gene's embedded responses |
+| `clusters.jsonl` | One cluster assignment per sampled completion |
+| `variant-persona-clusters.jsonl` | One endpoint/persona record with cluster labels ordered by `gene_index` |
+| `pool.jsonl` | Sampled endpoint/persona records selected from cluster-label tuples |
+
+PCA is computed separately for each gene because each gene has its own response distribution.  Per-gene clustering assigns each sampled completion to a K-means cluster within that gene.  Aggregation converts sample-level labels into one cluster record per endpoint/persona row, ordered by ascending `gene_index`.
 
 Run one sampled gene through the filtered variants and embed the responses:
 
@@ -326,7 +386,7 @@ uv run --script tools/sample-tuple-pool.py \
   --seed 0
 ```
 
-The tuple sampler groups rows by exact `clusters` vector, chooses a unique cluster tuple uniformly for each emitted row, and then chooses one row uniformly from that tuple.  Sampling is with replacement.  The diagnostics file records the selected tuple, source row, model ID, provider, endpoint tag, quantization, and cumulative counts.
+`tools/sample-tuple-pool.py` samples by cluster tuple.  For each emitted pool entry, it chooses one unique cluster tuple uniformly at random, then chooses one row uniformly from rows with that tuple.  Sampling uses replacement, so repeated endpoint/persona rows can appear in `pool.jsonl`; the diagnostics file records the selected tuple, source row, model ID, provider, endpoint tag, quantization, and cumulative counts.
 
 ## Score Model
 
@@ -341,18 +401,50 @@ The scorer separates deliberation quality from operational behavior:
 | `item_variation_count` | Count of items with different response values across trials. |
 | `operational_metrics` | Latency, timeouts, provider errors, malformed JSON, schema violations, invalid votes, tool-call failures, context-limit errors, and cost. |
 
-Pool selection filters and ranks over those fields explicitly.  Operational failures and substantive deliberation failures have separate fields.  The score output keeps them separate.
+Pool selection filters and ranks over those fields explicitly.  Operational failures and substantive deliberation failures have separate fields.  The score output keeps them separate so endpoint filtering can reject route failures without hiding answer quality.
 
 ## Troubleshooting
 
-If a validation command fails, inspect the reported item id and schema path first.  The core item schema, response schema, fixtures, and rubric must agree before a run can produce scores.  A fixture-backed tool item should have a manifest and evidence files under the matching `sets/core20/fixtures/` directory.
+If a validation command fails, inspect the reported item ID and schema path first.  The core item schema, response schema, fixtures, and rubric must agree before a run can produce scores.  A fixture-backed tool item should have a manifest and evidence files under the matching `sets/core20/fixtures/` directory.
 
-If an OpenRouter run fails before it writes result rows, check credentials, model ids, provider constraints, and endpoint availability.  The tools read `OPENROUTER_API_KEY` from the environment first and then from ignored `secrets/openrouter.api.txt`.  Exact-variant runs also depend on the provider route named by the variant spec, so a provider-side endpoint change can fail a spec that used to run.
+If an OpenRouter run fails before it writes result rows, check credentials, model IDs, provider constraints, and endpoint availability.  The tools read `OPENROUTER_API_KEY` from the environment first and then from ignored `secrets/openrouter.api.txt`.  Exact-variant runs also depend on the provider route named by the variant spec, so a provider-side endpoint change can fail a spec that used to run.
 
-If a batch run stops making progress, inspect `variant-runs/*/run_eval.log`, `progress.jsonl`, `variant_summary.csv`, and the timeout fields in the command.  The per-request timeout controls one model call, while `--no-progress-timeout` controls a child process that stops writing output or result rows.  A timed-out provider variant records provider-route behavior, but a child crash or scoring failure indicates an eval-tool problem that must be diagnosed before continuing.
+If a batch run stops making progress, inspect `variant-runs/*/run_eval.log`, `progress.jsonl`, `variant_summary.csv`, and the timeout fields in the command.  The per-request timeout controls one model call, while `--no-progress-timeout` controls a child process that stops writing output or result rows.  A child crash or scoring failure indicates an eval-tool problem that must be diagnosed before continuing.
 
 If gene-response, PCA, clustering, aggregation, or pool sampling fails, check row counts against the command expectations.  The clustering and aggregation tools validate expected variants, samples per variant, and samples per gene so incomplete upstream data cannot produce a pool without an error.  For reduced tests, set those expected-count flags to the test shape rather than relying on historical full-run constants.
+
+## File Reference
+
+| Path | Contents |
+| --- | --- |
+| `sets/core20/questions.jsonl` | 20-question core set with knowledge, science, reasoning, instruction-following, and record-based adjudication questions |
+| `sets/deliberation/questions.jsonl` | 20-question deliberation set with eight juror-deliberation questions |
+| `sets/core20/fixtures/` | Evidence records for record-based questions |
+| `schemas/` | JSON schemas for questions, responses, and evaluation outputs |
+| `rubrics/core20.md` | Deterministic checks, deliberation score, and operational metrics |
+| `prompts/` | Single-juror and council-member prompt wrappers |
+| `personas/generic.md` | Generic persona for gene-response sampling |
+| `config/` | Model-pool configuration files |
+| `tools/run_eval.py` | Model call script for mock models, OpenRouter model IDs, and exact provider specs |
+| `tools/score_eval.py` | Question validation and deterministic scoring |
+| `tools/audit_eval.py` | Repository consistency audit |
+| `tools/tool_server.py` | Local read-only evidence tools used by the runner |
+| `tools/model_inventory.py` | OpenRouter model and provider endpoint inventory |
+| `tools/run_variant_batch.py` | Provider-endpoint batch evaluation |
+| `tools/run_end_to_end.py` | Full selection procedure from root models to `pool.jsonl` |
+| `tools/run_first_gene_inference_embeddings.py` | Gene completion and embedding collection |
+| `tools/run_embedding_pca.py` | PCA reduction for embedded gene responses |
+| `tools/run_gene_pca_clustering.py` | Per-gene K-means clustering |
+| `tools/aggregate_variant_persona_clusters.py` | Aggregation from sample-level clusters to endpoint/persona cluster records |
+| `tools/sample-pool.py`, `tools/sample-diverse-pool.py`, and `tools/sample-tuple-pool.py` | Pool samplers for variant/persona cluster rows |
+| `variants/filtered-20260529/` | Checked-in accepted endpoint snapshot |
+| `genes.json` and `sampled-genes.json` | Source gene list and sampled gene subset used by the clustering procedure |
+| `results/` | Generated evaluation and pool-construction files.  Git ignores this directory except for `.gitkeep`. |
 
 ## Scope
 
 The core eval set catches malformed JSON, brittle instruction following, weak record use, unsupported citations, and obvious reasoning failures.  The endpoint-variant tooling evaluates OpenRouter routed products under explicit provider and quantization constraints.  Full adjudication runs are in `adc/`, `arb/`, and `arbd/`.
+
+## Detailed References
+
+[Sampling Runbook](docs/sampling-runbook.md) contains the staged procedure from OpenRouter root sampling through tuple-uniform pool sampling.  [OpenRouter Inventory Procedure](docs/model-inventory.md) explains provider-endpoint identity, routing constraints, metadata fields, and interpretation limits.  [Core20 Rubric](rubrics/core20.md) defines response schemas, deterministic checks, deliberation scoring, and operational metrics.
