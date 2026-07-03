@@ -20,6 +20,7 @@ The eval sets are sized for manual review.  A high score shows that a model beha
 | Build a pool from OpenRouter model IDs. | [Full Selection Procedure](#full-selection-procedure) |
 | Refresh or inspect the accepted provider endpoint set. | [Provider Endpoint Selection](#provider-endpoint-selection) |
 | Understand behavior prompts, embeddings, PCA, clusters, and pool sampling. | [Behavior Clustering And Pool Sampling](#behavior-clustering-and-pool-sampling) |
+| Rebuild the legacy CSV persona-clustering pool or render the juror-clustering chart. | [Jury Pool Generation](docs/jury-pool-generation.md) |
 | Interpret score fields. | [Score Model](#score-model) |
 | Diagnose failed validation, endpoint, batch, or clustering runs. | [Troubleshooting](#troubleshooting) |
 | Find the meaning and purpose of a repository term. | [Glossary](#glossary) |
@@ -79,7 +80,7 @@ This example evaluates five sampled root models, uses one trial per question, sa
 | Provider endpoint | One OpenRouter provider endpoint for one OpenRouter model ID. | Keeps provider routing, quantization, context limits, pricing, and supported parameters separate during evaluation. | `endpoint_variants.jsonl` |
 | Accepted endpoint | A provider endpoint that passed the current operational and deliberation filters. | Supplies eligible endpoints for behavior sampling and pool construction. | `variants/filtered-20260529/*` |
 | Gene | A behavior-eliciting prompt used after endpoint filtering. | Produces response variation used to compare accepted endpoints beyond question-set scores. | `genes.json`, `sampled-genes.json` |
-| Persona | Role text used while sampling gene responses. | Holds the role constant while comparing endpoint behavior on genes. | `personas/generic.md` |
+| Persona | Role text used while sampling gene responses or replaying saved deliberations. | Holds the role constant while comparing endpoint behavior on genes, and supplies persona overrides for `aar juror-replay`. | `personas/generic.md`, `personas/experiments/` |
 | Cluster assignment | One sampled completion assigned to a per-gene PCA cluster. | Records the behavior group for one endpoint response to one gene. | `clusters.jsonl` |
 | Cluster record | One endpoint/persona row with one cluster label per sampled gene. | Summarizes endpoint/persona behavior for pool sampling. | `variant-persona-clusters.jsonl` |
 | Pool entry | One selected endpoint/persona row for a model pool. | Provides endpoint/persona records to pool code. | `pool.jsonl` |
@@ -382,11 +383,18 @@ uv run --script tools/sample-tuple-pool.py \
   results/variant-persona-clusters-YYYYMMDDTHHMMSSZ/variant-persona-clusters.jsonl \
   --out results/sample-tuple-pool-YYYYMMDDTHHMMSSZ/pool.jsonl \
   --diagnostics-out results/sample-tuple-pool-YYYYMMDDTHHMMSSZ/diagnostics.jsonl \
+  --equivalence-out results/sample-tuple-pool-YYYYMMDDTHHMMSSZ/equivalence.jsonl \
   --pool-size 20 \
   --seed 0
 ```
 
-`tools/sample-tuple-pool.py` samples by cluster tuple.  For each emitted pool entry, it chooses one unique cluster tuple uniformly at random, then chooses one row uniformly from rows with that tuple.  Sampling uses replacement, so repeated endpoint/persona rows can appear in `pool.jsonl`; the diagnostics file records the selected tuple, source row, model ID, provider, endpoint tag, quantization, and cumulative counts.
+`tools/sample-tuple-pool.py` deduplicates equivalent provider endpoints before sampling.  It groups rows by OpenRouter model ID, endpoint model ID, canonical slug, Hugging Face ID, quantization, and modalities.  The grouping excludes provider name, endpoint tag, context limits, prompt and completion limits, supported parameters, price, latency, and uptime, because those fields describe provider-route capability or serving behavior rather than model-configuration identity.  For each group, it selects one concrete provider endpoint by operational rank: fewer provider errors, higher deliberation score, fewer schema violations, fewer timeouts and context-limit errors, higher context and token capacity, higher uptime, lower latency, lower price, then stable endpoint identifiers.
+
+The pool remains executable because each emitted row names one concrete provider endpoint.  `equivalence.jsonl` records every provider endpoint in each equivalent group, including the selected representative, provider name, endpoint tag, quantization, limits, operational fields, and cluster vector.  Use `--no-dedupe-equivalent-endpoints` only when the pool is meant to compare provider routes for the same model configuration.
+
+After deduplication, the sampler chooses one unique cluster tuple uniformly at random, then chooses one representative row uniformly from rows with that tuple.  Sampling uses replacement by default, so repeated rows can appear in `pool.jsonl`; the diagnostics file records the selected tuple, source row, model ID, provider, endpoint tag, quantization, equivalence class, and cumulative counts.  The diagnostic counts describe the deduplicated sampling frame unless `--no-dedupe-equivalent-endpoints` was used.
+
+Pass `--without-replacement` when each row from the sampling frame may appear at most once.  With deduplication enabled, the maximum `--pool-size` is the number of equivalence classes.  The command fails before writing output when the requested size exceeds that frame.
 
 ## Score Model
 
@@ -424,6 +432,7 @@ If gene-response, PCA, clustering, aggregation, or pool sampling fails, check ro
 | `rubrics/core20.md` | Deterministic checks, deliberation score, and operational metrics |
 | `prompts/` | Single-juror and council-member prompt wrappers |
 | `personas/generic.md` | Generic persona for gene-response sampling |
+| `personas/experiments/` | Experimental persona text files for replaying saved AAR deliberations with `aar juror-replay` |
 | `config/` | Model-pool configuration files |
 | `tools/run_eval.py` | Model call script for mock models, OpenRouter model IDs, and exact provider specs |
 | `tools/score_eval.py` | Question validation and deterministic scoring |
@@ -437,6 +446,7 @@ If gene-response, PCA, clustering, aggregation, or pool sampling fails, check ro
 | `tools/run_gene_pca_clustering.py` | Per-gene K-means clustering |
 | `tools/aggregate_variant_persona_clusters.py` | Aggregation from sample-level clusters to endpoint/persona cluster records |
 | `tools/sample-pool.py`, `tools/sample-diverse-pool.py`, and `tools/sample-tuple-pool.py` | Pool samplers for variant/persona cluster rows |
+| `tools/cluster-personas.py`, `tools/clusters-graph.py`, `tools/generate-council.py`, and `tools/select-council.py` | Legacy CSV persona-clustering, chart rendering, and council-selection tools |
 | `variants/filtered-20260529/` | Checked-in accepted endpoint snapshot |
 | `genes.json` and `sampled-genes.json` | Source gene list and sampled gene subset used by the clustering procedure |
 | `results/` | Generated evaluation and pool-construction files.  Git ignores this directory except for `.gitkeep`. |

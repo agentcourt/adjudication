@@ -1,6 +1,6 @@
 # Adjudication Evals
 
-`evals/` contains adjudication eval tools, checked-in eval sets, endpoint-variant sampling tools, and pool samplers.  The [Adjudication Evals Manual](manual.md) documents commands, endpoint-variant inventory work, batch evals, filtered variants, gene clustering, pool sampling, scoring, and troubleshooting.
+`evals/` contains adjudication eval tools, checked-in eval sets, endpoint-variant sampling tools, clustering tools, graphing tools, and pool samplers.  The [Adjudication Evals Manual](manual.md) documents commands, endpoint-variant inventory work, batch evals, filtered variants, gene clustering, pool sampling, scoring, and troubleshooting.
 
 ## Documentation
 
@@ -8,6 +8,7 @@
 | --- | --- |
 | [Adjudication Evals Manual](manual.md) | Commands, endpoint-variant inventory, batch evals, filtered variants, gene clustering, pool sampling, scoring, and troubleshooting. |
 | [Sampling Runbook](docs/sampling-runbook.md) | Repeatable procedure from root-model inventory through tuple-uniform pool sampling. |
+| [Jury Pool Generation](docs/jury-pool-generation.md) | Legacy CSV pipeline for persona clustering, clustering charts, and council CSV selection. |
 | [Model Inventory Notes](docs/model-inventory.md) | Notes for OpenRouter endpoint inventory work. |
 
 ## Quick Checks
@@ -39,4 +40,8 @@ Generated outputs belong under `results/`, which is ignored except for `results/
 | `tools/score_eval.py` | Item validator and deterministic scorer. |
 | `tools/audit_eval.py` | Repository consistency audit. |
 | `tools/run_end_to_end.py` | Full endpoint-variant pool pipeline runner. |
+| `tools/cluster-personas.py` | Legacy persona-completion clustering runner. |
+| `tools/clusters-graph.py` | Faceted PCA and cluster graph renderer. |
+| `tools/generate-council.py` | Legacy CSV council-generation driver. |
+| `personas/experiments/` | Experimental persona text files for replaying saved AAR deliberations with `aar juror-replay`. |
 | `variants/filtered-20260529/` | Current checked-in filtered endpoint-variant snapshot. |

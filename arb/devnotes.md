@@ -1,5 +1,17 @@
 # Development Notes
 
+## 2026-06-18
+
+### Pi council output accounting and ex08a 9-member run
+
+Reference: `runtime/localrun/localrun.go`, `runtime/localrun/localrun_test.go`, `manual.md`, `out/ex08a-openclaw-pi-20260618004247`
+
+The failed ex08a 9-member run at `out/ex08a-openclaw-pi-20260617220136` showed C5 removed for `agent_output_limit_exceeded` after the local process counted raw Pi JSON stdout before compaction.  Pi emitted repeated accumulated `message_update` records while thinking remained enabled, and the saved stdout log was much smaller because `piTailLogWriter` compacted repeated prefixes after the byte counter had already counted them.  The local runner now places the counter after the Pi compactor for stdout, so the council output limit measures compacted stdout plus stderr while preserving the normal 128 MiB cap.
+
+The focused test `TestPiTailLogWriterCounterCountsFilteredBytes` covers that accounting order.  `go test ./runtime/localrun` and `make build` passed after the change.  The manual now states that `aar run` enforces the Pi council output limit against compacted Pi stdout logs and stderr byte counts.
+
+The next ex08a 9-member run at `out/ex08a-openclaw-pi-20260618004247` did not hit the output limit.  C4, `openrouter://minimax/minimax-m2.7`, failed during deliberation because OpenRouter returned upstream `429` on all three automatic retries.  The case later closed `status=ok`, `resolution=demonstrated`, after enough remaining members voted, but that output is unsuitable for a strict 9-vote comparison because it contains `council_member_removed` events instead of nine council votes.
+
 ## 2026-06-17
 
 ### Lawyer source-work prompts
@@ -132,7 +144,7 @@ Reference: [AAR run options](manual.md#aar-run)
 
 The C5 Clerk run produced more than 140 MB of Pi stdout while the agent repeated accumulated `message_update` content without calling the council tools.  The stdout log filter now compacts only Pi council `message_update` lines whose active `thinking` or `text` content is a prefix extension of the previous event for the same response and content index.  The stored log line keeps the event metadata, replaces repeated accumulated content with the tail, and adds `aar_log_filter.message: "earlier repeated message_update events dropped"`.
 
-Invalid JSON, unrelated event types, missing content fields, and non-prefix changes remain unchanged.  The local run process still counts raw stdout bytes accepted from the Pi process for the council output limit, so compacted logs do not weaken the runaway-output cap.  This filter addresses log amplification from accumulated message fields; it does not classify the agent's reasoning quality or alter case state.
+Invalid JSON, unrelated event types, missing content fields, and non-prefix changes remain unchanged.  The local run process counts compacted Pi stdout log bytes plus stderr bytes for the council output limit, so repeated accumulated telemetry does not consume the cap multiple times.  Non-prefix output, stderr, and other large unfiltered records still count toward the limit.  This filter addresses log amplification from accumulated message fields; it does not classify the agent's reasoning quality or alter case state.
 
 ### Case-file scanner cleanup
 
@@ -1093,3 +1105,27 @@ A local direct `ex01` run restored the signature and public key evidence, then c
 The runner now gives each Pi council container a deterministic AAR name and records that name with the process record.  Cleanup removes named containers through the same runtime command that launched them, even when the local client process has already exited.  The output-limit monitor removes the named container before it kills the local client process, which prevents the client-kill path from orphaning a live Pi container.
 
 The runtime test pass also corrected the `runtime/cmd/aar` service black-box fixture.  The service API requires `out_dir` to be an immediate child of the configured service output root, but those tests passed sibling directories under the broader fixture root.  The fixture now exposes the service output root and derives service case directories from it, so `go test ./runtime/...` exercises the current service path.
+
+## 2026-06-30
+
+### Local direct example batch
+
+The local direct `examples/ex*` batch stopped at `out/local-direct-three-per-ex-only-20260629/ex08a/run-02` because `.bin/aar run` returned exit code `1` after the case had already closed.  The case artifacts show a completed run: `run.json` reports `status=ok`, `phase=closed`, and `resolution=demonstrated`, with council votes from C1 through C5.  The stderr file contained three upstream OpenRouter retry lines, the private case API address, and then `Get "http://127.0.0.1:34231/councilapi/v1/get?case_id=arb-ex08a-20260630053412&member_id=C3": dial tcp 127.0.0.1:34231: connect: connection refused`.
+
+The root cause was a lifecycle race in `runtime/localrun/localrun.go`.  After a Pi council process exited, `handleCouncilProcessExit` checked `/councilapi/v1/get` to decide whether the council member needed a failure report.  In this run, the case had closed and the private case API listener had stopped, but the main runner selected the agent-error channel before it selected the completed case outcome.
+
+The runner now waits briefly for a completed case outcome before treating an agent-error signal as fatal.  If the case outcome arrives, the runner writes the normal run summary and returns the case result.  If no case outcome arrives within the short wait, the runner returns the agent error, so active-case agent failures remain fatal.
+
+## 2026-07-03
+
+### Juror replay persona experiments
+
+`aar juror-replay` now runs one fresh Pi deliberation from an existing AAR output packet with an explicit model config and persona file.  The command uses the existing council replay executor, which preserves the frozen Council API, MCP server, Pi container path, prompt rendering, evidence access controls, and replay output files.  The separate command keeps the experiment interface focused on model-plus-persona replay while leaving `aar council-replay` available for same-spec replay.
+
+The command prefers captured council-turn snapshots when it can identify one from `--snapshot` or a unique `--member-id` match under `council-turns/`.  If the source output predates snapshots, the command uses `reconstructed_first_round`, which rebuilds a first-round deliberation from durable output files.  Ambiguous snapshot selection fails with a specific error so a replay cannot use the wrong saved turn.
+
+The implementation adds a strict persona override to the local replay config loader.  With `--persona`, the loader parses the model config as a JSON request-spec record, reads the supplied persona path, rejects missing or empty persona files, stores the absolute persona path in the request spec, and passes the resulting seat to the existing replay builder.  The command writes `juror-replay.json` with the source output, selected snapshot, model config path, persona path, persona SHA-256, vote, rationale, and tool-call count.
+
+Replay cleanup now runs through a deferred secret cleanup path after the replay run state exists.  This covers successful replay, failed model calls, failed Pi process exit, and Pi startup errors after `writePiConfig` has created `.mcp.json` or Pi auth files.  The focused startup-failure test forces the container command to fail and verifies that generated replay secret files are absent afterward.
+
+Focused tests cover persona override loading, missing and empty persona failures, snapshot discovery by member id, ambiguous snapshot rejection, and fallback to reconstructed replay when no snapshot directory exists.  The first real test should use one existing `ex*` output with `council-turns/`, a model config derived from that run's `council.json`, and one persona from `evals/personas/experiments`.

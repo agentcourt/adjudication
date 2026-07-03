@@ -19,6 +19,7 @@ import (
 
 	"adjudication/arb/runtime/mcp"
 	"adjudication/arb/runtime/proceeding"
+	"adjudication/common/modelrequest"
 	"adjudication/common/persona"
 )
 
@@ -28,6 +29,7 @@ type CouncilReplayOptions struct {
 	SnapshotDir             string
 	PromptDir               string
 	ModelConfigPath         string
+	PersonaPath             string
 	OutputDir               string
 	MemberID                string
 	CaseAPIAddr             string
@@ -80,7 +82,7 @@ type replayDoRequest struct {
 	Arguments     map[string]any `json:"arguments"`
 }
 
-func ReplayCouncil(ctx context.Context, opts CouncilReplayOptions) (CouncilReplayResult, error) {
+func ReplayCouncil(ctx context.Context, opts CouncilReplayOptions) (result CouncilReplayResult, err error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -88,7 +90,7 @@ func ReplayCouncil(ctx context.Context, opts CouncilReplayOptions) (CouncilRepla
 	if err := validateCouncilReplayOptions(opts); err != nil {
 		return CouncilReplayResult{}, err
 	}
-	entry, seat, err := loadCouncilReplayModelConfig(opts.ModelConfigPath, opts.MemberID)
+	entry, seat, err := loadCouncilReplayModelConfig(opts.ModelConfigPath, opts.MemberID, opts.PersonaPath)
 	if err != nil {
 		return CouncilReplayResult{}, err
 	}
@@ -132,6 +134,11 @@ func ReplayCouncil(ctx context.Context, opts CouncilReplayOptions) (CouncilRepla
 		councilStarts: map[string]bool{},
 		agentErrs:     make(chan error, 8),
 	}
+	defer func() {
+		if cleanupErr := state.cleanupSecrets(); cleanupErr != nil {
+			err = errors.Join(err, cleanupErr)
+		}
+	}()
 	if state.token == "" {
 		token, err := randomToken()
 		if err != nil {
@@ -185,7 +192,7 @@ func ReplayCouncil(ctx context.Context, opts CouncilReplayOptions) (CouncilRepla
 		cancel()
 		return CouncilReplayResult{}, err
 	}
-	result, err := waitCouncilReplayResult(runCtx, opts, input, state, caseServer)
+	result, err = waitCouncilReplayResult(runCtx, opts, input, state, caseServer)
 	cancel()
 	stopErr := state.stopAgents()
 	mcpErr := <-mcpDone
@@ -264,15 +271,67 @@ func validateCouncilReplayOptions(opts CouncilReplayOptions) error {
 	return nil
 }
 
-func loadCouncilReplayModelConfig(path string, memberID string) (councilRosterEntry, proceeding.CouncilSeat, error) {
+func loadCouncilReplayModelConfig(path string, memberID string, personaPath string) (councilRosterEntry, proceeding.CouncilSeat, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return councilRosterEntry{}, proceeding.CouncilSeat{}, fmt.Errorf("read council config %s: %w", path, err)
+	}
+	if strings.TrimSpace(personaPath) != "" {
+		requestSpec, err := modelrequest.ParseJSON(raw)
+		if err != nil {
+			return councilRosterEntry{}, proceeding.CouncilSeat{}, fmt.Errorf("parse council model config %s: %w", path, err)
+		}
+		file, text, err := readReplayPersonaOverride(personaPath)
+		if err != nil {
+			return councilRosterEntry{}, proceeding.CouncilSeat{}, err
+		}
+		requestSpec.Persona = file
+		return councilReplayConfigFromSpec(persona.Spec{
+			Model:       requestSpec.RuntimeModel(),
+			File:        file,
+			FilePath:    file,
+			Text:        text,
+			RequestSpec: &requestSpec,
+		}, memberID)
 	}
 	spec, err := persona.ParseRecord(string(raw), filepath.Dir(path))
 	if err != nil {
 		return councilRosterEntry{}, proceeding.CouncilSeat{}, err
 	}
+	if spec.RequestSpec == nil {
+		return councilRosterEntry{}, proceeding.CouncilSeat{}, fmt.Errorf("council config must be a JSON request-spec record")
+	}
+	return councilReplayConfigFromSpec(spec, memberID)
+}
+
+func readReplayPersonaOverride(path string) (string, string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", "", fmt.Errorf("--persona is required")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve persona path %s: %w", path, err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", "", fmt.Errorf("stat persona %s: %w", abs, err)
+	}
+	if info.IsDir() {
+		return "", "", fmt.Errorf("persona path is a directory: %s", abs)
+	}
+	raw, err := os.ReadFile(abs)
+	if err != nil {
+		return "", "", fmt.Errorf("read persona text %s: %w", abs, err)
+	}
+	text := strings.TrimSpace(string(raw))
+	if text == "" {
+		return "", "", fmt.Errorf("empty persona text: %s", abs)
+	}
+	return abs, text, nil
+}
+
+func councilReplayConfigFromSpec(spec persona.Spec, memberID string) (councilRosterEntry, proceeding.CouncilSeat, error) {
 	if spec.RequestSpec == nil {
 		return councilRosterEntry{}, proceeding.CouncilSeat{}, fmt.Errorf("council config must be a JSON request-spec record")
 	}

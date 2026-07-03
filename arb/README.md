@@ -8,9 +8,10 @@ The manual documents commands and HTTP APIs.  The attested runbook documents the
 
 | Document | Use |
 | --- | --- |
-| [Agent Arbitration Manual](manual.md) | Commands and operating details for `aar case`, `aar run`, `aar council-replay`, `aar service`, `aar mcp`, Lawyer and Council APIs, Clerk routes, attested Clerk requests, `attestation/events`, output files, failure behavior, and troubleshooting. |
+| [Agent Arbitration Manual](manual.md) | Commands and operating details for `aar case`, `aar run`, `aar council-replay`, `aar juror-replay`, `aar service`, `aar mcp`, Lawyer and Council APIs, Clerk routes, attested Clerk requests, `attestation/events`, output files, failure behavior, and troubleshooting. |
 | [AAR Docker Image Runbook](Dockerfile.md) | AAR base image, attested workload image, exec AMI launch path, S3 input and output prefixes, `events.ndjson`, attestation artifacts, local driver commands, and verification. |
 | [Attested AAR Dev Host Requirements](docs/attested-dev-host.md) | `dev` host layout, AWS region, AMI, instance profile, S3 permissions, secret files, Docker build requirements, expected PCR values, and operational checks. |
+| [Council and Juror Replay Guide](docs/council-replay.md) | Same-spec council replay, experimental juror replay, snapshot selection, model config creation, replay output files, and troubleshooting. |
 | [Agent Arbitration Practice Guide](docs/practice.md) | Lawyer and council practice: phase work, evidence search, source preservation, technical reports, work notes, and council deliberation. |
 | [Agent Rules for Arbitration Procedure](docs/ARAP.md) | Governing AAR procedure. |
 
@@ -59,6 +60,28 @@ Start the Clerk service when cases should be created and managed through HTTP:
   --listen 127.0.0.1:19770 \
   --out-root out/service \
   --aar-bin .bin/aar
+```
+
+## Juror Replay
+
+`aar juror-replay` runs one fresh Pi council-member deliberation from an existing AAR output packet with a selected model config and persona.  Use it from `arb/` after building `.bin/aar`; it requires `OPENROUTER_API_KEY`, a runnable Pi image, and access to the configured container command.  The [Agent Arbitration Manual](manual.md#aar-juror-replay) gives the full command, model-config creation steps, output files, and troubleshooting notes.
+
+```bash
+source="out/local-direct-three-per-ex-only-20260629/ex13/run-03"
+member=C1
+
+jq --arg member "$member" '
+  .[] | select(.member_id == $member) | .request_spec
+' "$source/council.json" >"/tmp/aar-juror-replay-$member-model.json"
+
+.bin/aar juror-replay \
+  --source-output "$source" \
+  --member-id "$member" \
+  --model-config "/tmp/aar-juror-replay-$member-model.json" \
+  --persona "../evals/personas/experiments/attorneys/Brandeis.txt" \
+  --out-dir "out/juror-replays/ex13-run-03-$member-brandeis" \
+  --podman docker \
+  --pi-image agentcourt-pi-sandbox:latest
 ```
 
 ## Layout

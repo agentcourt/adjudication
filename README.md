@@ -51,10 +51,10 @@ The repository root has no top-level `Makefile`.  Shared packages build through 
 | Area | Primary documents |
 | --- | --- |
 | ADC | [README](adc/README.md), [manual](adc/manual.md), [practice guide](adc/docs/practice.md), [rules](adc/docs/ARCP.md), [attested runbook](adc/Dockerfile.md), [dev-host requirements](adc/docs/attested-dev-host.md). |
-| AAR | [README](arb/README.md), [manual](arb/manual.md), [practice guide](arb/docs/practice.md), [rules](arb/docs/ARAP.md), [attested runbook](arb/Dockerfile.md), [dev-host requirements](arb/docs/attested-dev-host.md). |
+| AAR | [README](arb/README.md), [manual](arb/manual.md), [council and juror replay guide](arb/docs/council-replay.md), [practice guide](arb/docs/practice.md), [rules](arb/docs/ARAP.md), [attested runbook](arb/Dockerfile.md), [dev-host requirements](arb/docs/attested-dev-host.md). |
 | AARD | [README](arbd/README.md), [manual](arbd/manual.md), [practice guide](arbd/docs/practice.md), [rules](arbd/docs/ARAP.md), [attested runbook](arbd/Dockerfile.md), [dev-host requirements](arbd/docs/attested-dev-host.md). |
 | Evals | [README](evals/README.md), [manual](evals/manual.md), [sampling runbook](evals/docs/sampling-runbook.md), [model inventory notes](evals/docs/model-inventory.md). |
-| Shared model pools | [Jury and council pool generation](common/docs/jury-pool-generation.md). |
+| Shared model pools | [Jury and council pool generation](evals/docs/jury-pool-generation.md). |
 
 ## License
 

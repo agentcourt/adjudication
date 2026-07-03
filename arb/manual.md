@@ -151,6 +151,7 @@ Use `--file` to provide explicit initial evidence.  The flag may be repeated.  S
 | `aar mcp` | Run an MCP server that forwards tools to a Case API or service API base. |
 | `aar run` | Run one complete local arbitration with OpenClaw lawyers and Pi council agents. |
 | `aar council-replay` | Re-run one council member against a saved AAR output packet. |
+| `aar juror-replay` | Run one fresh juror deliberation from a saved AAR output packet with an explicit model config and persona. |
 | `aar service` | Run the long-lived HTTP service, including Clerk APIs for full `aar run` cases. |
 
 Use command help to see current flags:
@@ -158,6 +159,7 @@ Use command help to see current flags:
 ```bash
 .bin/aar help run
 .bin/aar help council-replay
+.bin/aar help juror-replay
 .bin/aar help service
 ```
 
@@ -372,7 +374,7 @@ Important run flags:
 | `--docker-mcp-host` | Host name Docker containers use to reach MCP.  Default: `host.docker.internal`. |
 | `--podman-mcp-host` | Host name Podman containers use to reach MCP.  Default: `127.0.0.1`. |
 
-The council output limit is enforced by the local `aar run` process while it monitors Pi stdout and stderr byte counts.  A runaway council process can write more than the configured limit before the next monitor check kills it.  Pi stdout logs compact repeated accumulated `message_update` content fields when a new event contains the previous content as a prefix; the log line then keeps only the tail and adds `aar_log_filter.message: "earlier repeated message_update events dropped"`.  The failure event records the configured limit, bytes written, stdout bytes, stderr bytes, process name, process error, and failed council member.
+The council output limit is enforced by the local `aar run` process while it monitors compacted Pi stdout logs and stderr byte counts.  Pi can emit JSON `message_update` records whose `thinking` or `text` fields repeat accumulated content.  The local runner compacts prefix-repeated content before writing and counting the stdout log, preserving only the new tail and adding `aar_log_filter.message: "earlier repeated message_update events dropped"`.  A council process that writes large non-repeated output can still exceed the configured limit, and the process can write more than the limit before the next monitor check kills it.  The failure event records the configured limit, bytes written, stdout bytes, stderr bytes, process name, process error, and failed council member.
 
 `aar run` writes one pid file per child process in the output directory.  It writes MCP logs under `logs/mcp.stderr`, lawyer and council process logs under `logs/`, final case artifacts in the output root, and `local-run.json` with run-level settings.  After completion, it prints one final JSON result to stdout.  The process exits when the case reaches a terminal state or when an agent/process error requires termination.
 
@@ -459,6 +461,109 @@ go run ./arb/runtime/cmd/aar council-replay \
 ```
 
 The replay output directory contains `input.json`, `prompt.txt`, `result.json`, `tool-calls.ndjson`, one Pi pid file, and logs under `logs/`.  `result.json` records the replay status, vote, rationale, model, source output directory, tool calls, and the replay input.  `tool-calls.ndjson` records each Council API tool call in order, which is the fastest way to see whether the member read evidence bytes before voting.
+
+## `aar juror-replay`
+
+`aar juror-replay` runs one fresh Pi deliberation from a saved AAR output packet with a model config and persona chosen at command time.  It starts the same frozen Council API, MCP server, Pi container, and replay recorder used by `aar council-replay`.  The command supports persona experiments, alternative-model comparisons, and repeat runs against existing `ex*` output packets.
+
+The command needs four inputs: a source AAR output packet, one JSON model request-spec record, one persona text file, and a new output directory.  The source output can be a directory containing `run.json`, or a parent run directory containing `aar-output/` or `aar-partial/`.  The model config can come from an original run's `council.json`, from `pool.jsonl`, or from another file containing one request-spec JSON object accepted by `common/modelrequest`.
+
+Snapshot selection controls the case state presented to the fresh juror.  An explicit `--snapshot` uses that saved turn input.  A supplied `--member-id` makes the command scan `council-turns/*/input.json` and require exactly one snapshot with that `member_id`.  When the source output has no `council-turns/` directory, the command uses `reconstructed_first_round`, which rebuilds a first-round deliberation from the durable run files.
+
+Create a model config from an original council member:
+
+```bash
+source="out/local-direct-three-per-ex-only-20260629/ex13/run-03"
+member=C1
+
+jq --arg member "$member" '
+  .[] | select(.member_id == $member) | .request_spec
+' "$source/council.json" >"/tmp/aar-juror-replay-$member-model.json"
+```
+
+Create a model config from the current AAR pool instead:
+
+```bash
+jq -c '
+  select(.openrouter_model_id == "minimax/minimax-m2.5")
+  | select(.provider_name == "Minimax")
+' pool.jsonl | head -n 1 >"/tmp/aar-juror-replay-pool-model.json"
+```
+
+Run from `arb/` with an experimental persona:
+
+```bash
+.bin/aar juror-replay \
+  --source-output "$source" \
+  --member-id "$member" \
+  --model-config "/tmp/aar-juror-replay-$member-model.json" \
+  --persona "../evals/personas/experiments/attorneys/Brandeis.txt" \
+  --out-dir "out/juror-replays/ex13-run-03-$member-brandeis" \
+  --podman docker \
+  --pi-image agentcourt-pi-sandbox:latest
+```
+
+Run from the repository root with `go run` by passing the prompt and instruction paths explicitly:
+
+```bash
+go run ./arb/runtime/cmd/aar juror-replay \
+  --source-output arb/out/local-direct-three-per-ex-only-20260629/ex13/run-03 \
+  --member-id C1 \
+  --model-config /tmp/aar-juror-replay-C1-model.json \
+  --persona evals/personas/experiments/attorneys/Brandeis.txt \
+  --out-dir arb/out/juror-replays/ex13-run-03-C1-brandeis \
+  --prompt-dir arb/prompts \
+  --council-instructions arb/agent-instructions/pi-council.md.tmpl \
+  --podman docker \
+  --pi-image agentcourt-pi-sandbox:latest
+```
+
+Important `juror-replay` flags:
+
+| Flag | Meaning |
+| --- | --- |
+| `--source-output` | Extracted AAR output directory, or a run directory containing `aar-output` or `aar-partial`.  Required. |
+| `--model-config` | Single JSON request-spec record.  Required.  Pool JSONL rows and `council.json` request specs both satisfy this format. |
+| `--persona` | Persona text file for the fresh juror.  Required.  Relative paths resolve from the current working directory. |
+| `--out-dir` | Replay output directory.  Required. |
+| `--basis` | Optional replay basis.  Valid values are `reconstructed_first_round` and `snapshot`.  Omit it for automatic selection. |
+| `--snapshot` | Snapshot directory or `input.json`.  This selects snapshot replay directly. |
+| `--member-id` | Member id used to find one snapshot, or the member id used for reconstructed replay. |
+| `--prompt-dir` | Prompt directory override.  From `arb/`, the default `prompts/` is correct. |
+| `--council-instructions` | Pi council instruction template.  From `arb/`, the default `agent-instructions/pi-council.md.tmpl` is correct. |
+| `--podman` | Container command for Pi council.  Use `--podman docker` when Docker runs the Pi image. |
+| `--pi-image` | Pi container image. |
+| `--timeout-seconds` | Replay council timeout.  Default: 900 seconds. |
+| `--council-output-limit-bytes` | Total stdout plus stderr limit for the replay Pi process.  Default: 128 MiB. |
+
+The command prints one JSON summary to stdout.  `status=ok` means the fresh juror submitted a vote, while `status=error` reports the setup, container, provider, timeout, or tool error that stopped the replay.  The output directory contains `input.json`, `prompt.txt`, `result.json`, `tool-calls.ndjson`, a Pi pid file, logs under `logs/`, and `juror-replay.json`.
+
+Use these checks after a run:
+
+```bash
+jq '{status,basis,case_id,member_id,model,vote,tool_call_count,persona_path,snapshot_dir}' \
+  out/juror-replays/ex13-run-03-C1-brandeis/juror-replay.json
+
+jq -r '.tool' out/juror-replays/ex13-run-03-C1-brandeis/tool-calls.ndjson
+
+rg -n 'Persona:|You are an attorney' out/juror-replays/ex13-run-03-C1-brandeis/prompt.txt
+```
+
+`juror-replay.json` records the source output, selected snapshot, model config path, persona path, persona SHA-256, vote, rationale, and tool-call count.  `input.json` records the rendered prompt, case view, evidence manifest, policy, runtime limits, and selected seat.  `tool-calls.ndjson` records the Council API calls in order, which shows whether the fresh juror examined evidence bytes before voting.
+
+Common failures have specific causes:
+
+| Message or symptom | Cause | Fix |
+| --- | --- | --- |
+| `OPENROUTER_API_KEY is required` | The selected Pi model config uses OpenRouter. | Export `OPENROUTER_API_KEY` in the environment that runs `aar juror-replay`. |
+| `stat persona ...` or `empty persona text` | `--persona` points to a missing, directory, or empty file. | Pass the intended persona text file, usually under `../evals/personas/experiments/` from `arb/`. |
+| `source output has multiple council-turn snapshots` | The source run has more than one captured turn and the command cannot infer the target turn. | Pass `--member-id MEMBER` or `--snapshot PATH`. |
+| `member MEMBER has N council-turn snapshots` | The same member has more than one captured turn, usually after later deliberation rounds. | Pass the exact `--snapshot` directory. |
+| `operation not permitted` while binding `127.0.0.1:0` | The process cannot open the local replay HTTP listener in the current environment. | Run the command in a local shell with permission to bind loopback ports. |
+| Pi image or container command failure | The configured container command cannot run the Pi image. | Check `docker image inspect agentcourt-pi-sandbox:latest` or the matching Podman image, then use `--podman docker` or `--podman podman` consistently. |
+| Missing prompt or instruction template | The command ran from a directory where default relative paths do not exist. | Run from `arb/`, or pass `--prompt-dir arb/prompts` and `--council-instructions arb/agent-instructions/pi-council.md.tmpl`. |
+
+The replay output can include a large `pi-MEMBER/` filesystem because Pi installs or caches runtime packages inside the replay home.  The replay runner removes generated secret files such as `.mcp.json` and Pi `auth.json` before returning, including failed Pi-start paths.  Keep `input.json`, `prompt.txt`, `result.json`, `tool-calls.ndjson`, `juror-replay.json`, and `logs/` when publishing or comparing replay behavior.
 
 ## OpenClaw Lawyer Auth
 
