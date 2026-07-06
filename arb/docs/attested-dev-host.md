@@ -4,6 +4,8 @@
 
 Attested AAR runs use the generic exec AMI launcher from the `attest` repository and add AAR-specific Docker, S3, secret, and verification requirements.  Start with [Dev Host Requirements](../../../attest/dev-host.md), which defines the generic `dev` host, Nix, EC2, IAM, and launched-instance assumptions for `attest`.  This document adds the requirements for building the AAR attested workload image, staging inputs, launching the Docker-enabled exec AMI, collecting S3 artifacts, and verifying an AAR attestation.
 
+The via-service request path lives in the [Agent Arbitration Manual](../manual.md#aar-service) and its [Clerk API](../manual.md#clerk-api) section.  The image build, exec AMI run path, S3 artifact layout, and verification commands live in the [AAR Docker Image Runbook](../Dockerfile.md).  This document defines the `dev` host requirements those paths assume.
+
 The attested AAR path supports checked-in examples and Clerk-style local case inputs.  Example mode selects a case inside the AAR Docker image with `AAR_EXAMPLE`.  Case-packet mode packages a local `complaint_path` and optional `case_files` into `case.tar.gz` and `case-packet.json`, uploads them under the S3 input prefix through `dev`, and records their hashes in the attestation manifest.
 
 ## Host Layout
@@ -150,4 +152,4 @@ rm -f /tmp/arbattest-s3-probe.txt
 
 ## References
 
-The generic host and AMI requirements live in [Dev Host Requirements](../../../attest/dev-host.md).  The AAR image build and run sequence lives in [AAR Docker Image Runbook](../Dockerfile.md).  The lower-level attested runner is `arb/tools/run-arb-attested.py`, and the one-example wrapper is `arb/tools/run-one-attested-arb.sh`.
+The via-service request path lives in the [Agent Arbitration Manual](../manual.md#aar-service) and [Clerk API](../manual.md#clerk-api) section.  The generic host and AMI requirements live in [Dev Host Requirements](../../../attest/dev-host.md).  The AAR image build and run sequence lives in [AAR Docker Image Runbook](../Dockerfile.md).  The lower-level attested runner is `arb/tools/run-arb-attested.py`, and the one-example wrapper is `arb/tools/run-one-attested-arb.sh`.

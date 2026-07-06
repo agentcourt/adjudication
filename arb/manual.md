@@ -725,6 +725,8 @@ EOF
 
 Create an attested example run:
 
+This section defines the service request shape for attested Clerk runs.  The image build, exec AMI, S3 artifact flow, and verification details live in the [AAR Docker Image Runbook](Dockerfile.md).  The `dev` host, secret-file, IAM, S3 permission, AMI, and PCR requirements live in [Attested AAR Dev Host Requirements](docs/attested-dev-host.md).
+
 ```bash
 .bin/aar service \
   --listen 127.0.0.1:19770 \

@@ -4,6 +4,8 @@
 
 This runbook covers the AAR base image from `arb/Dockerfile`, the AAR attested workload image from `arb/Dockerfile.glue`, and the attested exec run launched by `tools/run-aar.sh`.  The base image contains the compiled `aar` and `aarengine` binaries, the `adjudication` source tree, the Docker CLI, and an embedded Pi council root filesystem.  The attested workload image adds AWS CLI, `nitro-tpm-attest`, the TSS runtime libraries, and `attest/exec-container-entrypoint.sh`.
 
+The via-service path uses `aar service` and the Clerk API.  Its request shape, service flags, monitoring route, artifact routes, and completion rule live in the [Agent Arbitration Manual](manual.md#aar-service) and its [Clerk API](manual.md#clerk-api) section.  This runbook covers the Docker image, exec AMI, S3 artifact flow, local driver, and verification procedure used by those service requests.
+
 The attested path supports two AAR input modes.  Example mode runs a checked-in directory under `arb/examples/<name>` selected by `AAR_EXAMPLE`; when the variable is absent, both `run-aar.sh` and the exec container entrypoint use `ex01`.  Case-packet mode runs a local complaint and optional case files by packaging them into `case.tar.gz` and `case-packet.json`, uploading those objects under `INPUT_PREFIX`, and passing the extracted complaint path to `aar run`.
 
 The exec input schema always reads `auth.json` and `keys.sh` from `INPUT_PREFIX`.  Example mode adds only the `AAR_EXAMPLE` selector.  Case-packet mode adds `case.tar.gz`, `case-packet.json`, `AAR_CASE_PACKET_SHA384`, and `AAR_CASE_MANIFEST_SHA384`, so the manifest and verifier bind the exact arbitrary case packet used by the exec instance.
@@ -205,6 +207,8 @@ AWS_DEFAULT_REGION=us-east-2 aws s3 ls "$input_prefix/"
 The `keys.sh` file must define `OPENROUTER_API_KEY`.  The exec container entrypoint sources that file inside the container and exits before AAR starts if the variable is absent.  For arbitrary local cases, use the local driver to create the packet; the driver writes deterministic packet objects and records their hashes in `run.env`.
 
 ## Run The Attested AAR
+
+For Clerk-managed attested runs, start with the [Agent Arbitration Manual](manual.md#aar-service).  Use this section when running the lower-level driver directly, checking the S3 and verification path used by the service, or diagnosing the exec AMI path.
 
 The preferred command for a normal checked-in example is `adjudication/arb/tools/run-one-attested-arb.sh`.  It takes one argument, an example directory such as `examples/ex03`.  It validates that the directory exists and contains `complaint.md`, stages `auth.json` and `keys.sh` into a fresh S3 input prefix, chooses timestamped input and output prefixes, starts the exec AMI through the local driver, downloads the S3 artifacts, extracts the AAR archive, and verifies the attestation.
 
