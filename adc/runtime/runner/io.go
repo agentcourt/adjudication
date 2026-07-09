@@ -3,6 +3,7 @@ package runner
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -106,6 +107,163 @@ func resetEventLog(path string) error {
 	return nil
 }
 
+func (r *Runner) writeEvidenceManifest() error {
+	if r.cfg.OutputPath == "" {
+		return nil
+	}
+	outputDir := filepath.Dir(r.cfg.OutputPath)
+	caseObj, _ := r.state["case"].(map[string]any)
+	if caseObj == nil {
+		return fmt.Errorf("state.case missing")
+	}
+	files, _ := caseObj["case_files"].([]any)
+	evidence := make([]map[string]any, 0, len(files))
+	for _, raw := range files {
+		fileObj, _ := raw.(map[string]any)
+		if fileObj == nil {
+			continue
+		}
+		item, err := r.evidenceManifestItem(outputDir, caseObj, fileObj)
+		if err != nil {
+			return err
+		}
+		evidence = append(evidence, item)
+	}
+	manifest := map[string]any{
+		"schema_version": "adc.evidence-manifest.v0",
+		"created_at":     time.Now().UTC().Format(time.RFC3339),
+		"evidence":       evidence,
+		"evidence_count": len(evidence),
+	}
+	if err := writeJSONFileAtomic(filepath.Join(outputDir, "evidence-manifest.json"), manifest); err != nil {
+		return fmt.Errorf("write evidence manifest: %w", err)
+	}
+	return nil
+}
+
+func (r *Runner) evidenceManifestItem(outputDir string, caseObj map[string]any, fileObj map[string]any) (map[string]any, error) {
+	fileID := strings.TrimSpace(stringOrDefault(fileObj["file_id"], ""))
+	if fileID == "" {
+		return nil, fmt.Errorf("case file missing file_id")
+	}
+	storedPath := strings.TrimSpace(stringOrDefault(fileObj["storage_relpath"], ""))
+	if storedPath == "" {
+		return nil, fmt.Errorf("case file %s has no storage_relpath", fileID)
+	}
+	src := resolveStoredCaseFilePath(storedPath, r.cfg.ScenarioBaseDir)
+	name := manifestCaseFileName(fileObj)
+	if err := copyFileAtomic(src, filepath.Join(outputDir, "submitted-evidence", name)); err != nil {
+		return nil, fmt.Errorf("copy case file %s into submitted evidence: %w", fileID, err)
+	}
+	item := map[string]any{
+		"evidence_id":     fileID,
+		"file_id":         fileID,
+		"name":            name,
+		"original_name":   strings.TrimSpace(stringOrDefault(fileObj["original_name"], "")),
+		"label":           strings.TrimSpace(stringOrDefault(fileObj["label"], "")),
+		"storage_relpath": storedPath,
+		"sha256":          strings.TrimSpace(stringOrDefault(fileObj["sha256"], "")),
+		"size_bytes":      intFromAny(fileObj["size_bytes"]),
+		"mime_type":       caseFileMIMEType(fileObj),
+		"text_readable":   isReadableCaseTextExtension(caseFileExtension(fileObj)),
+		"uses":            caseFileUses(caseObj, fileID),
+	}
+	if importedAt := strings.TrimSpace(stringOrDefault(fileObj["imported_at"], "")); importedAt != "" {
+		item["imported_at"] = importedAt
+	}
+	if importedBy := strings.TrimSpace(stringOrDefault(fileObj["imported_by"], "")); importedBy != "" {
+		item["imported_by"] = importedBy
+	}
+	return item, nil
+}
+
+func manifestCaseFileName(fileObj map[string]any) string {
+	fileID := strings.TrimSpace(stringOrDefault(fileObj["file_id"], "case-file"))
+	name := strings.TrimSpace(stringOrDefault(fileObj["original_name"], ""))
+	if name == "" {
+		name = strings.TrimSpace(stringOrDefault(fileObj["label"], ""))
+	}
+	if name == "" {
+		name = strings.TrimSpace(filepath.Base(stringOrDefault(fileObj["storage_relpath"], "")))
+	}
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		name = "case-file.bin"
+	}
+	return fileID + "-" + sanitizeUploadedCaseFilename(name)
+}
+
+func writeJSONFileAtomic(path string, value any) error {
+	raw, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(raw); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if _, err := tmp.Write([]byte("\n")); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	return nil
+}
+
+func copyFileAtomic(src string, dst string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	tmp, err := os.CreateTemp(filepath.Dir(dst), "."+filepath.Base(dst)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := io.Copy(tmp, in); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, dst); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	return nil
+}
+
 func (r *Runner) writeEvidence(result Result) error {
 	raw, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
@@ -118,6 +276,9 @@ func (r *Runner) writeEvidence(result Result) error {
 		return fmt.Errorf("write evidence: %w", err)
 	}
 	if err := exportExternalWorkProduct(filepath.Dir(r.cfg.OutputPath), r.workProductDirs); err != nil {
+		return err
+	}
+	if err := r.writeEvidenceManifest(); err != nil {
 		return err
 	}
 	return nil

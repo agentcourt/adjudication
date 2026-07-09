@@ -81,7 +81,7 @@ make test
 make prove
 ```
 
-`adc run` uses Docker for OpenClaw lawyers and Podman for Pi jurors.  The default OpenClaw image is `ghcr.io/openclaw/openclaw:latest`; the default OpenClaw model is `gpt-5.5` with thinking set to `low`.  The default Pi image is `agentcourt-pi-sandbox`, unless `PI_CONTAINER_IMAGE` is set and `--pi-image` is omitted.  The default Pi MCP adapter package is `npm:pi-mcp-adapter`.
+`adc run` uses Docker for OpenClaw lawyers and Podman for Pi jurors.  The default OpenClaw image is `ghcr.io/openclaw/openclaw:latest`; the default OpenClaw model is `gpt-5.5` with thinking set to `low`.  The default Pi image is `agentcourt-pi-sandbox`, unless `PI_CONTAINER_IMAGE` is set and `--pi-image` is omitted.  The default Pi MCP adapter path is `/opt/pi-extensions/pi-mcp-adapter/node_modules/pi-mcp-adapter`, which the shared Pi image builds from pinned `pi-mcp-adapter@2.11.0`.
 
 Pi jurors require `OPENROUTER_API_KEY`.  The juror model request comes from a JSONL request-spec pool, and `adc run` requires a readable pool file even if the selected scenario reaches jurors late.  Request-spec records must contain an OpenRouter endpoint and model.  ADC rejects Pi juror request specs that require temperature or top-p settings because the current Pi config writer cannot enforce those parameters.
 
@@ -217,7 +217,7 @@ Important local-agent flags:
 | `--openclaw-lawyer-start-delay-seconds` | Delay between plaintiff and defendant container startup.  The default is 15 seconds. |
 | `--openclaw-network` | Docker network for OpenClaw lawyer containers.  The supported non-empty value is `host`. |
 | `--pi-image` | Pi container image. |
-| `--pi-mcp-adapter` | Pi MCP adapter package. |
+| `--pi-mcp-adapter` | Pi MCP adapter path or package source. |
 | `--juror-output-limit-bytes` | Total stdout plus stderr byte cap per Pi juror process.  The default is 128 MiB. |
 | `--docker-mcp-host` | Host name OpenClaw containers use to reach MCP. |
 | `--podman-mcp-host` | Host name Pi containers use to reach MCP. |
@@ -424,7 +424,7 @@ Endpoints:
 
 The `/api/v1/cases` paths use the same implementation as `/clerk/v1/cases`.  They exist as service API aliases.  A bearer token can protect all service routes when `--bearer-token` is set.
 
-Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, and `evidence-manifest.json`.  They do not serve arbitrary output files, process logs, generated remote-lawyer instruction files, or staged Codex auth directories.  The evidence route reads `evidence-manifest.json` and serves submitted evidence by evidence id when the manifest maps that id to a readable file.
+Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, and `evidence-manifest.json`.  They do not serve arbitrary output files, process logs, generated remote-lawyer instruction files, or staged Codex auth directories.  The evidence route reads `evidence-manifest.json` and serves submitted evidence by evidence id when the manifest maps that id to a readable file.  Local case processes write the manifest when the runner initializes and after case-file state changes, so active cases can serve evidence after the corresponding manifest update.  An active case that has not yet written the manifest returns HTTP `409` with error code `evidence_manifest_pending`; a terminal output packet without a manifest returns HTTP `404` with error code `manifest_missing`.
 
 The create request is structured JSON.  Common fields include `case_id`, `run_id`, exactly one of `complaint_path` or `scenario_path`, `out_dir`, `model`, `juror_personas`, `engine_path`, `timeout_seconds`, `invalid_attempt_limit`, and `max_response_bytes`.  Jury configuration fields are `juror_count`, `unanimous_required`, and `minimum_concurring`; the service passes them to the child case process for local-agent and direct runs.  If `out_dir` is supplied, it must be an immediate child of the service `--output-root`; when it is omitted, the service uses `OUTPUT_ROOT/CASE_ID`.  Complaint-based runs also accept setup fields such as `court`, `non_juror_model`, `plaintiff_model`, `defendant_model`, `judge_model`, `clerk_model`, `planner_model`, `report_model`, `trial_mode`, and `skip_voir_dire`.
 

@@ -313,6 +313,9 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 	if err := resetEventLog(r.cfg.EventsPath); err != nil {
 		return Result{}, err
 	}
+	if err := r.writeEvidenceManifest(); err != nil {
+		return Result{}, err
+	}
 	if err := r.store.CreateRun(r.cfg.RunID, r.scenario.Name); err != nil {
 		return Result{}, err
 	}

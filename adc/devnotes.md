@@ -1,5 +1,24 @@
 # Development Notes
 
+## 2026-07-09: Live evidence manifest for service evidence fetch
+
+### References
+
+- Service evidence route: [`runtime/service/service.go`](runtime/service/service.go)
+- Runner evidence output: [`runtime/runner/io.go`](runtime/runner/io.go)
+- ADC manual service section: [`manual.md`](manual.md#service-api)
+
+### Decisions
+
+The ADC service evidence route now distinguishes an active missing manifest from a terminal packet that lacks a manifest.  Active cases return HTTP `409` with error code `evidence_manifest_pending`; terminal packets return HTTP `404` with error code `manifest_missing`; unreadable and malformed manifests return separate server errors.  The route accepts both the legacy array manifest and the object manifest with an `evidence` array.
+
+The runner now writes `evidence-manifest.json` when it initializes and after case-file state changes.  The manifest uses an empty array when no files exist, avoiding the `null` shape that made service parsing fail in the ARB live test.  Case files are copied into `submitted-evidence/` with atomic replacement, so the service route can fetch a file by `evidence_id` during a live run after the corresponding manifest update.
+
+### Verification
+
+- [x] `go test ./runtime/runner`
+- [x] `go test ./runtime/service`
+
 ## 2026-06-17: Manual review
 
 ### References
@@ -242,7 +261,7 @@ The ACP prompt now names current limits instead of relying only on static docume
 - [x] Make `defaultACPServerPath` return the relative wrapper path directly.
 - [ ] Add a dedicated test if this area changes again.
 
-## 2026-03-18: `../common/tools/cluster-personas.py`
+## 2026-03-18: `../evals/tools/cluster-personas.py`
 
 ### References
 
@@ -295,6 +314,6 @@ The ACP prompt now names current limits instead of relying only on static docume
 
 ### Results
 
-- Live test: `uv run ../common/tools/cluster-personas.py --personas-file /tmp/persona-sample-test.csv --genes-file /tmp/persona-sample-genes.json --num-samples 3 --gene-dim 3`
+- Live test: `uv run ../evals/tools/cluster-personas.py --personas-file /tmp/persona-sample-test.csv --genes-file /tmp/persona-sample-genes.json --num-samples 3 --gene-dim 3`
 - Live output: three `MP,G,C` rows for one persona and one gene through local xproxy plus direct embeddings.
 - Follow-up fix: `adc xproxy` initially returned an error on clean shutdown because the listener was already closed.  `runtime/xproxy/xproxy.go` now ignores `net.ErrClosed` in that path, and a live `Ctrl-C` shutdown now exits with status `0`.

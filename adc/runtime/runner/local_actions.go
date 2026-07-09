@@ -483,6 +483,9 @@ func (r *Runner) executeLocalAction(actorRole, actionType string, payload map[st
 			r.state = nextState
 			leanRes["state"] = nextState
 			leanRes["file"] = record
+			if err := r.writeEvidenceManifest(); err != nil {
+				return ActionExecution{}, true, err
+			}
 		}
 		return ActionExecution{Result: leanRes}, true, nil
 	case "list_case_files":
@@ -631,6 +634,9 @@ func (r *Runner) executeLocalAction(actorRole, actionType string, payload map[st
 			}
 			r.state = nextState
 			leanRes["state"] = nextState
+			if err := r.writeEvidenceManifest(); err != nil {
+				return ActionExecution{}, true, err
+			}
 		}
 		return ActionExecution{Result: leanRes}, true, nil
 	case "offer_case_file_as_exhibit":
@@ -700,6 +706,9 @@ func (r *Runner) executeLocalAction(actorRole, actionType string, payload map[st
 			nextState["case"] = nextCase
 			r.state = nextState
 			leanRes["state"] = nextState
+			if err := r.writeEvidenceManifest(); err != nil {
+				return ActionExecution{}, true, err
+			}
 		}
 		return ActionExecution{Result: leanRes}, true, nil
 	case "rest_case":

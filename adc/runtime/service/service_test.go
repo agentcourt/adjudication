@@ -106,6 +106,35 @@ func TestRoleAPIProxyForwardsGetAndPost(t *testing.T) {
 	}
 }
 
+func TestListCasesOmitsStoredSummary(t *testing.T) {
+	s := testServiceWithCase(t, CaseRecord{
+		CaseID:    "case-1",
+		RunID:     "run-case-1",
+		Status:    "completed",
+		OutputDir: t.TempDir(),
+		CreatedAt: "2026-07-09T18:17:20Z",
+		Summary: map[string]any{
+			"final_state": map[string]any{"large": true},
+		},
+	})
+
+	status, got := serviceGet(t, s, "/clerk/v1/cases")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d body=%#v", status, got)
+	}
+	cases, ok := got["cases"].([]any)
+	if !ok || len(cases) != 1 {
+		t.Fatalf("cases = %#v", got["cases"])
+	}
+	rec, ok := cases[0].(map[string]any)
+	if !ok {
+		t.Fatalf("case record = %#v", cases[0])
+	}
+	if _, ok := rec["summary"]; ok {
+		t.Fatalf("list case includes summary: %#v", rec["summary"])
+	}
+}
+
 func TestCaseProcessArgsDefaultsToRun(t *testing.T) {
 	s := &Server{cfg: Config{EnginePath: "lake exe adc-engine"}}
 	startDelay := 15
@@ -292,6 +321,75 @@ func TestArtifactRouteServesOnlyListedArtifacts(t *testing.T) {
 	status, got = serviceGet(t, s, "/api/v1/cases/case-1/artifacts/transcript.md")
 	if status != http.StatusBadRequest {
 		t.Fatalf("transcript symlink status = %d body = %#v", status, got)
+	}
+}
+
+func TestEvidenceRouteReadsCurrentManifestShape(t *testing.T) {
+	outDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(outDir, "submitted-evidence"), 0o755); err != nil {
+		t.Fatalf("mkdir submitted evidence: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "submitted-evidence", "file-0001-record.txt"), []byte("record text\n"), 0o644); err != nil {
+		t.Fatalf("write evidence: %v", err)
+	}
+	manifest := `{"schema_version":"adc.evidence-manifest.v0","evidence":[{"evidence_id":"file-0001","name":"file-0001-record.txt"}],"evidence_count":1}` + "\n"
+	if err := os.WriteFile(filepath.Join(outDir, "evidence-manifest.json"), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	s := testServiceWithCase(t, CaseRecord{
+		CaseID:    "case-1",
+		RunID:     "run-case-1",
+		Status:    "completed",
+		OutputDir: outDir,
+	})
+
+	status, body := serviceRawGet(t, s, "/api/v1/cases/case-1/evidence/file-0001")
+	if status != http.StatusOK || string(body) != "record text\n" {
+		t.Fatalf("evidence status = %d body = %q", status, string(body))
+	}
+}
+
+func TestEvidenceRouteReportsPendingManifest(t *testing.T) {
+	outDir := t.TempDir()
+	s := testServiceWithCase(t, CaseRecord{
+		CaseID:    "case-1",
+		RunID:     "run-case-1",
+		Status:    "running",
+		OutputDir: outDir,
+	})
+
+	status, got := serviceGet(t, s, "/api/v1/cases/case-1/evidence/file-0001")
+	if status != http.StatusConflict {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusConflict, got)
+	}
+	errObj, ok := got["error"].(map[string]any)
+	if !ok || errObj["code"] != "evidence_manifest_pending" {
+		t.Fatalf("error = %#v", got["error"])
+	}
+	if !strings.Contains(mapString(errObj["message"]), "not available yet") {
+		t.Fatalf("error message = %#v", errObj["message"])
+	}
+}
+
+func TestEvidenceRouteReportsTerminalMissingManifest(t *testing.T) {
+	outDir := t.TempDir()
+	s := testServiceWithCase(t, CaseRecord{
+		CaseID:    "case-1",
+		RunID:     "run-case-1",
+		Status:    "completed",
+		OutputDir: outDir,
+	})
+
+	status, got := serviceGet(t, s, "/api/v1/cases/case-1/evidence/file-0001")
+	if status != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusNotFound, got)
+	}
+	errObj, ok := got["error"].(map[string]any)
+	if !ok || errObj["code"] != "manifest_missing" {
+		t.Fatalf("error = %#v", got["error"])
+	}
+	if !strings.Contains(mapString(errObj["message"]), "evidence-manifest.json") {
+		t.Fatalf("error message = %#v", errObj["message"])
 	}
 }
 

@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,6 +83,106 @@ func TestExportExternalWorkProduct(t *testing.T) {
 	}
 	if string(raw) != "timeline\n" {
 		t.Fatalf("exported work product = %q", string(raw))
+	}
+}
+
+func TestWriteEvidenceManifestUsesEmptyArray(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	r := &Runner{
+		cfg: Config{OutputPath: filepath.Join(tmpDir, "run.json")},
+		state: map[string]any{
+			"case": map[string]any{
+				"case_files": []any{},
+			},
+		},
+	}
+
+	if err := r.writeEvidenceManifest(); err != nil {
+		t.Fatalf("writeEvidenceManifest returned error: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(tmpDir, "evidence-manifest.json"))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	var got struct {
+		Evidence []map[string]any `json:"evidence"`
+		Count    int              `json:"evidence_count"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
+	if got.Evidence == nil {
+		t.Fatalf("manifest evidence array is nil: %s", string(raw))
+	}
+	if len(got.Evidence) != 0 || got.Count != 0 {
+		t.Fatalf("manifest = %s", string(raw))
+	}
+}
+
+func TestWriteEvidenceManifestCopiesCaseFile(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	src := filepath.Join(tmpDir, "source.txt")
+	if err := os.WriteFile(src, []byte("case file text\n"), 0o644); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	r := &Runner{
+		cfg: Config{OutputPath: filepath.Join(tmpDir, "out", "run.json")},
+		state: map[string]any{
+			"case": map[string]any{
+				"case_files": []any{
+					map[string]any{
+						"file_id":         "file-0001",
+						"label":           "Record",
+						"original_name":   "record.txt",
+						"storage_relpath": src,
+						"sha256":          "sha-test",
+						"size_bytes":      15,
+					},
+				},
+				"file_events": []any{
+					map[string]any{
+						"action":  "offer_case_file_as_exhibit",
+						"file_id": "file-0001",
+						"actor":   "plaintiff",
+					},
+				},
+			},
+		},
+	}
+
+	if err := r.writeEvidenceManifest(); err != nil {
+		t.Fatalf("writeEvidenceManifest returned error: %v", err)
+	}
+	copied, err := os.ReadFile(filepath.Join(tmpDir, "out", "submitted-evidence", "file-0001-record.txt"))
+	if err != nil {
+		t.Fatalf("read copied evidence: %v", err)
+	}
+	if string(copied) != "case file text\n" {
+		t.Fatalf("copied evidence = %q", string(copied))
+	}
+	raw, err := os.ReadFile(filepath.Join(tmpDir, "out", "evidence-manifest.json"))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	var got struct {
+		Evidence []map[string]any `json:"evidence"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
+	if len(got.Evidence) != 1 {
+		t.Fatalf("evidence count = %d manifest=%s", len(got.Evidence), string(raw))
+	}
+	item := got.Evidence[0]
+	if item["evidence_id"] != "file-0001" || item["name"] != "file-0001-record.txt" || item["mime_type"] != "text/plain; charset=utf-8" {
+		t.Fatalf("manifest item = %#v", item)
+	}
+	if uses, ok := item["uses"].([]any); !ok || len(uses) != 1 {
+		t.Fatalf("uses = %#v", item["uses"])
 	}
 }
 
