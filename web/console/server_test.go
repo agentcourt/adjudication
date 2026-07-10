@@ -196,7 +196,12 @@ func TestCaseDetailCompactsStructuredFieldsAndRefreshesRunningCase(t *testing.T)
 		case "/clerk/v1/cases/case-running/result":
 			writeTestJSON(w, map[string]any{"ok": true, "case_id": "case-running", "status": "running"})
 		case "/clerk/v1/cases/case-running/artifacts":
-			writeTestJSON(w, map[string]any{"ok": true, "case_id": "case-running", "artifacts": []map[string]any{}})
+			writeTestJSON(w, map[string]any{"ok": true, "case_id": "case-running", "artifacts": []map[string]any{{"name": "events.ndjson", "size_bytes": 256}}})
+		case "/clerk/v1/cases/case-running/artifacts/events.ndjson":
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			_, _ = w.Write([]byte(`{"timestamp":"2026-07-10T18:35:21Z","phase":"openings","type":"run_initialized","payload":{"role":"system"}}` + "\n"))
+			_, _ = w.Write([]byte(`{"timestamp":"2026-07-10T18:35:42Z","phase":"openings","type":"evidence_read","role":"plaintiff","payload":{"evidence_id":"ev_deadline","byte_count":820}}` + "\n"))
+			_, _ = w.Write([]byte(`{"timestamp":"2026-07-10T18:36:02Z","phase":"arguments","type":"opportunity_ready","payload":{"role":"plaintiff","message":"plaintiff may file argument"}}` + "\n"))
 		default:
 			t.Fatalf("path = %s", r.URL.Path)
 		}
@@ -216,6 +221,10 @@ func TestCaseDetailCompactsStructuredFieldsAndRefreshesRunningCase(t *testing.T)
 		"<dt>answers</dt><dd>C5=73</dd>",
 		"<dt>events</dt><dd>2</dd>",
 		"<summary>full JSON (2 keys)</summary>",
+		"Recent Events",
+		"opportunity_ready",
+		"plaintiff may file argument",
+		"ev_deadline (820 bytes)",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q: %s", want, body)
@@ -266,8 +275,8 @@ func TestCaseDetailSummarizesFailureEvents(t *testing.T) {
 			t.Fatalf("body missing %q: %s", want, body)
 		}
 	}
-	if count := strings.Count(body, "provider rejected function.arguments"); count != 1 {
-		t.Fatalf("failure message count = %d body=%s", count, body)
+	if count := strings.Count(body, "<td>pi-C2</td>"); count != 1 {
+		t.Fatalf("failure process row count = %d body=%s", count, body)
 	}
 	if strings.Contains(body, `action="/system/arb/clerk/cases/case-failure/manage"`) {
 		t.Fatalf("completed case includes manage action: %s", body)

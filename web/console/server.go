@@ -34,6 +34,7 @@ type ViewData struct {
 	Result         map[string]any
 	Artifacts      []Artifact
 	EventIssues    []EventIssue
+	RecentEvents   []CaseEvent
 	EventNotice    string
 	Evidence       []EvidenceEntry
 	EvidenceID     string
@@ -63,6 +64,14 @@ type EventIssue struct {
 	Reason    string
 	Message   string
 	LogPath   string
+}
+
+type CaseEvent struct {
+	Timestamp string
+	Phase     string
+	Type      string
+	Actor     string
+	Message   string
 }
 
 type recordFact struct {
@@ -286,7 +295,7 @@ func (a *App) handleCaseDetail(w http.ResponseWriter, r *http.Request, sys Syste
 	data.Record = asMap(record.JSON["case"])
 	data.Result = result.JSON
 	data.Artifacts = artifactsFrom(artifacts.JSON["artifacts"])
-	data.EventIssues, data.EventNotice = a.loadEventIssues(r.Context(), sys, scope, caseID, data.Artifacts)
+	data.EventIssues, data.RecentEvents, data.EventNotice = a.loadEventData(r.Context(), sys, scope, caseID, data.Artifacts)
 	data.AutoRefresh = activeCase(data.Record, data.Result)
 	data.CanManage = data.AutoRefresh
 	data.Response = &record
@@ -375,22 +384,22 @@ func (a *App) loadEvidenceManifest(ctx context.Context, sys SystemConfig, scope 
 	return entries, ""
 }
 
-func (a *App) loadEventIssues(ctx context.Context, sys SystemConfig, scope ScopeConfig, caseID string, artifacts []Artifact) ([]EventIssue, string) {
+func (a *App) loadEventData(ctx context.Context, sys SystemConfig, scope ScopeConfig, caseID string, artifacts []Artifact) ([]EventIssue, []CaseEvent, string) {
 	if !artifactNamed(artifacts, "events.ndjson") {
-		return nil, ""
+		return nil, nil, ""
 	}
 	resp, err := a.client.JSON(ctx, sys, http.MethodGet, artifactPath(scope, caseID, "events.ndjson"), nil)
 	if err != nil {
-		return nil, "events.ndjson request failed: " + err.Error()
+		return nil, nil, "events.ndjson request failed: " + err.Error()
 	}
 	if resp.StatusCode >= 400 {
 		message := fieldText(resp.JSON, "message")
 		if message == "" {
 			message = compactBody(resp.Body)
 		}
-		return nil, fmt.Sprintf("events.ndjson returned HTTP %d: %s", resp.StatusCode, message)
+		return nil, nil, fmt.Sprintf("events.ndjson returned HTTP %d: %s", resp.StatusCode, message)
 	}
-	return eventIssuesFromNDJSON(resp.Body), ""
+	return eventIssuesFromNDJSON(resp.Body), recentEventsFromNDJSON(resp.Body, 8), ""
 }
 
 func (a *App) handleManageCase(w http.ResponseWriter, r *http.Request, sys SystemConfig, scope ScopeConfig, caseID string) {
@@ -624,6 +633,72 @@ func eventIssuesFromNDJSON(raw []byte) []EventIssue {
 		}
 	}
 	return out
+}
+
+func recentEventsFromNDJSON(raw []byte, max int) []CaseEvent {
+	if max <= 0 {
+		return nil
+	}
+	var events []CaseEvent
+	for _, line := range bytes.Split(raw, []byte("\n")) {
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+		var event map[string]any
+		if err := json.Unmarshal(line, &event); err != nil {
+			continue
+		}
+		if row, ok := caseEventFrom(event); ok {
+			events = append(events, row)
+		}
+	}
+	if len(events) > max {
+		events = events[len(events)-max:]
+	}
+	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
+		events[i], events[j] = events[j], events[i]
+	}
+	return events
+}
+
+func caseEventFrom(event map[string]any) (CaseEvent, bool) {
+	eventType := fieldText(event, "type")
+	if eventType == "" {
+		return CaseEvent{}, false
+	}
+	payload := asMap(event["payload"])
+	actor := firstNonEmpty(fieldText(payload, "member_id"), fieldText(payload, "role"), fieldText(event, "role"))
+	message := eventMessage(payload)
+	return CaseEvent{
+		Timestamp: fieldText(event, "timestamp"),
+		Phase:     fieldText(event, "phase"),
+		Type:      eventType,
+		Actor:     actor,
+		Message:   limitText(message, 240),
+	}, true
+}
+
+func eventMessage(payload map[string]any) string {
+	if payload == nil {
+		return ""
+	}
+	if message := firstNonEmpty(fieldText(payload, "message"), fieldText(payload, "cause"), fieldText(payload, "agent_error")); message != "" {
+		return message
+	}
+	if evidenceID := fieldText(payload, "evidence_id"); evidenceID != "" {
+		if byteCount := fieldText(payload, "byte_count"); byteCount != "" {
+			return evidenceID + " (" + byteCount + " bytes)"
+		}
+		return evidenceID
+	}
+	if actionType := fieldText(payload, "action_type"); actionType != "" {
+		if opportunityID := fieldText(payload, "opportunity_id"); opportunityID != "" {
+			return actionType + " " + opportunityID
+		}
+		return actionType
+	}
+	return ""
 }
 
 func eventIssueFrom(event map[string]any) (EventIssue, bool) {

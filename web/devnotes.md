@@ -26,6 +26,8 @@ The default console exposes ADC only through Clerk.  The ADC service still serve
 
 Structured case-record fields now render as fact lists plus a closed JSON disclosure.  This keeps `summary` cells useful on the case page: scalar state, answers, vote tallies, and collection counts appear immediately, while the full service JSON remains available without leaving the page.
 
+The case detail page now renders a Recent Events table from `events.ndjson`, newest first and capped at eight rows.  Active cases then show visible phase progress without forcing the operator to open the raw NDJSON artifact.  The existing Failure Events table still reports process and provider failures separately.
+
 ### Verification
 
 - [x] `go test ./web/...`

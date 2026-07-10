@@ -144,6 +144,21 @@ const pageTemplates = `
 <h2>Artifacts</h2>
 <table><tr><th>Name</th><th>Size</th></tr>{{range .Artifacts}}<tr><td><a href="/system/{{$.System.ID}}/{{$.Scope.ID}}/cases/{{$.CaseID | pathEscape}}/artifacts/{{.Name | pathEscape}}">{{.Name}}</a></td><td>{{.Size}}</td></tr>{{end}}</table>
 {{end}}
+{{if .RecentEvents}}
+<h2>Recent Events</h2>
+<table>
+  <tr><th>Time</th><th>Phase</th><th>Type</th><th>Actor</th><th>Message</th></tr>
+  {{range .RecentEvents}}
+  <tr>
+    <td>{{.Timestamp}}</td>
+    <td>{{.Phase}}</td>
+    <td>{{.Type}}</td>
+    <td>{{.Actor}}</td>
+    <td>{{.Message}}</td>
+  </tr>
+  {{end}}
+</table>
+{{end}}
 {{if .EventIssues}}
 <h2>Failure Events</h2>
 <table>
