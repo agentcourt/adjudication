@@ -22,6 +22,8 @@ The case detail page now reads `events.ndjson` through the service artifact API 
 
 The manage form appears only while a case is active.  Completed cases still show result, artifact, evidence, and attestation links, but they no longer present a stale kill or cancel action.
 
+The default console exposes ADC only through Clerk.  The ADC service still serves `/api/v1/cases` for API clients that call the service directly.  The web UI case navigation now presents the operational choices: ADC Clerk, ARB Clerk, ARB Direct, AARD Clerk, and AARD Direct.
+
 ### Verification
 
 - [x] `go test ./web/...`

@@ -41,6 +41,28 @@ func TestListCasesForwardsBearerAndRendersRows(t *testing.T) {
 	}
 }
 
+func TestIndexDoesNotExposeADCAlias(t *testing.T) {
+	app, err := New(DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	app.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, unwanted := range []string{
+		"ADC API Alias",
+		"/system/adc/api/cases",
+	} {
+		if strings.Contains(body, unwanted) {
+			t.Fatalf("body includes %q: %s", unwanted, body)
+		}
+	}
+}
+
 func TestCreateCasePostsRawJSONAndRedirects(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/clerk/v1/cases" {

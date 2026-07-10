@@ -42,7 +42,6 @@ func DefaultConfig() Config {
 				BaseURL: "http://127.0.0.1:19870",
 				Scopes: []ScopeConfig{
 					{ID: "clerk", Label: "Clerk", BasePath: "/clerk/v1/cases", ManageAction: "kill", Description: "Full ADC runs and direct-mode ADC cases."},
-					{ID: "api", Label: "API Alias", BasePath: "/api/v1/cases", ManageAction: "kill", Description: "ADC service alias for the same case-management API."},
 				},
 			},
 			"arb": {
