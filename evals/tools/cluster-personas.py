@@ -16,7 +16,7 @@ shared data files.
 
 Usage:
 
-   uv run common/tools/cluster-personas.py --personas-file common/data/personas/some-personas.csv --num-samples 3 --num-genes 5 --num-personas 25
+   uv run --script evals/tools/cluster-personas.py --personas-file common/data/personas/some-personas.csv --num-samples 3 --num-genes 5 --num-personas 25
 
 The shared persona pool is `common/etc/personas.csv`.  The checked-in sampled
 subset is `common/data/personas/some-personas.csv`.

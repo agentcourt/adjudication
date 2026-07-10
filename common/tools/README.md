@@ -6,13 +6,9 @@ This directory contains shared maintenance tools for the `arb` and `arbd` trees.
 
 | File | Role |
 | --- | --- |
-| `cluster-personas.py` | Cluster persona text for pool review. |
-| `clusters-graph.py` | Render persona-cluster graphs. |
-| `filter-models.py` | Filter model lists for pool construction. |
 | `gendiagram.sh` | Generate diagrams from source files. |
-| `generate-council.py` | Build council persona data. |
 | `gentheorems.py` | Generate theorem scaffolding. |
 | `llm_graph.py` | Render model and request graphs. |
-| `model-speed.sh` | Measure model request timing. |
 | `proofstats.sh` | Summarize proof statistics. |
-| `select-council.py` | Select council members from a persona pool. |
+
+Model-pool evaluation, clustering, graphing, and selection tools live under [Adjudication Evals](../../evals/README.md).

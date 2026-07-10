@@ -10,7 +10,7 @@
 # 4. prints status and model output or captured error text to stderr.
 #
 # Usage:
-#   common/tools/model-speed.sh common/etc/personas/persons/d715074-0.txt < common/data/personas/models.csv
+#   evals/tools/model-speed.sh common/etc/personas/persons/d715074-0.txt < common/data/personas/models.csv
 #
 # Notes:
 # - run from the repository root;

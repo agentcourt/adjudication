@@ -332,10 +332,10 @@ def main(argv: list[str]) -> int:
     persona_dir = rel_path(root, args.persona_dir)
     probe_persona = rel_path(root, args.probe_persona)
 
-    require_file(rel_path(root, "common/tools/filter-models.py"), "filter-models.py")
-    require_file(rel_path(root, "common/tools/model-speed.sh"), "model-speed.sh")
-    require_file(rel_path(root, "common/tools/cluster-personas.py"), "cluster-personas.py")
-    require_file(rel_path(root, "common/tools/select-council.py"), "select-council.py")
+    require_file(rel_path(root, "evals/tools/filter-models.py"), "filter-models.py")
+    require_file(rel_path(root, "evals/tools/model-speed.sh"), "model-speed.sh")
+    require_file(rel_path(root, "evals/tools/cluster-personas.py"), "cluster-personas.py")
+    require_file(rel_path(root, "evals/tools/select-council.py"), "select-council.py")
     require_file(genes, "genes file")
     require_file(failures, "operational failure ledger")
     require_file(probe_persona, "probe persona")
@@ -357,7 +357,7 @@ def main(argv: list[str]) -> int:
         run_command(
             [
                 sys.executable,
-                "common/tools/filter-models.py",
+                "evals/tools/filter-models.py",
                 "--metadata",
                 display(root, metadata),
                 "--out",
@@ -377,7 +377,7 @@ def main(argv: list[str]) -> int:
         ensure_parent(model_latency, args.dry_run)
         ensure_parent(model_speed_log, args.dry_run)
         run_command(
-            ["bash", "common/tools/model-speed.sh", display(root, probe_persona)],
+            ["bash", "evals/tools/model-speed.sh", display(root, probe_persona)],
             cwd=root,
             dry_run=args.dry_run,
             stdin_path=models_prefiltered,
@@ -417,7 +417,7 @@ def main(argv: list[str]) -> int:
                 "uv",
                 "run",
                 "--script",
-                "common/tools/cluster-personas.py",
+                "evals/tools/cluster-personas.py",
                 "--personas-file",
                 display(root, cluster_input),
                 "--genes-file",
@@ -444,7 +444,7 @@ def main(argv: list[str]) -> int:
             "uv",
             "run",
             "--script",
-            "common/tools/select-council.py",
+            "evals/tools/select-council.py",
             "--clusters",
             display(root, clusters),
             "--pca",

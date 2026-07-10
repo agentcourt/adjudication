@@ -11,21 +11,22 @@ Run the commands below from the repository root unless the command says otherwis
 | File | Role |
 |---|---|
 | `common/data/personas/openrouter-models.json` | Raw OpenRouter model metadata used by the metadata filter and `select-council.py` |
-| `common/tools/filter-models.py` | Conservative metadata prefilter for OpenRouter models |
+| `evals/tools/filter-models.py` | Conservative metadata prefilter for OpenRouter models |
 | `common/data/personas/models-prefiltered.csv` | Intermediate model list after metadata prefilter |
 | `common/data/personas/model-filter-decisions.csv` | Audit file explaining prefilter decisions |
-| `common/tools/model-speed.sh` | Live probe for latency and `submit_juror_vote` tool support |
+| `evals/tools/model-speed.sh` | Live probe for latency and `submit_juror_vote` tool support |
 | `common/data/personas/model-latency.csv` | `MODEL,ELAPSED_MS,TOOLS_SUPPORTED` records from the live probe |
 | `common/data/personas/models.csv` | Model ids retained after latency and tool-support filtering |
 | `common/data/personas/cluster-input.csv` | Deterministic sampled model/persona input for clustering when using `generate-council.py` |
 | `common/etc/personas/persons/` | Checked-in persona text files |
 | `common/etc/personas.csv` | Cross product of retained models and persona files |
 | `common/data/personas/genes.json` | Gene prompts used for clustering |
-| `common/tools/cluster-personas.py` | Samples completions, embeds them, clusters per gene, and writes PCA rows |
+| `evals/tools/cluster-personas.py` | Samples completions, embeds them, clusters per gene, and writes PCA rows |
+| `evals/tools/clusters-graph.py` | Renders PCA and cluster rows as a faceted PNG |
 | `common/data/personas/clusters.csv` | `MODEL,PERSONA_FILE,GENE,CLUSTER` rows from `cluster-personas.py` |
 | `common/data/personas/pca-cluster.csv` | `MODEL,PERSONA_FILE,GENE,PC1,PC2,PC3,CLUSTER` rows from `cluster-personas.py` |
 | `common/data/personas/model-operational-failures.csv` | Manual exclusion ledger for known model failures |
-| `common/tools/select-council.py` | Selects a behaviorally diverse council from cluster/PCA data |
+| `evals/tools/select-council.py` | Selects a behaviorally diverse council from cluster/PCA data |
 | `common/data/personas/council.csv` | Selected council rows, written as `MODEL,personas/persons/....txt` |
 | `common/data/personas/council-report.md` | Default selection report from `generate-council.py` |
 | `common/data/personas/pool.csv` | CSV pool file; not a current runtime council pool |
@@ -46,10 +47,10 @@ Do not check in absolute local home-directory paths in council or pool files.
 
 ## End-To-End Driver
 
-`common/tools/generate-council.py` runs the full pipeline described below:
+`evals/tools/generate-council.py` runs the full pipeline described below:
 
 ```bash
-uv run --script common/tools/generate-council.py
+uv run --script evals/tools/generate-council.py
 ```
 
 A full run fetches OpenRouter metadata, filters models, probes tool support and latency, rebuilds `models.csv`, rebuilds `common/etc/personas.csv`, samples a clustering input, runs `cluster-personas.py`, and runs `select-council.py`.
@@ -63,7 +64,7 @@ The full run requires:
 For a selection-only verification using existing metadata, latency, clusters, and PCA rows, run:
 
 ```bash
-uv run --script common/tools/generate-council.py \
+uv run --script evals/tools/generate-council.py \
   --use-existing-metadata \
   --use-existing-latency \
   --use-existing-clusters
@@ -74,7 +75,7 @@ The driver defaults to a deterministic 512-row clustering input sample (`--sampl
 By default, the driver reuses intermediate files younger than seven days. Control that cache window with `--expires DAYS`:
 
 ```bash
-uv run --script common/tools/generate-council.py --expires 7
+uv run --script evals/tools/generate-council.py --expires 7
 ```
 
 Use `--expires 0` to regenerate all intermediates. The cache applies to intermediate outputs such as metadata, metadata-filter outputs, `model-latency.csv`, `models.csv`, `common/etc/personas.csv`, `cluster-input.csv`, `clusters.csv`, and `pca-cluster.csv`. The final `council.csv` and `council-report.md` are regenerated from the selected inputs. For paired outputs, such as `clusters.csv` and `pca-cluster.csv`, the driver refuses to mix a fresh file with a stale or missing paired file.
@@ -95,7 +96,7 @@ curl -fsSL https://openrouter.ai/api/v1/models \
 The metadata prefilter removes models only when OpenRouter metadata proves the model cannot satisfy the juror path. It excludes models without text input, without text output, or without advertised function-tool support. Unknowns remain eligible for the live probe.
 
 ```bash
-uv run --script common/tools/filter-models.py \
+uv run --script evals/tools/filter-models.py \
   --metadata common/data/personas/openrouter-models.json \
   --out common/data/personas/models-prefiltered.csv \
   --decisions common/data/personas/model-filter-decisions.csv
@@ -108,7 +109,7 @@ uv run --script common/tools/filter-models.py \
 Run the live probe against the prefiltered model list:
 
 ```bash
-common/tools/model-speed.sh common/etc/personas/persons/d715074-0.txt \
+evals/tools/model-speed.sh common/etc/personas/persons/d715074-0.txt \
   < common/data/personas/models-prefiltered.csv \
   > common/data/personas/model-latency.csv
 ```
@@ -171,7 +172,7 @@ shuf -n 100 common/etc/personas.csv > common/data/personas/some-personas.csv
 Run `cluster-personas.py` over the sampled model/persona input and gene prompts:
 
 ```bash
-uv run --script common/tools/cluster-personas.py \
+uv run --script evals/tools/cluster-personas.py \
   --personas-file common/data/personas/cluster-input.csv \
   --genes-file common/data/personas/genes.json \
   --pca-out common/data/personas/pca-cluster.csv \
@@ -197,12 +198,24 @@ MODEL,PERSONA_FILE,GENE,PC1,PC2,PC3,CLUSTER
 
 `select-council.py` treats the unique `(MODEL, PERSONA_FILE)` pairs in `clusters.csv` as the candidate universe.
 
-## Stage 8: Select `council.csv`
+## Stage 8: Render A Clustering Chart
+
+Run `clusters-graph.py` over the PCA rows when a visual inspection chart is needed:
+
+```bash
+env MPLBACKEND=Agg uv run --script evals/tools/clusters-graph.py \
+  --pca common/data/personas/pca-cluster.csv \
+  --out common/data/personas/pca-cluster.png
+```
+
+The graph has one row per provider source and one column per gene.  Point color records the cluster assignment, and point shape records the model within the provider row.  A site image can use the same command with a site output path, for example `--out /home/somebody/src/site-agentcourt/source/pages/adc/juror_canidate_clustering.png`.
+
+## Stage 9: Select `council.csv`
 
 Run `select-council.py` with the cluster rows, PCA rows, OpenRouter metadata, latency data, and operational-failure ledger:
 
 ```bash
-uv run --script common/tools/select-council.py \
+uv run --script evals/tools/select-council.py \
   --clusters common/data/personas/clusters.csv \
   --pca common/data/personas/pca-cluster.csv \
   --metadata common/data/personas/openrouter-models.json \
@@ -223,7 +236,7 @@ Selection works in four steps:
 
 `council.csv` is a selected council candidate set.  It is not a current runtime pool, because it omits provider endpoint and quantization constraints.
 
-## Stage 9: Runtime Pool Decision
+## Stage 10: Runtime Pool Decision
 
 `aar`/`arb` read JSONL request-spec pools. When `--council-pool` is not supplied, the runtime checks `./pool.jsonl`, then `<common-root>/data/personas/pool.jsonl`. The runtime does not read `clusters.csv`, `pca-cluster.csv`, `model-latency.csv`, `pool.csv`, or the council-selection report.
 
@@ -249,7 +262,7 @@ absolute=0 relative=20 bad_relative=0 total=20
 Validate the selector and inspect the council-selection report if needed:
 
 ```bash
-python3 -m py_compile common/tools/select-council.py
+python3 -m py_compile evals/tools/select-council.py
 sed -n '1,120p' common/data/personas/council-report.md
 ```
 
