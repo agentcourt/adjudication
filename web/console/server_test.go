@@ -139,6 +139,40 @@ func TestArtifactProxyUsesServiceAPI(t *testing.T) {
 	}
 }
 
+func TestArtifactProxyForwardsRangeHeaders(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/clerk/v1/cases/case-3/artifacts/events.ndjson" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get("Range") != "bytes=5-9" {
+			t.Fatalf("range = %q", r.Header.Get("Range"))
+		}
+		if r.Header.Get("If-Range") != `"abc"` {
+			t.Fatalf("if-range = %q", r.Header.Get("If-Range"))
+		}
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.Header().Set("Content-Range", "bytes 5-9/20")
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte("56789"))
+	}))
+	defer api.Close()
+	app := testApp(t, api.URL, "")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/system/arb/clerk/cases/case-3/artifacts/events.ndjson", nil)
+	req.Header.Set("Range", "bytes=5-9")
+	req.Header.Set("If-Range", `"abc"`)
+	app.ServeHTTP(rec, req)
+	if rec.Code != http.StatusPartialContent {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Content-Range") != "bytes 5-9/20" {
+		t.Fatalf("content-range = %q", rec.Header().Get("Content-Range"))
+	}
+	if rec.Body.String() != "56789" {
+		t.Fatalf("body = %q", rec.Body.String())
+	}
+}
+
 func TestArtifactProxyPreservesNestedArtifactName(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/cases/case-3/artifacts/service-logs/aar.stderr" {

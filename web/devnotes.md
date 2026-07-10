@@ -34,10 +34,13 @@ ADC recent-event summaries now include short payload identifiers such as `juror_
 
 The evidence page now renders the manifest `uses` list.  ADC updates this list as files become offered or admitted trial exhibits, so the page shows labels such as `exhibit:PX-1` and `admitted_exhibit:PX-1` without requiring the operator to open raw `evidence-manifest.json`.
 
+The artifact, evidence, and attestation byte proxy now forwards `Range`, `If-Range`, `If-Modified-Since`, and `If-None-Match` headers to the service.  Service artifact handlers serve large files with standard HTTP byte-range behavior, and the web console should preserve that behavior so an operator can inspect large `events.ndjson` and log artifacts without forcing a full download.
+
 ### Verification
 
 - [x] `go test ./web/...`
 - [x] `go test ./adc/runtime/... ./arb/runtime/... ./arbd/runtime/... ./common/... ./web/...`
 - [x] Manual curl test against `go run ./web/cmd/adjudication-web`: `/` returned HTML, `/health` returned HTTP `204`, and a disabled service target returned HTTP `502`.
 - [x] Manual curl test against a real ARB clerk service and the web console.  Submitted `web-live-ex01-20260710T1312Z` from `arb/examples/ex01` through the web case-create route, listed cases, monitored the record and result, fetched `evidence-manifest.json`, `events.ndjson`, `digest.md`, `run.json`, and fetched evidence through both the rendered evidence page and the raw evidence route.  The ARB case closed at `2026-07-10T13:32:20Z` with final resolution `demonstrated` and vote tally `demonstrated: 5`, `not_demonstrated: 1`.
+- [x] Manual curl test against live ADC case `adc-web-ui-run-20260710T202612Z`: a Web console request for `/artifacts/events.ndjson` with `Range: bytes=-4096` returned HTTP `206`, a 4096-byte body, and the service `Content-Range` header.
 - [ ] `go test ./...`: package enumeration fails before testing because `arb/out/juror-model-experiments/generic-5model-tolerant-20260706T145403Z/resume-repair/20260706T202709Z/dirs/runs/ex08a/run-02/deepseek-r1/r01/pi-C1/pi-mcp-output-D1UmsM` is unreadable.

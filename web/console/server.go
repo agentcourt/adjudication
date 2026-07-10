@@ -207,14 +207,14 @@ func (a *App) handleSystem(w http.ResponseWriter, r *http.Request) {
 		a.handleResult(w, r, sys, scope, caseID)
 	case len(parts) == 6 && parts[5] == "artifacts" && r.Method == http.MethodGet:
 		a.handleArtifactList(w, r, sys, scope, caseID)
-	case len(parts) >= 7 && parts[5] == "artifacts" && r.Method == http.MethodGet:
+	case len(parts) >= 7 && parts[5] == "artifacts" && proxyMethod(r.Method):
 		name := strings.Join(parts[6:], "/")
 		a.proxyService(w, r, sys, artifactPath(scope, caseID, name))
 	case len(parts) == 6 && parts[5] == "evidence" && r.Method == http.MethodGet:
 		a.handleEvidence(w, r, sys, scope, caseID)
-	case len(parts) == 7 && parts[5] == "evidence" && r.Method == http.MethodGet:
+	case len(parts) == 7 && parts[5] == "evidence" && proxyMethod(r.Method):
 		a.proxyService(w, r, sys, evidencePath(scope, caseID, parts[6]))
-	case len(parts) == 7 && parts[5] == "attestation" && parts[6] == "events" && r.Method == http.MethodGet:
+	case len(parts) == 7 && parts[5] == "attestation" && parts[6] == "events" && proxyMethod(r.Method):
 		a.proxyService(w, r, sys, casePath(scope, caseID, "attestation/events"))
 	case len(parts) == 6 && parts[5] == "manage" && r.Method == http.MethodPost:
 		a.handleManageCase(w, r, sys, scope, caseID)
@@ -460,7 +460,7 @@ func (a *App) handleRawRequest(w http.ResponseWriter, r *http.Request, sys Syste
 }
 
 func (a *App) proxyService(w http.ResponseWriter, r *http.Request, sys SystemConfig, servicePath string) {
-	resp, err := a.client.Proxy(r.Context(), sys, http.MethodGet, servicePath, nil, "")
+	resp, err := a.client.ProxyWithHeaders(r.Context(), sys, r.Method, servicePath, nil, "", proxyRequestHeaders(r.Header))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
@@ -472,6 +472,20 @@ func (a *App) proxyService(w http.ResponseWriter, r *http.Request, sys SystemCon
 	}
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
+}
+
+func proxyMethod(method string) bool {
+	return method == http.MethodGet || method == http.MethodHead
+}
+
+func proxyRequestHeaders(src http.Header) http.Header {
+	out := http.Header{}
+	for _, key := range []string{"Range", "If-Range", "If-Modified-Since", "If-None-Match"} {
+		for _, value := range src.Values(key) {
+			out.Add(key, value)
+		}
+	}
+	return out
 }
 
 func (a *App) render(w http.ResponseWriter, status int, name string, data ViewData) {

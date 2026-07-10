@@ -55,10 +55,18 @@ func (c *Client) JSON(ctx context.Context, sys SystemConfig, method string, requ
 }
 
 func (c *Client) Proxy(ctx context.Context, sys SystemConfig, method string, requestPath string, body []byte, contentType string) (*http.Response, error) {
-	return c.do(ctx, sys, method, requestPath, body, contentType)
+	return c.ProxyWithHeaders(ctx, sys, method, requestPath, body, contentType, nil)
+}
+
+func (c *Client) ProxyWithHeaders(ctx context.Context, sys SystemConfig, method string, requestPath string, body []byte, contentType string, headers http.Header) (*http.Response, error) {
+	return c.doWithHeaders(ctx, sys, method, requestPath, body, contentType, headers)
 }
 
 func (c *Client) do(ctx context.Context, sys SystemConfig, method string, requestPath string, body []byte, contentType string) (*http.Response, error) {
+	return c.doWithHeaders(ctx, sys, method, requestPath, body, contentType, nil)
+}
+
+func (c *Client) doWithHeaders(ctx context.Context, sys SystemConfig, method string, requestPath string, body []byte, contentType string, headers http.Header) (*http.Response, error) {
 	base := strings.TrimSpace(sys.BaseURL)
 	if base == "" {
 		return nil, fmt.Errorf("%s service URL is not configured", sys.Label)
@@ -92,6 +100,11 @@ func (c *Client) do(ctx context.Context, sys SystemConfig, method string, reques
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
+	}
+	for key, values := range headers {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
 	}
 	if strings.TrimSpace(sys.BearerToken) != "" {
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(sys.BearerToken))
