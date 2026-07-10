@@ -196,7 +196,7 @@ const pageTemplates = `
 {{if .Evidence}}
 <h2>Evidence Manifest</h2>
 <table>
-  <tr><th>Evidence</th><th>Title</th><th>MIME</th><th>Size</th><th>Status</th><th>Visibility</th></tr>
+  <tr><th>Evidence</th><th>Title</th><th>MIME</th><th>Size</th><th>Status</th><th>Visibility</th><th>Uses</th></tr>
   {{range .Evidence}}
   <tr>
     <td><a href="/system/{{$.System.ID}}/{{$.Scope.ID}}/cases/{{$.CaseID | pathEscape}}/evidence?id={{.ID | query}}">{{.ID}}</a></td>
@@ -205,6 +205,7 @@ const pageTemplates = `
     <td>{{.Size}}</td>
     <td>{{.Status}}</td>
     <td>{{.Visibility}}</td>
+    <td>{{.Uses}}</td>
   </tr>
   {{end}}
 </table>

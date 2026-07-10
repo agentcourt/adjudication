@@ -410,6 +410,7 @@ func TestEvidencePageRendersNonJSONEvidence(t *testing.T) {
 				"size_bytes":           15,
 				"admissibility_status": "case_packet",
 				"record_visibility":    "juror_visible",
+				"uses":                 []string{"complaint_attachment", "exhibit:PX-1", "admitted_exhibit:PX-1"},
 			}}})
 			return
 		case "/clerk/v1/cases/case-4/evidence/E1":
@@ -444,6 +445,7 @@ func TestEvidencePageListsManifestEntries(t *testing.T) {
 			"size_bytes":           820,
 			"admissibility_status": "case_packet",
 			"record_visibility":    "juror_visible",
+			"uses":                 []string{"complaint_attachment", "exhibit:PX-2"},
 		}}})
 	}))
 	defer api.Close()
@@ -460,6 +462,7 @@ func TestEvidencePageListsManifestEntries(t *testing.T) {
 		`href="/system/arb/clerk/cases/case-5/evidence?id=ev_123"`,
 		"Deadline thread",
 		"case_packet",
+		"complaint_attachment, exhibit:PX-2",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q: %s", want, body)

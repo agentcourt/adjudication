@@ -87,6 +87,7 @@ type EvidenceEntry struct {
 	Size       string
 	Status     string
 	Visibility string
+	Uses       string
 }
 
 func New(cfg Config) (*App, error) {
@@ -608,6 +609,7 @@ func evidenceEntriesFrom(v any) []EvidenceEntry {
 			Size:       fieldText(item, "size_bytes"),
 			Status:     fieldText(item, "admissibility_status"),
 			Visibility: fieldText(item, "record_visibility"),
+			Uses:       stringListText(item["uses"]),
 		})
 	}
 	if items, ok := root.([]any); ok && len(out) == 0 {
@@ -619,6 +621,21 @@ func evidenceEntriesFrom(v any) []EvidenceEntry {
 		}
 	}
 	return out
+}
+
+func stringListText(value any) string {
+	items, ok := value.([]any)
+	if !ok {
+		return ""
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		text := strings.TrimSpace(fmt.Sprint(item))
+		if text != "" {
+			out = append(out, text)
+		}
+	}
+	return strings.Join(out, ", ")
 }
 
 func eventIssuesFromNDJSON(raw []byte) []EventIssue {

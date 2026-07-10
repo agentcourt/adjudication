@@ -32,6 +32,8 @@ The attestation-events link now appears only when the service case record report
 
 ADC recent-event summaries now include short payload identifiers such as `juror_id`, `exchange_id`, `asked_by`, and `file_id` when those fields are present.  This keeps support calls and voir-dire actions identifiable in the case page table without rendering the large ADC state snapshots embedded in each event response.
 
+The evidence page now renders the manifest `uses` list.  ADC updates this list as files become offered or admitted trial exhibits, so the page shows labels such as `exhibit:PX-1` and `admitted_exhibit:PX-1` without requiring the operator to open raw `evidence-manifest.json`.
+
 ### Verification
 
 - [x] `go test ./web/...`
