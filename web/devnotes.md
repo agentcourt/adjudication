@@ -30,6 +30,8 @@ The case detail page now renders a Recent Events table from `events.ndjson`, new
 
 The attestation-events link now appears only when the service case record reports `execution.mode: "attested"`.  Local runs return a service-level 404 for that route because they have no attestation event stream, so the case page no longer advertises a link that cannot succeed for ordinary local ADC, ARB, or AARD runs.
 
+ADC recent-event summaries now include short payload identifiers such as `juror_id`, `exchange_id`, `asked_by`, and `file_id` when those fields are present.  This keeps support calls and voir-dire actions identifiable in the case page table without rendering the large ADC state snapshots embedded in each event response.
+
 ### Verification
 
 - [x] `go test ./web/...`

@@ -730,14 +730,8 @@ func adcActionMessage(event map[string]any) string {
 		if reason := fieldText(payload, "reason"); reason != "" {
 			return reason
 		}
-		if fileID := fieldText(payload, "file_id"); fileID != "" {
-			return "file_id=" + fileID
-		}
-		if tool := fieldText(payload, "tool_name"); tool != "" {
-			return "tool=" + tool
-		}
-		if kind := fieldText(payload, "kind"); kind != "" {
-			return "kind=" + kind
+		if summary := adcPayloadSummary(payload); summary != "" {
+			return summary
 		}
 	}
 	response := asMap(event["response"])
@@ -755,6 +749,35 @@ func adcActionMessage(event map[string]any) string {
 	}
 	if step := fieldText(event, "step"); step != "" {
 		parts = append(parts, "step "+step)
+	}
+	return strings.Join(parts, " ")
+}
+
+func adcPayloadSummary(payload map[string]any) string {
+	var parts []string
+	for _, key := range []string{
+		"file_id",
+		"juror_id",
+		"exchange_id",
+		"asked_by",
+		"allowed",
+		"tool_name",
+		"kind",
+		"party",
+		"report_id",
+		"exhibit_id",
+	} {
+		text := fieldText(payload, key)
+		if text == "" {
+			continue
+		}
+		if key == "tool_name" {
+			key = "tool"
+		}
+		parts = append(parts, key+"="+limitText(text, 120))
+		if len(parts) == 3 {
+			break
+		}
 	}
 	return strings.Join(parts, " ")
 }

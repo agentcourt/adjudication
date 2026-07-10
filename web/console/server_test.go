@@ -361,6 +361,8 @@ func TestCaseDetailSummarizesADCActionEvents(t *testing.T) {
 			_, _ = w.Write([]byte(`{"action":"list_case_files","payload":{},"response":{"case":{"phase":"filed"},"ok":true},"role":"defendant","step":1,"timestamp":"2026-07-10 15:30:51.833","turn":2}` + "\n"))
 			_, _ = w.Write([]byte(`{"action":"read_case_text_file","payload":{"file_id":"file-0001"},"response":{"ok":true},"role":"defendant","step":2,"timestamp":"2026-07-10 15:30:54.539","turn":2}` + "\n"))
 			_, _ = w.Write([]byte(`{"action":"pass_turn","payload":{"kind":"pass","reason":"No supported Rule 12 ground fits."},"response":{"ok":true,"result_kind":"pass_recorded","state":{"case":{"phase":"pretrial"}}},"role":"defendant","step":3,"timestamp":"2026-07-10 15:31:30.121","turn":2}` + "\n"))
+			_, _ = w.Write([]byte(`{"action":"get_juror_context","payload":{"juror_id":"J9"},"response":{"ok":true},"role":"defendant","step":1,"timestamp":"2026-07-10 15:32:00.000","turn":3}` + "\n"))
+			_, _ = w.Write([]byte(`{"action":"decide_voir_dire_question","payload":{"allowed":true,"exchange_id":"vdq-18","juror_id":"J9"},"response":{"ok":true,"state":{"case":{"phase":"voir_dire"}}},"role":"judge","step":1,"timestamp":"2026-07-10 15:33:00.000","turn":4}` + "\n"))
 		default:
 			t.Fatalf("path = %s", r.URL.Path)
 		}
@@ -385,6 +387,11 @@ func TestCaseDetailSummarizesADCActionEvents(t *testing.T) {
 		"defendant",
 		"filed",
 		"pretrial",
+		"get_juror_context",
+		"juror_id=J9",
+		"decide_voir_dire_question",
+		"exchange_id=vdq-18",
+		"voir_dire",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q: %s", want, body)
