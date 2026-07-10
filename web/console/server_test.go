@@ -300,6 +300,59 @@ func TestCaseDetailCompactsStructuredFieldsAndRefreshesRunningCase(t *testing.T)
 	}
 }
 
+func TestCaseDetailOmitsLargeStructuredRecordValue(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/clerk/v1/cases/case-large-record":
+			writeTestJSON(w, map[string]any{
+				"ok": true,
+				"case": map[string]any{
+					"case_id": "case-large-record",
+					"status":  "completed",
+					"summary": map[string]any{
+						"final_state": map[string]any{
+							"case": map[string]any{
+								"status": "judgment_entered",
+								"phase":  "post_verdict",
+							},
+						},
+						"events": []any{"one", "two", "three"},
+						"text":   strings.Repeat("x", 13000),
+					},
+				},
+			})
+		case "/clerk/v1/cases/case-large-record/result":
+			writeTestJSON(w, map[string]any{"ok": true, "case_id": "case-large-record", "status": "done"})
+		case "/clerk/v1/cases/case-large-record/artifacts":
+			writeTestJSON(w, map[string]any{"ok": true, "case_id": "case-large-record", "artifacts": []map[string]any{}})
+		default:
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+	}))
+	defer api.Close()
+	app := testApp(t, api.URL, "")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/system/arb/clerk/cases/case-large-record", nil)
+	app.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"<dt>case.status</dt><dd>judgment_entered</dd>",
+		"<dt>case.phase</dt><dd>post_verdict</dd>",
+		"<dt>events</dt><dd>3</dd>",
+		"JSON not rendered",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, strings.Repeat("x", 1000)) {
+		t.Fatalf("large structured record was embedded: %s", body)
+	}
+}
+
 func TestCaseDetailLinksAttestationEventsForAttestedCase(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

@@ -956,7 +956,7 @@ func structuredRecordValue(value any) (template.HTML, bool) {
 	b.WriteString(`<details class="record-details"><summary>`)
 	b.WriteString(template.HTMLEscapeString(label))
 	b.WriteString(`</summary><pre>`)
-	b.WriteString(template.HTMLEscapeString(prettyJSON(value)))
+	b.WriteString(template.HTMLEscapeString(boundedJSON(value)))
 	b.WriteString(`</pre></details>`)
 	return template.HTML(b.String()), true
 }
