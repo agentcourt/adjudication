@@ -28,40 +28,42 @@ type jurorReplaySelection struct {
 }
 
 type jurorReplaySummary struct {
-	Status          string `json:"status"`
-	Basis           string `json:"basis,omitempty"`
-	CaseID          string `json:"case_id,omitempty"`
-	MemberID        string `json:"member_id,omitempty"`
-	Model           string `json:"model,omitempty"`
-	Vote            string `json:"vote,omitempty"`
-	Rationale       string `json:"rationale,omitempty"`
-	OutputDir       string `json:"out_dir,omitempty"`
-	SourceOutputDir string `json:"source_output_dir,omitempty"`
-	SnapshotDir     string `json:"snapshot_dir,omitempty"`
-	ModelConfigPath string `json:"model_config_path,omitempty"`
-	PersonaPath     string `json:"persona_path,omitempty"`
-	ToolCallCount   int    `json:"tool_call_count,omitempty"`
-	Error           string `json:"error,omitempty"`
+	Status          string         `json:"status"`
+	Basis           string         `json:"basis,omitempty"`
+	CaseID          string         `json:"case_id,omitempty"`
+	MemberID        string         `json:"member_id,omitempty"`
+	Model           string         `json:"model,omitempty"`
+	Vote            string         `json:"vote,omitempty"`
+	Rationale       string         `json:"rationale,omitempty"`
+	OutputDir       string         `json:"out_dir,omitempty"`
+	SourceOutputDir string         `json:"source_output_dir,omitempty"`
+	SnapshotDir     string         `json:"snapshot_dir,omitempty"`
+	ModelConfigPath string         `json:"model_config_path,omitempty"`
+	PersonaPath     string         `json:"persona_path,omitempty"`
+	ToolCallCount   int            `json:"tool_call_count,omitempty"`
+	Error           string         `json:"error,omitempty"`
+	ErrorDetails    map[string]any `json:"error_details,omitempty"`
 }
 
 type jurorReplayMetadata struct {
-	SchemaVersion   string `json:"schema_version"`
-	CreatedAt       string `json:"created_at"`
-	Status          string `json:"status"`
-	Basis           string `json:"basis,omitempty"`
-	CaseID          string `json:"case_id,omitempty"`
-	MemberID        string `json:"member_id,omitempty"`
-	Model           string `json:"model,omitempty"`
-	Vote            string `json:"vote,omitempty"`
-	Rationale       string `json:"rationale,omitempty"`
-	OutputDir       string `json:"out_dir,omitempty"`
-	SourceOutputDir string `json:"source_output_dir,omitempty"`
-	SnapshotDir     string `json:"snapshot_dir,omitempty"`
-	ModelConfigPath string `json:"model_config_path,omitempty"`
-	PersonaPath     string `json:"persona_path,omitempty"`
-	PersonaSHA256   string `json:"persona_sha256,omitempty"`
-	ToolCallCount   int    `json:"tool_call_count"`
-	Error           string `json:"error,omitempty"`
+	SchemaVersion   string         `json:"schema_version"`
+	CreatedAt       string         `json:"created_at"`
+	Status          string         `json:"status"`
+	Basis           string         `json:"basis,omitempty"`
+	CaseID          string         `json:"case_id,omitempty"`
+	MemberID        string         `json:"member_id,omitempty"`
+	Model           string         `json:"model,omitempty"`
+	Vote            string         `json:"vote,omitempty"`
+	Rationale       string         `json:"rationale,omitempty"`
+	OutputDir       string         `json:"out_dir,omitempty"`
+	SourceOutputDir string         `json:"source_output_dir,omitempty"`
+	SnapshotDir     string         `json:"snapshot_dir,omitempty"`
+	ModelConfigPath string         `json:"model_config_path,omitempty"`
+	PersonaPath     string         `json:"persona_path,omitempty"`
+	PersonaSHA256   string         `json:"persona_sha256,omitempty"`
+	ToolCallCount   int            `json:"tool_call_count"`
+	Error           string         `json:"error,omitempty"`
+	ErrorDetails    map[string]any `json:"error_details,omitempty"`
 }
 
 func runJurorReplay(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) error {
@@ -82,7 +84,7 @@ func runJurorReplay(ctx context.Context, args []string, stdout io.Writer, stderr
 	councilInstructions := fs.String("council-instructions", localrun.DefaultCouncilInstructionsPath(), "Pi council instruction template")
 	podmanCommand := fs.String("podman", localrun.DefaultPodmanCommand, "Podman command")
 	piImage := fs.String("pi-image", "", "Pi container image")
-	piMCPAdapter := fs.String("pi-mcp-adapter", "", "Pi MCP adapter package")
+	piMCPAdapter := fs.String("pi-mcp-adapter", "", "Pi MCP adapter path or package source")
 	podmanMCPHost := fs.String("podman-mcp-host", "", "Host name used by Podman containers to reach MCP")
 	councilOutputLimitBytes := fs.Int64("council-output-limit-bytes", localrun.DefaultCouncilOutputLimitBytes, "Total stdout plus stderr byte limit for the Pi council agent")
 	fs.Usage = func() {
@@ -290,6 +292,7 @@ func buildJurorReplaySummary(result localrun.CouncilReplayResult, modelConfigPat
 		PersonaPath:     strings.TrimSpace(personaPath),
 		ToolCallCount:   len(result.ToolCalls),
 		Error:           strings.TrimSpace(errorText),
+		ErrorDetails:    cloneSummaryMap(result.ErrorDetails),
 	}
 }
 
@@ -355,6 +358,7 @@ func writeJurorReplayMetadata(outDir string, result localrun.CouncilReplayResult
 		PersonaSHA256:   hash,
 		ToolCallCount:   summary.ToolCallCount,
 		Error:           summary.Error,
+		ErrorDetails:    cloneSummaryMap(summary.ErrorDetails),
 	}
 	raw, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
@@ -365,6 +369,22 @@ func writeJurorReplayMetadata(outDir string, result localrun.CouncilReplayResult
 		return fmt.Errorf("write juror replay metadata: %w", err)
 	}
 	return nil
+}
+
+func cloneSummaryMap(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for key, value := range in {
+		if strings.TrimSpace(key) != "" && value != nil {
+			out[key] = value
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func replayPersonaPath(result localrun.CouncilReplayResult, fallback string) string {

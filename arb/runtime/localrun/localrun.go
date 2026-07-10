@@ -34,12 +34,14 @@ const (
 	defaultOpenClawAuth           = "auto"
 	defaultOpenClawStartDelay     = 15
 	defaultPiImage                = "agentcourt-pi-sandbox"
-	defaultPiMCPAdapter           = "npm:pi-mcp-adapter"
+	defaultPiMCPAdapter           = "/opt/pi-extensions/pi-mcp-adapter/node_modules/pi-mcp-adapter"
 	defaultPiMCPServer            = "aar"
 	defaultCaseAPIStartupWait     = 10 * time.Minute
 	defaultMCPStartupWait         = 30 * time.Second
 	defaultCouncilRosterWait      = 2 * time.Minute
 	defaultCouncilOutputCheck     = 5 * time.Second
+	defaultAgentErrorCaseWait     = 2 * time.Second
+	councilAgentErrorLogTailBytes = 256 * 1024
 	councilFailureAgentExited     = "agent_exited"
 	councilFailureOutputLimit     = "agent_output_limit_exceeded"
 	openClawCodexContainerHome    = "/aar-codex"
@@ -414,6 +416,16 @@ func Run(ctx context.Context, opts Options) (result proceeding.Result, err error
 			}
 			return proceeding.Result{}, fmt.Errorf("MCP server failed: %w", err)
 		case exit := <-state.agentErrs:
+			if outcome, ok := waitForCaseOutcome(caseDone, defaultAgentErrorCaseWait); ok {
+				cancel()
+				if err := <-mcpDone; err != nil && !errors.Is(err, context.Canceled) {
+					return outcome.result, err
+				}
+				if writeErr := writeRunSummary(opts.OutputDir, outcome.result, opts); writeErr != nil {
+					return outcome.result, writeErr
+				}
+				return outcome.result, outcome.err
+			}
 			cancel()
 			return proceeding.Result{}, exit
 		case <-councilTicker.C:
@@ -425,6 +437,25 @@ func Run(ctx context.Context, opts Options) (result proceeding.Result, err error
 			cancel()
 			return proceeding.Result{}, ctx.Err()
 		}
+	}
+}
+
+func waitForCaseOutcome(caseDone <-chan caseOutcome, wait time.Duration) (caseOutcome, bool) {
+	if wait <= 0 {
+		select {
+		case outcome := <-caseDone:
+			return outcome, true
+		default:
+			return caseOutcome{}, false
+		}
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case outcome := <-caseDone:
+		return outcome, true
+	case <-timer.C:
+		return caseOutcome{}, false
 	}
 }
 
@@ -1428,11 +1459,15 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 	}
 	stdoutWriter := io.Writer(stdout)
 	var stdoutFilter *piTailLogWriter
+	var stdoutCounter *processOutputCounter
 	if councilTarget != nil && strings.HasPrefix(name, "pi-") {
-		stdoutFilter = newPiTailLogWriter(stdout)
+		stdoutCounter = newProcessOutputCounter(stdout)
+		stdoutFilter = newPiTailLogWriter(stdoutCounter)
 		stdoutWriter = stdoutFilter
+	} else {
+		stdoutCounter = newProcessOutputCounter(stdoutWriter)
+		stdoutWriter = stdoutCounter
 	}
-	stdoutCounter := newProcessOutputCounter(stdoutWriter)
 	closeStdout := func() error {
 		if stdoutFilter == nil {
 			return stdout.Close()
@@ -1440,7 +1475,7 @@ func (s *runState) startProcess(ctx context.Context, name string, kind string, c
 		return errors.Join(stdoutFilter.Flush(), stdout.Close())
 	}
 	cmd := exec.CommandContext(ctx, command, args...)
-	cmd.Stdout = stdoutCounter
+	cmd.Stdout = stdoutWriter
 	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		return nil, errors.Join(fmt.Errorf("start %s: %w", name, err), closeStdout(), stderr.Close())
@@ -1658,13 +1693,161 @@ func (s *runState) handleCouncilProcessExit(ctx context.Context, proc *processRe
 	if forcedMessage != "" {
 		message = forcedMessage
 	}
+	agentError, agentErrorDetails := councilAgentProcessError(proc)
+	for key, value := range agentErrorDetails {
+		details[key] = value
+	}
+	if agentError != "" && forcedMessage == "" {
+		message = fmt.Sprintf("Council member %s agent process failed before completing opportunity %s: %s.", target.memberID, target.opportunityID, trimFinalPeriod(agentError))
+	}
 	if waitErr != nil {
-		if forcedMessage == "" {
+		if forcedMessage == "" && agentError == "" {
 			message = fmt.Sprintf("Council member %s agent process failed before completing opportunity %s: %s.", target.memberID, target.opportunityID, waitErr.Error())
 		}
 		details["process_error"] = waitErr.Error()
 	}
 	return s.reportCouncilFailure(ctx, target.memberID, target.opportunityID, reason, message, details)
+}
+
+func councilAgentProcessError(proc *processRecord) (string, map[string]any) {
+	details := map[string]any{}
+	for _, source := range []struct {
+		name string
+		path string
+	}{
+		{name: "stdout", path: proc.stdoutPath},
+		{name: "stderr", path: proc.stderrPath},
+	} {
+		message, err := councilAgentLogError(source.path)
+		if err != nil {
+			details[source.name+"_log_error"] = err.Error()
+			continue
+		}
+		if message == "" {
+			continue
+		}
+		details["agent_error"] = message
+		details["agent_error_stream"] = source.name
+		details["agent_error_log"] = source.path
+		return message, details
+	}
+	return "", details
+}
+
+func councilAgentLogError(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	raw, err := readFileTail(path, councilAgentErrorLogTailBytes)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return extractJSONLogError(raw), nil
+}
+
+func readFileTail(path string, limit int64) ([]byte, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	offset := info.Size() - limit
+	if offset < 0 {
+		offset = 0
+	}
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return nil, err
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, limit))
+	if err != nil {
+		return nil, err
+	}
+	if offset > 0 {
+		if index := bytes.IndexByte(raw, '\n'); index >= 0 {
+			raw = raw[index+1:]
+		}
+	}
+	return raw, nil
+}
+
+func extractJSONLogError(raw []byte) string {
+	lines := bytes.Split(bytes.TrimSpace(raw), []byte("\n"))
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := bytes.TrimSpace(lines[i])
+		if len(line) == 0 {
+			continue
+		}
+		var value any
+		if err := json.Unmarshal(line, &value); err != nil {
+			continue
+		}
+		if message := findJSONErrorMessage(value); message != "" {
+			return message
+		}
+	}
+	return ""
+}
+
+func findJSONErrorMessage(value any) string {
+	switch v := value.(type) {
+	case map[string]any:
+		for _, key := range []string{"errorMessage", "error_message"} {
+			if message, ok := v[key].(string); ok && strings.TrimSpace(message) != "" {
+				return strings.TrimSpace(message)
+			}
+		}
+		if message := jsonErrorValueMessage(v["error"]); message != "" {
+			return message
+		}
+		for _, key := range []string{"message", "assistantMessageEvent", "partial", "turn", "result"} {
+			if message := findJSONErrorMessage(v[key]); message != "" {
+				return message
+			}
+		}
+		for _, nested := range v {
+			if message := findJSONErrorMessage(nested); message != "" {
+				return message
+			}
+		}
+	case []any:
+		for i := len(v) - 1; i >= 0; i-- {
+			if message := findJSONErrorMessage(v[i]); message != "" {
+				return message
+			}
+		}
+	}
+	return ""
+}
+
+func jsonErrorValueMessage(value any) string {
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case map[string]any:
+		for _, key := range []string{"message", "detail", "type"} {
+			if message, ok := v[key].(string); ok && strings.TrimSpace(message) != "" {
+				return strings.TrimSpace(message)
+			}
+		}
+		return findJSONErrorMessage(v)
+	default:
+		return ""
+	}
+}
+
+func trimFinalPeriod(message string) string {
+	return strings.TrimRight(strings.TrimSpace(message), ".")
 }
 
 func (s *runState) reportCouncilFailure(ctx context.Context, memberID string, opportunityID string, reason string, message string, details map[string]any) error {

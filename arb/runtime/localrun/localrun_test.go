@@ -117,6 +117,28 @@ func TestHandleOpenClawLawyerExitRejectsAttorneyPhase(t *testing.T) {
 	}
 }
 
+func TestWaitForCaseOutcomeReturnsDelayedOutcome(t *testing.T) {
+	caseDone := make(chan caseOutcome, 1)
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		caseDone <- caseOutcome{result: proceeding.Result{Status: "ok", Resolution: "demonstrated"}}
+	}()
+	outcome, ok := waitForCaseOutcome(caseDone, time.Second)
+	if !ok {
+		t.Fatalf("waitForCaseOutcome returned no outcome")
+	}
+	if outcome.result.Status != "ok" || outcome.result.Resolution != "demonstrated" {
+		t.Fatalf("outcome = %#v", outcome.result)
+	}
+}
+
+func TestWaitForCaseOutcomeReturnsFalseOnTimeout(t *testing.T) {
+	caseDone := make(chan caseOutcome, 1)
+	if outcome, ok := waitForCaseOutcome(caseDone, 10*time.Millisecond); ok {
+		t.Fatalf("waitForCaseOutcome returned %#v", outcome)
+	}
+}
+
 func TestOpenClawLawyerInstructionsIncludeInvestigationAndJournal(t *testing.T) {
 	path := filepath.Join("..", "..", "agent-instructions", "openclaw-lawyer.md.tmpl")
 	got, err := renderInstructions(path, instructionData{
@@ -590,10 +612,8 @@ func TestApplyDefaultsCouncilOutputLimit(t *testing.T) {
 }
 
 func TestPiRunArgsIncludesContainerName(t *testing.T) {
-	args := piRunArgs(Options{
-		PiImage:      "agentcourt-pi-sandbox",
-		PiMCPAdapter: "npm:pi-mcp-adapter",
-	}, "aar-case-1-c1", "/tmp/pi-C1", "model-1", "instructions")
+	opts := applyDefaults(Options{PiImage: "agentcourt-pi-sandbox"})
+	args := piRunArgs(opts, "aar-case-1-c1", "/tmp/pi-C1", "model-1", "instructions")
 	got := "\x00" + strings.Join(args, "\x00") + "\x00"
 	for _, want := range []string{
 		"\x00run\x00",
@@ -602,7 +622,7 @@ func TestPiRunArgsIncludesContainerName(t *testing.T) {
 		"\x00--network\x00host\x00",
 		"\x00agentcourt-pi-sandbox\x00",
 		"\x00--model\x00model-1\x00",
-		"\x00-e\x00npm:pi-mcp-adapter\x00",
+		"\x00-e\x00/opt/pi-extensions/pi-mcp-adapter/node_modules/pi-mcp-adapter\x00",
 		"\x00-p\x00instructions\x00",
 	} {
 		if !strings.Contains(got, want) {
@@ -660,6 +680,31 @@ func TestCouncilProcessOutputSizeUsesStdoutCounter(t *testing.T) {
 	}
 	if size.Stdout != 6 || size.Stderr != 2 || size.Total != 8 {
 		t.Fatalf("size = %#v", size)
+	}
+}
+
+func TestCouncilAgentProcessErrorExtractsJSONErrorMessage(t *testing.T) {
+	dir := t.TempDir()
+	stdoutPath := filepath.Join(dir, "pi-C1.stdout")
+	stderrPath := filepath.Join(dir, "pi-C1.stderr")
+	const message = "404 No endpoints found for anthropic/claude-opus-4.6-fast."
+	line := fmt.Sprintf(`{"type":"message_start","message":{"stopReason":"error","errorMessage":%q}}`+"\n", message)
+	if err := os.WriteFile(stdoutPath, []byte(line), 0o644); err != nil {
+		t.Fatalf("write stdout: %v", err)
+	}
+	if err := os.WriteFile(stderrPath, nil, 0o644); err != nil {
+		t.Fatalf("write stderr: %v", err)
+	}
+	got, details := councilAgentProcessError(&processRecord{
+		name:       "pi-C1",
+		stdoutPath: stdoutPath,
+		stderrPath: stderrPath,
+	})
+	if got != message {
+		t.Fatalf("agent error = %q", got)
+	}
+	if details["agent_error_stream"] != "stdout" || details["agent_error"] != message {
+		t.Fatalf("details = %#v", details)
 	}
 }
 
@@ -974,6 +1019,28 @@ func TestPiTailLogWriterHandlesChunkedLines(t *testing.T) {
 	}
 	if !strings.Contains(got, first) {
 		t.Fatalf("first line changed:\n%s", got)
+	}
+}
+
+func TestPiTailLogWriterCounterCountsFilteredBytes(t *testing.T) {
+	var out bytes.Buffer
+	counter := newProcessOutputCounter(&out)
+	writer := newPiTailLogWriter(counter)
+	prefix := strings.Repeat("a", 4096)
+	first := fmt.Sprintf(`{"type":"message_update","assistantMessageEvent":{"type":"thinking_start","contentIndex":0,"partial":{"responseId":"r1","content":[{"type":"thinking","thinking":%q}]}}}`, prefix)
+	second := fmt.Sprintf(`{"type":"message_update","assistantMessageEvent":{"type":"thinking_delta","contentIndex":0,"partial":{"responseId":"r1","content":[{"type":"thinking","thinking":%q}]}}}`, prefix+"def")
+	raw := []byte(first + "\n" + second + "\n")
+	if _, err := writer.Write(raw); err != nil {
+		t.Fatalf("write raw log: %v", err)
+	}
+	if err := writer.Flush(); err != nil {
+		t.Fatalf("flush log: %v", err)
+	}
+	if counter.Size() != int64(out.Len()) {
+		t.Fatalf("counter size = %d, log size = %d", counter.Size(), out.Len())
+	}
+	if counter.Size() >= int64(len(raw)) {
+		t.Fatalf("counter counted raw bytes: counter=%d raw=%d", counter.Size(), len(raw))
 	}
 }
 

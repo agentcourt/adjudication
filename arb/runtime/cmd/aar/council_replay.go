@@ -12,17 +12,18 @@ import (
 )
 
 type councilReplaySummary struct {
-	Status          string `json:"status"`
-	Basis           string `json:"basis,omitempty"`
-	CaseID          string `json:"case_id,omitempty"`
-	MemberID        string `json:"member_id,omitempty"`
-	Model           string `json:"model,omitempty"`
-	Vote            string `json:"vote,omitempty"`
-	Rationale       string `json:"rationale,omitempty"`
-	OutputDir       string `json:"out_dir,omitempty"`
-	SourceOutputDir string `json:"source_output_dir,omitempty"`
-	SnapshotDir     string `json:"snapshot_dir,omitempty"`
-	Error           string `json:"error,omitempty"`
+	Status          string         `json:"status"`
+	Basis           string         `json:"basis,omitempty"`
+	CaseID          string         `json:"case_id,omitempty"`
+	MemberID        string         `json:"member_id,omitempty"`
+	Model           string         `json:"model,omitempty"`
+	Vote            string         `json:"vote,omitempty"`
+	Rationale       string         `json:"rationale,omitempty"`
+	OutputDir       string         `json:"out_dir,omitempty"`
+	SourceOutputDir string         `json:"source_output_dir,omitempty"`
+	SnapshotDir     string         `json:"snapshot_dir,omitempty"`
+	Error           string         `json:"error,omitempty"`
+	ErrorDetails    map[string]any `json:"error_details,omitempty"`
 }
 
 func runCouncilReplay(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) error {
@@ -42,7 +43,7 @@ func runCouncilReplay(ctx context.Context, args []string, stdout io.Writer, stde
 	councilInstructions := fs.String("council-instructions", localrun.DefaultCouncilInstructionsPath(), "Pi council instruction template")
 	podmanCommand := fs.String("podman", localrun.DefaultPodmanCommand, "Podman command")
 	piImage := fs.String("pi-image", "", "Pi container image")
-	piMCPAdapter := fs.String("pi-mcp-adapter", "", "Pi MCP adapter package")
+	piMCPAdapter := fs.String("pi-mcp-adapter", "", "Pi MCP adapter path or package source")
 	podmanMCPHost := fs.String("podman-mcp-host", "", "Host name used by Podman containers to reach MCP")
 	councilOutputLimitBytes := fs.Int64("council-output-limit-bytes", localrun.DefaultCouncilOutputLimitBytes, "Total stdout plus stderr byte limit for the Pi council agent")
 	fs.Usage = func() {
@@ -94,6 +95,7 @@ func buildCouncilReplaySummary(result localrun.CouncilReplayResult) councilRepla
 		SourceOutputDir: strings.TrimSpace(result.SourceOutputDir),
 		SnapshotDir:     strings.TrimSpace(result.SnapshotDir),
 		Error:           strings.TrimSpace(result.Error),
+		ErrorDetails:    cloneSummaryMap(result.ErrorDetails),
 	}
 }
 

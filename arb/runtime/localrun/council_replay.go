@@ -57,6 +57,7 @@ type CouncilReplayResult struct {
 	Vote            string                        `json:"vote,omitempty"`
 	Rationale       string                        `json:"rationale,omitempty"`
 	Error           string                        `json:"error,omitempty"`
+	ErrorDetails    map[string]any                `json:"error_details,omitempty"`
 	ToolCalls       []CouncilReplayToolCall       `json:"tool_calls,omitempty"`
 	Input           proceeding.CouncilReplayInput `json:"input"`
 }
@@ -72,6 +73,12 @@ type CouncilReplayToolCall struct {
 type councilReplayVote struct {
 	Vote      string `json:"vote"`
 	Rationale string `json:"rationale"`
+}
+
+type councilReplayFailure struct {
+	Reason  string
+	Message string
+	Details map[string]any
 }
 
 type replayDoRequest struct {
@@ -380,6 +387,15 @@ func waitCouncilReplayResult(
 		base.Vote = vote.Vote
 		base.Rationale = vote.Rationale
 		return base, nil
+	case failure := <-server.FailureDone():
+		message := strings.TrimSpace(failure.Message)
+		if message == "" {
+			message = "council replay agent failed"
+		}
+		err := errors.New(message)
+		base.Error = message
+		base.ErrorDetails = cloneReplayMap(failure.Details)
+		return base, err
 	case err := <-state.agentErrs:
 		base.Error = err.Error()
 		return base, err
@@ -433,6 +449,7 @@ type frozenCouncilReplayServer struct {
 	outputDir      string
 	server         *http.Server
 	voteDone       chan councilReplayVote
+	failureDone    chan councilReplayFailure
 	version        uint64
 	deadline       time.Time
 	evidenceBudget replayEvidenceBudget
@@ -453,11 +470,12 @@ func startFrozenCouncilReplayServer(ctx context.Context, input proceeding.Counci
 		return nil, "", err
 	}
 	server := &frozenCouncilReplayServer{
-		input:     input,
-		outputDir: outputDir,
-		voteDone:  make(chan councilReplayVote, 1),
-		version:   1,
-		deadline:  time.Now().Add(input.Runtime.CouncilTimeout()),
+		input:       input,
+		outputDir:   outputDir,
+		voteDone:    make(chan councilReplayVote, 1),
+		failureDone: make(chan councilReplayFailure, 1),
+		version:     1,
+		deadline:    time.Now().Add(input.Runtime.CouncilTimeout()),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -496,6 +514,10 @@ func (s *frozenCouncilReplayServer) Close() error {
 
 func (s *frozenCouncilReplayServer) VoteDone() <-chan councilReplayVote {
 	return s.voteDone
+}
+
+func (s *frozenCouncilReplayServer) FailureDone() <-chan councilReplayFailure {
+	return s.failureDone
 }
 
 func (s *frozenCouncilReplayServer) ToolCalls() []CouncilReplayToolCall {
@@ -590,22 +612,36 @@ func (s *frozenCouncilReplayServer) handleFail(w http.ResponseWriter, r *http.Re
 		return
 	}
 	var req struct {
-		CaseID        string `json:"case_id"`
-		MemberID      string `json:"member_id"`
-		OpportunityID string `json:"opportunity_id"`
-		Message       string `json:"message"`
+		CaseID        string         `json:"case_id"`
+		MemberID      string         `json:"member_id"`
+		OpportunityID string         `json:"opportunity_id"`
+		Reason        string         `json:"reason"`
+		Message       string         `json:"message"`
+		Details       map[string]any `json:"details"`
 	}
 	if err := decodeReplayJSONBody(w, r, &req, int64(s.input.Runtime.MaxResponseBytes)); err != nil {
 		writeReplayJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": replayAPIError("bad_json", err.Error())})
 		return
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.failure = strings.TrimSpace(req.Message)
-	if s.failure == "" {
-		s.failure = "council replay agent failed"
+	failure := councilReplayFailure{
+		Reason:  strings.TrimSpace(req.Reason),
+		Message: strings.TrimSpace(req.Message),
+		Details: cloneReplayMap(req.Details),
 	}
+	if failure.Message == "" {
+		failure.Message = "council replay agent failed"
+	}
+	s.mu.Lock()
+	shouldSignal := s.failure == ""
+	s.failure = failure.Message
 	s.version++
+	s.mu.Unlock()
+	if shouldSignal {
+		select {
+		case s.failureDone <- failure:
+		default:
+		}
+	}
 	writeReplayJSON(w, http.StatusOK, map[string]any{"ok": true, "result": map[string]any{"text": "Council member failure recorded."}})
 }
 

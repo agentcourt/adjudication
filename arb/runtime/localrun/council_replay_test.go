@@ -1,7 +1,10 @@
 package localrun
 
 import (
+	"bytes"
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,6 +74,52 @@ func TestLoadCouncilReplayModelConfigRejectsEmptyPersonaOverride(t *testing.T) {
 	_, _, err := loadCouncilReplayModelConfig(configPath, "C1", personaPath)
 	if err == nil || !strings.Contains(err.Error(), "empty persona text") {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestWaitCouncilReplayResultReturnsPostedFailure(t *testing.T) {
+	input := proceeding.CouncilReplayInput{
+		Basis:           proceeding.CouncilReplayBasisSnapshot,
+		CaseID:          "case-1",
+		MemberID:        "C1",
+		SourceOutputDir: "source-out",
+		Runtime:         proceeding.DefaultRuntimeLimits(),
+		Seat: proceeding.CouncilReplaySeat{
+			MemberID: "C1",
+			Model:    "openrouter://example/model",
+		},
+	}
+	server := &frozenCouncilReplayServer{
+		input:       input,
+		voteDone:    make(chan councilReplayVote, 1),
+		failureDone: make(chan councilReplayFailure, 1),
+	}
+	const message = "Council member C1 agent process failed before completing opportunity deliberation:1:C1: provider error."
+	req := httptest.NewRequest(http.MethodPost, "/councilapi/v1/fail", bytes.NewBufferString(`{
+		"case_id":"case-1",
+		"member_id":"C1",
+		"opportunity_id":"deliberation:1:C1",
+		"reason":"agent_exited",
+		"message":"`+message+`",
+		"details":{"agent_error":"provider error"}
+	}`))
+	rec := httptest.NewRecorder()
+	server.handleFail(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("handleFail status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	result, err := waitCouncilReplayResult(context.Background(), CouncilReplayOptions{
+		CouncilTimeoutSeconds: 60,
+		OutputDir:             "out",
+	}, input, &runState{agentErrs: make(chan error, 1)}, server)
+	if err == nil || err.Error() != message {
+		t.Fatalf("wait error = %v", err)
+	}
+	if result.Error != message || result.Status != "error" {
+		t.Fatalf("result = %#v", result)
+	}
+	if result.ErrorDetails["agent_error"] != "provider error" {
+		t.Fatalf("error details = %#v", result.ErrorDetails)
 	}
 }
 

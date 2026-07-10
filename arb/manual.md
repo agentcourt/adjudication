@@ -82,7 +82,7 @@ The full test command for the Go runtime is:
 go test -count=1 ./runtime/...
 ```
 
-`aar run` uses Docker for OpenClaw lawyer containers and Podman for Pi council agents.  The default OpenClaw image is `ghcr.io/openclaw/openclaw:latest`.  The default Pi image is `agentcourt-pi-sandbox`, unless `PI_CONTAINER_IMAGE` is set and `--pi-image` is omitted.  The default Pi MCP adapter package is `npm:pi-mcp-adapter`.
+`aar run` uses Docker for OpenClaw lawyer containers and Podman for Pi council agents.  The default OpenClaw image is `ghcr.io/openclaw/openclaw:latest`.  The default Pi image is `agentcourt-pi-sandbox`, unless `PI_CONTAINER_IMAGE` is set and `--pi-image` is omitted.  The default Pi MCP adapter path is `/opt/pi-extensions/pi-mcp-adapter/node_modules/pi-mcp-adapter`, which the shared Pi image builds from pinned `pi-mcp-adapter@2.11.0`.
 
 Pi council agents require `OPENROUTER_API_KEY`.  `aar run` validates that the variable exists before starting.  Council model, provider, quantization, and persona come from the selected entries in `pool.jsonl`; AAR passes those request-spec entries to Pi without deriving a separate model string.
 
@@ -369,7 +369,7 @@ Important run flags:
 | `--openclaw-codex-auth` | Codex `auth.json` path. |
 | `--openclaw-lawyer-start-delay-seconds` | Delay between plaintiff and defendant container starts.  Default: 15 seconds. |
 | `--pi-image` | Pi container image. |
-| `--pi-mcp-adapter` | Pi MCP adapter package. |
+| `--pi-mcp-adapter` | Pi MCP adapter path or package source. |
 | `--council-output-limit-bytes` | Total stdout plus stderr limit per Pi council process.  Default: 128 MiB. |
 | `--docker-mcp-host` | Host name Docker containers use to reach MCP.  Default: `host.docker.internal`. |
 | `--podman-mcp-host` | Host name Podman containers use to reach MCP.  Default: `127.0.0.1`. |
@@ -883,7 +883,7 @@ Clerk create request fields mirror `aar run` options in structured JSON:
 | `openclaw_codex_auth_path` | Codex `auth.json` path. |
 | `openclaw_lawyer_start_delay_seconds` | Delay between local OpenClaw lawyer starts. |
 | `pi_image` | Pi container image. |
-| `pi_mcp_adapter` | Pi MCP adapter package. |
+| `pi_mcp_adapter` | Pi MCP adapter path or package source. |
 | `council_output_limit_bytes` | Total stdout plus stderr limit per Pi council process. |
 | `docker_mcp_host` | Host name Docker containers use to reach MCP. |
 | `podman_mcp_host` | Host name Podman containers use to reach MCP. |
