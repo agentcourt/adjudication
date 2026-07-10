@@ -63,6 +63,15 @@ func TestIndexDoesNotExposeADCAlias(t *testing.T) {
 	}
 }
 
+func TestDirectCreateTemplatesOmitOutputDir(t *testing.T) {
+	for _, systemID := range []string{"arb", "arbd"} {
+		body := createTemplate(systemID, "direct")
+		if strings.Contains(body, `"out_dir"`) {
+			t.Fatalf("%s direct template includes out_dir: %s", systemID, body)
+		}
+	}
+}
+
 func TestCreateCasePostsRawJSONAndRedirects(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/clerk/v1/cases" {

@@ -1080,7 +1080,6 @@ func createTemplate(systemID string, scopeID string) string {
 			return `{
   "case_id": "arb-api-web-YYYYMMDDHHMMSS",
   "complaint_path": "examples/ex01/complaint.md",
-  "out_dir": "api-case-web-YYYYMMDDHHMMSS",
   "council_backend": "councilapi"
 }`
 		}
@@ -1096,7 +1095,6 @@ func createTemplate(systemID string, scopeID string) string {
 			return `{
   "case_id": "arbd-api-web-YYYYMMDDHHMMSS",
   "complaint_path": "examples/ex1/complaint.md",
-  "out_dir": "api-case-web-YYYYMMDDHHMMSS",
   "council_backend": "councilapi"
 }`
 		}
