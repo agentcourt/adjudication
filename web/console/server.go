@@ -756,6 +756,7 @@ func adcActionPhase(event map[string]any) string {
 }
 
 func adcActionMessage(event map[string]any) string {
+	action := fieldText(event, "action")
 	payload := asMap(event["payload"])
 	if payload != nil {
 		if reason := fieldText(payload, "reason"); reason != "" {
@@ -772,6 +773,9 @@ func adcActionMessage(event map[string]any) string {
 		}
 		if errText := fieldText(response, "error"); errText != "" {
 			return errText
+		}
+		if summary := adcResponseSummary(action, response); summary != "" {
+			return summary
 		}
 	}
 	var parts []string
@@ -811,6 +815,27 @@ func adcPayloadSummary(payload map[string]any) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+func adcResponseSummary(action string, response map[string]any) string {
+	switch action {
+	case "list_case_files":
+		if items, ok := response["files"].([]any); ok {
+			return fmt.Sprintf("files=%d", len(items))
+		}
+	case "get_case":
+		if caseData := asMap(response["case"]); caseData != nil {
+			var parts []string
+			if status := fieldText(caseData, "status"); status != "" {
+				parts = append(parts, "status="+status)
+			}
+			if phase := fieldText(caseData, "phase"); phase != "" {
+				parts = append(parts, "phase="+phase)
+			}
+			return strings.Join(parts, " ")
+		}
+	}
+	return ""
 }
 
 func eventMessage(payload map[string]any) string {

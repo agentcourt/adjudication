@@ -392,7 +392,7 @@ func TestCaseDetailSummarizesADCActionEvents(t *testing.T) {
 			writeTestJSON(w, map[string]any{"ok": true, "case_id": "adc-events", "artifacts": []map[string]any{{"name": "events.ndjson", "size_bytes": 512}}})
 		case "/clerk/v1/cases/adc-events/artifacts/events.ndjson":
 			w.Header().Set("Content-Type", "application/x-ndjson")
-			_, _ = w.Write([]byte(`{"action":"list_case_files","payload":{},"response":{"case":{"phase":"filed"},"ok":true},"role":"defendant","step":1,"timestamp":"2026-07-10 15:30:51.833","turn":2}` + "\n"))
+			_, _ = w.Write([]byte(`{"action":"list_case_files","payload":{},"response":{"files":[{"file_id":"file-0001"},{"file_id":"file-0002"}],"ok":true},"role":"defendant","step":1,"timestamp":"2026-07-10 15:30:51.833","turn":2}` + "\n"))
 			_, _ = w.Write([]byte(`{"action":"read_case_text_file","payload":{"file_id":"file-0001"},"response":{"ok":true},"role":"defendant","step":2,"timestamp":"2026-07-10 15:30:54.539","turn":2}` + "\n"))
 			_, _ = w.Write([]byte(`{"action":"pass_turn","payload":{"kind":"pass","reason":"No supported Rule 12 ground fits."},"response":{"ok":true,"result_kind":"pass_recorded","state":{"case":{"phase":"pretrial"}}},"role":"defendant","step":3,"timestamp":"2026-07-10 15:31:30.121","turn":2}` + "\n"))
 			_, _ = w.Write([]byte(`{"action":"get_juror_context","payload":{"juror_id":"J9"},"response":{"ok":true},"role":"defendant","step":1,"timestamp":"2026-07-10 15:32:00.000","turn":3}` + "\n"))
@@ -417,9 +417,8 @@ func TestCaseDetailSummarizesADCActionEvents(t *testing.T) {
 		"read_case_text_file",
 		"file_id=file-0001",
 		"list_case_files",
-		"turn 2 step 1",
+		"files=2",
 		"defendant",
-		"filed",
 		"pretrial",
 		"get_juror_context",
 		"juror_id=J9",
