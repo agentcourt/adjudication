@@ -95,6 +95,7 @@ func New(cfg Config) (*App, error) {
 	}
 	tmpl, err := template.New("console").Funcs(template.FuncMap{
 		"json":        prettyJSON,
+		"boundedJSON": boundedJSON,
 		"response":    responseText,
 		"body":        compactBody,
 		"field":       fieldText,
@@ -1011,6 +1012,15 @@ func prettyJSON(v any) string {
 		return fmt.Sprint(v)
 	}
 	return string(raw)
+}
+
+func boundedJSON(v any) string {
+	text := prettyJSON(v)
+	const max = 12000
+	if len(text) <= max {
+		return text
+	}
+	return fmt.Sprintf("[JSON not rendered: formatted value is %d bytes, limit is %d bytes]", len(text), max)
 }
 
 func responseText(resp *Response) string {

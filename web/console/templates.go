@@ -177,7 +177,7 @@ const pageTemplates = `
   {{end}}
 </table>
 {{else if .EventNotice}}<p class="muted">{{.EventNotice}}</p>{{end}}
-	{{if .Result}}<h2>Result</h2><pre>{{json .Result}}</pre>{{end}}
+	{{if .Result}}<h2>Result</h2><pre>{{boundedJSON .Result}}</pre>{{end}}
 	{{if .Response}}<h2>Case Response</h2><pre>{{response .Response}}</pre>{{end}}
 {{template "layout-end" .}}{{end}}
 

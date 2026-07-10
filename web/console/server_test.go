@@ -386,6 +386,36 @@ func TestResponseTextOmitsLargeResponses(t *testing.T) {
 	}
 }
 
+func TestCaseDetailOmitsLargeEmbeddedResult(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/clerk/v1/cases/case-large":
+			writeTestJSON(w, map[string]any{"ok": true, "case": map[string]any{"case_id": "case-large", "status": "completed"}})
+		case "/clerk/v1/cases/case-large/result":
+			writeTestJSON(w, map[string]any{"ok": true, "case_id": "case-large", "status": "done", "text": strings.Repeat("x", 13000)})
+		case "/clerk/v1/cases/case-large/artifacts":
+			writeTestJSON(w, map[string]any{"ok": true, "case_id": "case-large", "artifacts": []map[string]any{}})
+		default:
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+	}))
+	defer api.Close()
+	app := testApp(t, api.URL, "")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/system/arb/clerk/cases/case-large", nil)
+	app.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "JSON not rendered") {
+		t.Fatalf("body does not report omitted result: %s", body)
+	}
+	if strings.Contains(body, strings.Repeat("x", 1000)) {
+		t.Fatalf("large result was embedded: %s", body)
+	}
+}
+
 func TestRawRequestRejectsAbsoluteURL(t *testing.T) {
 	app := testApp(t, "http://127.0.0.1:1", "")
 	rec := httptest.NewRecorder()
