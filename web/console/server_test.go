@@ -213,7 +213,9 @@ func TestCaseDetailCompactsStructuredFieldsAndRefreshesRunningCase(t *testing.T)
 	for _, want := range []string{
 		`<meta http-equiv="refresh" content="10">`,
 		`action="/system/arb/clerk/cases/case-running/manage"`,
-		"object (2 keys)",
+		"<dt>answers</dt><dd>C5=73</dd>",
+		"<dt>events</dt><dd>2</dd>",
+		"<summary>full JSON (2 keys)</summary>",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q: %s", want, body)
@@ -221,6 +223,9 @@ func TestCaseDetailCompactsStructuredFieldsAndRefreshesRunningCase(t *testing.T)
 	}
 	if strings.Contains(body, "map[answers") {
 		t.Fatalf("body contains fmt map rendering: %s", body)
+	}
+	if strings.Contains(body, "object (2 keys)") {
+		t.Fatalf("body contains placeholder structured value: %s", body)
 	}
 }
 

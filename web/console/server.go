@@ -65,6 +65,11 @@ type EventIssue struct {
 	LogPath   string
 }
 
+type recordFact struct {
+	Label string
+	Value string
+}
+
 type EvidenceEntry struct {
 	ID         string
 	Title      string
@@ -666,8 +671,8 @@ func recordValue(sys SystemConfig, scope ScopeConfig, caseID string, key string,
 	if value == nil {
 		return ""
 	}
-	if summary, ok := structuredValueSummary(value); ok {
-		return template.HTML(template.HTMLEscapeString(summary))
+	if html, ok := structuredRecordValue(value); ok {
+		return html
 	}
 	text := strings.TrimSpace(fmt.Sprint(value))
 	if text == "" {
@@ -680,15 +685,217 @@ func recordValue(sys SystemConfig, scope ScopeConfig, caseID string, key string,
 	return template.HTML(template.HTMLEscapeString(text))
 }
 
-func structuredValueSummary(value any) (string, bool) {
+func structuredRecordValue(value any) (template.HTML, bool) {
+	facts := recordFacts(value)
+	var label string
 	switch v := value.(type) {
 	case map[string]any:
-		return fmt.Sprintf("object (%d keys)", len(v)), true
+		label = fmt.Sprintf("full JSON (%d keys)", len(v))
 	case []any:
-		return fmt.Sprintf("array (%d items)", len(v)), true
+		label = fmt.Sprintf("full JSON (%d items)", len(v))
 	default:
 		return "", false
 	}
+	var b strings.Builder
+	if len(facts) > 0 {
+		b.WriteString(`<dl class="record-facts">`)
+		for _, fact := range facts {
+			b.WriteString(`<dt>`)
+			b.WriteString(template.HTMLEscapeString(fact.Label))
+			b.WriteString(`</dt><dd>`)
+			b.WriteString(template.HTMLEscapeString(fact.Value))
+			b.WriteString(`</dd>`)
+		}
+		b.WriteString(`</dl>`)
+	}
+	b.WriteString(`<details class="record-details"><summary>`)
+	b.WriteString(template.HTMLEscapeString(label))
+	b.WriteString(`</summary><pre>`)
+	b.WriteString(template.HTMLEscapeString(prettyJSON(value)))
+	b.WriteString(`</pre></details>`)
+	return template.HTML(b.String()), true
+}
+
+func recordFacts(value any) []recordFact {
+	switch v := value.(type) {
+	case map[string]any:
+		return mapRecordFacts(v)
+	case []any:
+		return []recordFact{{Label: "items", Value: fmt.Sprint(len(v))}}
+	default:
+		return nil
+	}
+}
+
+func mapRecordFacts(m map[string]any) []recordFact {
+	var facts []recordFact
+	seen := map[string]bool{}
+	addScalarFacts(&facts, seen, "", m, []string{
+		"status",
+		"case_status",
+		"phase",
+		"final_reason",
+		"resolution",
+		"council_backend",
+		"started_at",
+		"finished_at",
+		"caption",
+		"question",
+		"proposition",
+		"error",
+	})
+	addMapFact(&facts, seen, "answers", m["answers"])
+	addMapFact(&facts, seen, "vote_tally", m["vote_tally"])
+	if finalState := asMap(m["final_state"]); finalState != nil {
+		if caseState := asMap(finalState["case"]); caseState != nil {
+			addScalarFacts(&facts, seen, "case.", caseState, []string{
+				"status",
+				"case_status",
+				"phase",
+				"final_reason",
+				"resolution",
+				"question",
+				"proposition",
+			})
+			addMapFact(&facts, seen, "case.answers", caseState["answers"])
+			addMapFact(&facts, seen, "case.vote_tally", caseState["vote_tally"])
+			addCountFacts(&facts, seen, caseState, "case.", []string{
+				"council",
+				"council_members",
+				"events",
+				"evidence",
+				"submitted_evidence",
+				"offered_evidence",
+				"case_files",
+				"attorneys",
+				"technical_reports",
+			})
+		}
+	}
+	addCountFacts(&facts, seen, m, "", []string{
+		"council",
+		"council_members",
+		"events",
+		"evidence",
+		"submitted_evidence",
+		"offered_evidence",
+		"case_files",
+		"attorneys",
+		"technical_reports",
+	})
+	return facts
+}
+
+func addScalarFacts(facts *[]recordFact, seen map[string]bool, prefix string, m map[string]any, keys []string) {
+	for _, key := range keys {
+		if text, ok := scalarFactText(m[key]); ok {
+			addRecordFact(facts, seen, prefix+key, limitText(text, 500))
+		}
+	}
+}
+
+func addMapFact(facts *[]recordFact, seen map[string]bool, label string, value any) {
+	if m := asMap(value); m != nil {
+		if text := conciseMapText(m, 10); text != "" {
+			addRecordFact(facts, seen, label, text)
+		}
+	}
+}
+
+func addCountFacts(facts *[]recordFact, seen map[string]bool, m map[string]any, prefix string, keys []string) {
+	for _, key := range keys {
+		if text, ok := countFactText(m[key]); ok {
+			addRecordFact(facts, seen, prefix+key, text)
+		}
+	}
+}
+
+func addRecordFact(facts *[]recordFact, seen map[string]bool, label string, value string) {
+	value = strings.TrimSpace(value)
+	if label == "" || value == "" || seen[label] {
+		return
+	}
+	seen[label] = true
+	*facts = append(*facts, recordFact{Label: label, Value: value})
+}
+
+func scalarFactText(value any) (string, bool) {
+	switch v := value.(type) {
+	case nil:
+		return "", false
+	case map[string]any, []any:
+		return "", false
+	case string:
+		text := strings.TrimSpace(v)
+		return text, text != ""
+	default:
+		text := strings.TrimSpace(fmt.Sprint(value))
+		return text, text != ""
+	}
+}
+
+func conciseMapText(m map[string]any, maxKeys int) string {
+	keys := sortedKeys(m)
+	if maxKeys > 0 && len(keys) > maxKeys {
+		keys = keys[:maxKeys]
+	}
+	parts := make([]string, 0, len(keys)+1)
+	for _, key := range keys {
+		text, ok := scalarFactText(m[key])
+		if !ok {
+			continue
+		}
+		parts = append(parts, key+"="+limitText(text, 120))
+	}
+	if len(m) > len(keys) {
+		parts = append(parts, fmt.Sprintf("+%d more", len(m)-len(keys)))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func countFactText(value any) (string, bool) {
+	items, ok := value.([]any)
+	if !ok {
+		if m := asMap(value); m != nil {
+			return fmt.Sprint(len(m)), true
+		}
+		return "", false
+	}
+	text := fmt.Sprint(len(items))
+	if counts := arrayFieldCounts(items, "status"); counts != "" {
+		text += " (" + counts + ")"
+	} else if counts := arrayFieldCounts(items, "vote"); counts != "" {
+		text += " (" + counts + ")"
+	}
+	return text, true
+}
+
+func arrayFieldCounts(items []any, field string) string {
+	counts := map[string]int{}
+	for _, item := range items {
+		m := asMap(item)
+		if m == nil {
+			continue
+		}
+		value := fieldText(m, field)
+		if value == "" {
+			continue
+		}
+		counts[value]++
+	}
+	if len(counts) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%d", key, counts[key]))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func logArtifactName(key string, text string) string {

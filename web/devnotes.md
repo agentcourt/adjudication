@@ -24,6 +24,8 @@ The manage form appears only while a case is active.  Completed cases still show
 
 The default console exposes ADC only through Clerk.  The ADC service still serves `/api/v1/cases` for API clients that call the service directly.  The web UI case navigation now presents the operational choices: ADC Clerk, ARB Clerk, ARB Direct, AARD Clerk, and AARD Direct.
 
+Structured case-record fields now render as fact lists plus a closed JSON disclosure.  This keeps `summary` cells useful on the case page: scalar state, answers, vote tallies, and collection counts appear immediately, while the full service JSON remains available without leaving the page.
+
 ### Verification
 
 - [x] `go test ./web/...`

@@ -36,6 +36,11 @@ const pageTemplates = `
     .muted { color:var(--muted); }
     .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; }
     .actions form { display:inline; margin-right:8px; }
+    .record-facts { display:grid; grid-template-columns:max-content minmax(0, 1fr); gap:3px 10px; margin:0 0 8px; }
+    .record-facts dt { color:var(--muted); }
+    .record-facts dd { margin:0; overflow-wrap:anywhere; }
+    .record-details summary { cursor:pointer; color:var(--muted); }
+    .record-details pre { max-height:340px; margin:6px 0 0; }
   </style>
 </head>
 <body>
