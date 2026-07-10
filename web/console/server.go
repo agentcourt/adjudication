@@ -22,32 +22,33 @@ type App struct {
 }
 
 type ViewData struct {
-	Title          string
-	Systems        []SystemConfig
-	System         SystemConfig
-	Scope          ScopeConfig
-	ScopeOptions   []ScopeConfig
-	Cases          []map[string]any
-	CaseID         string
-	StatusFilter   string
-	Record         map[string]any
-	Result         map[string]any
-	Artifacts      []Artifact
-	EventIssues    []EventIssue
-	RecentEvents   []CaseEvent
-	EventNotice    string
-	Evidence       []EvidenceEntry
-	EvidenceID     string
-	EvidenceNotice string
-	ServicePath    string
-	Method         string
-	Payload        string
-	Response       *Response
-	Error          string
-	Notice         string
-	CreateTemplate string
-	AutoRefresh    bool
-	CanManage      bool
+	Title                string
+	Systems              []SystemConfig
+	System               SystemConfig
+	Scope                ScopeConfig
+	ScopeOptions         []ScopeConfig
+	Cases                []map[string]any
+	CaseID               string
+	StatusFilter         string
+	Record               map[string]any
+	Result               map[string]any
+	Artifacts            []Artifact
+	EventIssues          []EventIssue
+	RecentEvents         []CaseEvent
+	EventNotice          string
+	Evidence             []EvidenceEntry
+	EvidenceID           string
+	EvidenceNotice       string
+	HasAttestationEvents bool
+	ServicePath          string
+	Method               string
+	Payload              string
+	Response             *Response
+	Error                string
+	Notice               string
+	CreateTemplate       string
+	AutoRefresh          bool
+	CanManage            bool
 }
 
 type Artifact struct {
@@ -296,6 +297,7 @@ func (a *App) handleCaseDetail(w http.ResponseWriter, r *http.Request, sys Syste
 	data.Record = asMap(record.JSON["case"])
 	data.Result = result.JSON
 	data.Artifacts = artifactsFrom(artifacts.JSON["artifacts"])
+	data.HasAttestationEvents = caseHasAttestationEvents(data.Record)
 	data.EventIssues, data.RecentEvents, data.EventNotice = a.loadEventData(r.Context(), sys, scope, caseID, data.Artifacts)
 	data.AutoRefresh = activeCase(data.Record, data.Result)
 	data.CanManage = data.AutoRefresh
@@ -578,6 +580,14 @@ func artifactNamed(artifacts []Artifact, name string) bool {
 		}
 	}
 	return false
+}
+
+func caseHasAttestationEvents(record map[string]any) bool {
+	execution := asMap(record["execution"])
+	if execution == nil {
+		return false
+	}
+	return fieldText(execution, "mode") == "attested"
 }
 
 func evidenceEntriesFrom(v any) []EvidenceEntry {

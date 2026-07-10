@@ -28,6 +28,8 @@ Structured case-record fields now render as fact lists plus a closed JSON disclo
 
 The case detail page now renders a Recent Events table from `events.ndjson`, newest first and capped at eight rows.  Active cases then show visible phase progress without forcing the operator to open the raw NDJSON artifact.  ADC action events do not always carry a top-level phase, so the parser also reads phase from structured `response.case.phase` and `response.state.case.phase` fields.  The existing Failure Events table still reports process and provider failures separately.
 
+The attestation-events link now appears only when the service case record reports `execution.mode: "attested"`.  Local runs return a service-level 404 for that route because they have no attestation event stream, so the case page no longer advertises a link that cannot succeed for ordinary local ADC, ARB, or AARD runs.
+
 ### Verification
 
 - [x] `go test ./web/...`

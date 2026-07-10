@@ -134,7 +134,9 @@ const pageTemplates = `
   <a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/result">result</a>
   <a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/artifacts">artifacts</a>
   <a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/evidence">evidence</a>
+  {{if .HasAttestationEvents}}
   <a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/attestation/events">attestation events</a>
+  {{end}}
 </div>
 {{if .Record}}
 <h2>Record</h2>

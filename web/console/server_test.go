@@ -261,6 +261,45 @@ func TestCaseDetailCompactsStructuredFieldsAndRefreshesRunningCase(t *testing.T)
 	if strings.Contains(body, "object (2 keys)") {
 		t.Fatalf("body contains placeholder structured value: %s", body)
 	}
+	if strings.Contains(body, "attestation events") {
+		t.Fatalf("local case includes attestation events link: %s", body)
+	}
+}
+
+func TestCaseDetailLinksAttestationEventsForAttestedCase(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/clerk/v1/cases/case-attested":
+			writeTestJSON(w, map[string]any{
+				"ok": true,
+				"case": map[string]any{
+					"case_id": "case-attested",
+					"status":  "running",
+					"execution": map[string]any{
+						"mode": "attested",
+					},
+				},
+			})
+		case "/clerk/v1/cases/case-attested/result":
+			writeTestJSON(w, map[string]any{"ok": true, "case_id": "case-attested", "status": "pending"})
+		case "/clerk/v1/cases/case-attested/artifacts":
+			writeTestJSON(w, map[string]any{"ok": true, "case_id": "case-attested", "artifacts": []map[string]any{}})
+		default:
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+	}))
+	defer api.Close()
+	app := testApp(t, api.URL, "")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/system/arb/clerk/cases/case-attested", nil)
+	app.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `href="/system/arb/clerk/cases/case-attested/attestation/events"`) {
+		t.Fatalf("body missing attestation events link: %s", body)
+	}
 }
 
 func TestCaseDetailSummarizesFailureEvents(t *testing.T) {
