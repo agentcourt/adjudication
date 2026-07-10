@@ -793,6 +793,9 @@ func adcPayloadSummary(payload map[string]any) string {
 	for _, key := range []string{
 		"file_id",
 		"juror_id",
+		"vote",
+		"damages",
+		"confidence",
 		"exchange_id",
 		"asked_by",
 		"allowed",
@@ -810,7 +813,7 @@ func adcPayloadSummary(payload map[string]any) string {
 			key = "tool"
 		}
 		parts = append(parts, key+"="+limitText(text, 120))
-		if len(parts) == 3 {
+		if len(parts) == 4 {
 			break
 		}
 	}

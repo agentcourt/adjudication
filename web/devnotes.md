@@ -38,6 +38,8 @@ The artifact, evidence, and attestation byte proxy now forwards `Range`, `If-Ran
 
 ADC recent-event summaries now also use concise response fields for common read actions.  `list_case_files` reports the returned file count, and `get_case` reports case status and phase when those fields are present.
 
+Deliberation vote events now report the juror ID, vote, damages amount, and confidence when those fields are present in the ADC event payload.  This keeps the case page useful during jury deliberation without rendering the full embedded case state from `events.ndjson`.
+
 ### Verification
 
 - [x] `go test ./web/...`
@@ -46,4 +48,5 @@ ADC recent-event summaries now also use concise response fields for common read 
 - [x] Manual curl test against a real ARB clerk service and the web console.  Submitted `web-live-ex01-20260710T1312Z` from `arb/examples/ex01` through the web case-create route, listed cases, monitored the record and result, fetched `evidence-manifest.json`, `events.ndjson`, `digest.md`, `run.json`, and fetched evidence through both the rendered evidence page and the raw evidence route.  The ARB case closed at `2026-07-10T13:32:20Z` with final resolution `demonstrated` and vote tally `demonstrated: 5`, `not_demonstrated: 1`.
 - [x] Manual curl test against live ADC case `adc-web-ui-run-20260710T202612Z`: a Web console request for `/artifacts/events.ndjson` with `Range: bytes=-4096` returned HTTP `206`, a 4096-byte body, and the service `Content-Range` header.
 - [x] Manual curl test against live ADC case `adc-web-ui-run-20260710T202612Z`: the case page Recent Events table rendered `files=9` for `list_case_files` and `status=trial phase=charge_conference` for `get_case`.
+- [x] Manual curl test against live ADC case `adc-web-ui-run-20260710T202612Z`: the case page Recent Events table rendered `juror_id=J6 vote=plaintiff damages=108000 confidence=medium` for a deliberation vote.
 - [ ] `go test ./...`: package enumeration fails before testing because `arb/out/juror-model-experiments/generic-5model-tolerant-20260706T145403Z/resume-repair/20260706T202709Z/dirs/runs/ex08a/run-02/deepseek-r1/r01/pi-C1/pi-mcp-output-D1UmsM` is unreadable.
