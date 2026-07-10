@@ -6,6 +6,7 @@
 import argparse
 import datetime as dt
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -30,6 +31,8 @@ from run_eval import (  # noqa: E402
     openrouter_request,
     response_meta,
 )
+
+REQUEST_PARAMETER_KEYS = ("temperature", "top_p", "max_tokens")
 
 
 def utc_now() -> str:
@@ -80,6 +83,16 @@ def provider_request_from_variant(row: dict) -> dict:
     return provider
 
 
+def request_params_from_variant(row: dict, requested: dict) -> tuple[dict, dict]:
+    supported = row.get("supported_parameters")
+    if not isinstance(supported, list):
+        return dict(requested), {}
+    supported_set = {str(value).strip() for value in supported if str(value).strip()}
+    effective = {key: value for key, value in requested.items() if key in supported_set}
+    omitted = {key: value for key, value in requested.items() if key not in supported_set}
+    return effective, omitted
+
+
 def spec_from_variant(row: dict) -> dict:
     obj = dict(row)
     obj["provider"] = provider_request_from_variant(row)
@@ -94,22 +107,94 @@ def chat_payload(spec: dict, persona: str, gene: str, request_params: dict) -> d
             {"role": "system", "content": persona},
             {"role": "user", "content": gene},
         ],
-        "temperature": request_params["temperature"],
-        "top_p": request_params["top_p"],
-        "max_tokens": request_params["max_tokens"],
     }
+    for key in REQUEST_PARAMETER_KEYS:
+        if key in request_params:
+            payload[key] = request_params[key]
     if spec.get("provider"):
         payload["provider"] = spec["provider"]
     return payload
 
 
-def openrouter_completion(spec: dict, persona: str, gene: str, request_params: dict, timeout: int) -> tuple[str, dict]:
+def openrouter_completion_once(spec: dict, persona: str, gene: str, request_params: dict, timeout: int) -> tuple[str, dict]:
     payload = chat_payload(spec, persona, gene, request_params)
     started = time.time()
     body = openrouter_request(payload, timeout, spec.get("headers"))
     text, meta, _ = response_meta(body, started)
     meta = attach_request_spec_meta(meta, {**spec, "request": request_params}, timeout)
     return text or "", meta
+
+
+def retry_after_seconds(exc: Exception) -> float | None:
+    if not isinstance(exc, OpenRouterHTTPError):
+        return None
+    body = exc.body_json
+    if not isinstance(body, dict):
+        return None
+    error = body.get("error")
+    if not isinstance(error, dict):
+        return None
+    metadata = error.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    value = metadata.get("retry_after_seconds")
+    if isinstance(value, (int, float)) and value >= 0:
+        return float(value)
+    return None
+
+
+def retryable_completion_error(exc: Exception) -> bool:
+    error_type = classify_error(exc)
+    if error_type in {"rate_limit", "timeout"}:
+        return True
+    if isinstance(exc, (http.client.IncompleteRead, http.client.RemoteDisconnected, urllib.error.URLError, socket.timeout)):
+        return True
+    text = str(exc).lower()
+    transient_fragments = [
+        "incompleteread",
+        "remote end closed",
+        "connection reset",
+        "temporarily unavailable",
+        "service unavailable",
+        "bad gateway",
+        "gateway timeout",
+    ]
+    return any(fragment in text for fragment in transient_fragments)
+
+
+def openrouter_completion(
+    spec: dict,
+    persona: str,
+    gene: str,
+    request_params: dict,
+    timeout: int,
+    attempts: int,
+    retry_sleep: float,
+) -> tuple[str, dict]:
+    errors: list[dict] = []
+    for attempt in range(1, attempts + 1):
+        try:
+            text, metadata = openrouter_completion_once(spec, persona, gene, request_params, timeout)
+        except Exception as exc:
+            errors.append(
+                {
+                    "attempt": attempt,
+                    "error_type": classify_error(exc),
+                    "error_message": str(exc),
+                }
+            )
+            if attempt >= attempts or not retryable_completion_error(exc):
+                raise
+            sleep_seconds = retry_after_seconds(exc)
+            if sleep_seconds is None:
+                sleep_seconds = retry_sleep
+            time.sleep(max(0.0, sleep_seconds))
+            continue
+        metadata["completion_attempt_count"] = attempt
+        if errors:
+            metadata["completion_retry_errors"] = errors
+        return text, metadata
+    raise RuntimeError("completion retry loop exited without a result")
 
 
 def embedding_request(text: str, model: str, timeout: int) -> tuple[list[float], dict]:
@@ -151,6 +236,19 @@ def error_row(base: dict, status: str, exc: Exception) -> dict:
     return {**base, "status": status, "response_text": "", "embedding": None, "metadata": meta}
 
 
+def record_key(row: dict) -> tuple[str, str]:
+    endpoint = row.get("endpoint_variant_id")
+    if endpoint in (None, ""):
+        endpoint = row.get("combined_index")
+    return str(endpoint), str(row.get("sample_index"))
+
+
+def reusable_record(row: dict | None) -> bool:
+    if not isinstance(row, dict):
+        return False
+    return row.get("status") == "ok" and isinstance(row.get("embedding"), list)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one sampled gene through filtered variants and embed responses.")
     parser.add_argument("--out", required=True)
@@ -164,12 +262,19 @@ def main() -> int:
     parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--top-p", type=float, default=1.0)
     parser.add_argument("--max-tokens", type=int, default=512)
+    parser.add_argument("--completion-attempts", type=int, default=3)
+    parser.add_argument("--retry-sleep", type=float, default=2.0)
+    parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
 
     if not load_openrouter_key():
         raise RuntimeError("OPENROUTER_API_KEY not found in environment or secrets/openrouter.api.txt")
     if not load_openai_key():
         raise RuntimeError("OPENAI_API_KEY not found in environment or secrets/openai.api.txt")
+    if args.completion_attempts < 1:
+        raise RuntimeError("--completion-attempts must be positive")
+    if args.retry_sleep < 0:
+        raise RuntimeError("--retry-sleep cannot be negative")
 
     variants_path = ROOT / args.variants
     genes_path = ROOT / args.genes
@@ -193,11 +298,16 @@ def main() -> int:
     if not variants:
         raise RuntimeError(f"{variants_path}: no variants found")
 
-    request_params = {"temperature": args.temperature, "top_p": args.top_p, "max_tokens": args.max_tokens}
+    requested_params = {"temperature": args.temperature, "top_p": args.top_p, "max_tokens": args.max_tokens}
     run_id = out.name
     expected = len(variants) * args.samples
     records_path = out / "records.jsonl"
     summary_path = out / "summary.json"
+    temp_records_path = out / "records.jsonl.tmp"
+    prior_records: dict[tuple[str, str], dict] = {}
+    if args.resume and records_path.exists():
+        for row in load_jsonl(records_path):
+            prior_records[record_key(row)] = row
 
     manifest = {
         "run_id": run_id,
@@ -210,18 +320,23 @@ def main() -> int:
         "variant_count": len(variants),
         "samples_per_variant": args.samples,
         "expected_records": expected,
-        "request_parameters": request_params,
+        "requested_request_parameters": requested_params,
         "embedding_model": args.embedding_model,
+        "completion_attempts": args.completion_attempts,
+        "retry_sleep_seconds": args.retry_sleep,
+        "resume": args.resume,
         "records_path": display_path(records_path),
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps({"event": "started", "run_id": run_id, "expected": expected, "out": str(out)}, sort_keys=True), flush=True)
 
     rows: list[dict] = []
-    with records_path.open("w") as handle:
+    reused_records = 0
+    with temp_records_path.open("w") as handle:
         completed = 0
         for variant_order, row in enumerate(variants, 1):
             spec = spec_from_variant(row)
+            request_params, omitted_request_params = request_params_from_variant(row, requested_params)
             for sample_index in range(1, args.samples + 1):
                 base = {
                     "run_id": run_id,
@@ -240,34 +355,49 @@ def main() -> int:
                     "quantization": row.get("quantization"),
                     "sample_index": sample_index,
                     "request_parameters": request_params,
+                    "requested_request_parameters": requested_params,
+                    "omitted_request_parameters": omitted_request_params,
                     "embedding_model": args.embedding_model,
                 }
-                try:
-                    response_text, metadata = openrouter_completion(spec, persona, gene, request_params, args.timeout)
-                except Exception as exc:
-                    record = error_row(base, "completion_error", exc)
+                prior = prior_records.get(record_key(base))
+                if reusable_record(prior):
+                    record = prior
+                    reused_records += 1
                 else:
                     try:
-                        embedding, embedding_meta = embedding_request(response_text, args.embedding_model, args.timeout)
+                        response_text, metadata = openrouter_completion(
+                            spec,
+                            persona,
+                            gene,
+                            request_params,
+                            args.timeout,
+                            args.completion_attempts,
+                            args.retry_sleep,
+                        )
                     except Exception as exc:
-                        metadata["embedding_error_type"] = classify_error(exc)
-                        metadata["embedding_error_message"] = str(exc)
-                        record = {
-                            **base,
-                            "status": "embedding_error",
-                            "response_text": response_text,
-                            "embedding": None,
-                            "metadata": metadata,
-                        }
+                        record = error_row(base, "completion_error", exc)
                     else:
-                        metadata.update(embedding_meta)
-                        record = {
-                            **base,
-                            "status": "ok",
-                            "response_text": response_text,
-                            "embedding": embedding,
-                            "metadata": metadata,
-                        }
+                        try:
+                            embedding, embedding_meta = embedding_request(response_text, args.embedding_model, args.timeout)
+                        except Exception as exc:
+                            metadata["embedding_error_type"] = classify_error(exc)
+                            metadata["embedding_error_message"] = str(exc)
+                            record = {
+                                **base,
+                                "status": "embedding_error",
+                                "response_text": response_text,
+                                "embedding": None,
+                                "metadata": metadata,
+                            }
+                        else:
+                            metadata.update(embedding_meta)
+                            record = {
+                                **base,
+                                "status": "ok",
+                                "response_text": response_text,
+                                "embedding": embedding,
+                                "metadata": metadata,
+                            }
                 rows.append(record)
                 handle.write(json.dumps(record, ensure_ascii=False) + "\n")
                 handle.flush()
@@ -281,6 +411,7 @@ def main() -> int:
                             "combined_index": row.get("combined_index"),
                             "sample_index": sample_index,
                             "status": record["status"],
+                            "reused": record is prior,
                         },
                         sort_keys=True,
                     ),
@@ -288,9 +419,10 @@ def main() -> int:
                 )
 
     hydrate_posthoc_generation_metadata(rows, args.timeout)
-    with records_path.open("w") as handle:
+    with temp_records_path.open("w") as handle:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+    os.replace(temp_records_path, records_path)
 
     counts: dict[str, int] = {}
     for row in rows:
@@ -299,10 +431,12 @@ def main() -> int:
         **manifest,
         "finished_at": utc_now(),
         "records_written": len(rows),
+        "reused_record_count": reused_records,
         "status_counts": counts,
         "completion_error_count": counts.get("completion_error", 0),
         "embedding_error_count": counts.get("embedding_error", 0),
         "embedding_count": sum(1 for row in rows if isinstance(row.get("embedding"), list)),
+        "partial_records_allowed": True,
     }
     summary_path.write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps({"event": "finished", "summary": summary}, sort_keys=True), flush=True)

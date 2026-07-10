@@ -94,6 +94,7 @@ def main() -> int:
     parser.add_argument("--variants", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--expected-samples-per-gene", type=int)
+    parser.add_argument("--allow-missing-gene-samples", action="store_true")
     args = parser.parse_args()
 
     if args.expected_samples_per_gene is not None and args.expected_samples_per_gene < 1:
@@ -118,10 +119,24 @@ def main() -> int:
 
     output_rows: list[dict[str, Any]] = []
     method_counts: Counter[str] = Counter()
+    skipped_variants: list[dict[str, Any]] = []
     expected_genes = sorted({int(row["gene_index"]) for row in cluster_rows})
     for endpoint_variant_id, persona_id in sorted(grouped):
         by_gene = grouped[(endpoint_variant_id, persona_id)]
-        if sorted(by_gene) != expected_genes:
+        present_genes = sorted(by_gene)
+        if present_genes != expected_genes:
+            missing_genes = [gene_index for gene_index in expected_genes if gene_index not in by_gene]
+            if args.allow_missing_gene_samples:
+                skipped_variants.append(
+                    {
+                        "endpoint_variant_id": endpoint_variant_id,
+                        "persona_id": persona_id,
+                        "missing_gene_indexes": missing_genes,
+                        "present_gene_indexes": present_genes,
+                        "reason": "missing_gene_samples",
+                    }
+                )
+                continue
             raise RuntimeError(f"{endpoint_variant_id},{persona_id}: missing gene indexes")
         variant = variants.get(endpoint_variant_id)
         if variant is None:
@@ -162,6 +177,8 @@ def main() -> int:
             "cluster_details": cluster_details,
             "variant": variant,
         })
+    if not output_rows:
+        raise RuntimeError("no variant/persona rows produced")
 
     jsonl_path = out / "variant-persona-clusters.jsonl"
     with jsonl_path.open("w") as handle:
@@ -182,8 +199,11 @@ def main() -> int:
         "gene_indexes": expected_genes,
         "clusters_per_row": len(expected_genes),
         "input_cluster_rows": len(cluster_rows),
+        "skipped_variant_count": len(skipped_variants),
+        "skipped_variants": skipped_variants,
         "aggregation_method_counts": {key: method_counts[key] for key in sorted(method_counts)},
         "expected_samples_per_gene": args.expected_samples_per_gene,
+        "allow_missing_gene_samples": args.allow_missing_gene_samples,
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n")
     print(json.dumps(summary, sort_keys=True, ensure_ascii=False))

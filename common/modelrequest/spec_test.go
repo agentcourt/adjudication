@@ -15,6 +15,10 @@ func TestParseJSONDerivesOpenRouterProviderFromInventoryRow(t *testing.T) {
 		"provider_name":"DeepInfra",
 		"quantization":"fp4",
 		"raw_endpoint_sha256":"abc123",
+		"equivalence_key":{"openrouter_model_id":"deepseek/deepseek-v4-flash","quantization":"fp4"},
+		"equivalence_class_size":2,
+		"representative_endpoint_variant_id":"variant-1",
+		"equivalent_endpoints":[{"provider_name":"DeepInfra"},{"provider_name":"Novita"}],
 		"request":{"temperature":0,"top_p":1,"max_tokens":1024},
 		"persona":{"id":"d715074-5","path":"personas/persons/d715074-5.txt"}
 	}`)
@@ -55,6 +59,13 @@ func TestParseJSONDerivesOpenRouterProviderFromInventoryRow(t *testing.T) {
 	}
 	if spec.VariantMetadata["raw_endpoint_sha256"] != "abc123" {
 		t.Fatalf("variant metadata did not preserve raw_endpoint_sha256: %#v", spec.VariantMetadata)
+	}
+	equivalenceClassSize, ok := spec.VariantMetadata["equivalence_class_size"].(json.Number)
+	if !ok || equivalenceClassSize.String() != "2" {
+		t.Fatalf("variant metadata did not preserve equivalence_class_size: %#v", spec.VariantMetadata)
+	}
+	if spec.VariantMetadata["representative_endpoint_variant_id"] != "variant-1" {
+		t.Fatalf("variant metadata did not preserve representative_endpoint_variant_id: %#v", spec.VariantMetadata)
 	}
 }
 
@@ -100,6 +111,28 @@ func TestParseJSONAcceptsExplicitProvider(t *testing.T) {
 	}
 	if spec.Headers["X-Test"] != "ok" || spec.Headers[openRouterMetadataHeader] != "enabled" {
 		t.Fatalf("headers = %#v", spec.Headers)
+	}
+}
+
+func TestParseJSONEmptyProviderDisablesOpenRouterDerivation(t *testing.T) {
+	t.Parallel()
+
+	spec, err := ParseJSON([]byte(`{
+		"openrouter_model_id":"deepseek/deepseek-r1",
+		"endpoint_tag":"novita/fp8",
+		"provider_name":"Novita",
+		"quantization":"fp8",
+		"provider":{}
+	}`))
+	if err != nil {
+		t.Fatalf("ParseJSON error = %v", err)
+	}
+	if provider := spec.ProviderBody(); provider != nil {
+		raw, _ := json.Marshal(provider)
+		t.Fatalf("ProviderBody = %s, want nil", raw)
+	}
+	if spec.RuntimeModel() != "openrouter://deepseek/deepseek-r1" {
+		t.Fatalf("RuntimeModel = %q", spec.RuntimeModel())
 	}
 }
 

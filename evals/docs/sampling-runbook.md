@@ -498,12 +498,17 @@ uv run --script tools/sample-tuple-pool.py \
   results/variant-persona-clusters-YYYYMMDDTHHMMSSZ/variant-persona-clusters.jsonl \
   --out results/sample-tuple-pool-YYYYMMDDTHHMMSSZ/pool.jsonl \
   --diagnostics-out results/sample-tuple-pool-YYYYMMDDTHHMMSSZ/diagnostics.jsonl \
+  --equivalence-out results/sample-tuple-pool-YYYYMMDDTHHMMSSZ/equivalence.jsonl \
   --pool-size 20 \
   --seed 0 \
   | tee results/sample-tuple-pool-YYYYMMDDTHHMMSSZ/sample.log
 ```
 
-Sampling is with replacement.  Duplicate rows can appear in the final pool, especially when `pool-size` exceeds the number of well-populated tuples or when the random draw revisits a tuple.  The diagnostics file records the selected tuple, source row, cumulative tuple count, cumulative source-row count, model ID, provider, endpoint tag, quantization, and endpoint identifier for each emitted row.
+The sampler deduplicates equivalent provider endpoints before tuple sampling.  The equivalence key uses model identity, quantization, and modalities; it excludes provider name, endpoint tag, context limits, prompt and completion limits, supported parameters, price, latency, and uptime.  The representative selection rule ranks endpoints by operational results, capacity, and serving metadata, then writes the full provider set to `equivalence.jsonl`.
+
+Sampling is with replacement by default after deduplication.  Duplicate rows can appear in the final pool, especially when `pool-size` exceeds the number of well-populated tuples or when the random draw revisits a tuple.  The diagnostics file records the selected tuple, source row, cumulative tuple count, cumulative source-row count, model ID, provider, endpoint tag, quantization, endpoint identifier, and equivalence class for each emitted row.
+
+Add `--without-replacement` when the pool must contain each row from the sampling frame at most once.  With the default equivalent-endpoint deduplication, the sampling frame is the representative set, so `--pool-size` cannot exceed the number of equivalence classes.  The command fails before writing output when `--pool-size` is larger than the available frame.
 
 Verify the sampled pool.
 
@@ -515,24 +520,29 @@ from pathlib import Path
 source_path = Path("results/variant-persona-clusters-YYYYMMDDTHHMMSSZ/variant-persona-clusters.jsonl")
 pool_path = Path("results/sample-tuple-pool-YYYYMMDDTHHMMSSZ/pool.jsonl")
 diagnostics_path = Path("results/sample-tuple-pool-YYYYMMDDTHHMMSSZ/diagnostics.jsonl")
+equivalence_path = Path("results/sample-tuple-pool-YYYYMMDDTHHMMSSZ/equivalence.jsonl")
 
 source_lines = [line for line in source_path.read_text().splitlines() if line.strip()]
-source_set = set(source_lines)
+source_rows = [json.loads(line) for line in source_lines]
+source_ids = {row["endpoint_variant_id"] for row in source_rows}
 pool_lines = [line for line in pool_path.read_text().splitlines() if line.strip()]
 pool_rows = [json.loads(line) for line in pool_lines]
 diagnostics = [json.loads(line) for line in diagnostics_path.read_text().splitlines() if line.strip()]
+equivalence = [json.loads(line) for line in equivalence_path.read_text().splitlines() if line.strip()]
 
-source_tuples = {tuple(json.loads(line)["clusters"]) for line in source_lines}
+source_tuples = {tuple(row["clusters"]) for row in source_rows}
 pool_tuples = {tuple(row["clusters"]) for row in pool_rows}
 
 print({
     "output_rows": len(pool_rows),
     "diagnostic_rows": len(diagnostics),
+    "equivalence_rows": len(equivalence),
     "unique_output_rows": len(set(pool_lines)),
     "unique_output_tuples": len(pool_tuples),
-    "all_rows_from_input": all(line in source_set for line in pool_lines),
+    "all_representatives_from_input": all(row["endpoint_variant_id"] in source_ids for row in pool_rows),
     "all_tuples_from_input": pool_tuples <= source_tuples,
     "all_clusters_int": all(all(isinstance(value, int) for value in row["clusters"]) for row in pool_rows),
+    "all_equivalence_records_have_representative": all("representative_endpoint_variant_id" in row for row in equivalence),
 })
 PY
 ```

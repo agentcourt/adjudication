@@ -152,6 +152,17 @@ def stage_done(path: Path, resume: bool) -> bool:
     return resume and path.exists()
 
 
+def completed_gene_summary(summary_path: Path, args: argparse.Namespace, expected_records: int) -> bool:
+    if not args.resume or not summary_path.exists():
+        return False
+    summary = load_json(summary_path)
+    if summary.get("records_written") != expected_records:
+        return False
+    if not summary.get("completion_error_count") and not summary.get("embedding_error_count"):
+        return True
+    return not args.strict_gene_completions and bool(summary.get("partial_records_allowed"))
+
+
 def run_inventory(args: argparse.Namespace, run_dir: Path, commands_path: Path) -> Path:
     out_dir = run_dir / "inventory"
     summary = out_dir / "summary.json"
@@ -414,12 +425,15 @@ def selected_gene_indexes(args: argparse.Namespace) -> list[int]:
 
 def run_genes(args: argparse.Namespace, run_dir: Path, filtered_dir: Path, commands_path: Path) -> dict[int, Path]:
     out: dict[int, Path] = {}
+    survivor_count = line_count(filtered_dir / "endpoint_variants.jsonl")
+    expected_records = survivor_count * args.samples_per_gene
     for gene_index in selected_gene_indexes(args):
         gene_dir = run_dir / "genes" / f"gene-{gene_index}"
         inference_dir = gene_dir / "inference"
         summary_path = inference_dir / "summary.json"
+        records_path = inference_dir / "records.jsonl"
         out[gene_index] = inference_dir
-        if stage_done(summary_path, args.resume):
+        if completed_gene_summary(summary_path, args, expected_records):
             event("stage_skipped", stage="genes", gene_index=gene_index, reason="resume", output=display_path(inference_dir))
             continue
         cmd = [
@@ -449,7 +463,13 @@ def run_genes(args: argparse.Namespace, run_dir: Path, filtered_dir: Path, comma
             str(args.top_p),
             "--max-tokens",
             str(args.max_tokens),
+            "--completion-attempts",
+            str(args.completion_attempts),
+            "--retry-sleep",
+            str(args.retry_sleep),
         ]
+        if args.resume and records_path.exists():
+            cmd.append("--resume")
         run_command(cmd, cwd=ROOT, commands_path=commands_path, stage=f"genes:{gene_index}", dry_run=args.dry_run)
     return out
 
@@ -459,13 +479,27 @@ def validate_gene_summaries(args: argparse.Namespace, gene_dirs: dict[int, Path]
     embedding_counts: list[int] = []
     for gene_index, inference_dir in sorted(gene_dirs.items()):
         summary = load_json(inference_dir / "summary.json")
-        if summary.get("completion_error_count") or summary.get("embedding_error_count"):
+        completion_errors = int(summary.get("completion_error_count") or 0)
+        embedding_errors = int(summary.get("embedding_error_count") or 0)
+        if args.strict_gene_completions and (completion_errors or embedding_errors):
             raise RuntimeError(f"gene {gene_index}: completion or embedding errors present")
         if summary.get("records_written") != expected:
             raise RuntimeError(f"gene {gene_index}: expected {expected} records, found {summary.get('records_written')}")
-        if summary.get("embedding_count") != expected:
+        embedding_count = int(summary.get("embedding_count") or 0)
+        if args.strict_gene_completions and embedding_count != expected:
             raise RuntimeError(f"gene {gene_index}: expected {expected} embeddings, found {summary.get('embedding_count')}")
-        embedding_counts.append(int(summary["embedding_count"]))
+        if embedding_count < 1:
+            raise RuntimeError(f"gene {gene_index}: no usable embeddings")
+        if completion_errors or embedding_errors:
+            event(
+                "gene_errors_allowed",
+                gene_index=gene_index,
+                completion_error_count=completion_errors,
+                embedding_error_count=embedding_errors,
+                embedding_count=embedding_count,
+                expected_records=expected,
+            )
+        embedding_counts.append(embedding_count)
     if not embedding_counts:
         raise RuntimeError("no gene runs selected")
     min_embeddings = min(embedding_counts)
@@ -520,12 +554,6 @@ def run_clustering(
         "tools/run_gene_pca_clustering.py",
         "--out",
         display_path(out_dir),
-        "--expected-rows-per-gene",
-        str(expected_rows),
-        "--expected-variants-per-gene",
-        str(survivor_count),
-        "--expected-samples-per-variant",
-        str(args.samples_per_gene),
         "--pca-dimensions",
         str(pca_dimensions),
         "--min-k",
@@ -533,6 +561,17 @@ def run_clustering(
         "--max-k",
         str(args.max_k),
     ]
+    if args.strict_gene_completions:
+        cmd.extend(
+            [
+                "--expected-rows-per-gene",
+                str(expected_rows),
+                "--expected-variants-per-gene",
+                str(survivor_count),
+                "--expected-samples-per-variant",
+                str(args.samples_per_gene),
+            ]
+        )
     for _, pca_dir in sorted(pca_dirs.items()):
         cmd.extend(["--pca-records", display_path(pca_dir / "pca-records.jsonl")])
     run_command(cmd, cwd=ROOT, commands_path=commands_path, stage="clusters", dry_run=args.dry_run)
@@ -558,9 +597,11 @@ def run_aggregate(args: argparse.Namespace, run_dir: Path, filtered_dir: Path, c
         display_path(filtered_dir / "endpoint_variants.jsonl"),
         "--out",
         display_path(out_dir),
-        "--expected-samples-per-gene",
-        str(args.samples_per_gene),
     ]
+    if args.strict_gene_completions:
+        cmd.extend(["--expected-samples-per-gene", str(args.samples_per_gene)])
+    else:
+        cmd.append("--allow-missing-gene-samples")
     run_command(cmd, cwd=ROOT, commands_path=commands_path, stage="aggregate", dry_run=args.dry_run)
     return out_dir
 
@@ -581,11 +622,15 @@ def run_pool(args: argparse.Namespace, run_dir: Path, aggregate_dir: Path, comma
         display_path(pool_path),
         "--diagnostics-out",
         display_path(out_dir / "diagnostics.jsonl"),
+        "--equivalence-out",
+        display_path(out_dir / "equivalence.jsonl"),
         "--pool-size",
         str(args.pool_size),
         "--seed",
         str(args.pool_seed),
     ]
+    if args.no_dedupe_equivalent_endpoints:
+        cmd.append("--no-dedupe-equivalent-endpoints")
     run_command(cmd, cwd=ROOT, commands_path=commands_path, stage="pool", dry_run=args.dry_run, stdout_path=out_dir / "sample.log")
     return out_dir
 
@@ -611,12 +656,15 @@ def collect_summary(run_dir: Path, pca_dimensions: int | None = None) -> dict[st
             summary[key] = load_json(path)
     pool_path = run_dir / "pool" / "pool.jsonl"
     diagnostics_path = run_dir / "pool" / "diagnostics.jsonl"
+    equivalence_path = run_dir / "pool" / "equivalence.jsonl"
     if pool_path.exists():
         summary["pool"] = {
             "pool_path": display_path(pool_path),
             "diagnostics_path": display_path(diagnostics_path),
+            "equivalence_path": display_path(equivalence_path),
             "pool_rows": line_count(pool_path),
             "diagnostic_rows": line_count(diagnostics_path),
+            "equivalence_rows": line_count(equivalence_path),
         }
     gene_summaries = []
     for path in sorted((run_dir / "genes").glob("gene-*/inference/summary.json")):
@@ -652,12 +700,16 @@ def build_manifest(args: argparse.Namespace, run_id: str, run_dir: Path) -> dict
             "gene_index": args.gene_index,
             "persona": args.persona,
             "samples_per_gene": args.samples_per_gene,
+            "completion_attempts": args.completion_attempts,
+            "retry_sleep": args.retry_sleep,
+            "strict_gene_completions": args.strict_gene_completions,
             "pca_dimensions": args.pca_dimensions,
             "strict_pca_dimensions": args.strict_pca_dimensions,
             "min_k": args.min_k,
             "max_k": args.max_k,
             "pool_size": args.pool_size,
             "pool_seed": args.pool_seed,
+            "no_dedupe_equivalent_endpoints": args.no_dedupe_equivalent_endpoints,
             "timeout": args.timeout,
             "eval_no_progress_timeout": args.eval_no_progress_timeout,
             "eval_variant_timeout": args.eval_variant_timeout,
@@ -688,12 +740,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--top-p", type=float, default=1.0)
     parser.add_argument("--max-tokens", type=int, default=512)
+    parser.add_argument("--completion-attempts", type=int, default=3)
+    parser.add_argument("--retry-sleep", type=float, default=2.0)
+    parser.add_argument("--strict-gene-completions", action="store_true")
     parser.add_argument("--pca-dimensions", type=int, default=3)
     parser.add_argument("--strict-pca-dimensions", action="store_true")
     parser.add_argument("--min-k", type=int, default=2)
     parser.add_argument("--max-k", type=int, default=10)
     parser.add_argument("--pool-size", type=int, default=20)
     parser.add_argument("--pool-seed", type=int, default=0)
+    parser.add_argument("--no-dedupe-equivalent-endpoints", action="store_true")
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--eval-no-progress-timeout", type=int)
     parser.add_argument("--eval-variant-timeout", type=int)
@@ -714,6 +770,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         raise SystemExit("--gene-index values cannot be negative")
     if args.samples_per_gene < 1:
         raise SystemExit("--samples-per-gene must be positive")
+    if args.completion_attempts < 1:
+        raise SystemExit("--completion-attempts must be positive")
+    if args.retry_sleep < 0:
+        raise SystemExit("--retry-sleep cannot be negative")
     if args.pca_dimensions < 1:
         raise SystemExit("--pca-dimensions must be positive")
     if args.min_k < 2:
