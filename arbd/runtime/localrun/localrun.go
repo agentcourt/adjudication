@@ -34,7 +34,7 @@ const (
 	defaultOpenClawAuth           = "auto"
 	defaultOpenClawStartDelay     = 15
 	defaultPiImage                = "agentcourt-pi-sandbox"
-	defaultPiMCPAdapter           = "npm:pi-mcp-adapter"
+	defaultPiMCPAdapter           = "/opt/pi-extensions/pi-mcp-adapter/node_modules/pi-mcp-adapter"
 	defaultPiMCPServer            = "aard"
 	defaultCaseAPIStartupWait     = 10 * time.Minute
 	defaultMCPStartupWait         = 30 * time.Second
