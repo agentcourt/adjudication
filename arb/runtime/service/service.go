@@ -1069,18 +1069,27 @@ func (s *Server) handleEvidence(w http.ResponseWriter, r *http.Request, caseID s
 		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_case", "unknown case_id")})
 		return
 	}
-	serveEvidenceFile(w, r, caseID, rec.OutputDir, evidenceID)
+	serveEvidenceFile(w, r, caseID, rec.OutputDir, evidenceID, rec.Status == "starting" || rec.Status == "running")
 }
 
-func serveEvidenceFile(w http.ResponseWriter, r *http.Request, caseID string, outDir string, evidenceID string) {
-	raw, err := os.ReadFile(filepath.Join(outDir, "evidence-manifest.json"))
+func serveEvidenceFile(w http.ResponseWriter, r *http.Request, caseID string, outDir string, evidenceID string, pending bool) {
+	manifestPath := filepath.Join(outDir, "evidence-manifest.json")
+	raw, err := os.ReadFile(manifestPath)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("manifest_missing", err.Error())})
+		if pending && os.IsNotExist(err) {
+			writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "case_id": caseID, "error": apiError("evidence_manifest_pending", "evidence manifest is not available yet; try again after the case accepts evidence or writes its output packet")})
+			return
+		}
+		if os.IsNotExist(err) {
+			writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("manifest_missing", "evidence manifest is missing from the output packet: "+manifestPath)})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "case_id": caseID, "error": apiError("manifest_unreadable", "read evidence manifest: "+err.Error())})
 		return
 	}
 	manifest, err := parseEvidenceManifest(raw)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "case_id": caseID, "error": apiError("bad_manifest", err.Error())})
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "case_id": caseID, "error": apiError("bad_manifest", "parse evidence manifest: "+err.Error())})
 		return
 	}
 	for _, item := range manifest {
@@ -1094,7 +1103,7 @@ func serveEvidenceFile(w http.ResponseWriter, r *http.Request, caseID string, ou
 			return
 		}
 	}
-	writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "evidence_id": evidenceID, "error": apiError("unknown_evidence", "unknown evidence_id")})
+	writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "evidence_id": evidenceID, "error": apiError("unknown_evidence", "evidence_id is not listed in the evidence manifest")})
 }
 
 func parseEvidenceManifest(raw []byte) ([]map[string]any, error) {

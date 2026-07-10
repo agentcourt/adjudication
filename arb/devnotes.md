@@ -1129,3 +1129,11 @@ The implementation adds a strict persona override to the local replay config loa
 Replay cleanup now runs through a deferred secret cleanup path after the replay run state exists.  This covers successful replay, failed model calls, failed Pi process exit, and Pi startup errors after `writePiConfig` has created `.mcp.json` or Pi auth files.  The focused startup-failure test forces the container command to fail and verifies that generated replay secret files are absent afterward.
 
 Focused tests cover persona override loading, missing and empty persona failures, snapshot discovery by member id, ambiguous snapshot rejection, and fallback to reconstructed replay when no snapshot directory exists.  The first real test should use one existing `ex*` output with `council-turns/`, a model config derived from that run's `council.json`, and one persona from `evals/personas/experiments`.
+
+## 2026-07-09
+
+### Live Clerk evidence manifests
+
+Manual service testing found that `/clerk/v1/cases/{case_id}/evidence/{evidence_id}` returned `manifest_missing` during active long Clerk runs after lawyers had submitted evidence.  Submitted evidence bytes entered `evidence-store/` and live run state immediately, but `evidence-manifest.json` was written only during final packet rendering.  The service route uses the manifest to map an evidence id to stored bytes, so it could not fetch live evidence before terminal rendering.
+
+The proceeding now writes `evidence-manifest.json` when the evidence registry initializes and after each accepted submitted-evidence item.  The manifest writer uses a temporary file in the output directory and renames it into place, so the service route does not read partial JSON during a concurrent write.  The Clerk and direct service evidence routes now report an active missing manifest as HTTP `409` with error code `evidence_manifest_pending`; terminal packets without a manifest still return HTTP `404` with error code `manifest_missing`.

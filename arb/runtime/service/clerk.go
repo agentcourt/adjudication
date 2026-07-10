@@ -601,7 +601,7 @@ func (s *Server) handleClerkEvidence(w http.ResponseWriter, r *http.Request, cas
 		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_case", "unknown case_id")})
 		return
 	}
-	serveEvidenceFile(w, r, caseID, clerkEffectiveOutputDir(rec), evidenceID)
+	serveEvidenceFile(w, r, caseID, clerkEffectiveOutputDir(rec), evidenceID, isActiveClerk(&rec))
 }
 
 func (s *Server) handleClerkAttestationEvents(w http.ResponseWriter, r *http.Request, caseID string) {

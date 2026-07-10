@@ -54,7 +54,7 @@ If a child has no final artifact yet, the result endpoint returns `ok: true`, th
 
 `GET /api/v1/cases/{case_id}/artifacts` lists files under the case output directory.  `GET /api/v1/cases/{case_id}/artifacts/{name}` serves one artifact file if the normalized path stays inside the output directory.  Artifact path errors return JSON; successful file reads use normal file serving.
 
-`GET /api/v1/cases/{case_id}/evidence/{evidence_id}` serves a submitted evidence file from the final evidence manifest.  Unknown cases, missing manifests, bad manifests, missing paths, and unknown evidence ids return JSON errors.  Successful reads serve the stored file bytes.
+`GET /api/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted evidence by evidence id from `evidence-manifest.json` and `evidence-store/`.  Local case processes write the manifest at evidence-registry initialization and after each accepted submitted-evidence item, so active cases can serve evidence after the corresponding manifest update.  Unknown cases, pending manifests, missing terminal manifests, bad manifests, missing paths, and unknown evidence ids return JSON errors.
 
 ### Clerk API
 
@@ -68,7 +68,7 @@ Attested Clerk execution requires verification.  The service rejects `verify: fa
 
 `GET /clerk/v1/cases` lists Clerk cases.  `GET /clerk/v1/cases/{case_id}` returns one Clerk record, including the execution object for attested cases.  `GET /clerk/v1/cases/{case_id}/result` returns the final or pending run result, reading `run.json` from `aar-output/` for verified attested cases.  `POST /clerk/v1/cases/{case_id}/kill` stops an attached active child process and records the resulting service status.
 
-`GET /clerk/v1/cases/{case_id}/artifacts` lists primary run artifacts.  For attested records, the list also includes downloaded top-level attestation files when present, including `run.env`, `progress.log`, `launcher.log`, `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, `attestation.txt`, `verification.log`, `case.tar.gz`, `case-packet.json`, `aar-output.tar.gz`, and `aar-partial.tar.gz`.  `GET /clerk/v1/cases/{case_id}/artifacts/{name}` serves one exact listed artifact name.  `GET /clerk/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted submitted evidence by evidence id from the local output packet or the extracted attested output packet.
+`GET /clerk/v1/cases/{case_id}/artifacts` lists primary run artifacts.  For attested records, the list also includes downloaded top-level attestation files when present, including `run.env`, `progress.log`, `launcher.log`, `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, `attestation.txt`, `verification.log`, `case.tar.gz`, `case-packet.json`, `aar-output.tar.gz`, and `aar-partial.tar.gz`.  `GET /clerk/v1/cases/{case_id}/artifacts/{name}` serves one exact listed artifact name.  `GET /clerk/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted submitted evidence by evidence id from the local output directory or the extracted attested output packet; active local records without a manifest return HTTP `409` with error code `evidence_manifest_pending`.
 
 The service role proxy routes are for direct `/api/v1/cases` records.  A Clerk-started run has its own case process and MCP server inside the child `aar run` process.
 

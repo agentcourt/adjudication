@@ -57,7 +57,7 @@ func writeEvidence(cfg Config, result Result, rc *runContext) error {
 	if err := writeJSONFile(filepath.Join(cfg.OutputDir, "run.json"), result); err != nil {
 		return err
 	}
-	if err := writeJSONFile(filepath.Join(cfg.OutputDir, "evidence-manifest.json"), rc.evidenceManifest()); err != nil {
+	if err := rc.writeEvidenceManifest(); err != nil {
 		return err
 	}
 	if err := writeJSONFile(filepath.Join(cfg.OutputDir, "state.json"), result.FinalState); err != nil {

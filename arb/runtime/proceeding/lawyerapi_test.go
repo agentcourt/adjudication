@@ -6,9 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"adjudication/arb/runtime/lean"
 )
 
 func TestLawyerDoRequiresActiveOpportunityID(t *testing.T) {
@@ -171,6 +174,66 @@ func TestLawyerSendWorkNotesWritesOffRecordLog(t *testing.T) {
 	}
 	if note.Role != "plaintiff" || note.Phase != "openings" || note.OpportunityID != "openings:plaintiff" || note.CallID != "notes-1" {
 		t.Fatalf("unexpected note metadata: %#v", note)
+	}
+}
+
+func TestLawyerSubmitEvidenceWritesLiveManifest(t *testing.T) {
+	api, turn := testLawyerAPIWithTurn()
+	dir := t.TempDir()
+	enginePath := filepath.Join(dir, "engine.sh")
+	engineScript := "#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '{\"ok\":true,\"state\":{\"case\":{\"status\":\"open\",\"phase\":\"arguments\",\"submitted_evidence\":[]}}}'\n"
+	if err := os.WriteFile(enginePath, []byte(engineScript), 0o755); err != nil {
+		t.Fatalf("write fake engine: %v", err)
+	}
+	api.rc.cfg.OutputDir = dir
+	api.rc.cfg.Engine = lean.Engine{Command: []string{enginePath}}
+	api.rc.evidenceStoreDir = filepath.Join(dir, "evidence-store")
+	turn.opportunity = Opportunity{
+		ID:           "arguments:plaintiff",
+		Role:         "plaintiff",
+		Phase:        "arguments",
+		AllowedTools: []string{"submit_evidence", "submit_argument"},
+	}
+
+	status, got := callLawyerAPIDo(t, api, map[string]any{
+		"case_id":        "arb-1",
+		"role_id":        "plaintiff",
+		"opportunity_id": "arguments:plaintiff",
+		"tool":           "submit_evidence",
+		"arguments": map[string]any{
+			"title":                  "Source",
+			"mime_type":              "text/plain",
+			"source_url":             "https://example.test/source",
+			"relevance":              "Shows the disputed fact.",
+			"content":                "source evidence\n",
+			"retrieval_timestamp":    "2026-07-09T12:00:00Z",
+			"preferred_filename_ext": "txt",
+		},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
+	}
+	if got["ok"] != true {
+		t.Fatalf("ok = %#v, body = %#v", got["ok"], got)
+	}
+	result := got["result"].(map[string]any)
+	evidenceID := mapString(result["evidence_id"])
+	if evidenceID == "" {
+		t.Fatalf("missing evidence_id in %#v", result)
+	}
+	rawManifest, err := os.ReadFile(filepath.Join(dir, "evidence-manifest.json"))
+	if err != nil {
+		t.Fatalf("read evidence manifest: %v", err)
+	}
+	var manifest struct {
+		EvidenceCount int            `json:"evidence_count"`
+		Evidence      []EvidenceMeta `json:"evidence"`
+	}
+	if err := json.Unmarshal(rawManifest, &manifest); err != nil {
+		t.Fatalf("decode evidence manifest: %v", err)
+	}
+	if manifest.EvidenceCount != 1 || len(manifest.Evidence) != 1 || manifest.Evidence[0].EvidenceID != evidenceID {
+		t.Fatalf("manifest evidence = %#v, want %q", manifest, evidenceID)
 	}
 }
 

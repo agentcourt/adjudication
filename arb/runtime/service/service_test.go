@@ -781,6 +781,36 @@ func TestClerkEvidenceRouteReadsCurrentManifestShape(t *testing.T) {
 	}
 }
 
+func TestClerkEvidenceRouteReportsPendingManifest(t *testing.T) {
+	root := t.TempDir()
+	aarBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
+	outDir := filepath.Join(root, "clerk-running")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatalf("mkdir out dir: %v", err)
+	}
+	rec := ClerkRecord{
+		CaseID:    "clerk-running",
+		RunID:     "run-clerk-running",
+		Status:    "running",
+		OutDir:    outDir,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	writeClerkRecord(t, outDir, rec)
+	s := newClerkTestServer(t, root, aarBin)
+
+	status, got := serviceGet(t, s, "/clerk/v1/cases/clerk-running/evidence/EV1")
+	if status != http.StatusConflict {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusConflict, got)
+	}
+	errObj, ok := got["error"].(map[string]any)
+	if !ok || errObj["code"] != "evidence_manifest_pending" {
+		t.Fatalf("error = %#v", got["error"])
+	}
+	if !strings.Contains(mapString(errObj["message"]), "not available yet") {
+		t.Fatalf("error message = %#v", errObj["message"])
+	}
+}
+
 func TestClerkKillRejectsDiskOnlyActiveRecord(t *testing.T) {
 	root := t.TempDir()
 	aarBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
