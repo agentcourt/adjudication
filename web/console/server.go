@@ -1073,7 +1073,8 @@ func createTemplate(systemID string, scopeID string) string {
   "mode": "run",
   "case_id": "adc-web-YYYYMMDDHHMMSS",
   "complaint_path": "examples/ex1/complaint.md",
-  "out_dir": "adc-web-YYYYMMDDHHMMSS"
+  "openclaw_auth": "codex",
+  "juror_personas": "../common/data/personas/pool.jsonl"
 }`
 	case "arb":
 		if scopeID == "direct" {

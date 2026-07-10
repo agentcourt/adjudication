@@ -72,6 +72,20 @@ func TestDirectCreateTemplatesOmitOutputDir(t *testing.T) {
 	}
 }
 
+func TestADCCreateTemplateUsesServiceDefaults(t *testing.T) {
+	body := createTemplate("adc", "clerk")
+	for _, unwanted := range []string{`"out_dir"`} {
+		if strings.Contains(body, unwanted) {
+			t.Fatalf("ADC template includes %s: %s", unwanted, body)
+		}
+	}
+	for _, want := range []string{`"openclaw_auth": "codex"`, `"juror_personas": "../common/data/personas/pool.jsonl"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("ADC template missing %s: %s", want, body)
+		}
+	}
+}
+
 func TestCreateCasePostsRawJSONAndRedirects(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/clerk/v1/cases" {
