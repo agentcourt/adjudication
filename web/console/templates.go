@@ -18,7 +18,7 @@ const pageTemplates = `
     h1 { font-size:18px; margin:0 0 12px; }
     h2 { font-size:15px; margin:18px 0 8px; }
     table { border-collapse:collapse; width:100%; background:var(--panel); margin:8px 0 14px; }
-    th, td { border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
+    th, td { border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; overflow-wrap:anywhere; }
     th { background:#ededeb; font-weight:700; }
     a { color:#111; text-decoration:underline; text-underline-offset:2px; }
     form { margin:8px 0 14px; }
