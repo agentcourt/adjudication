@@ -596,6 +596,7 @@ func evidenceEntriesFrom(v any) []EvidenceEntry {
 
 func eventIssuesFromNDJSON(raw []byte) []EventIssue {
 	var out []EventIssue
+	seen := map[string]bool{}
 	for _, line := range bytes.Split(raw, []byte("\n")) {
 		line = bytes.TrimSpace(line)
 		if len(line) == 0 {
@@ -607,6 +608,11 @@ func eventIssuesFromNDJSON(raw []byte) []EventIssue {
 		}
 		issue, ok := eventIssueFrom(event)
 		if ok {
+			key := issue.Member + "\x00" + issue.Message
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
 			out = append(out, issue)
 		}
 	}

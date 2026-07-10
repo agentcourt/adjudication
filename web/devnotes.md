@@ -18,7 +18,7 @@ The case detail page now summarizes structured record values such as AARD `summa
 
 The evidence page now reads `evidence-manifest.json` through the service artifact API and renders evidence IDs as fetch links.  The page still accepts a manual evidence ID because active cases can return a pending or missing manifest.  The ARB clerk create template now uses `../arb/pool.jsonl`, matching the service's common-root-relative pool lookup for real ARB clerk runs.
 
-The case detail page now reads `events.ndjson` through the service artifact API when that artifact exists and renders a failure-event table.  The table reports timestamp, phase, event type, member, process, reason, message, and the log path carried by the event.  It does not read the log path directly; the service artifact API remains the only source of case data.
+The case detail page now reads `events.ndjson` through the service artifact API when that artifact exists and renders a failure-event table.  The table reports timestamp, phase, event type, member, process, reason, message, and the log path carried by the event.  Duplicate removal events are collapsed when they repeat the same member and message.  The web console does not read the log path directly; the service artifact API remains the only source of case data.
 
 ### Verification
 

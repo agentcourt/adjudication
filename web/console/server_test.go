@@ -213,6 +213,7 @@ func TestCaseDetailSummarizesFailureEvents(t *testing.T) {
 		case "/clerk/v1/cases/case-failure/artifacts/events.ndjson":
 			w.Header().Set("Content-Type", "application/x-ndjson")
 			_, _ = w.Write([]byte(`{"timestamp":"2026-07-10T15:27:32Z","phase":"deliberation","type":"opportunity_failed","payload":{"member_id":"C2","process_name":"pi-C2","reason":"agent_exited","message":"Council member C2 failed: provider rejected function.arguments","agent_error_log":"/tmp/run/logs/pi-C2.stdout"}}` + "\n"))
+			_, _ = w.Write([]byte(`{"timestamp":"2026-07-10T15:27:32Z","phase":"deliberation","type":"council_member_removed","payload":{"member_id":"C2","cause":"Council member C2 failed: provider rejected function.arguments","failure_reason":"agent_exited"}}` + "\n"))
 		default:
 			t.Fatalf("path = %s", r.URL.Path)
 		}
@@ -236,6 +237,9 @@ func TestCaseDetailSummarizesFailureEvents(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q: %s", want, body)
 		}
+	}
+	if count := strings.Count(body, "provider rejected function.arguments"); count != 1 {
+		t.Fatalf("failure message count = %d body=%s", count, body)
 	}
 }
 
