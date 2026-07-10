@@ -190,6 +190,7 @@ func TestCaseDetailCompactsStructuredFieldsAndRefreshesRunningCase(t *testing.T)
 	body := rec.Body.String()
 	for _, want := range []string{
 		`<meta http-equiv="refresh" content="10">`,
+		`action="/system/arb/clerk/cases/case-running/manage"`,
 		"object (2 keys)",
 	} {
 		if !strings.Contains(body, want) {
@@ -240,6 +241,9 @@ func TestCaseDetailSummarizesFailureEvents(t *testing.T) {
 	}
 	if count := strings.Count(body, "provider rejected function.arguments"); count != 1 {
 		t.Fatalf("failure message count = %d body=%s", count, body)
+	}
+	if strings.Contains(body, `action="/system/arb/clerk/cases/case-failure/manage"`) {
+		t.Fatalf("completed case includes manage action: %s", body)
 	}
 }
 

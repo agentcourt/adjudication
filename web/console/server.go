@@ -46,6 +46,7 @@ type ViewData struct {
 	Notice         string
 	CreateTemplate string
 	AutoRefresh    bool
+	CanManage      bool
 }
 
 type Artifact struct {
@@ -282,6 +283,7 @@ func (a *App) handleCaseDetail(w http.ResponseWriter, r *http.Request, sys Syste
 	data.Artifacts = artifactsFrom(artifacts.JSON["artifacts"])
 	data.EventIssues, data.EventNotice = a.loadEventIssues(r.Context(), sys, scope, caseID, data.Artifacts)
 	data.AutoRefresh = activeCase(data.Record, data.Result)
+	data.CanManage = data.AutoRefresh
 	data.Response = &record
 	if recordErr != nil {
 		data.Error = recordErr.Error()
