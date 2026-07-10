@@ -692,6 +692,14 @@ func eventMessage(payload map[string]any) string {
 		}
 		return evidenceID
 	}
+	if nested := asMap(payload["payload"]); nested != nil {
+		if vote := fieldText(nested, "vote"); vote != "" {
+			return "vote=" + vote
+		}
+		if answer := fieldText(nested, "answer"); answer != "" {
+			return "answer=" + answer
+		}
+	}
 	if actionType := fieldText(payload, "action_type"); actionType != "" {
 		if opportunityID := fieldText(payload, "opportunity_id"); opportunityID != "" {
 			return actionType + " " + opportunityID
