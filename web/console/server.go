@@ -687,11 +687,31 @@ func adcActionEventFrom(event map[string]any) (CaseEvent, bool) {
 	}
 	return CaseEvent{
 		Timestamp: fieldText(event, "timestamp"),
-		Phase:     fieldText(event, "phase"),
+		Phase:     firstNonEmpty(fieldText(event, "phase"), adcActionPhase(event)),
 		Type:      action,
 		Actor:     fieldText(event, "role"),
 		Message:   limitText(adcActionMessage(event), 240),
 	}, true
+}
+
+func adcActionPhase(event map[string]any) string {
+	response := asMap(event["response"])
+	if response == nil {
+		return ""
+	}
+	if caseData := asMap(response["case"]); caseData != nil {
+		if phase := fieldText(caseData, "phase"); phase != "" {
+			return phase
+		}
+	}
+	if state := asMap(response["state"]); state != nil {
+		if caseData := asMap(state["case"]); caseData != nil {
+			if phase := fieldText(caseData, "phase"); phase != "" {
+				return phase
+			}
+		}
+	}
+	return ""
 }
 
 func adcActionMessage(event map[string]any) string {
