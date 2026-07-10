@@ -666,7 +666,7 @@ func recentEventsFromNDJSON(raw []byte, max int) []CaseEvent {
 func caseEventFrom(event map[string]any) (CaseEvent, bool) {
 	eventType := fieldText(event, "type")
 	if eventType == "" {
-		return CaseEvent{}, false
+		return adcActionEventFrom(event)
 	}
 	payload := asMap(event["payload"])
 	actor := firstNonEmpty(fieldText(payload, "member_id"), fieldText(payload, "role"), fieldText(event, "role"))
@@ -678,6 +678,55 @@ func caseEventFrom(event map[string]any) (CaseEvent, bool) {
 		Actor:     actor,
 		Message:   limitText(message, 240),
 	}, true
+}
+
+func adcActionEventFrom(event map[string]any) (CaseEvent, bool) {
+	action := fieldText(event, "action")
+	if action == "" {
+		return CaseEvent{}, false
+	}
+	return CaseEvent{
+		Timestamp: fieldText(event, "timestamp"),
+		Phase:     fieldText(event, "phase"),
+		Type:      action,
+		Actor:     fieldText(event, "role"),
+		Message:   limitText(adcActionMessage(event), 240),
+	}, true
+}
+
+func adcActionMessage(event map[string]any) string {
+	payload := asMap(event["payload"])
+	if payload != nil {
+		if reason := fieldText(payload, "reason"); reason != "" {
+			return reason
+		}
+		if fileID := fieldText(payload, "file_id"); fileID != "" {
+			return "file_id=" + fileID
+		}
+		if tool := fieldText(payload, "tool_name"); tool != "" {
+			return "tool=" + tool
+		}
+		if kind := fieldText(payload, "kind"); kind != "" {
+			return "kind=" + kind
+		}
+	}
+	response := asMap(event["response"])
+	if response != nil {
+		if result := fieldText(response, "result_kind"); result != "" {
+			return result
+		}
+		if errText := fieldText(response, "error"); errText != "" {
+			return errText
+		}
+	}
+	var parts []string
+	if turn := fieldText(event, "turn"); turn != "" {
+		parts = append(parts, "turn "+turn)
+	}
+	if step := fieldText(event, "step"); step != "" {
+		parts = append(parts, "step "+step)
+	}
+	return strings.Join(parts, " ")
 }
 
 func eventMessage(payload map[string]any) string {

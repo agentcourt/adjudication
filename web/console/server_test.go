@@ -308,6 +308,49 @@ func TestCaseDetailSummarizesFailureEvents(t *testing.T) {
 	}
 }
 
+func TestCaseDetailSummarizesADCActionEvents(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/clerk/v1/cases/adc-events":
+			writeTestJSON(w, map[string]any{"ok": true, "case": map[string]any{"case_id": "adc-events", "status": "running"}})
+		case "/clerk/v1/cases/adc-events/result":
+			writeTestJSON(w, map[string]any{"ok": true, "case_id": "adc-events", "status": "pending"})
+		case "/clerk/v1/cases/adc-events/artifacts":
+			writeTestJSON(w, map[string]any{"ok": true, "case_id": "adc-events", "artifacts": []map[string]any{{"name": "events.ndjson", "size_bytes": 512}}})
+		case "/clerk/v1/cases/adc-events/artifacts/events.ndjson":
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			_, _ = w.Write([]byte(`{"action":"list_case_files","payload":{},"response":{"ok":true},"role":"defendant","step":1,"timestamp":"2026-07-10 15:30:51.833","turn":2}` + "\n"))
+			_, _ = w.Write([]byte(`{"action":"read_case_text_file","payload":{"file_id":"file-0001"},"response":{"ok":true},"role":"defendant","step":2,"timestamp":"2026-07-10 15:30:54.539","turn":2}` + "\n"))
+			_, _ = w.Write([]byte(`{"action":"pass_turn","payload":{"kind":"pass","reason":"No supported Rule 12 ground fits."},"response":{"ok":true,"result_kind":"pass_recorded"},"role":"defendant","step":3,"timestamp":"2026-07-10 15:31:30.121","turn":2}` + "\n"))
+		default:
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+	}))
+	defer api.Close()
+	app := testApp(t, api.URL, "")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/system/arb/clerk/cases/adc-events", nil)
+	app.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"Recent Events",
+		"pass_turn",
+		"No supported Rule 12 ground fits.",
+		"read_case_text_file",
+		"file_id=file-0001",
+		"list_case_files",
+		"turn 2 step 1",
+		"defendant",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q: %s", want, body)
+		}
+	}
+}
+
 func TestEvidencePageRendersNonJSONEvidence(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
