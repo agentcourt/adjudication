@@ -1,5 +1,33 @@
 # Development Notes
 
+## 2026-07-06
+
+### ex13 summary draft
+
+Reference: `out/local-direct-three-per-ex-only-20260629/ex13/summary.md`, `agent-instructions/draft-summary.md`, `out/local-direct-three-per-ex-only-20260629/ex13/run-01`, `out/local-direct-three-per-ex-only-20260629/ex13/run-02`, `out/local-direct-three-per-ex-only-20260629/ex13/run-03`
+
+The ex13 draft summary uses only the historical run artifacts as the record.  It now leads with the proposition and `rules.txt` clarifying document, then gives a concise resolution summary before the procedural explanation.  The draft reports all three run-level outcomes, the admitted evidence sets across the three runs, the parties' merits arguments, every submitted or failed council vote, twelve submitted votes for `not_demonstrated`, one failed council member in each run, and the shared evidentiary basis: no signed or formally adopted U.S.-Iran agreement, no matched official public confirmations, and no permanent-cessation language by the June 15, 2025 deadline.
+
+`agent-instructions/draft-summary.md` records the drafting pattern for future example summaries.  It instructs summary drafters to lead with the dispute and resolution, use the run artifacts as the record unless independent verification is requested, link internal artifacts, report run-level variation and process failures, and keep technical runtime details secondary to the arbitration record.
+
+### Provider-tolerant juror model experiment
+
+Reference: `out/juror-model-experiments/generic-5model-tolerant-20260706T145403Z`, `../common/modelrequest/spec.go`, `../common/modelrequest/spec_test.go`
+
+The generic-persona model experiment uses five model identities while allowing OpenRouter to choose the serving provider for each request.  The copied pool records still retain `provider_name`, `endpoint_tag`, and `quantization` as metadata, but each request config includes `provider: {}` so the request parser does not derive a provider lock from those fields.  The parser test now records that rule: an explicit empty provider object suppresses OpenRouter provider derivation and sends no `provider` body.
+
+The completed rows show the intended request behavior.  `provider_only` is empty in `model-runs.jsonl`, while `provider` records the source config lineage, such as WandB, Novita, Alibaba, Mistral, or OpenRouter-routed Claude.  The run artifacts do not record the final upstream endpoint OpenRouter selected after the provider lock was removed; the Pi logs record the API provider as `openrouter`.
+
+The run stopped at `ex08a/run-02` during row 144 and row 145.  Both failures occurred before model deliberation because the Pi container failed while installing `pi-mcp-adapter`, with npm reporting no matching version for `@aws-sdk/core@^3.974.28`.  A later direct check inside `agentcourt-pi-sandbox:latest` could read `@aws-sdk/core` version `3.974.28` and could install `pi-mcp-adapter`, which points to an npm registry or cache inconsistency during live extension installation rather than a model-provider failure.
+
+The shared Pi image now pins `pi-mcp-adapter@2.11.0` at `/opt/pi-extensions/pi-mcp-adapter/node_modules/pi-mcp-adapter`.  The AAR, ADC, and AARD local-run defaults use that path, so normal Pi agents load the adapter from the image instead of installing `npm:pi-mcp-adapter` at startup.  The rebuilt local Docker image is `agentcourt-pi-sandbox:latest`, image id `sha256:5ea8953d6b1c2e7194abbc28d16cd025298f7ca62f15189df56f8d6fa44bd5da`.
+
+The direct verification runs used `aar juror-replay` against `ex08a/run-02`, snapshot `turn-000009-C1`, and omitted `--pi-mcp-adapter`, so they exercised the new default.  The `gpt-oss-120b` run wrote `arb/out/pi-adapter-baked-test-ex08a-run02-gpt-oss-120b`, returned `status=ok`, and submitted one council vote.  The exact row-144 model check used `claude-opus-4.8-fast`, wrote `arb/out/pi-adapter-baked-test-ex08a-run02-claude-opus-4.8-fast`, returned `status=ok`, and the normal logs for both runs contain no `npm install`, `ETARGET`, or missing-version message.
+
+Before resuming the long experiment, the active ledgers were repaired for the two affected `ex08a/run-02` rows.  The repair preserved the original ledger files and row directories under `arb/out/juror-model-experiments/generic-5model-tolerant-20260706T145403Z/resume-repair/20260706T202709Z`, removed the Claude terminal error row from `model-runs.jsonl`, removed the Claude and DeepSeek failed-attempt rows from `attempts.jsonl` and `failed-attempts.jsonl`, and moved the corresponding active row directories out of `runs/` and `failed/`.  The remaining active counts before restart were 143 terminal rows, 159 attempt rows, and 20 failed-attempt rows.
+
+After the session interruption, the resumed runner had reached row 232 and then stopped after a burst of OpenRouter connection errors.  The failed Pi logs showed `input:0`, `output:0`, and `errorMessage:"Connection error."` before any model output across several unrelated models, while a fresh Pi-image OpenRouter probe later reached the API.  The connection-error rows were preserved under `arb/out/juror-model-experiments/generic-5model-tolerant-20260706T145403Z/resume-repair/20260706T224929Z`, and the active ledgers removed only the nine terminal connection-error rows and eighteen matching failed-attempt rows.  The remaining active counts before restart were 223 terminal rows, 247 attempt rows, and 29 failed-attempt rows.
+
 ## 2026-06-18
 
 ### Pi council output accounting and ex08a 9-member run
