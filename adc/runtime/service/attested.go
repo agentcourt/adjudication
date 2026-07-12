@@ -679,6 +679,8 @@ func listedCaseTopArtifactName(name string) bool {
 
 func listedCaseTopArtifactNames() []string {
 	return []string{
+		"service-logs/adc.stdout",
+		"service-logs/adc.stderr",
 		"run.env",
 		"progress.log",
 		"launcher.log",

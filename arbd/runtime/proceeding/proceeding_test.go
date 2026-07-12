@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -152,6 +153,20 @@ func TestEvidenceRegistryStoresCaseFilesAndReadsBoundedRanges(t *testing.T) {
 	if _, ok := rc.fileByID["source.txt"]; ok {
 		t.Fatalf("fileByID retained filename key after canonical evidence registration")
 	}
+	rawManifest, err := os.ReadFile(filepath.Join(dir, "evidence-manifest.json"))
+	if err != nil {
+		t.Fatalf("read evidence manifest: %v", err)
+	}
+	var manifest struct {
+		EvidenceCount int            `json:"evidence_count"`
+		Evidence      []EvidenceMeta `json:"evidence"`
+	}
+	if err := json.Unmarshal(rawManifest, &manifest); err != nil {
+		t.Fatalf("decode evidence manifest: %v", err)
+	}
+	if manifest.EvidenceCount != 1 || len(manifest.Evidence) != 1 || manifest.Evidence[0].EvidenceID != evidence.EvidenceID {
+		t.Fatalf("manifest evidence = %#v, want %q", manifest, evidence.EvidenceID)
+	}
 	budget := &evidenceReadBudget{}
 	got, err := rc.readEvidenceRange(evidence.EvidenceID, 1, 3, budget)
 	if err != nil {
@@ -159,6 +174,36 @@ func TestEvidenceRegistryStoresCaseFilesAndReadsBoundedRanges(t *testing.T) {
 	}
 	if got["content_base64"] != "YmNk" || got["length"] != 3 {
 		t.Fatalf("read result = %#v", got)
+	}
+}
+
+func TestEvidenceManifestUsesEmptyArrayForNoEvidence(t *testing.T) {
+	dir := t.TempDir()
+	rc := &runContext{
+		cfg: Config{
+			OutputDir: dir,
+			Policy:    DefaultPolicy(),
+		},
+	}
+	if err := rc.initializeEvidenceRegistry(); err != nil {
+		t.Fatalf("initializeEvidenceRegistry returned error: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "evidence-manifest.json"))
+	if err != nil {
+		t.Fatalf("read evidence manifest: %v", err)
+	}
+	if strings.Contains(string(raw), `"evidence": null`) {
+		t.Fatalf("manifest used null evidence array: %s", raw)
+	}
+	var manifest struct {
+		EvidenceCount int            `json:"evidence_count"`
+		Evidence      []EvidenceMeta `json:"evidence"`
+	}
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("decode evidence manifest: %v", err)
+	}
+	if manifest.EvidenceCount != 0 || len(manifest.Evidence) != 0 {
+		t.Fatalf("manifest evidence = %#v, want empty", manifest)
 	}
 }
 

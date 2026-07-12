@@ -60,6 +60,49 @@ func TestLoadCaseRecordsMarksDetachedActiveCaseFailed(t *testing.T) {
 	if rec.Error != "service restarted and child process is not attached" {
 		t.Fatalf("error = %q", rec.Error)
 	}
+	disk := readServiceRecord(t, outDir)
+	if disk.Status != "failed" || disk.Error != "service restarted and child process is not attached" || disk.PID != 0 {
+		t.Fatalf("disk record = %#v", disk)
+	}
+}
+
+func TestLoadCaseRecordsRepairsDetachedCaseFromRunJSON(t *testing.T) {
+	root := t.TempDir()
+	outDir := filepath.Join(root, "case-1")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatalf("mkdir output dir: %v", err)
+	}
+	writeServiceRecord(t, outDir, CaseRecord{
+		CaseID:    "case-1",
+		RunID:     "run-case-1",
+		Status:    "failed",
+		OutputDir: outDir,
+		Error:     detachedProcessMessage,
+	})
+	writeJSONFile(t, filepath.Join(outDir, "run.json"), map[string]any{
+		"status":       "ok",
+		"resolution":   "held",
+		"final_reason": "test",
+		"final_state": map[string]any{
+			"case": map[string]any{"status": "closed"},
+		},
+	})
+
+	s, err := New(Config{OutputRoot: root, ADCBin: "/bin/false"})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	rec, ok := s.getCase("case-1")
+	if !ok {
+		t.Fatalf("case record missing")
+	}
+	if rec.Status != "completed" || rec.Error != "" || rec.PID != 0 {
+		t.Fatalf("record = %#v", rec)
+	}
+	disk := readServiceRecord(t, outDir)
+	if disk.Status != "completed" || disk.Error != "" || disk.PID != 0 {
+		t.Fatalf("disk record = %#v", disk)
+	}
 }
 
 func TestRoleAPIProxyForwardsGetAndPost(t *testing.T) {
@@ -252,6 +295,53 @@ func TestStartCaseRejectsPathCaseIDs(t *testing.T) {
 	}
 }
 
+func TestStartCaseWritesChildLogsDirectly(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(t.TempDir(), "adc")
+	script := `#!/bin/sh
+printf 'child stdout\n'
+printf '{"status":"ok","case_id":"case-logs"}\n'
+printf 'child stderr\n' >&2
+exit 0
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake adc: %v", err)
+	}
+	scenario := filepath.Join(root, "scenario.json")
+	if err := os.WriteFile(scenario, []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write scenario: %v", err)
+	}
+	s, err := New(Config{OutputRoot: filepath.Join(root, "service"), ADCBin: bin})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	created, err := s.startCase(context.Background(), CaseCreateRequest{
+		CaseID:       "case-logs",
+		ScenarioPath: scenario,
+	})
+	if err != nil {
+		t.Fatalf("start case: %v", err)
+	}
+	rec := waitCaseStatus(t, s, "case-logs", "completed")
+	stdout, err := os.ReadFile(created.StdoutLog)
+	if err != nil {
+		t.Fatalf("read stdout log: %v", err)
+	}
+	if !strings.Contains(string(stdout), "child stdout") || !strings.Contains(string(stdout), `"status":"ok"`) {
+		t.Fatalf("stdout log = %q", string(stdout))
+	}
+	stderr, err := os.ReadFile(created.StderrLog)
+	if err != nil {
+		t.Fatalf("read stderr log: %v", err)
+	}
+	if string(stderr) != "child stderr\n" {
+		t.Fatalf("stderr log = %q", string(stderr))
+	}
+	if rec.Summary["status"] != "ok" {
+		t.Fatalf("summary = %#v", rec.Summary)
+	}
+}
+
 func TestValidateServiceOutputDirAcceptsImmediateChild(t *testing.T) {
 	root := t.TempDir()
 	if err := validateServiceOutputDir(root, filepath.Join(root, "case-1")); err != nil {
@@ -262,6 +352,9 @@ func TestValidateServiceOutputDirAcceptsImmediateChild(t *testing.T) {
 func TestListedArtifactNameRequiresExactName(t *testing.T) {
 	if !listedArtifactName("digest.md") {
 		t.Fatalf("digest.md should be listed")
+	}
+	if !listedArtifactName("service-logs/adc.stderr") {
+		t.Fatalf("service-logs/adc.stderr should be listed")
 	}
 	for _, name := range []string{"/digest.md", "logs/../digest.md", "digest.md/", " digest.md"} {
 		if listedArtifactName(name) {
@@ -275,8 +368,14 @@ func TestArtifactRouteServesOnlyListedArtifacts(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(outDir, "logs"), 0o755); err != nil {
 		t.Fatalf("mkdir logs: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(outDir, "service-logs"), 0o755); err != nil {
+		t.Fatalf("mkdir service logs: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(outDir, "digest.md"), []byte("digest text\n"), 0o644); err != nil {
 		t.Fatalf("write digest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "service-logs", "adc.stderr"), []byte("child stderr\n"), 0o644); err != nil {
+		t.Fatalf("write service log: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(outDir, "logs", "mcp.stderr"), []byte("secret log\n"), 0o644); err != nil {
 		t.Fatalf("write log: %v", err)
@@ -309,6 +408,24 @@ func TestArtifactRouteServesOnlyListedArtifacts(t *testing.T) {
 	if !artifactListContains(got["artifacts"], "digest.md") || artifactListContains(got["artifacts"], "transcript.md") {
 		t.Fatalf("artifacts = %#v", got["artifacts"])
 	}
+	if !artifactListContains(got["artifacts"], "service-logs/adc.stderr") {
+		t.Fatalf("artifacts missing service stderr log = %#v", got["artifacts"])
+	}
+	status, body = serviceRawGet(t, s, "/api/v1/cases/case-1/artifacts/service-logs/adc.stderr")
+	if status != http.StatusOK || string(body) != "child stderr\n" {
+		t.Fatalf("stderr status = %d body = %q", status, string(body))
+	}
+	status, got = serviceGet(t, s, "/api/v1/cases/case-1/artifacts/events.ndjson")
+	if status != http.StatusNotFound {
+		t.Fatalf("missing artifact status = %d body = %#v", status, got)
+	}
+	errObj, ok := got["error"].(map[string]any)
+	if !ok || errObj["code"] != "artifact_missing" || got["artifact_name"] != "events.ndjson" {
+		t.Fatalf("missing artifact error = %#v", got)
+	}
+	if strings.Contains(mapString(errObj["message"]), outDir) {
+		t.Fatalf("missing artifact message exposes output dir: %#v", errObj["message"])
+	}
 	for _, path := range []string{
 		"/api/v1/cases/case-1/artifacts/logs/mcp.stderr",
 		"/api/v1/cases/case-1/artifacts/openclaw-plaintiff-lawyer-skill.md",
@@ -321,6 +438,10 @@ func TestArtifactRouteServesOnlyListedArtifacts(t *testing.T) {
 	status, got = serviceGet(t, s, "/api/v1/cases/case-1/artifacts/transcript.md")
 	if status != http.StatusBadRequest {
 		t.Fatalf("transcript symlink status = %d body = %#v", status, got)
+	}
+	errObj, ok = got["error"].(map[string]any)
+	if !ok || errObj["code"] != "bad_artifact_path" || strings.Contains(mapString(errObj["message"]), outside) {
+		t.Fatalf("transcript symlink error = %#v", got)
 	}
 }
 
@@ -795,6 +916,30 @@ func writeServiceRecord(t *testing.T, outDir string, rec CaseRecord) {
 	if err := os.WriteFile(filepath.Join(outDir, "service-case.json"), raw, 0o644); err != nil {
 		t.Fatalf("write service record: %v", err)
 	}
+}
+
+func writeJSONFile(t *testing.T, path string, value any) {
+	t.Helper()
+	raw, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal json: %v", err)
+	}
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write json: %v", err)
+	}
+}
+
+func readServiceRecord(t *testing.T, outDir string) CaseRecord {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(outDir, "service-case.json"))
+	if err != nil {
+		t.Fatalf("read service record: %v", err)
+	}
+	var rec CaseRecord
+	if err := json.Unmarshal(raw, &rec); err != nil {
+		t.Fatalf("decode service record: %v", err)
+	}
+	return rec
 }
 
 func writeTestJSON(w http.ResponseWriter, value map[string]any) {

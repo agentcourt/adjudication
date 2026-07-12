@@ -742,6 +742,9 @@ func (api *lawyerAPIServer) commitEvidenceUploadLocked(turn *lawyerTurn, args ma
 	api.rc.caseFiles = append(api.rc.caseFiles, file)
 	api.rc.fileByID[file.EvidenceID] = file
 	api.rc.submittedEvidence = append(api.rc.submittedEvidence, meta)
+	if err := api.rc.writeEvidenceManifest(); err != nil {
+		return nil, err
+	}
 	if err := api.recordSubmittedEvidenceEventLocked(turn, meta); err != nil {
 		return nil, err
 	}
@@ -782,6 +785,9 @@ func (api *lawyerAPIServer) submitEvidenceLocked(turn *lawyerTurn, args map[stri
 	api.rc.caseFiles = append(api.rc.caseFiles, file)
 	api.rc.fileByID[file.EvidenceID] = file
 	api.rc.submittedEvidence = append(api.rc.submittedEvidence, meta)
+	if err := api.rc.writeEvidenceManifest(); err != nil {
+		return nil, err
+	}
 	if err := api.recordSubmittedEvidenceEventLocked(turn, meta); err != nil {
 		return nil, err
 	}

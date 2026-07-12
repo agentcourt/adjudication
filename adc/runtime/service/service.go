@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -16,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -27,6 +27,7 @@ const (
 	DefaultCaseStartupWait = 30 * time.Second
 
 	defaultMaxProxyBodyBytes = 32 << 20
+	detachedProcessMessage   = "service restarted and child process is not attached"
 )
 
 type Config struct {
@@ -456,14 +457,8 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 	}
 	cmd := exec.CommandContext(context.Background(), commandPath, args...)
 	rec.cmd = cmd
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return CaseRecord{}, errors.Join(fmt.Errorf("stdout pipe: %w", err), closeLogFiles())
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return CaseRecord{}, errors.Join(fmt.Errorf("stderr pipe: %w", err), closeLogFiles())
-	}
+	cmd.Stdout = stdoutFile
+	cmd.Stderr = stderrFile
 	s.mu.Lock()
 	if _, exists := s.cases[caseID]; exists {
 		s.mu.Unlock()
@@ -482,15 +477,7 @@ func (s *Server) startCase(ctx context.Context, req CaseCreateRequest) (CaseReco
 		markErr := s.markFailed(rec, fmt.Sprintf("start child: %v", err))
 		return CaseRecord{}, errors.Join(startErr, markErr, closeLogFiles())
 	}
-	stdoutDone := make(chan error, 1)
-	go func() {
-		stdoutDone <- captureStdout(stdout, stdoutFile)
-	}()
-	stderrDone := make(chan error, 1)
-	go func() {
-		stderrDone <- captureStderr(stderr, stderrFile)
-	}()
-	go s.waitChild(rec, stdoutDone, stderrDone)
+	go s.waitChild(rec, stdoutFile, stderrFile)
 	s.mu.Lock()
 	rec.PID = cmd.Process.Pid
 	rec.StartedAt = time.Now().UTC().Format(time.RFC3339)
@@ -661,53 +648,6 @@ func (s *Server) caseProcessArgs(mode string, req CaseCreateRequest, caseID stri
 	return addDirectCommon(args)
 }
 
-func captureStdout(stdout io.Reader, logFile *os.File) error {
-	return captureProcessLog("stdout", stdout, logFile)
-}
-
-func captureStderr(stderr io.Reader, logFile *os.File) error {
-	return captureProcessLog("stderr", stderr, logFile)
-}
-
-func captureProcessLog(name string, input io.Reader, logFile *os.File) error {
-	scanner := bufio.NewScanner(input)
-	scanner.Buffer(make([]byte, 0, 64*1024), 16<<20)
-	var firstErr error
-	closed := false
-	for scanner.Scan() {
-		line := scanner.Text()
-		if firstErr != nil {
-			continue
-		}
-		if _, err := fmt.Fprintln(logFile, line); err != nil {
-			firstErr = fmt.Errorf("write %s log: %w", name, err)
-			if closeErr := logFile.Close(); closeErr != nil {
-				firstErr = errors.Join(firstErr, fmt.Errorf("close %s log: %w", name, closeErr))
-			}
-			closed = true
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		if !closed {
-			if closeErr := logFile.Close(); closeErr != nil {
-				firstErr = errors.Join(firstErr, fmt.Errorf("close %s log: %w", name, closeErr))
-			}
-			closed = true
-		}
-		if firstErr != nil {
-			return errors.Join(firstErr, fmt.Errorf("read %s pipe: %w", name, err))
-		}
-		return fmt.Errorf("read %s pipe: %w", name, err)
-	}
-	if closed {
-		return firstErr
-	}
-	if err := logFile.Close(); err != nil {
-		return fmt.Errorf("close %s log: %w", name, err)
-	}
-	return firstErr
-}
-
 func chooseLocalCaseAPIAddr() (string, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -804,10 +744,7 @@ func (s *Server) markStartupFailed(rec *CaseRecord, message string) {
 	}
 }
 
-func (s *Server) waitChild(rec *CaseRecord, stdoutDone <-chan error, stderrDone <-chan error) {
-	stdoutErr := <-stdoutDone
-	stderrErr := <-stderrDone
-	ioErr := errors.Join(stdoutErr, stderrErr)
+func (s *Server) waitChild(rec *CaseRecord, stdoutFile *os.File, stderrFile *os.File) {
 	err := rec.cmd.Wait()
 	exitCode := 0
 	if err != nil {
@@ -817,6 +754,7 @@ func (s *Server) waitChild(rec *CaseRecord, stdoutDone <-chan error, stderrDone 
 			exitCode = exitErr.ExitCode()
 		}
 	}
+	logErr := errors.Join(stdoutFile.Close(), stderrFile.Close())
 	isAttested := rec.Execution != nil && rec.Execution.Mode == clerkExecutionAttested
 	attested := attestedCaseUpdate{}
 	s.mu.Lock()
@@ -824,8 +762,8 @@ func (s *Server) waitChild(rec *CaseRecord, stdoutDone <-chan error, stderrDone 
 	rec.ExitCode = &exitCode
 	rec.cmd = nil
 	rec.PID = 0
-	if ioErr != nil {
-		rec.Error = ioErr.Error()
+	if logErr != nil {
+		rec.Error = fmt.Sprintf("close process logs: %v", logErr)
 	} else if isAttested {
 		attested = buildAttestedCaseUpdate(rec, exitCode)
 		if attested.summary != nil {
@@ -845,7 +783,7 @@ func (s *Server) waitChild(rec *CaseRecord, stdoutDone <-chan error, stderrDone 
 	switch {
 	case rec.killing:
 		rec.Status = "killed"
-	case ioErr != nil:
+	case logErr != nil:
 		rec.Status = "failed"
 	case isAttested && attested.err != "":
 		rec.Status = "failed"
@@ -1132,12 +1070,12 @@ func (s *Server) handleArtifact(w http.ResponseWriter, r *http.Request, caseID s
 		return
 	}
 	if !listedArtifactName(name) && !listedCaseTopArtifactName(name) {
-		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_artifact", "unknown artifact")})
+		writeUnknownArtifact(w, caseID, name)
 		return
 	}
 	path, err := caseArtifactPath(publicRecord(rec), name)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "case_id": caseID, "error": apiError("bad_artifact_path", err.Error())})
+		writeArtifactAccessError(w, caseID, name, err)
 		return
 	}
 	http.ServeFile(w, r, path)
@@ -1217,7 +1155,7 @@ func evidenceFileArtifactName(item map[string]any) string {
 func (s *Server) serveCaseFile(w http.ResponseWriter, r *http.Request, rec *CaseRecord, name string) {
 	path, err := safeArtifactPath(caseEffectiveOutputDir(publicRecord(rec)), name)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "case_id": rec.CaseID, "error": apiError("bad_artifact_path", err.Error())})
+		writeArtifactAccessError(w, rec.CaseID, name, err)
 		return
 	}
 	http.ServeFile(w, r, path)
@@ -1225,15 +1163,42 @@ func (s *Server) serveCaseFile(w http.ResponseWriter, r *http.Request, rec *Case
 
 func serveListedArtifactFile(w http.ResponseWriter, r *http.Request, caseID string, outDir string, name string) {
 	if !listedArtifactName(name) {
-		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_artifact", "unknown artifact")})
+		writeUnknownArtifact(w, caseID, name)
 		return
 	}
 	path, err := safeArtifactPath(outDir, name)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "case_id": caseID, "error": apiError("bad_artifact_path", err.Error())})
+		writeArtifactAccessError(w, caseID, name, err)
 		return
 	}
 	http.ServeFile(w, r, path)
+}
+
+func writeUnknownArtifact(w http.ResponseWriter, caseID string, name string) {
+	writeJSON(w, http.StatusNotFound, map[string]any{
+		"ok":            false,
+		"case_id":       caseID,
+		"artifact_name": name,
+		"error":         apiError("unknown_artifact", "unknown artifact"),
+	})
+}
+
+func writeArtifactAccessError(w http.ResponseWriter, caseID string, name string, err error) {
+	if errors.Is(err, os.ErrNotExist) {
+		writeJSON(w, http.StatusNotFound, map[string]any{
+			"ok":            false,
+			"case_id":       caseID,
+			"artifact_name": name,
+			"error":         apiError("artifact_missing", "artifact is not available"),
+		})
+		return
+	}
+	writeJSON(w, http.StatusBadRequest, map[string]any{
+		"ok":            false,
+		"case_id":       caseID,
+		"artifact_name": name,
+		"error":         apiError("bad_artifact_path", "artifact path is invalid"),
+	})
 }
 
 func safeArtifactPath(root string, name string) (string, error) {
@@ -1273,7 +1238,7 @@ func listArtifacts(root string) ([]map[string]any, error) {
 }
 
 func listedArtifactNames() []string {
-	return []string{"run.json", "digest.md", "transcript.md", "work-notes.ndjson", "events.ndjson", "evidence-manifest.json"}
+	return []string{"run.json", "digest.md", "transcript.md", "work-notes.ndjson", "events.ndjson", "evidence-manifest.json", "service-logs/adc.stdout", "service-logs/adc.stderr"}
 }
 
 func listedArtifactName(name string) bool {
@@ -1366,20 +1331,62 @@ func (s *Server) loadCaseRecords() error {
 		if rec.CaseID == "" {
 			continue
 		}
-		if isActive(&rec) {
-			if _, err := readRunJSON(&rec); err == nil {
-				rec.Status = "completed"
-			} else {
-				rec.Status = "failed"
-				if rec.Error == "" {
-					rec.Error = "service restarted and child process is not attached"
+		if isActive(&rec) || rec.Error == detachedProcessMessage {
+			reconciled, changed := reconcileDetachedCaseRecord(rec)
+			rec = reconciled
+			if changed {
+				if err := s.persistRecord(&rec); err != nil {
+					return err
 				}
 			}
-			rec.PID = 0
 		}
 		s.cases[rec.CaseID] = &rec
 	}
 	return nil
+}
+
+func reconcileDetachedCaseRecord(rec CaseRecord) (CaseRecord, bool) {
+	if !isActive(&rec) && rec.Error != detachedProcessMessage {
+		return rec, false
+	}
+	original := rec
+	if run, err := readRunJSON(&rec); err == nil {
+		applyRunJSONToRecord(&rec, run)
+	} else if isActive(&rec) {
+		rec.Status = "failed"
+		rec.PID = 0
+		rec.cmd = nil
+		rec.killing = false
+		if rec.Error == "" {
+			rec.Error = detachedProcessMessage
+		}
+	}
+	return rec, caseRecordChanged(original, rec)
+}
+
+func applyRunJSONToRecord(rec *CaseRecord, run map[string]any) {
+	rec.PID = 0
+	rec.cmd = nil
+	rec.killing = false
+	rec.Summary = run
+	if finishedAt := mapString(run["finished_at"]); finishedAt != "" {
+		rec.FinishedAt = finishedAt
+	}
+	if mapString(run["status"]) == "failed" || mapString(mapAny(mapAny(run["final_state"])["case"])["status"]) == "failed" {
+		rec.Status = "failed"
+		rec.Error = firstNonEmpty(mapString(run["error"]), "case wrote failed run.json")
+		return
+	}
+	rec.Status = "completed"
+	rec.Error = ""
+}
+
+func caseRecordChanged(a CaseRecord, b CaseRecord) bool {
+	return a.Status != b.Status ||
+		a.PID != b.PID ||
+		a.FinishedAt != b.FinishedAt ||
+		a.Error != b.Error ||
+		!reflect.DeepEqual(a.Summary, b.Summary)
 }
 
 func normalizeCreateMode(mode string) string {

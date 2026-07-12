@@ -834,9 +834,9 @@ Kill a Clerk case:
 curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases/arb-custom-20260603123000/kill
 ```
 
-Kill sends interrupt, waits 10 seconds, and then kills the child process if it has not exited.  If the case record is active on disk but the current service process has no process handle, the endpoint returns HTTP `409` with error code `case_not_attached`.  Terminal disk-only records return unchanged because there is no live process to kill.
+Kill sends interrupt, waits 10 seconds, and then kills the child process if it has not exited.  After a service restart, Clerk reads disk records from the output root and reconciles active-looking records before returning them.  If terminal `run.json` exists, Clerk marks the record completed or failed from that artifact; otherwise it marks the record failed with `service restarted and child process is not attached`.
 
-Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, and `evidence-manifest.json`.  For attested Clerk records, the same endpoint also lists downloaded top-level attestation files when present: `run.env`, `progress.log`, `launcher.log`, `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, `attestation.txt`, `verification.log`, `case.tar.gz`, `case-packet.json`, `aar-output.tar.gz`, and `aar-partial.tar.gz`.  Artifact routes do not serve arbitrary output files, process logs outside the listed set, generated remote-lawyer skill files, or staged Codex auth directories.
+Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, `evidence-manifest.json`, `clerk.stdout`, and `clerk.stderr`.  For attested Clerk records, the same endpoint also lists downloaded top-level attestation files when present: `run.env`, `progress.log`, `launcher.log`, `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, `attestation.txt`, `verification.log`, `case.tar.gz`, `case-packet.json`, `aar-output.tar.gz`, and `aar-partial.tar.gz`.  Artifact routes do not serve arbitrary output files, process logs outside the listed set, generated remote-lawyer skill files, or staged Codex auth directories.  An unlisted artifact name returns `unknown_artifact`; a listed artifact whose file is absent returns `artifact_missing`.
 
 The result route reads terminal `run.json`; the evidence route reads `evidence-manifest.json` and `evidence-store/` from the effective output directory.  Local Clerk runs use the run output directory directly, and the case process writes `evidence-manifest.json` at evidence-registry initialization and after each accepted submitted-evidence item.  An active local run that has not yet written the manifest returns HTTP `409` with error code `evidence_manifest_pending`; a terminal packet without a manifest returns HTTP `404` with error code `manifest_missing`.  Attested Clerk runs use the extracted `aar-output/` directory after verification, or the extracted `aar-partial/` directory for inspection after a failed remote run.
 
@@ -844,7 +844,7 @@ Clerk create request fields mirror `aar run` options in structured JSON:
 
 | JSON field | Meaning |
 | --- | --- |
-| `example` | Example name under `examples/`. |
+| `example` | Example name under `examples/`.  Clerk checks `examples/EXAMPLE/complaint.md` before starting the child process and returns `unknown_example` when the complaint is missing. |
 | `case_id` | Case id override.  Generated form: `arb-YYYYMMDDHHMMSS-RANDOM`. |
 | `run_id` | Run id override. |
 | `complaint_path` | Complaint file path.  Required unless `example` is set. |
@@ -948,7 +948,7 @@ Cancel:
 curl -sS -X POST http://127.0.0.1:19770/api/v1/cases/api-case-1/cancel
 ```
 
-Artifact routes serve only listed artifact names from a case output directory.  `GET /api/v1/cases/{case_id}/artifacts` lists known artifacts, and `GET /api/v1/cases/{case_id}/artifacts/{name}` serves one exact listed artifact name.  `GET /api/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted evidence by evidence id when the manifest contains a readable file name.
+Artifact routes serve only listed artifact names from a case output directory, including `service-logs/aar.stdout` and `service-logs/aar.stderr` for service child process logs.  `GET /api/v1/cases/{case_id}/artifacts` lists known artifacts, and `GET /api/v1/cases/{case_id}/artifacts/{name}` serves one exact listed artifact name.  An unlisted artifact name returns `unknown_artifact`; a listed artifact whose file is absent returns `artifact_missing`.  `GET /api/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted evidence by evidence id when the manifest contains a readable file name.
 
 ## Output Packet
 
@@ -1074,7 +1074,7 @@ If OpenClaw containers cannot reach MCP, check the MCP URL from the same network
 
 If a remote OpenClaw says the MCP health endpoint disappeared after deliberation, check whether `aar run` already finished and shut down MCP.  Final results are in the local output directory, especially `run.json`, `digest.md`, and `transcript.md`.  The remote OpenClaw may not be able to retrieve the final result through MCP after the local run exits.
 
-If Clerk reports `case_not_attached` for `/kill`, the current service process found an active-looking `clerk.json` record but has no process handle for it.  This can happen after service restart.  Inspect the process table and the recorded `pid`, then decide outside the API whether a live child process still exists.
+If a Clerk record reports `service restarted and child process is not attached`, the service found an active-looking `clerk.json` record without a current process handle and without terminal `run.json`.  The service does not reattach to that process.  Inspect the output directory, process table, and recorded `pid` before deciding whether any external cleanup is required.
 
 If a run directory is rejected as nonempty, choose a new output directory.  AAR run packets are intended to be immutable records for one case run.  Reusing an output directory mixes artifacts and makes review unreliable.
 

@@ -217,8 +217,31 @@ func TestClerkCreateRejectsMissingComplaintWithoutExample(t *testing.T) {
 	}
 }
 
+func TestClerkCreateRejectsUnknownExample(t *testing.T) {
+	root := t.TempDir()
+	useExampleCWD(t, "ex3")
+	aarBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
+	s := newClerkTestServer(t, root, aarBin)
+
+	status, got := servicePost(t, s, "/clerk/v1/cases", map[string]any{
+		"case_id": "missing-example",
+		"example": "no-such-example",
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusBadRequest, got)
+	}
+	errObj, ok := got["error"].(map[string]any)
+	if !ok || errObj["code"] != "unknown_example" {
+		t.Fatalf("error = %#v", got["error"])
+	}
+	if _, err := os.Stat(filepath.Join(root, "missing-example")); !os.IsNotExist(err) {
+		t.Fatalf("case output dir exists after rejected create: %v", err)
+	}
+}
+
 func TestClerkCreateAttestedExampleCompletesAfterVerification(t *testing.T) {
 	root := t.TempDir()
+	useExampleCWD(t, "ex3")
 	driver := writeFakeAttestedDriver(t, 0)
 	s := newClerkTestServerWithConfig(t, Config{
 		RegistryDir: filepath.Join(t.TempDir(), "registry"),
@@ -412,6 +435,7 @@ func TestClerkCreateAttestedComplaintCompletesAfterVerification(t *testing.T) {
 
 func TestClerkCreateAttestedRejectsUnsupportedRunFields(t *testing.T) {
 	root := t.TempDir()
+	useExampleCWD(t, "ex3")
 	complaint := filepath.Join(t.TempDir(), "complaint.md")
 	if err := os.WriteFile(complaint, []byte("# Complaint\n"), 0o644); err != nil {
 		t.Fatalf("write complaint: %v", err)
@@ -470,6 +494,7 @@ func TestClerkCreateAttestedRejectsUnsupportedRunFields(t *testing.T) {
 
 func TestClerkCreateAttestedFailureDoesNotComplete(t *testing.T) {
 	root := t.TempDir()
+	useExampleCWD(t, "ex3")
 	s := newClerkTestServerWithConfig(t, Config{
 		RegistryDir: filepath.Join(t.TempDir(), "registry"),
 		OutputRoot:  root,
@@ -533,6 +558,64 @@ func TestDirectCreateRejectsOutputDirOutsideOutputRoot(t *testing.T) {
 	}
 }
 
+func TestDirectLoadRegistryRepairsDetachedCaseFromRunJSON(t *testing.T) {
+	root := t.TempDir()
+	registry := filepath.Join(t.TempDir(), "registry")
+	if err := os.MkdirAll(registry, 0o755); err != nil {
+		t.Fatalf("mkdir registry: %v", err)
+	}
+	outDir := filepath.Join(root, "direct-complete")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatalf("mkdir out dir: %v", err)
+	}
+	rec := CaseRecord{
+		CaseID:    "direct-complete",
+		RunID:     "run-direct-complete",
+		Status:    "failed",
+		OutputDir: outDir,
+		Error:     detachedProcessMessage,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	raw, err := json.MarshalIndent(rec, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal record: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(registry, rec.CaseID+".json"), raw, 0o644); err != nil {
+		t.Fatalf("write registry record: %v", err)
+	}
+	writeJSONFile(t, filepath.Join(outDir, "run.json"), map[string]any{
+		"status":       "ok",
+		"resolution":   "90",
+		"final_reason": "test",
+		"final_state": map[string]any{
+			"case": map[string]any{"status": "closed"},
+		},
+	})
+
+	s, err := New(Config{RegistryDir: registry, OutputRoot: root, AardBin: writeFakeAAR(t, "#!/bin/sh\nexit 0\n")})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	got, ok := s.getCase("direct-complete")
+	if !ok {
+		t.Fatalf("case missing")
+	}
+	if got.Status != "completed" || got.PID != 0 || got.Error != "" {
+		t.Fatalf("case = %#v", got)
+	}
+	raw, err = os.ReadFile(filepath.Join(registry, rec.CaseID+".json"))
+	if err != nil {
+		t.Fatalf("read registry record: %v", err)
+	}
+	var disk CaseRecord
+	if err := json.Unmarshal(raw, &disk); err != nil {
+		t.Fatalf("decode registry record: %v", err)
+	}
+	if disk.Status != "completed" || disk.Error != "" {
+		t.Fatalf("disk = %#v", disk)
+	}
+}
+
 func TestCreateRejectsPathCaseIDs(t *testing.T) {
 	root := t.TempDir()
 	aardBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
@@ -561,6 +644,9 @@ func TestCreateRejectsPathCaseIDs(t *testing.T) {
 func TestListedArtifactNameRequiresExactName(t *testing.T) {
 	if !listedArtifactName("digest.md") {
 		t.Fatalf("digest.md should be listed")
+	}
+	if !listedArtifactName("service-logs/aard.stderr") {
+		t.Fatalf("service-logs/aard.stderr should be listed")
 	}
 	for _, name := range []string{"/digest.md", "logs/../digest.md", "digest.md/", " digest.md"} {
 		if listedArtifactName(name) {
@@ -636,6 +722,53 @@ func TestClerkListReadsExistingRecordsFromOutputRoot(t *testing.T) {
 	}
 }
 
+func TestClerkListReconcilesDetachedActiveRecordFromRunJSON(t *testing.T) {
+	root := t.TempDir()
+	aarBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
+	outDir := filepath.Join(root, "detached-complete")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatalf("mkdir out dir: %v", err)
+	}
+	rec := ClerkRecord{
+		CaseID:    "detached-complete",
+		RunID:     "run-detached-complete",
+		Status:    "running",
+		OutDir:    outDir,
+		PID:       12345,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	writeClerkRecord(t, outDir, rec)
+	writeJSONFile(t, filepath.Join(outDir, "run.json"), map[string]any{
+		"status":       "ok",
+		"resolution":   "90",
+		"final_reason": "test",
+		"final_state": map[string]any{
+			"case": map[string]any{"status": "closed"},
+		},
+	})
+	s := newClerkTestServer(t, root, aarBin)
+
+	status, got := serviceGet(t, s, "/clerk/v1/cases")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusOK, got)
+	}
+	cases, ok := got["cases"].([]any)
+	if !ok || len(cases) != 1 {
+		t.Fatalf("cases = %#v", got["cases"])
+	}
+	listed, ok := cases[0].(map[string]any)
+	if !ok || listed["status"] != "completed" || (listed["error"] != nil && listed["error"] != "") {
+		t.Fatalf("listed = %#v", cases[0])
+	}
+	disk, err := readClerkRecord(filepath.Join(outDir, clerkRecordName))
+	if err != nil {
+		t.Fatalf("read clerk record: %v", err)
+	}
+	if disk.Status != "completed" || disk.PID != 0 || disk.Error != "" {
+		t.Fatalf("disk record = %#v", disk)
+	}
+}
+
 func TestClerkRoutesReadOutputArtifacts(t *testing.T) {
 	root := t.TempDir()
 	aardBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
@@ -668,6 +801,9 @@ func TestClerkRoutesReadOutputArtifacts(t *testing.T) {
 	})
 	if err := os.WriteFile(filepath.Join(outDir, "digest.md"), []byte("digest text\n"), 0o644); err != nil {
 		t.Fatalf("write digest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "clerk.stderr"), []byte("clerk stderr\n"), 0o644); err != nil {
+		t.Fatalf("write clerk stderr: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(outDir, "logs"), 0o755); err != nil {
 		t.Fatalf("mkdir logs: %v", err)
@@ -718,6 +854,9 @@ func TestClerkRoutesReadOutputArtifacts(t *testing.T) {
 	if !artifactListContains(got["artifacts"], "run.json") || !artifactListContains(got["artifacts"], "digest.md") {
 		t.Fatalf("artifacts = %#v", got["artifacts"])
 	}
+	if !artifactListContains(got["artifacts"], "clerk.stderr") {
+		t.Fatalf("artifacts missing clerk stderr log = %#v", got["artifacts"])
+	}
 	if artifactListContains(got["artifacts"], "transcript.md") {
 		t.Fatalf("unsafe symlink listed in artifacts = %#v", got["artifacts"])
 	}
@@ -725,6 +864,21 @@ func TestClerkRoutesReadOutputArtifacts(t *testing.T) {
 	rawStatus, body := serviceRawGet(t, s, "/clerk/v1/cases/clerk-rich/artifacts/digest.md")
 	if rawStatus != http.StatusOK || string(body) != "digest text\n" {
 		t.Fatalf("digest status = %d body = %q", rawStatus, string(body))
+	}
+	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/clerk-rich/artifacts/clerk.stderr")
+	if rawStatus != http.StatusOK || string(body) != "clerk stderr\n" {
+		t.Fatalf("clerk stderr status = %d body = %q", rawStatus, string(body))
+	}
+	status, got = serviceGet(t, s, "/clerk/v1/cases/clerk-rich/artifacts/work-notes.ndjson")
+	if status != http.StatusNotFound {
+		t.Fatalf("missing artifact status = %d body = %#v", status, got)
+	}
+	errObj, ok := got["error"].(map[string]any)
+	if !ok || errObj["code"] != "artifact_missing" || got["artifact_name"] != "work-notes.ndjson" {
+		t.Fatalf("missing artifact error = %#v", got)
+	}
+	if strings.Contains(mapString(errObj["message"]), outDir) {
+		t.Fatalf("missing artifact message exposes output dir: %#v", errObj["message"])
 	}
 	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/clerk-rich/evidence/EV1")
 	if rawStatus != http.StatusOK || string(body) != "evidence text\n" {
@@ -743,9 +897,83 @@ func TestClerkRoutesReadOutputArtifacts(t *testing.T) {
 	if status != http.StatusBadRequest {
 		t.Fatalf("transcript symlink status = %d, body = %#v", status, got)
 	}
+	errObj, ok = got["error"].(map[string]any)
+	if !ok || errObj["code"] != "bad_artifact_path" || strings.Contains(mapString(errObj["message"]), outside) {
+		t.Fatalf("transcript symlink error = %#v", got)
+	}
 }
 
-func TestClerkKillRejectsDiskOnlyActiveRecord(t *testing.T) {
+func TestClerkEvidenceRouteReadsCurrentManifestShape(t *testing.T) {
+	root := t.TempDir()
+	aarBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
+	outDir := filepath.Join(root, "clerk-evidence")
+	storePath := filepath.Join(outDir, "evidence-store", "ab", "abcdef")
+	if err := os.MkdirAll(filepath.Dir(storePath), 0o755); err != nil {
+		t.Fatalf("mkdir evidence store: %v", err)
+	}
+	if err := os.WriteFile(storePath, []byte("current evidence\n"), 0o644); err != nil {
+		t.Fatalf("write evidence: %v", err)
+	}
+	rec := ClerkRecord{
+		CaseID:    "clerk-evidence",
+		RunID:     "run-clerk-evidence",
+		Status:    "completed",
+		OutDir:    outDir,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	writeClerkRecord(t, outDir, rec)
+	writeJSONFile(t, filepath.Join(outDir, "evidence-manifest.json"), map[string]any{
+		"schema_version": "aard.evidence-manifest.v0",
+		"evidence": []map[string]any{
+			{
+				"evidence_id":   "EV1",
+				"storage_name":  "ab/abcdef",
+				"original_name": "ev1.txt",
+			},
+		},
+	})
+	s := newClerkTestServer(t, root, aarBin)
+
+	rawStatus, body := serviceRawGet(t, s, "/clerk/v1/cases/clerk-evidence/evidence/EV1")
+	if rawStatus != http.StatusOK || string(body) != "current evidence\n" {
+		t.Fatalf("evidence status = %d body = %q", rawStatus, string(body))
+	}
+}
+
+func TestClerkEvidenceRouteReportsPendingManifest(t *testing.T) {
+	root := t.TempDir()
+	aarBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
+	outDir := filepath.Join(root, "clerk-running")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatalf("mkdir out dir: %v", err)
+	}
+	rec := ClerkRecord{
+		CaseID:    "clerk-running",
+		RunID:     "run-clerk-running",
+		Status:    "running",
+		OutDir:    outDir,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	writeClerkRecord(t, outDir, rec)
+	s := newClerkTestServer(t, root, aarBin)
+	s.mu.Lock()
+	s.clerkCases["clerk-running"] = &rec
+	s.mu.Unlock()
+
+	status, got := serviceGet(t, s, "/clerk/v1/cases/clerk-running/evidence/EV1")
+	if status != http.StatusConflict {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusConflict, got)
+	}
+	errObj, ok := got["error"].(map[string]any)
+	if !ok || errObj["code"] != "evidence_manifest_pending" {
+		t.Fatalf("error = %#v", got["error"])
+	}
+	if !strings.Contains(mapString(errObj["message"]), "not available yet") {
+		t.Fatalf("error message = %#v", errObj["message"])
+	}
+}
+
+func TestClerkKillReturnsReconciledDetachedActiveRecord(t *testing.T) {
 	root := t.TempDir()
 	aarBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
 	outDir := filepath.Join(root, "active-disk")
@@ -769,15 +997,22 @@ func TestClerkKillRejectsDiskOnlyActiveRecord(t *testing.T) {
 	s := newClerkTestServer(t, root, aarBin)
 
 	status, got := servicePost(t, s, "/clerk/v1/cases/active-disk/kill", map[string]any{})
-	if status != http.StatusConflict {
-		t.Fatalf("status = %d, want %d: %#v", status, http.StatusConflict, got)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %#v", status, http.StatusOK, got)
 	}
-	if got["ok"] != false {
-		t.Fatalf("ok = %#v, want false", got["ok"])
+	caseObj, ok := got["case"].(map[string]any)
+	if !ok || caseObj["status"] != "failed" {
+		t.Fatalf("case = %#v", got["case"])
 	}
-	errObj, ok := got["error"].(map[string]any)
-	if !ok || errObj["code"] != "case_not_attached" {
-		t.Fatalf("error = %#v", got["error"])
+	if caseObj["error"] != detachedProcessMessage {
+		t.Fatalf("error = %#v", caseObj["error"])
+	}
+	disk, err := readClerkRecord(filepath.Join(outDir, clerkRecordName))
+	if err != nil {
+		t.Fatalf("read clerk record: %v", err)
+	}
+	if disk.Status != "failed" || disk.Error != detachedProcessMessage || disk.PID != 0 {
+		t.Fatalf("disk record = %#v", disk)
 	}
 }
 
@@ -814,25 +1049,6 @@ func TestStartupPollMarksFailedAfterTimeout(t *testing.T) {
 	}
 	if !strings.Contains(rec.Error, "case API did not become healthy") {
 		t.Fatalf("error = %q", rec.Error)
-	}
-}
-
-func TestCaptureStderrDoesNotSetControlState(t *testing.T) {
-	s, rec := testServerWithStartingCase(t)
-	rec.CaseAPIBase = "http://127.0.0.1:21431"
-	logPath := filepath.Join(t.TempDir(), "stderr.log")
-	logFile, err := os.Create(logPath)
-	if err != nil {
-		t.Fatalf("create stderr log: %v", err)
-	}
-
-	s.captureStderr(rec, strings.NewReader("lawyerapi listening on http://127.0.0.1:1/lawyerapi/v1\ncouncilapi listening on http://127.0.0.1:2/councilapi/v1\n"), logFile)
-
-	if rec.CaseAPIBase != "http://127.0.0.1:21431" {
-		t.Fatalf("caseapi base changed to %q", rec.CaseAPIBase)
-	}
-	if rec.Status != "starting" {
-		t.Fatalf("status = %q, want starting", rec.Status)
 	}
 }
 
@@ -1068,6 +1284,30 @@ func newClerkTestServerWithConfig(t *testing.T, cfg Config) *Server {
 		t.Fatalf("new service: %v", err)
 	}
 	return s
+}
+
+func useExampleCWD(t *testing.T, example string) {
+	t.Helper()
+	oldCWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get cwd: %v", err)
+	}
+	dir := t.TempDir()
+	exampleDir := filepath.Join(dir, "examples", example)
+	if err := os.MkdirAll(exampleDir, 0o755); err != nil {
+		t.Fatalf("mkdir example: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(exampleDir, "complaint.md"), []byte("# Complaint\n"), 0o644); err != nil {
+		t.Fatalf("write example complaint: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldCWD); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	})
 }
 
 func serviceGet(t *testing.T, s *Server, path string) (int, map[string]any) {

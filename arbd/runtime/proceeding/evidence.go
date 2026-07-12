@@ -124,7 +124,7 @@ func (rc *runContext) initializeEvidenceRegistry() error {
 		fileByID[file.EvidenceID] = file
 	}
 	rc.fileByID = fileByID
-	return nil
+	return rc.writeEvidenceManifest()
 }
 
 func (rc *runContext) registerCaseFileEvidence(file CaseFile) (EvidenceMeta, error) {
@@ -247,6 +247,9 @@ func (rc *runContext) evidencePath(meta EvidenceMeta) (string, error) {
 
 func (rc *runContext) evidenceManifest() map[string]any {
 	evidence := append([]EvidenceMeta(nil), rc.evidence...)
+	if evidence == nil {
+		evidence = []EvidenceMeta{}
+	}
 	sort.Slice(evidence, func(i, j int) bool { return evidence[i].EvidenceID < evidence[j].EvidenceID })
 	return map[string]any{
 		"schema_version": evidenceManifestSchemaVersion,
@@ -254,6 +257,10 @@ func (rc *runContext) evidenceManifest() map[string]any {
 		"evidence_count": len(evidence),
 		"evidence":       evidence,
 	}
+}
+
+func (rc *runContext) writeEvidenceManifest() error {
+	return writeJSONFileAtomic(filepath.Join(rc.cfg.OutputDir, "evidence-manifest.json"), rc.evidenceManifest())
 }
 
 func (rc *runContext) listVisibleEvidence() []EvidenceMeta {

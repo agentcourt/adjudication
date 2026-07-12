@@ -1,5 +1,27 @@
 # Development Notes
 
+## 2026-07-10: Service process record reconciliation
+
+### References
+
+- Service process manager: [`runtime/service/service.go`](runtime/service/service.go)
+- Service process tests: [`runtime/service/service_test.go`](runtime/service/service_test.go)
+
+### Decisions
+
+The service now gives child processes direct stdout and stderr log file descriptors instead of copying pipe output through the service process.  This lets the child continue writing logs if the service process exits, and it removes pipe-copy goroutines from the lifecycle path.  Completion still reads the stdout log after the child exits to populate the service summary.
+
+Startup record loading now persists repaired case records.  Active or previously detached records are repaired from `run.json` when it appears; otherwise active records become failed with `service restarted and child process is not attached`.  The service does not reattach to a process after restart.
+
+### Service API error cleanup
+
+Artifact reads now distinguish names outside the allowlist from listed artifacts whose files are absent.  The first returns `unknown_artifact`, and the second returns `artifact_missing`.  Missing listed-artifact responses omit host filesystem paths.
+
+### Verification
+
+- [x] `go test ./adc/runtime/service`
+- [x] `go test ./arb/runtime/... ./arbd/runtime/... ./adc/runtime/...`
+
 ## 2026-07-09: Live evidence manifest for service evidence fetch
 
 ### References

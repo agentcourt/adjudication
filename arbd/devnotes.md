@@ -1,5 +1,35 @@
 # Development Notes
 
+## 2026-07-10
+
+### Service process record reconciliation
+
+Reference: `runtime/service/service.go`, `runtime/service/clerk.go`, `runtime/service/service_test.go`, `manual.md`
+
+The service now gives child processes direct stdout and stderr log file descriptors instead of copying pipe output through the service process.  This lets the child continue writing logs if the service process exits, and it removes pipe-copy goroutines from the lifecycle path.  Completion still reads the stdout log after the child exits to populate the service summary.
+
+Clerk listing and lookup now reconcile detached active-looking `clerk.json` records before returning them.  If `run.json` exists, the service marks the record completed or failed from that artifact and persists the repaired record.  If no terminal artifact exists, the service marks the record failed with `service restarted and child process is not attached`; it does not reattach to a process.
+
+The direct service registry uses the same restart rule.  Active or previously detached records are repaired from `run.json` when it appears, and the repaired registry record is written back to disk.  Focused tests cover Clerk record repair, detached active Clerk failure, and direct registry repair.
+
+### Service API error cleanup
+
+Clerk create now checks `examples/EXAMPLE/complaint.md` before reserving an output directory or starting a child process.  Missing examples return `unknown_example`, and invalid example names return `invalid_example`.  Artifact reads now distinguish names outside the allowlist from listed artifacts whose files are absent: the first returns `unknown_artifact`, and the second returns `artifact_missing` without host filesystem paths.
+
+### Live evidence manifest routing
+
+Reference: `runtime/proceeding/evidence.go`, `runtime/proceeding/lawyerapi.go`, `runtime/service/service.go`, `runtime/service/clerk.go`
+
+Manual web-console testing of a real Clerk AARD run found that the evidence page could not fetch initial case-packet evidence during the active run.  The Clerk evidence route returned `manifest_missing` because AARD wrote `evidence-manifest.json` only during final packet rendering, while the service route depended on that manifest to map `evidence_id` values to stored bytes.  The service route also still expected the old legacy manifest list shape, so it would have failed against the current terminal manifest after the run completed.
+
+AARD now matches the AAR behavior.  The evidence registry writes `evidence-manifest.json` at initialization, direct evidence submission and chunked upload commits rewrite it after accepted evidence changes, and final rendering uses the same manifest writer.  The service route reads both legacy and current manifest shapes, serves content-addressed `evidence-store/` paths, and reports active missing manifests as `evidence_manifest_pending` instead of terminal `manifest_missing`.
+
+### Verification
+
+- [x] `go test ./arbd/runtime/service`
+- [x] `go test ./arb/runtime/... ./arbd/runtime/... ./adc/runtime/...`
+- [x] `go test ./arbd/runtime/proceeding ./arbd/runtime/service`
+
 ## 2026-06-17
 
 ### Manual review

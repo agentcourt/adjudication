@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -16,6 +17,11 @@ import (
 const (
 	clerkRecordName = "clerk.json"
 	clerkKillGrace  = 10 * time.Second
+)
+
+var (
+	errInvalidClerkExample = errors.New("invalid clerk example")
+	errUnknownClerkExample = errors.New("unknown clerk example")
 )
 
 type ClerkCreateRequest struct {
@@ -143,7 +149,7 @@ func (s *Server) handleCreateClerkCase(w http.ResponseWriter, r *http.Request) {
 	}
 	rec, err := s.startClerkCase(req)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": apiError("start_case_failed", err.Error())})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": apiError(clerkCreateErrorCode(err), err.Error())})
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true, "case": rec})
@@ -181,6 +187,9 @@ func (s *Server) startClerkCase(req ClerkCreateRequest) (ClerkRecord, error) {
 	}
 	example := strings.TrimSpace(req.Example)
 	if err := validateClerkExample(example); err != nil {
+		return ClerkRecord{}, err
+	}
+	if err := validateClerkExampleExists(example); err != nil {
 		return ClerkRecord{}, err
 	}
 	complaintPath := strings.TrimSpace(req.ComplaintPath)
@@ -247,21 +256,12 @@ func (s *Server) startClerkCase(req ClerkCreateRequest) (ClerkRecord, error) {
 		_ = stdoutFile.Close()
 		return ClerkRecord{}, fmt.Errorf("create clerk stderr log: %w", err)
 	}
+	closeLogs := func() error {
+		return errors.Join(stdoutFile.Close(), stderrFile.Close())
+	}
 	cmd := exec.Command(commandPath, args...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		s.unreserveClerkCase(caseID)
-		_ = stdoutFile.Close()
-		_ = stderrFile.Close()
-		return ClerkRecord{}, fmt.Errorf("stdout pipe: %w", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		s.unreserveClerkCase(caseID)
-		_ = stdoutFile.Close()
-		_ = stderrFile.Close()
-		return ClerkRecord{}, fmt.Errorf("stderr pipe: %w", err)
-	}
+	cmd.Stdout = stdoutFile
+	cmd.Stderr = stderrFile
 	rec.StdoutLog = stdoutPath
 	rec.StderrLog = stderrPath
 	rec.cmd = cmd
@@ -270,16 +270,12 @@ func (s *Server) startClerkCase(req ClerkCreateRequest) (ClerkRecord, error) {
 	s.mu.Unlock()
 	if err := s.persistClerkRecord(rec); err != nil {
 		s.unreserveClerkCase(caseID)
-		_ = stdoutFile.Close()
-		_ = stderrFile.Close()
-		return ClerkRecord{}, err
+		return ClerkRecord{}, errors.Join(err, closeLogs())
 	}
 	if err := cmd.Start(); err != nil {
 		s.markClerkFailed(rec, fmt.Sprintf("start child: %v", err))
 		close(rec.done)
-		_ = stdoutFile.Close()
-		_ = stderrFile.Close()
-		return ClerkRecord{}, fmt.Errorf("start child: %w", err)
+		return ClerkRecord{}, errors.Join(fmt.Errorf("start child: %w", err), closeLogs())
 	}
 	s.mu.Lock()
 	rec.PID = cmd.Process.Pid
@@ -288,15 +284,7 @@ func (s *Server) startClerkCase(req ClerkCreateRequest) (ClerkRecord, error) {
 	s.cond.Broadcast()
 	s.mu.Unlock()
 	s.persistClerkRecordBestEffort(rec)
-	stdoutDone := make(chan error, 1)
-	stderrDone := make(chan error, 1)
-	go func() {
-		stdoutDone <- captureProcessLog(stdout, stdoutFile)
-	}()
-	go func() {
-		stderrDone <- captureProcessLog(stderr, stderrFile)
-	}()
-	go s.waitClerkChild(rec, stdoutDone, stderrDone)
+	go s.waitClerkChild(rec, stdoutFile, stderrFile)
 	s.mu.Lock()
 	out := publicClerkRecord(rec)
 	s.mu.Unlock()
@@ -396,10 +384,8 @@ func (s *Server) unreserveClerkCase(caseID string) {
 	s.mu.Unlock()
 }
 
-func (s *Server) waitClerkChild(rec *ClerkRecord, stdoutDone <-chan error, stderrDone <-chan error) {
+func (s *Server) waitClerkChild(rec *ClerkRecord, stdoutFile *os.File, stderrFile *os.File) {
 	defer close(rec.done)
-	stdoutErr := <-stdoutDone
-	stderrErr := <-stderrDone
 	waitErr := rec.cmd.Wait()
 	exitCode := 0
 	if waitErr != nil {
@@ -409,6 +395,7 @@ func (s *Server) waitClerkChild(rec *ClerkRecord, stdoutDone <-chan error, stder
 			exitCode = exitErr.ExitCode()
 		}
 	}
+	logErr := errors.Join(stdoutFile.Close(), stderrFile.Close())
 	var summary map[string]any
 	var readErr error
 	isAttested := rec.Execution != nil && rec.Execution.Mode == clerkExecutionAttested
@@ -416,7 +403,7 @@ func (s *Server) waitClerkChild(rec *ClerkRecord, stdoutDone <-chan error, stder
 	if isAttested {
 		attested = buildAttestedClerkUpdate(rec, exitCode)
 		summary = attested.summary
-	} else {
+	} else if logErr == nil {
 		var stdoutRaw []byte
 		stdoutRaw, readErr = os.ReadFile(rec.StdoutLog)
 		if readErr == nil {
@@ -435,12 +422,9 @@ func (s *Server) waitClerkChild(rec *ClerkRecord, stdoutDone <-chan error, stder
 	switch {
 	case rec.killing:
 		rec.Status = "killed"
-	case stdoutErr != nil:
+	case logErr != nil:
 		rec.Status = "failed"
-		rec.Error = stdoutErr.Error()
-	case stderrErr != nil:
-		rec.Status = "failed"
-		rec.Error = stderrErr.Error()
+		rec.Error = fmt.Sprintf("close process logs: %v", logErr)
 	case !isAttested && readErr != nil:
 		rec.Status = "failed"
 		rec.Error = fmt.Sprintf("read stdout log: %v", readErr)
@@ -564,12 +548,12 @@ func (s *Server) handleClerkArtifact(w http.ResponseWriter, r *http.Request, cas
 		return
 	}
 	if !listedArtifactName(name) && !listedClerkTopArtifactName(name) {
-		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_artifact", "unknown artifact")})
+		writeUnknownArtifact(w, caseID, name)
 		return
 	}
 	path, err := clerkArtifactPath(rec, name)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "case_id": caseID, "error": apiError("bad_artifact_path", err.Error())})
+		writeArtifactAccessError(w, caseID, name, err)
 		return
 	}
 	http.ServeFile(w, r, path)
@@ -581,7 +565,7 @@ func (s *Server) handleClerkEvidence(w http.ResponseWriter, r *http.Request, cas
 		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "case_id": caseID, "error": apiError("unknown_case", "unknown case_id")})
 		return
 	}
-	serveEvidenceFile(w, r, caseID, clerkEffectiveOutputDir(rec), evidenceID)
+	serveEvidenceFile(w, r, caseID, clerkEffectiveOutputDir(rec), evidenceID, isActiveClerk(&rec))
 }
 
 func (s *Server) getClerkRecordPtr(caseID string) (*ClerkRecord, bool) {
@@ -628,12 +612,77 @@ func (s *Server) listClerkRecords() ([]ClerkRecord, error) {
 		if err != nil {
 			return nil, err
 		}
+		if attached, ok := s.getClerkRecordPtr(rec.CaseID); ok {
+			records = append(records, publicClerkRecord(attached))
+			continue
+		}
+		rec, err = s.reconcileDetachedClerkRecord(rec)
+		if err != nil {
+			return nil, err
+		}
 		records = append(records, rec)
 	}
 	sort.Slice(records, func(i, j int) bool {
 		return records[i].CreatedAt < records[j].CreatedAt
 	})
 	return records, nil
+}
+
+func (s *Server) reconcileDetachedClerkRecord(rec ClerkRecord) (ClerkRecord, error) {
+	updated, changed := reconcileDetachedClerkRecord(rec)
+	if !changed {
+		return updated, nil
+	}
+	if err := s.persistClerkRecord(&updated); err != nil {
+		return ClerkRecord{}, fmt.Errorf("persist clerk record %s: %w", updated.CaseID, err)
+	}
+	return updated, nil
+}
+
+func reconcileDetachedClerkRecord(rec ClerkRecord) (ClerkRecord, bool) {
+	if !isActiveClerk(&rec) && rec.Error != detachedProcessMessage {
+		return rec, false
+	}
+	original := rec
+	if run, err := readRunJSONFromDir(clerkEffectiveOutputDir(rec)); err == nil {
+		applyRunJSONToClerkRecord(&rec, run)
+	} else if isActiveClerk(&rec) {
+		rec.Status = "failed"
+		rec.PID = 0
+		rec.cmd = nil
+		rec.killing = false
+		rec.done = nil
+		if rec.Error == "" {
+			rec.Error = detachedProcessMessage
+		}
+	}
+	return rec, clerkRecordChanged(original, rec)
+}
+
+func applyRunJSONToClerkRecord(rec *ClerkRecord, run map[string]any) {
+	rec.PID = 0
+	rec.cmd = nil
+	rec.killing = false
+	rec.done = nil
+	rec.Summary = run
+	if finishedAt := mapString(run["finished_at"]); finishedAt != "" {
+		rec.FinishedAt = finishedAt
+	}
+	if mapString(run["status"]) == "failed" || mapString(mapAny(mapAny(run["final_state"])["case"])["status"]) == "failed" {
+		rec.Status = "failed"
+		rec.Error = firstNonEmpty(mapString(run["error"]), "case wrote failed run.json")
+		return
+	}
+	rec.Status = "completed"
+	rec.Error = ""
+}
+
+func clerkRecordChanged(a ClerkRecord, b ClerkRecord) bool {
+	return a.Status != b.Status ||
+		a.PID != b.PID ||
+		a.FinishedAt != b.FinishedAt ||
+		a.Error != b.Error ||
+		!reflect.DeepEqual(a.Summary, b.Summary)
 }
 
 func (s *Server) readClerkRecordByCaseID(caseID string) (ClerkRecord, error) {
@@ -740,9 +789,37 @@ func validateClerkExample(example string) error {
 		return nil
 	}
 	if strings.Contains(example, "/") || strings.HasPrefix(example, ".") || strings.Contains(example, "..") {
-		return fmt.Errorf("invalid example name: %s", example)
+		return fmt.Errorf("%w: %s", errInvalidClerkExample, example)
 	}
 	return nil
+}
+
+func validateClerkExampleExists(example string) error {
+	if example == "" {
+		return nil
+	}
+	path := filepath.Join("examples", example, "complaint.md")
+	st, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("%w: %s is missing", errUnknownClerkExample, path)
+		}
+		return fmt.Errorf("check example %s: %w", example, err)
+	}
+	if st.IsDir() {
+		return fmt.Errorf("%w: %s is a directory", errUnknownClerkExample, path)
+	}
+	return nil
+}
+
+func clerkCreateErrorCode(err error) string {
+	if errors.Is(err, errInvalidClerkExample) {
+		return "invalid_example"
+	}
+	if errors.Is(err, errUnknownClerkExample) {
+		return "unknown_example"
+	}
+	return "start_case_failed"
 }
 
 func validateClerkNumbers(req ClerkCreateRequest) error {

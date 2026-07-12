@@ -645,6 +645,8 @@ func listedClerkTopArtifactName(name string) bool {
 
 func listedClerkTopArtifactNames() []string {
 	return []string{
+		"clerk.stdout",
+		"clerk.stderr",
 		"run.env",
 		"progress.log",
 		"launcher.log",

@@ -1,5 +1,26 @@
 # Development Notes
 
+## 2026-07-10
+
+### Service process record reconciliation
+
+Reference: `runtime/service/service.go`, `runtime/service/clerk.go`, `runtime/service/service_test.go`, `manual.md`
+
+The service now gives child processes direct stdout and stderr log file descriptors instead of copying pipe output through the service process.  This lets the child continue writing logs if the service process exits, and it removes pipe-copy goroutines from the lifecycle path.  Completion still reads the stdout log after the child exits to populate the service summary.
+
+Clerk listing and lookup now reconcile detached active-looking `clerk.json` records before returning them.  If `run.json` exists, the service marks the record completed or failed from that artifact and persists the repaired record.  If no terminal artifact exists, the service marks the record failed with `service restarted and child process is not attached`; it does not reattach to a process.
+
+The direct service registry uses the same restart rule.  Active or previously detached records are repaired from `run.json` when it appears, and the repaired registry record is written back to disk.  Focused tests cover Clerk record repair, detached active Clerk failure, direct registry repair, and attached active evidence-manifest pending behavior.
+
+### Service API error cleanup
+
+Clerk create now checks `examples/EXAMPLE/complaint.md` before reserving an output directory or starting a child process.  Missing examples return `unknown_example`, and invalid example names return `invalid_example`.  Artifact reads now distinguish names outside the allowlist from listed artifacts whose files are absent: the first returns `unknown_artifact`, and the second returns `artifact_missing` without host filesystem paths.
+
+### Verification
+
+- [x] `go test ./arb/runtime/service`
+- [x] `go test ./arb/runtime/... ./arbd/runtime/... ./adc/runtime/...`
+
 ## 2026-07-06
 
 ### ex13 summary draft
