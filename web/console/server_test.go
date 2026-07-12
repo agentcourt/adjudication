@@ -255,6 +255,9 @@ func TestCaseDetailCompactsStructuredFieldsAndRefreshesRunningCase(t *testing.T)
 		case "/clerk/v1/cases/case-running/artifacts":
 			writeTestJSON(w, map[string]any{"ok": true, "case_id": "case-running", "artifacts": []map[string]any{{"name": "events.ndjson", "size_bytes": 256}}})
 		case "/clerk/v1/cases/case-running/artifacts/events.ndjson":
+			if r.Header.Get("Range") != "bytes=-262144" {
+				t.Fatalf("range = %q", r.Header.Get("Range"))
+			}
 			w.Header().Set("Content-Type", "application/x-ndjson")
 			_, _ = w.Write([]byte(`{"timestamp":"2026-07-10T18:35:21Z","phase":"openings","type":"run_initialized","payload":{"role":"system"}}` + "\n"))
 			_, _ = w.Write([]byte(`{"timestamp":"2026-07-10T18:35:42Z","phase":"openings","type":"evidence_read","role":"plaintiff","payload":{"evidence_id":"ev_deadline","byte_count":820}}` + "\n"))
@@ -297,6 +300,57 @@ func TestCaseDetailCompactsStructuredFieldsAndRefreshesRunningCase(t *testing.T)
 	}
 	if strings.Contains(body, "attestation events") {
 		t.Fatalf("local case includes attestation events link: %s", body)
+	}
+}
+
+func TestEventsPageReadsTailRange(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/clerk/v1/cases/case-events":
+			writeTestJSON(w, map[string]any{"ok": true, "case": map[string]any{"case_id": "case-events", "status": "running"}})
+		case "/clerk/v1/cases/case-events/result":
+			writeTestJSON(w, map[string]any{"ok": true, "case_id": "case-events", "status": "running"})
+		case "/clerk/v1/cases/case-events/artifacts/events.ndjson":
+			if r.Header.Get("Range") != "bytes=-8192" {
+				t.Fatalf("range = %q", r.Header.Get("Range"))
+			}
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			w.Header().Set("Content-Range", "bytes 100-420/421")
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write([]byte(`{"partial":` + "\n"))
+			_, _ = w.Write([]byte(`{"timestamp":"2026-07-10T18:36:02Z","phase":"arguments","type":"opportunity_ready","payload":{"role":"plaintiff","message":"plaintiff may file argument"}}` + "\n"))
+			_, _ = w.Write([]byte(`{"timestamp":"2026-07-10T18:52:41Z","phase":"deliberation","type":"council_vote","payload":{"member_id":"C1","payload":{"vote":"demonstrated"}}}` + "\n"))
+		default:
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+	}))
+	defer api.Close()
+	app := testApp(t, api.URL, "")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/system/arb/clerk/cases/case-events/events?limit=1&bytes=8192", nil)
+	app.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`<meta http-equiv="refresh" content="10">`,
+		"raw events.ndjson",
+		"council_vote",
+		"vote=demonstrated",
+		"<summary>JSON</summary>",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q: %s", want, body)
+		}
+	}
+	for _, unwanted := range []string{
+		"opportunity_ready",
+		"partial",
+	} {
+		if strings.Contains(body, unwanted) {
+			t.Fatalf("body includes %q: %s", unwanted, body)
+		}
 	}
 }
 

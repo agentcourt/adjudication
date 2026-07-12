@@ -133,6 +133,9 @@ const pageTemplates = `
   {{end}}
   <a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/result">result</a>
   <a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/artifacts">artifacts</a>
+  {{if .HasEvents}}
+  <a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/events">events</a>
+  {{end}}
   <a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/evidence">evidence</a>
   {{if .HasAttestationEvents}}
   <a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/attestation/events">attestation events</a>
@@ -189,6 +192,40 @@ const pageTemplates = `
 <table><tr><th>Name</th><th>Size</th></tr>{{range .Artifacts}}<tr><td><a href="/system/{{$.System.ID}}/{{$.Scope.ID}}/cases/{{$.CaseID | pathEscape}}/artifacts/{{.Name | pathEscape}}">{{.Name}}</a></td><td>{{.Size}}</td></tr>{{end}}</table>
 {{else}}<p class="muted">No artifacts returned.</p>{{end}}
 	{{if .Response}}<h2>Service Response</h2><pre>{{response .Response}}</pre>{{end}}
+{{template "layout-end" .}}{{end}}
+
+{{define "events"}}{{template "layout-start" .}}
+<h1>{{.System.Label}} Events {{.CaseID}}</h1>
+<div class="bar">
+  <a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}">case</a>
+  <a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/artifacts/events.ndjson">raw events.ndjson</a>
+</div>
+<form method="get" action="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/events">
+  <fieldset>
+    <legend>Tail</legend>
+    <label for="event-limit">Events</label>
+    <input id="event-limit" name="limit" value="{{.EventLimit}}">
+    <label for="event-bytes">Bytes</label>
+    <input id="event-bytes" name="bytes" value="{{.EventBytes}}">
+    <button type="submit">Reload</button>
+  </fieldset>
+</form>
+{{if .Events}}
+<table>
+  <tr><th>Offset</th><th>Time</th><th>Phase</th><th>Type</th><th>Actor</th><th>Message</th><th>Record</th></tr>
+  {{range .Events}}
+  <tr>
+    <td>{{.Offset}}</td>
+    <td>{{.Timestamp}}</td>
+    <td>{{.Phase}}</td>
+    <td>{{.Type}}</td>
+    <td>{{.Actor}}</td>
+    <td>{{.Message}}</td>
+    <td><details class="record-details"><summary>JSON</summary><pre>{{boundedJSON .Raw}}</pre></details></td>
+  </tr>
+  {{end}}
+</table>
+{{else if .EventNotice}}<p class="muted">{{.EventNotice}}</p>{{end}}
 {{template "layout-end" .}}{{end}}
 
 {{define "evidence"}}{{template "layout-start" .}}

@@ -12,7 +12,15 @@ import (
 	"net/url"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
+)
+
+const (
+	defaultEventTailBytes = 256 << 10
+	maxEventTailBytes     = 2 << 20
+	defaultEventLimit     = 100
+	maxEventLimit         = 500
 )
 
 type App struct {
@@ -35,7 +43,11 @@ type ViewData struct {
 	Artifacts            []Artifact
 	EventIssues          []EventIssue
 	RecentEvents         []CaseEvent
+	Events               []EventRow
 	EventNotice          string
+	EventLimit           string
+	EventBytes           string
+	HasEvents            bool
 	Evidence             []EvidenceEntry
 	EvidenceID           string
 	EvidenceNotice       string
@@ -73,6 +85,16 @@ type CaseEvent struct {
 	Type      string
 	Actor     string
 	Message   string
+}
+
+type EventRow struct {
+	Offset    string
+	Timestamp string
+	Phase     string
+	Type      string
+	Actor     string
+	Message   string
+	Raw       map[string]any
 }
 
 type recordFact struct {
@@ -210,6 +232,8 @@ func (a *App) handleSystem(w http.ResponseWriter, r *http.Request) {
 	case len(parts) >= 7 && parts[5] == "artifacts" && proxyMethod(r.Method):
 		name := strings.Join(parts[6:], "/")
 		a.proxyService(w, r, sys, artifactPath(scope, caseID, name))
+	case len(parts) == 6 && parts[5] == "events" && r.Method == http.MethodGet:
+		a.handleEvents(w, r, sys, scope, caseID)
 	case len(parts) == 6 && parts[5] == "evidence" && r.Method == http.MethodGet:
 		a.handleEvidence(w, r, sys, scope, caseID)
 	case len(parts) == 7 && parts[5] == "evidence" && proxyMethod(r.Method):
@@ -298,6 +322,7 @@ func (a *App) handleCaseDetail(w http.ResponseWriter, r *http.Request, sys Syste
 	data.Record = asMap(record.JSON["case"])
 	data.Result = result.JSON
 	data.Artifacts = artifactsFrom(artifacts.JSON["artifacts"])
+	data.HasEvents = artifactNamed(data.Artifacts, "events.ndjson")
 	data.HasAttestationEvents = caseHasAttestationEvents(data.Record)
 	data.EventIssues, data.RecentEvents, data.EventNotice = a.loadEventData(r.Context(), sys, scope, caseID, data.Artifacts)
 	data.AutoRefresh = activeCase(data.Record, data.Result)
@@ -343,6 +368,30 @@ func (a *App) handleArtifactList(w http.ResponseWriter, r *http.Request, sys Sys
 		return
 	}
 	a.render(w, statusForView(resp.StatusCode), "artifacts", data)
+}
+
+func (a *App) handleEvents(w http.ResponseWriter, r *http.Request, sys SystemConfig, scope ScopeConfig, caseID string) {
+	limit := boundedQueryInt(r, "limit", defaultEventLimit, 1, maxEventLimit)
+	tailBytes := boundedQueryInt(r, "bytes", defaultEventTailBytes, 4096, maxEventTailBytes)
+	record, _ := a.client.JSON(r.Context(), sys, http.MethodGet, casePath(scope, caseID, ""), nil)
+	result, _ := a.client.JSON(r.Context(), sys, http.MethodGet, casePath(scope, caseID, "result"), nil)
+	rows, notice, err := a.loadEventTailRows(r.Context(), sys, scope, caseID, int64(tailBytes), limit)
+	data := baseView(sys, scope, a.systems(), "", "")
+	data.Title = sys.Label + " Events " + caseID
+	data.CaseID = caseID
+	data.Record = asMap(record.JSON["case"])
+	data.Result = result.JSON
+	data.Events = rows
+	data.EventNotice = notice
+	data.EventLimit = strconv.Itoa(limit)
+	data.EventBytes = strconv.Itoa(tailBytes)
+	data.AutoRefresh = activeCase(data.Record, data.Result)
+	if err != nil {
+		data.Error = err.Error()
+		a.render(w, http.StatusBadGateway, "events", data)
+		return
+	}
+	a.render(w, http.StatusOK, "events", data)
 }
 
 func (a *App) handleEvidence(w http.ResponseWriter, r *http.Request, sys SystemConfig, scope ScopeConfig, caseID string) {
@@ -392,18 +441,38 @@ func (a *App) loadEventData(ctx context.Context, sys SystemConfig, scope ScopeCo
 	if !artifactNamed(artifacts, "events.ndjson") {
 		return nil, nil, ""
 	}
-	resp, err := a.client.JSON(ctx, sys, http.MethodGet, artifactPath(scope, caseID, "events.ndjson"), nil)
+	rows, notice, err := a.loadEventTailRows(ctx, sys, scope, caseID, defaultEventTailBytes, defaultEventLimit)
 	if err != nil {
 		return nil, nil, "events.ndjson request failed: " + err.Error()
 	}
-	if resp.StatusCode >= 400 {
-		message := fieldText(resp.JSON, "message")
-		if message == "" {
-			message = compactBody(resp.Body)
-		}
-		return nil, nil, fmt.Sprintf("events.ndjson returned HTTP %d: %s", resp.StatusCode, message)
+	return eventIssuesFromRows(rows), recentEventsFromRows(rows, 8), notice
+}
+
+func (a *App) loadEventTailRows(ctx context.Context, sys SystemConfig, scope ScopeConfig, caseID string, tailBytes int64, limit int) ([]EventRow, string, error) {
+	headers := http.Header{}
+	headers.Set("Range", fmt.Sprintf("bytes=-%d", tailBytes))
+	resp, err := a.client.ProxyWithHeaders(ctx, sys, http.MethodGet, artifactPath(scope, caseID, "events.ndjson"), nil, "", headers)
+	if err != nil {
+		return nil, "", err
 	}
-	return eventIssuesFromNDJSON(resp.Body), recentEventsFromNDJSON(resp.Body, 8), ""
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, tailBytes+1))
+	if err != nil {
+		return nil, "", err
+	}
+	if int64(len(raw)) > tailBytes {
+		return nil, fmt.Sprintf("events.ndjson response exceeded %d bytes; the service did not return a bounded range", tailBytes), nil
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Sprintf("events.ndjson returned HTTP %d: %s", resp.StatusCode, responseMessage(raw)), nil
+	}
+	start, ok := contentRangeStart(resp.Header.Get("Content-Range"))
+	dropFirst := resp.StatusCode == http.StatusPartialContent && ok && start > 0
+	rows := eventRowsFromNDJSON(raw, start, dropFirst, limit)
+	if len(rows) == 0 {
+		return nil, "events.ndjson returned no complete event records in the selected byte range.", nil
+	}
+	return rows, "", nil
 }
 
 func (a *App) handleManageCase(w http.ResponseWriter, r *http.Request, sys SystemConfig, scope ScopeConfig, caseID string) {
@@ -652,56 +721,126 @@ func stringListText(value any) string {
 	return strings.Join(out, ", ")
 }
 
-func eventIssuesFromNDJSON(raw []byte) []EventIssue {
-	var out []EventIssue
-	seen := map[string]bool{}
-	for _, line := range bytes.Split(raw, []byte("\n")) {
-		line = bytes.TrimSpace(line)
-		if len(line) == 0 {
-			continue
+func eventRowsFromNDJSON(raw []byte, baseOffset int64, dropFirst bool, max int) []EventRow {
+	if dropFirst {
+		idx := bytes.IndexByte(raw, '\n')
+		if idx < 0 {
+			return nil
 		}
-		var event map[string]any
-		if err := json.Unmarshal(line, &event); err != nil {
-			continue
+		raw = raw[idx+1:]
+		baseOffset += int64(idx + 1)
+	}
+	var rows []EventRow
+	for pos := 0; pos <= len(raw); {
+		next := bytes.IndexByte(raw[pos:], '\n')
+		end := len(raw)
+		if next >= 0 {
+			end = pos + next
 		}
-		issue, ok := eventIssueFrom(event)
-		if ok {
-			key := issue.Member + "\x00" + issue.Message
-			if seen[key] {
-				continue
+		line := bytes.TrimSpace(raw[pos:end])
+		if len(line) > 0 {
+			var event map[string]any
+			if err := json.Unmarshal(line, &event); err == nil {
+				rows = append(rows, eventRowFrom(event, baseOffset+int64(pos)))
 			}
-			seen[key] = true
-			out = append(out, issue)
 		}
+		if next < 0 {
+			break
+		}
+		pos = end + 1
+	}
+	if max > 0 && len(rows) > max {
+		rows = rows[len(rows)-max:]
+	}
+	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+		rows[i], rows[j] = rows[j], rows[i]
+	}
+	return rows
+}
+
+func eventRowFrom(event map[string]any, offset int64) EventRow {
+	summary, ok := caseEventFrom(event)
+	if !ok {
+		summary = fallbackCaseEvent(event)
+	}
+	return EventRow{
+		Offset:    strconv.FormatInt(offset, 10),
+		Timestamp: summary.Timestamp,
+		Phase:     summary.Phase,
+		Type:      summary.Type,
+		Actor:     summary.Actor,
+		Message:   summary.Message,
+		Raw:       event,
+	}
+}
+
+func fallbackCaseEvent(event map[string]any) CaseEvent {
+	payload := asMap(event["payload"])
+	message := ""
+	if payload != nil {
+		message = eventMessage(payload)
+	}
+	return CaseEvent{
+		Timestamp: fieldText(event, "timestamp"),
+		Phase:     fieldText(event, "phase"),
+		Type:      firstNonEmpty(fieldText(event, "type"), fieldText(event, "action"), "event"),
+		Actor:     firstNonEmpty(fieldText(event, "role"), fieldText(payload, "role")),
+		Message:   limitText(message, 240),
+	}
+}
+
+func recentEventsFromRows(rows []EventRow, max int) []CaseEvent {
+	if max <= 0 {
+		return nil
+	}
+	if len(rows) > max {
+		rows = rows[:max]
+	}
+	out := make([]CaseEvent, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, CaseEvent{
+			Timestamp: row.Timestamp,
+			Phase:     row.Phase,
+			Type:      row.Type,
+			Actor:     row.Actor,
+			Message:   row.Message,
+		})
 	}
 	return out
 }
 
-func recentEventsFromNDJSON(raw []byte, max int) []CaseEvent {
-	if max <= 0 {
-		return nil
-	}
-	var events []CaseEvent
-	for _, line := range bytes.Split(raw, []byte("\n")) {
-		line = bytes.TrimSpace(line)
-		if len(line) == 0 {
+func eventIssuesFromRows(rows []EventRow) []EventIssue {
+	var out []EventIssue
+	seen := map[string]int{}
+	for _, row := range rows {
+		issue, ok := eventIssueFrom(row.Raw)
+		if !ok {
 			continue
 		}
-		var event map[string]any
-		if err := json.Unmarshal(line, &event); err != nil {
+		key := issue.Member + "\x00" + issue.Message
+		if existing, ok := seen[key]; ok {
+			if eventIssueScore(issue) > eventIssueScore(out[existing]) {
+				out[existing] = issue
+			}
 			continue
 		}
-		if row, ok := caseEventFrom(event); ok {
-			events = append(events, row)
+		seen[key] = len(out)
+		out = append(out, issue)
+	}
+	return out
+}
+
+func eventIssueScore(issue EventIssue) int {
+	score := 0
+	for _, value := range []string{issue.Process, issue.Reason, issue.LogPath} {
+		if strings.TrimSpace(value) != "" {
+			score++
 		}
 	}
-	if len(events) > max {
-		events = events[len(events)-max:]
+	if strings.Contains(issue.Type, "failed") {
+		score++
 	}
-	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
-		events[i], events[j] = events[j], events[i]
-	}
-	return events
+	return score
 }
 
 func caseEventFrom(event map[string]any) (CaseEvent, bool) {
@@ -1199,6 +1338,53 @@ func responseText(resp *Response) string {
 		return text
 	}
 	return fmt.Sprintf("[response body not rendered: formatted response is %d bytes, limit is %d bytes]", len(text), max)
+}
+
+func contentRangeStart(value string) (int64, bool) {
+	value = strings.TrimSpace(value)
+	if !strings.HasPrefix(value, "bytes ") {
+		return 0, false
+	}
+	value = strings.TrimPrefix(value, "bytes ")
+	dash := strings.IndexByte(value, '-')
+	if dash < 0 {
+		return 0, false
+	}
+	start, err := strconv.ParseInt(value[:dash], 10, 64)
+	if err != nil || start < 0 {
+		return 0, false
+	}
+	return start, true
+}
+
+func responseMessage(raw []byte) string {
+	var m map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(raw), &m); err == nil {
+		for _, key := range []string{"message", "error"} {
+			if text := fieldText(m, key); text != "" {
+				return text
+			}
+		}
+	}
+	return compactBody(raw)
+}
+
+func boundedQueryInt(r *http.Request, key string, fallback int, minValue int, maxValue int) int {
+	text := strings.TrimSpace(r.URL.Query().Get(key))
+	if text == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(text)
+	if err != nil {
+		return fallback
+	}
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
 }
 
 func activeCase(record map[string]any, result map[string]any) bool {
