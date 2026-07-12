@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	defaultEventTailBytes = 256 << 10
-	maxEventTailBytes     = 2 << 20
+	defaultEventTailBytes = 1 << 20
+	maxEventTailBytes     = 8 << 20
 	defaultEventLimit     = 100
 	maxEventLimit         = 500
 )
@@ -470,7 +470,7 @@ func (a *App) loadEventTailRows(ctx context.Context, sys SystemConfig, scope Sco
 	dropFirst := resp.StatusCode == http.StatusPartialContent && ok && start > 0
 	rows := eventRowsFromNDJSON(raw, start, dropFirst, limit)
 	if len(rows) == 0 {
-		return nil, "events.ndjson returned no complete event records in the selected byte range.", nil
+		return nil, fmt.Sprintf("events.ndjson returned no complete event records in the selected %d-byte range; increase the byte window.", tailBytes), nil
 	}
 	return rows, "", nil
 }

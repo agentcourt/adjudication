@@ -255,7 +255,7 @@ func TestCaseDetailCompactsStructuredFieldsAndRefreshesRunningCase(t *testing.T)
 		case "/clerk/v1/cases/case-running/artifacts":
 			writeTestJSON(w, map[string]any{"ok": true, "case_id": "case-running", "artifacts": []map[string]any{{"name": "events.ndjson", "size_bytes": 256}}})
 		case "/clerk/v1/cases/case-running/artifacts/events.ndjson":
-			if r.Header.Get("Range") != "bytes=-262144" {
+			if r.Header.Get("Range") != "bytes=-1048576" {
 				t.Fatalf("range = %q", r.Header.Get("Range"))
 			}
 			w.Header().Set("Content-Type", "application/x-ndjson")
