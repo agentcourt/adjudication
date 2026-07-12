@@ -1447,10 +1447,19 @@ func contentRangeStart(value string) (int64, bool) {
 func responseMessage(raw []byte) string {
 	var m map[string]any
 	if err := json.Unmarshal(bytes.TrimSpace(raw), &m); err == nil {
-		for _, key := range []string{"message", "error"} {
-			if text := fieldText(m, key); text != "" {
+		if text := fieldText(m, "message"); text != "" {
+			return text
+		}
+		if errData := asMap(m["error"]); errData != nil {
+			if text := fieldText(errData, "message"); text != "" {
 				return text
 			}
+			if text := fieldText(errData, "code"); text != "" {
+				return text
+			}
+		}
+		if text := fieldText(m, "error"); text != "" {
+			return text
 		}
 	}
 	return compactBody(raw)

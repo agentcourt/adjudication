@@ -275,7 +275,7 @@ func TestUnknownCaseOmitsActionsAndShowsServiceError(t *testing.T) {
 			t.Fatalf("unexpected request after missing case: %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusNotFound)
-		writeTestJSON(w, map[string]any{"ok": false, "error": "unknown_case", "message": "case not found"})
+		writeTestJSON(w, map[string]any{"ok": false, "error": map[string]any{"code": "unknown_case", "message": "unknown case_id"}})
 	}))
 	defer api.Close()
 	app := testApp(t, api.URL, "")
@@ -287,7 +287,7 @@ func TestUnknownCaseOmitsActionsAndShowsServiceError(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		"case record returned HTTP 404: case not found",
+		"case record returned HTTP 404: unknown case_id",
 		"unknown_case",
 		"Case Response",
 	} {
