@@ -147,7 +147,7 @@ const pageTemplates = `
 {{end}}
 {{if .Artifacts}}
 <h2>Artifacts</h2>
-<table><tr><th>Name</th><th>Size</th></tr>{{range .Artifacts}}<tr><td><a href="/system/{{$.System.ID}}/{{$.Scope.ID}}/cases/{{$.CaseID | pathEscape}}/artifacts/{{.Name | pathEscape}}">{{.Name}}</a></td><td>{{.Size}}</td></tr>{{end}}</table>
+<table><tr><th>Name</th><th>Size</th><th>View</th></tr>{{range .Artifacts}}<tr><td><a href="/system/{{$.System.ID}}/{{$.Scope.ID}}/cases/{{$.CaseID | pathEscape}}/artifacts/{{.Name | pathEscape}}">{{.Name}}</a></td><td>{{.Size}}</td><td>{{if isLog .Name}}<a href="/system/{{$.System.ID}}/{{$.Scope.ID}}/cases/{{$.CaseID | pathEscape}}/log?name={{.Name | query}}">log</a>{{end}}</td></tr>{{end}}</table>
 {{end}}
 {{if .RecentEvents}}
 <h2>Recent Events</h2>
@@ -189,9 +189,33 @@ const pageTemplates = `
 {{define "artifacts"}}{{template "layout-start" .}}
 <h1>{{.System.Label}} Artifacts {{.CaseID}}</h1>
 {{if .Artifacts}}
-<table><tr><th>Name</th><th>Size</th></tr>{{range .Artifacts}}<tr><td><a href="/system/{{$.System.ID}}/{{$.Scope.ID}}/cases/{{$.CaseID | pathEscape}}/artifacts/{{.Name | pathEscape}}">{{.Name}}</a></td><td>{{.Size}}</td></tr>{{end}}</table>
+<table><tr><th>Name</th><th>Size</th><th>View</th></tr>{{range .Artifacts}}<tr><td><a href="/system/{{$.System.ID}}/{{$.Scope.ID}}/cases/{{$.CaseID | pathEscape}}/artifacts/{{.Name | pathEscape}}">{{.Name}}</a></td><td>{{.Size}}</td><td>{{if isLog .Name}}<a href="/system/{{$.System.ID}}/{{$.Scope.ID}}/cases/{{$.CaseID | pathEscape}}/log?name={{.Name | query}}">log</a>{{end}}</td></tr>{{end}}</table>
 {{else}}<p class="muted">No artifacts returned.</p>{{end}}
 	{{if .Response}}<h2>Service Response</h2><pre>{{response .Response}}</pre>{{end}}
+{{template "layout-end" .}}{{end}}
+
+{{define "log"}}{{template "layout-start" .}}
+<h1>{{.System.Label}} Log {{.CaseID}}</h1>
+<div class="bar">
+  <a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}">case</a>
+  {{if .LogName}}<a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/artifacts/{{.LogName | pathEscape}}">raw log</a>{{end}}
+</div>
+<form method="get" action="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/log">
+  <fieldset>
+    <legend>Log</legend>
+    <label for="log-name">Artifact</label>
+    <input id="log-name" name="name" value="{{.LogName}}" style="width:100%">
+    <label for="log-mode">Mode</label>
+    <select id="log-mode" name="mode">
+      <option value="tail" {{if eq .LogMode "tail"}}selected{{end}}>tail</option>
+      <option value="head" {{if eq .LogMode "head"}}selected{{end}}>head</option>
+    </select>
+    <label for="log-bytes">Bytes</label>
+    <input id="log-bytes" name="bytes" value="{{.LogBytes}}">
+    <button type="submit">Reload</button>
+  </fieldset>
+</form>
+{{if .LogText}}<pre>{{.LogText}}</pre>{{else if .LogNotice}}<p class="muted">{{.LogNotice}}</p>{{end}}
 {{template "layout-end" .}}{{end}}
 
 {{define "events"}}{{template "layout-start" .}}

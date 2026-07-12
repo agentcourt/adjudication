@@ -225,9 +225,43 @@ func TestCaseDetailLinksStructuredLogFields(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		`href="/system/arb/clerk/cases/case-log/artifacts/clerk.stdout"`,
-		`href="/system/arb/clerk/cases/case-log/artifacts/clerk.stderr"`,
+		`href="/system/arb/clerk/cases/case-log/log?name=clerk.stdout"`,
+		`href="/system/arb/clerk/cases/case-log/log?name=clerk.stderr"`,
 		"/tmp/run/case-log/clerk.stderr",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q: %s", want, body)
+		}
+	}
+}
+
+func TestLogViewerReadsTailRange(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/clerk/v1/cases/case-log/artifacts/clerk.stderr" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get("Range") != "bytes=-4096" {
+			t.Fatalf("range = %q", r.Header.Get("Range"))
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Content-Range", "bytes 20-35/36")
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte("last log line\n"))
+	}))
+	defer api.Close()
+	app := testApp(t, api.URL, "")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/system/arb/clerk/cases/case-log/log?name=clerk.stderr&bytes=4096", nil)
+	app.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"ARB Log case-log",
+		"last log line",
+		`href="/system/arb/clerk/cases/case-log/artifacts/clerk.stderr"`,
+		`<option value="tail" selected>tail</option>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q: %s", want, body)

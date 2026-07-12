@@ -48,6 +48,11 @@ type ViewData struct {
 	EventLimit           string
 	EventBytes           string
 	HasEvents            bool
+	LogName              string
+	LogMode              string
+	LogBytes             string
+	LogText              string
+	LogNotice            string
 	Evidence             []EvidenceEntry
 	EvidenceID           string
 	EvidenceNotice       string
@@ -127,6 +132,7 @@ func New(cfg Config) (*App, error) {
 		"keys":        sortedKeys,
 		"pathEscape":  url.PathEscape,
 		"query":       url.QueryEscape,
+		"isLog":       isLogArtifactName,
 		"join":        strings.Join,
 	}).Parse(pageTemplates)
 	if err != nil {
@@ -234,6 +240,8 @@ func (a *App) handleSystem(w http.ResponseWriter, r *http.Request) {
 		a.proxyService(w, r, sys, artifactPath(scope, caseID, name))
 	case len(parts) == 6 && parts[5] == "events" && r.Method == http.MethodGet:
 		a.handleEvents(w, r, sys, scope, caseID)
+	case len(parts) == 6 && parts[5] == "log" && r.Method == http.MethodGet:
+		a.handleLog(w, r, sys, scope, caseID)
 	case len(parts) == 6 && parts[5] == "evidence" && r.Method == http.MethodGet:
 		a.handleEvidence(w, r, sys, scope, caseID)
 	case len(parts) == 7 && parts[5] == "evidence" && proxyMethod(r.Method):
@@ -394,6 +402,35 @@ func (a *App) handleEvents(w http.ResponseWriter, r *http.Request, sys SystemCon
 	a.render(w, http.StatusOK, "events", data)
 }
 
+func (a *App) handleLog(w http.ResponseWriter, r *http.Request, sys SystemConfig, scope ScopeConfig, caseID string) {
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	mode := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("mode")))
+	if mode != "head" {
+		mode = "tail"
+	}
+	byteCount := boundedQueryInt(r, "bytes", 65536, 1024, 4<<20)
+	data := baseView(sys, scope, a.systems(), "", "")
+	data.Title = sys.Label + " Log " + caseID
+	data.CaseID = caseID
+	data.LogName = name
+	data.LogMode = mode
+	data.LogBytes = strconv.Itoa(byteCount)
+	if !validArtifactName(name) {
+		data.Error = "log artifact name is required"
+		a.render(w, http.StatusBadRequest, "log", data)
+		return
+	}
+	text, notice, err := a.loadLogText(r.Context(), sys, scope, caseID, name, mode, int64(byteCount))
+	data.LogText = text
+	data.LogNotice = notice
+	if err != nil {
+		data.Error = err.Error()
+		a.render(w, http.StatusBadGateway, "log", data)
+		return
+	}
+	a.render(w, http.StatusOK, "log", data)
+}
+
 func (a *App) handleEvidence(w http.ResponseWriter, r *http.Request, sys SystemConfig, scope ScopeConfig, caseID string) {
 	evidenceID := strings.TrimSpace(r.URL.Query().Get("id"))
 	data := baseView(sys, scope, a.systems(), "", "")
@@ -473,6 +510,32 @@ func (a *App) loadEventTailRows(ctx context.Context, sys SystemConfig, scope Sco
 		return nil, fmt.Sprintf("events.ndjson returned no complete event records in the selected %d-byte range; increase the byte window.", tailBytes), nil
 	}
 	return rows, "", nil
+}
+
+func (a *App) loadLogText(ctx context.Context, sys SystemConfig, scope ScopeConfig, caseID string, name string, mode string, byteCount int64) (string, string, error) {
+	headers := http.Header{}
+	switch mode {
+	case "head":
+		headers.Set("Range", fmt.Sprintf("bytes=0-%d", byteCount-1))
+	default:
+		headers.Set("Range", fmt.Sprintf("bytes=-%d", byteCount))
+	}
+	resp, err := a.client.ProxyWithHeaders(ctx, sys, http.MethodGet, artifactPath(scope, caseID, name), nil, "", headers)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, byteCount+1))
+	if err != nil {
+		return "", "", err
+	}
+	if int64(len(raw)) > byteCount {
+		return "", fmt.Sprintf("%s response exceeded %d bytes; the service did not return a bounded range", name, byteCount), nil
+	}
+	if resp.StatusCode >= 400 {
+		return "", fmt.Sprintf("%s returned HTTP %d: %s", name, resp.StatusCode, responseMessage(raw)), nil
+	}
+	return compactBody(raw), "", nil
 }
 
 func (a *App) handleManageCase(w http.ResponseWriter, r *http.Request, sys SystemConfig, scope ScopeConfig, caseID string) {
@@ -664,6 +727,15 @@ func artifactNamed(artifacts []Artifact, name string) bool {
 		}
 	}
 	return false
+}
+
+func validArtifactName(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" || strings.HasPrefix(name, "/") {
+		return false
+	}
+	clean := path.Clean(name)
+	return clean == name && clean != "." && !strings.HasPrefix(clean, "../") && !strings.Contains(clean, "/../")
 }
 
 func caseHasAttestationEvents(record map[string]any) bool {
@@ -1063,7 +1135,7 @@ func recordValue(sys SystemConfig, scope ScopeConfig, caseID string, key string,
 		return ""
 	}
 	if name := logArtifactName(key, text); name != "" {
-		href := caseURL(sys.ID, scope.ID, caseID) + "/artifacts/" + url.PathEscape(name)
+		href := caseURL(sys.ID, scope.ID, caseID) + "/log?name=" + url.QueryEscape(name)
 		return template.HTML(`<a href="` + template.HTMLEscapeString(href) + `">` + template.HTMLEscapeString(text) + `</a>`)
 	}
 	return template.HTML(template.HTMLEscapeString(text))
@@ -1286,6 +1358,14 @@ func logArtifactName(key string, text string) string {
 	if key != "stdout_log" && key != "stderr_log" {
 		return ""
 	}
+	return matchingLogArtifactName(text)
+}
+
+func isLogArtifactName(text string) bool {
+	return matchingLogArtifactName(text) != ""
+}
+
+func matchingLogArtifactName(text string) string {
 	for _, name := range []string{
 		"clerk.stdout",
 		"clerk.stderr",
