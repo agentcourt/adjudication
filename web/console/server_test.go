@@ -24,6 +24,14 @@ func TestListCasesForwardsBearerAndRendersRows(t *testing.T) {
 				"run_id":     "run-case-1",
 				"status":     "running",
 				"created_at": "2026-07-10T00:00:00Z",
+				"summary": map[string]any{
+					"final_state": map[string]any{
+						"case": map[string]any{
+							"phase":  "post_verdict",
+							"status": "judgment_entered",
+						},
+					},
+				},
 			}},
 		})
 	}))
@@ -36,7 +44,7 @@ func TestListCasesForwardsBearerAndRendersRows(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "case-1") || !strings.Contains(body, "running") {
+	if !strings.Contains(body, "case-1") || !strings.Contains(body, "running") || !strings.Contains(body, "case.phase=post_verdict") {
 		t.Fatalf("body missing case row: %s", body)
 	}
 }

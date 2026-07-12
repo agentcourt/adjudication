@@ -93,12 +93,13 @@ const pageTemplates = `
 </div>
 {{if .Cases}}
 <table>
-  <tr><th>Case</th><th>Run</th><th>Status</th><th>Created</th><th>Finished</th><th>Example</th><th>Error</th></tr>
+  <tr><th>Case</th><th>Run</th><th>Status</th><th>Facts</th><th>Created</th><th>Finished</th><th>Example</th><th>Error</th></tr>
   {{range .Cases}}
   <tr>
     <td><a href="/system/{{$.System.ID}}/{{$.Scope.ID}}/cases/{{field . "case_id" | pathEscape}}">{{field . "case_id"}}</a></td>
     <td>{{field . "run_id"}}</td>
     <td>{{field . "status"}}</td>
+    <td>{{caseFacts .}}</td>
     <td>{{field . "created_at"}}</td>
     <td>{{field . "finished_at"}}</td>
     <td>{{field . "example"}}</td>

@@ -129,6 +129,7 @@ func New(cfg Config) (*App, error) {
 		"response":    responseText,
 		"body":        compactBody,
 		"field":       fieldText,
+		"caseFacts":   caseListFacts,
 		"recordValue": recordValue,
 		"keys":        sortedKeys,
 		"pathEscape":  url.PathEscape,
@@ -1128,6 +1129,41 @@ func fieldText(v any, key string) string {
 		return ""
 	}
 	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func caseListFacts(record map[string]any) string {
+	if record == nil {
+		return ""
+	}
+	var facts []recordFact
+	seen := map[string]bool{}
+	addScalarFacts(&facts, seen, "", record, []string{
+		"case_status",
+		"phase",
+		"resolution",
+		"final_reason",
+		"mode",
+		"exit_code",
+	})
+	if summary := asMap(record["summary"]); summary != nil {
+		for _, fact := range recordFacts(summary) {
+			switch fact.Label {
+			case "case.status", "case.phase", "case.resolution", "case.final_reason", "case.council_members", "case.vote_tally", "case.answers", "case.case_files", "case.technical_reports", "resolution", "final_reason", "vote_tally", "answers", "events":
+				addRecordFact(&facts, seen, fact.Label, fact.Value)
+			}
+			if len(facts) >= 6 {
+				break
+			}
+		}
+	}
+	if len(facts) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(facts))
+	for _, fact := range facts {
+		parts = append(parts, fact.Label+"="+fact.Value)
+	}
+	return limitText(strings.Join(parts, "; "), 500)
 }
 
 func recordValue(sys SystemConfig, scope ScopeConfig, caseID string, key string, value any) template.HTML {
