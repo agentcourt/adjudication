@@ -127,6 +127,7 @@ const pageTemplates = `
 
 {{define "case"}}{{template "layout-start" .}}
 <h1>{{.System.Label}} {{.Scope.Label}} Case {{.CaseID}}</h1>
+{{if .CaseAvailable}}
 <div class="actions">
   {{if .CanManage}}
   <form method="post" action="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/manage"><button type="submit">{{.Scope.ManageAction}}</button></form>
@@ -141,6 +142,7 @@ const pageTemplates = `
   <a class="pill" href="/system/{{.System.ID}}/{{.Scope.ID}}/cases/{{.CaseID | pathEscape}}/attestation/events">attestation events</a>
   {{end}}
 </div>
+{{end}}
 {{if .Record}}
 <h2>Record</h2>
 <table>{{range keys .Record}}<tr><th>{{.}}</th><td>{{recordValue $.System $.Scope $.CaseID . (index $.Record .)}}</td></tr>{{end}}</table>

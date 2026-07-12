@@ -269,6 +269,44 @@ func TestLogViewerReadsTailRange(t *testing.T) {
 	}
 }
 
+func TestUnknownCaseOmitsActionsAndShowsServiceError(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/clerk/v1/cases/missing-case" {
+			t.Fatalf("unexpected request after missing case: %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusNotFound)
+		writeTestJSON(w, map[string]any{"ok": false, "error": "unknown_case", "message": "case not found"})
+	}))
+	defer api.Close()
+	app := testApp(t, api.URL, "")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/system/arb/clerk/cases/missing-case", nil)
+	app.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"case record returned HTTP 404: case not found",
+		"unknown_case",
+		"Case Response",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q: %s", want, body)
+		}
+	}
+	for _, unwanted := range []string{
+		"/result",
+		"/artifacts",
+		"/evidence",
+		"/manage",
+	} {
+		if strings.Contains(body, unwanted) {
+			t.Fatalf("body includes stale action %q: %s", unwanted, body)
+		}
+	}
+}
+
 func TestArtifactListLinksNestedLogsToViewer(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/clerk/v1/cases/case-log/artifacts" {

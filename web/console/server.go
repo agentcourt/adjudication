@@ -66,6 +66,7 @@ type ViewData struct {
 	CreateTemplate       string
 	AutoRefresh          bool
 	CanManage            bool
+	CaseAvailable        bool
 }
 
 type Artifact struct {
@@ -321,20 +322,11 @@ func (a *App) handleCreateCase(w http.ResponseWriter, r *http.Request, sys Syste
 
 func (a *App) handleCaseDetail(w http.ResponseWriter, r *http.Request, sys SystemConfig, scope ScopeConfig, caseID string, notice string) {
 	record, recordErr := a.client.JSON(r.Context(), sys, http.MethodGet, casePath(scope, caseID, ""), nil)
-	result, _ := a.client.JSON(r.Context(), sys, http.MethodGet, casePath(scope, caseID, "result"), nil)
-	artifacts, _ := a.client.JSON(r.Context(), sys, http.MethodGet, casePath(scope, caseID, "artifacts"), nil)
 	data := baseView(sys, scope, a.systems(), "", "")
 	data.Title = sys.Label + " Case " + caseID
 	data.CaseID = caseID
 	data.Notice = notice
 	data.Record = asMap(record.JSON["case"])
-	data.Result = result.JSON
-	data.Artifacts = artifactsFrom(artifacts.JSON["artifacts"])
-	data.HasEvents = artifactNamed(data.Artifacts, "events.ndjson")
-	data.HasAttestationEvents = caseHasAttestationEvents(data.Record)
-	data.EventIssues, data.RecentEvents, data.EventNotice = a.loadEventData(r.Context(), sys, scope, caseID, data.Artifacts)
-	data.AutoRefresh = activeCase(data.Record, data.Result)
-	data.CanManage = data.AutoRefresh
 	data.Response = &record
 	if recordErr != nil {
 		data.Error = recordErr.Error()
@@ -342,9 +334,20 @@ func (a *App) handleCaseDetail(w http.ResponseWriter, r *http.Request, sys Syste
 		return
 	}
 	if record.StatusCode >= 400 {
+		data.Error = fmt.Sprintf("case record returned HTTP %d: %s", record.StatusCode, responseMessage(record.Body))
 		a.render(w, http.StatusBadGateway, "case", data)
 		return
 	}
+	result, _ := a.client.JSON(r.Context(), sys, http.MethodGet, casePath(scope, caseID, "result"), nil)
+	artifacts, _ := a.client.JSON(r.Context(), sys, http.MethodGet, casePath(scope, caseID, "artifacts"), nil)
+	data.Result = result.JSON
+	data.Artifacts = artifactsFrom(artifacts.JSON["artifacts"])
+	data.HasEvents = artifactNamed(data.Artifacts, "events.ndjson")
+	data.HasAttestationEvents = caseHasAttestationEvents(data.Record)
+	data.EventIssues, data.RecentEvents, data.EventNotice = a.loadEventData(r.Context(), sys, scope, caseID, data.Artifacts)
+	data.AutoRefresh = activeCase(data.Record, data.Result)
+	data.CanManage = data.AutoRefresh
+	data.CaseAvailable = true
 	a.render(w, http.StatusOK, "case", data)
 }
 
