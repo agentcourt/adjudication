@@ -269,6 +269,35 @@ func TestLogViewerReadsTailRange(t *testing.T) {
 	}
 }
 
+func TestArtifactListLinksNestedLogsToViewer(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/clerk/v1/cases/case-log/artifacts" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		writeTestJSON(w, map[string]any{"ok": true, "case_id": "case-log", "artifacts": []map[string]any{{"name": "service-logs/adc.stderr", "size_bytes": 42}}})
+	}))
+	defer api.Close()
+	app := testApp(t, api.URL, "")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/system/arb/clerk/cases/case-log/artifacts", nil)
+	app.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`href="/system/arb/clerk/cases/case-log/log?name=service-logs%2Fadc.stderr"`,
+		`href="/system/arb/clerk/cases/case-log/artifacts/service-logs%2Fadc.stderr"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "service-logs%252Fadc.stderr") {
+		t.Fatalf("body double-encodes nested log name: %s", body)
+	}
+}
+
 func TestCaseDetailCompactsStructuredFieldsAndRefreshesRunningCase(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

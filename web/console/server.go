@@ -131,7 +131,7 @@ func New(cfg Config) (*App, error) {
 		"recordValue": recordValue,
 		"keys":        sortedKeys,
 		"pathEscape":  url.PathEscape,
-		"query":       url.QueryEscape,
+		"query":       queryEscape,
 		"isLog":       isLogArtifactName,
 		"join":        strings.Join,
 	}).Parse(pageTemplates)
@@ -667,6 +667,10 @@ func evidencePath(scope ScopeConfig, caseID string, evidenceID string) string {
 
 func caseURL(systemID string, scopeID string, caseID string) string {
 	return "/system/" + url.PathEscape(systemID) + "/" + url.PathEscape(scopeID) + "/cases/" + url.PathEscape(caseID)
+}
+
+func queryEscape(value string) template.URL {
+	return template.URL(url.QueryEscape(value))
 }
 
 func responseCaseID(m map[string]any) string {
