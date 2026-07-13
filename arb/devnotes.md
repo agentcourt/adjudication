@@ -53,7 +53,7 @@ Verification:
 
 Reference: `engine/Proofs/OpportunityAgreement.lean`, `engine/Main.lean`
 
-ARB now proves that every accepted actor-facing public action from a reachable active state uses the actor role advertised by the current `nextOpportunity`.  The proof covers merits filings, submitted evidence, optional phase passes, and council votes.  It extracts the role accepted by each `stepCore` branch and matches it against the role returned by the corresponding `nextOpportunityForPhase` branch.
+ARB now proves that every accepted actor-facing public action from a reachable active state uses the actor role advertised by the current `nextOpportunity`.  The proof covers merits filings, submitted evidence, optional phase passes, and council votes.  It extracts the role accepted by each `stepCore` branch and matches it against the role returned by the corresponding `nextOpportunityForPhase` branch.  The file also exposes a combined theorem that packages the role match with the allowed-tool match.
 
 Verification:
 

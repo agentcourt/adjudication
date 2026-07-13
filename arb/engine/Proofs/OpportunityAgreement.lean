@@ -888,4 +888,25 @@ theorem reachable_actor_step_role_matches_nextOpportunity
                     · exact False.elim (hActorFacing.2 hFail)
                     · simp [stepCore] at hStepCore
 
+theorem reachable_actor_step_matches_nextOpportunity
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hs : Reachable s)
+    (hStatus : s.case.status = "active")
+    (hActorFacing : actorFacingAction action)
+    (hStep : step { state := s, action := action } = .ok t) :
+    ∃ opportunity,
+      (nextOpportunity s).opportunity = some opportunity ∧
+        trimString action.actor_role = opportunity.role ∧
+          action.action_type ∈ opportunity.allowed_tools := by
+  rcases reachable_actor_step_role_matches_nextOpportunity
+      s t action hs hStatus hActorFacing hStep with
+    ⟨roleOpportunity, hRoleNext, hRole⟩
+  rcases reachable_actor_step_allowed_by_nextOpportunity
+      s t action hs hStatus hActorFacing hStep with
+    ⟨toolOpportunity, hToolNext, hAllowed⟩
+  rw [hRoleNext] at hToolNext
+  cases hToolNext
+  exact ⟨roleOpportunity, hRoleNext, hRole, hAllowed⟩
+
 end ArbProofs
