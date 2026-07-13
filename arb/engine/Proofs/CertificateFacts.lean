@@ -98,4 +98,49 @@ theorem checkReplayCertificate_status_closed_facts
         checkReplayCertificate_ok_decisionSummary_replayed
           req actions claimed hCheck }
 
+theorem ClosedCertificateFacts.demonstrated_sound
+    {req : InitializeCaseRequest}
+    {actions : List CourtAction}
+    {claimed : ArbitrationState}
+    (facts : ClosedCertificateFacts req actions claimed)
+    (hResolution : claimed.case.resolution = "demonstrated") :
+    demonstratedOutcomeSound claimed := by
+  rcases facts.outcome_sound with hDemonstrated | hRest
+  · exact hDemonstrated.2
+  · rcases hRest with hNotDemonstrated | hNoMajority
+    · exact False.elim <| by
+        simpa [hResolution] using hNotDemonstrated.1
+    · exact False.elim <| by
+        simpa [hResolution] using hNoMajority.1
+
+theorem ClosedCertificateFacts.not_demonstrated_sound
+    {req : InitializeCaseRequest}
+    {actions : List CourtAction}
+    {claimed : ArbitrationState}
+    (facts : ClosedCertificateFacts req actions claimed)
+    (hResolution : claimed.case.resolution = "not_demonstrated") :
+    notDemonstratedOutcomeSound claimed := by
+  rcases facts.outcome_sound with hDemonstrated | hRest
+  · exact False.elim <| by
+      simpa [hResolution] using hDemonstrated.1
+  · rcases hRest with hNotDemonstrated | hNoMajority
+    · exact hNotDemonstrated.2
+    · exact False.elim <| by
+        simpa [hResolution] using hNoMajority.1
+
+theorem ClosedCertificateFacts.no_majority_sound
+    {req : InitializeCaseRequest}
+    {actions : List CourtAction}
+    {claimed : ArbitrationState}
+    (facts : ClosedCertificateFacts req actions claimed)
+    (hResolution : claimed.case.resolution = "no_majority") :
+    noMajorityOutcomeSound claimed := by
+  rcases facts.outcome_sound with hDemonstrated | hRest
+  · exact False.elim <| by
+      simpa [hResolution] using hDemonstrated.1
+  · rcases hRest with hNotDemonstrated | hNoMajority
+    · exact False.elim <| by
+        simpa [hResolution] using hNotDemonstrated.1
+    · exact hNoMajority.2
+
 end ArbProofs
