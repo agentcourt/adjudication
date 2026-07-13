@@ -17,7 +17,7 @@ def pristineCouncilState (c : ArbitrationCase) : Prop :=
     ∀ member ∈ c.council_members, memberIsSeated member = true
 
 /-
-This file begins Stage 3 of the verification plan: a reachable non-closed case
+This file begins Stage 3 of the verification plan: a reachable active case
 should not become stuck without a next opportunity.
 
 The proof has two different parts.
@@ -212,22 +212,23 @@ theorem reachable_phase_closed_implies_status_closed
       have hOpenings := initializeCase_phase_openings req s hInit
       simp [hOpenings] at hClosed
   | step u t action hu hStep _ =>
+      have hStepCore := stepCore_ok_of_step_ok u t action hStep
       by_cases hOpening : action.action_type = "record_opening_statement"
-      · exact False.elim ((step_record_opening_statement_phase_ne_closed u t action hOpening hStep) hClosed)
+      · exact False.elim ((step_record_opening_statement_phase_ne_closed u t action hOpening hStepCore) hClosed)
       · by_cases hArgument : action.action_type = "submit_argument"
-        · exact False.elim ((step_submit_argument_phase_ne_closed u t action hArgument hStep) hClosed)
+        · exact False.elim ((step_submit_argument_phase_ne_closed u t action hArgument hStepCore) hClosed)
         · by_cases hRebuttal : action.action_type = "submit_rebuttal"
-          · exact False.elim ((step_submit_rebuttal_phase_ne_closed u t action hRebuttal hStep) hClosed)
+          · exact False.elim ((step_submit_rebuttal_phase_ne_closed u t action hRebuttal hStepCore) hClosed)
           · by_cases hSurrebuttal : action.action_type = "submit_surrebuttal"
-            · exact False.elim ((step_submit_surrebuttal_phase_ne_closed u t action hSurrebuttal hStep) hClosed)
+            · exact False.elim ((step_submit_surrebuttal_phase_ne_closed u t action hSurrebuttal hStepCore) hClosed)
             · by_cases hClosing : action.action_type = "deliver_closing_statement"
-              · exact False.elim ((step_deliver_closing_statement_phase_ne_closed u t action hClosing hStep) hClosed)
+              · exact False.elim ((step_deliver_closing_statement_phase_ne_closed u t action hClosing hStepCore) hClosed)
               · by_cases hPass : action.action_type = "pass_phase_opportunity"
-                · exact False.elim ((step_pass_phase_opportunity_phase_ne_closed u t action hPass hStep) hClosed)
+                · exact False.elim ((step_pass_phase_opportunity_phase_ne_closed u t action hPass hStepCore) hClosed)
                 · by_cases hEvidence : action.action_type = "submit_evidence"
-                  · exact False.elim ((step_submit_evidence_phase_ne_closed u t action hEvidence hStep) hClosed)
+                  · exact False.elim ((step_submit_evidence_phase_ne_closed u t action hEvidence hStepCore) hClosed)
                   · by_cases hVote : action.action_type = "submit_council_vote"
-                    · rcases step_submit_council_vote_result u t action hVote hStep with
+                    · rcases step_submit_council_vote_result u t action hVote hStepCore with
                       ⟨memberId, vote, rationale, hDeliberation, hCont⟩
                       let c1 := { u.case with council_votes := u.case.council_votes.concat {
                         member_id := memberId
@@ -239,7 +240,7 @@ theorem reachable_phase_closed_implies_status_closed
                         simpa [c1] using hDeliberation) (by
                         simpa [c1] using hCont) hClosed
                     · by_cases hRemoval : action.action_type = "remove_council_member"
-                      · rcases step_remove_council_member_result u t action hRemoval hStep with
+                      · rcases step_remove_council_member_result u t action hRemoval hStepCore with
                         ⟨memberId, status, hDeliberation, hCont⟩
                         let c1 := {
                         u.case with council_members := u.case.council_members.map (fun (member : CouncilMember) =>
@@ -251,7 +252,19 @@ theorem reachable_phase_closed_implies_status_closed
                         exact continueDeliberation_phase_closed_implies_status_closed u t c1 (by
                           simpa [c1] using hDeliberation) (by
                           simpa [c1] using hCont) hClosed
-                      · simp [step] at hStep
+                      · by_cases hFail : action.action_type = "fail_opportunity"
+                        · have hFailOp := step_fail_opportunity_result u t action hFail hStepCore
+                          rcases failOpportunity_result u t action.payload hFailOp with hCouncil | hParty
+                          · rcases hCouncil with ⟨_memberId, _reason, _opportunityId, _message,
+                              c1, hC1, hDeliberation, _hSeated, _hFresh, hCont⟩
+                            have hDeliberation1 : c1.phase = "deliberation" := by
+                              rw [hC1]
+                              simpa using hDeliberation
+                            exact continueDeliberation_phase_closed_implies_status_closed
+                              u t c1 hDeliberation1 hCont hClosed
+                          · rcases hParty with ⟨_failure, _hEq, hNotClosed, _hNotDeliberation⟩
+                            exact False.elim (hNotClosed hClosed)
+                        · simp [stepCore] at hStepCore
 
 /--
 A successful opening step never reaches deliberation.
@@ -263,13 +276,13 @@ theorem step_record_opening_statement_phase_ne_deliberation
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "record_opening_statement")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase ≠ "deliberation" := by
   have hPhase : s.case.phase = "openings" := by
     by_cases hOpen : s.case.phase = "openings"
     · exact hOpen
     · have hClosed : s.case.phase != "openings" := by simpa using hOpen
-      simp [step, hType, hClosed] at hStep
+      simp [stepCore, hType, hClosed] at hStep
       cases hStep
   rcases step_record_opening_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   by_cases hAdvance : 1 ≤ s.case.openings.length
@@ -285,7 +298,7 @@ theorem step_submit_argument_phase_ne_deliberation
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_argument")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase ≠ "deliberation" := by
   have hSubmit :
       recordMeritsSubmission
@@ -297,7 +310,7 @@ theorem step_submit_argument_phase_ne_deliberation
         s.policy.max_argument_chars
         true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   have hPhase : s.case.phase = "arguments" := by
     unfold recordMeritsSubmission at hSubmit
     by_cases hArg : s.case.phase = "arguments"
@@ -323,7 +336,7 @@ theorem step_submit_rebuttal_phase_ne_deliberation
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_rebuttal")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase ≠ "deliberation" := by
   have hSubmit :
       recordMeritsSubmission
@@ -335,7 +348,7 @@ theorem step_submit_rebuttal_phase_ne_deliberation
         s.policy.max_rebuttal_chars
         true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   have hPhase : s.case.phase = "rebuttals" := by
     unfold recordMeritsSubmission at hSubmit
     by_cases hRebuttal : s.case.phase = "rebuttals"
@@ -358,7 +371,7 @@ theorem step_submit_surrebuttal_phase_ne_deliberation
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_surrebuttal")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase ≠ "deliberation" := by
   have hSubmit :
       recordMeritsSubmission
@@ -368,9 +381,9 @@ theorem step_submit_surrebuttal_phase_ne_deliberation
         "defendant"
         "surrebuttal"
         s.policy.max_surrebuttal_chars
-        false
+        true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   have hPhase : s.case.phase = "surrebuttals" := by
     unfold recordMeritsSubmission at hSubmit
     by_cases hSurrebuttal : s.case.phase = "surrebuttals"
@@ -378,11 +391,11 @@ theorem step_submit_surrebuttal_phase_ne_deliberation
     · have hClosed : s.case.phase != "surrebuttals" := by simpa using hSurrebuttal
       simp [hClosed] at hSubmit
       cases hSubmit
-  rcases recordMeritsSubmission_without_materials_result
+  rcases recordMeritsSubmission_with_materials_result
       s t "surrebuttals" action.actor_role "defendant"
       "surrebuttal" s.policy.max_surrebuttal_chars action.payload hSubmit with
-    ⟨rawText, rfl⟩
-  simp [stateWithCase, addFiling, advanceAfterMerits, hPhase]
+    ⟨rawText, offered, reports, rfl⟩
+  simp [stateWithCase, appendSupplementalMaterials, addFiling, advanceAfterMerits, hPhase]
 
 /--
 Passing an optional phase never reaches deliberation.
@@ -394,7 +407,7 @@ theorem step_pass_phase_opportunity_phase_ne_deliberation
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "pass_phase_opportunity")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase ≠ "deliberation" := by
   by_cases hRebuttals : s.case.phase = "rebuttals"
   · have hPass :
@@ -403,7 +416,7 @@ theorem step_pass_phase_opportunity_phase_ne_deliberation
           if !s.case.rebuttals.isEmpty then
             throw "rebuttal already submitted"
           pure <| stateWithCase s { s.case with phase := "surrebuttals" }) = .ok t := by
-      simpa [step, hType, hRebuttals] using hStep
+      simpa [stepCore, hType, hRebuttals] using hStep
     cases hRole : requireRole action.actor_role "plaintiff" with
     | error err =>
         rw [hRole] at hPass
@@ -427,7 +440,7 @@ theorem step_pass_phase_opportunity_phase_ne_deliberation
             if !s.case.surrebuttals.isEmpty then
               throw "surrebuttal already submitted"
             pure <| stateWithCase s { s.case with phase := "closings" }) = .ok t := by
-        simpa [step, hType, hRebuttals, hSurrebuttals] using hStep
+        simpa [stepCore, hType, hRebuttals, hSurrebuttals] using hStep
       cases hRole : requireRole action.actor_role "defendant" with
       | error err =>
           rw [hRole] at hPass
@@ -444,7 +457,7 @@ theorem step_pass_phase_opportunity_phase_ne_deliberation
               simp [hEmpty] at hPass
               cases hPass
               simp [stateWithCase]
-    · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
+    · simp [stepCore, hType, hRebuttals, hSurrebuttals] at hStep
 
 theorem submitEvidence_source_meritsPhase
     (s t : ArbitrationState)
@@ -462,18 +475,27 @@ theorem submitEvidence_source_meritsPhase
           simp [submitEvidence, hRebuttals, hEmpty] at hSubmit
           change Except.error "rebuttal evidence is closed" = .ok t at hSubmit
           cases hSubmit
-    · simp [submitEvidence] at hSubmit
-      change Except.error "submitted evidence is allowed only in arguments and rebuttals" = .ok t at hSubmit
-      cases hSubmit
+    · by_cases hSurrebuttals : s.case.phase = "surrebuttals"
+      · cases hEmpty : s.case.surrebuttals.isEmpty with
+        | true =>
+            exact Or.inr <| Or.inr <| Or.inr <| Or.inl hSurrebuttals
+        | false =>
+            simp [submitEvidence, hSurrebuttals, hEmpty] at hSubmit
+            change Except.error "surrebuttal evidence is closed" = .ok t at hSubmit
+            cases hSubmit
+      · simp [submitEvidence] at hSubmit
+        change Except.error
+          "submitted evidence is allowed only in arguments, rebuttals, and surrebuttals" = .ok t at hSubmit
+        cases hSubmit
 
 theorem step_submit_evidence_phase_eq_source
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_evidence")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase = s.case.phase := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
   simp [stateWithCase, appendSubmittedEvidence]
 
@@ -481,10 +503,10 @@ theorem step_submit_evidence_phase_ne_deliberation
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_evidence")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase ≠ "deliberation" := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   have hMerits : meritsPhase s.case.phase :=
     submitEvidence_source_meritsPhase s t action.actor_role action.payload hSubmit
   have hEq := step_submit_evidence_phase_eq_source s t action hType hStep
@@ -837,7 +859,7 @@ theorem step_record_opening_statement_preserves_pristineCouncilState
     (action : CourtAction)
     (hType : action.action_type = "record_opening_statement")
     (hPristine : pristineCouncilState s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     pristineCouncilState t.case := by
   rcases step_record_opening_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact pristineCouncilState_congr
@@ -861,7 +883,7 @@ theorem step_submit_argument_preserves_pristineCouncilState
     (action : CourtAction)
     (hType : action.action_type = "submit_argument")
     (hPristine : pristineCouncilState s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     pristineCouncilState t.case := by
   have hSubmit :
       recordMeritsSubmission
@@ -873,7 +895,7 @@ theorem step_submit_argument_preserves_pristineCouncilState
         s.policy.max_argument_chars
         true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   rcases recordMeritsSubmission_with_materials_result
       s t "arguments" action.actor_role
       (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
@@ -909,7 +931,7 @@ theorem step_submit_rebuttal_preserves_pristineCouncilState
     (action : CourtAction)
     (hType : action.action_type = "submit_rebuttal")
     (hPristine : pristineCouncilState s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     pristineCouncilState t.case := by
   have hSubmit :
       recordMeritsSubmission
@@ -921,7 +943,7 @@ theorem step_submit_rebuttal_preserves_pristineCouncilState
         s.policy.max_rebuttal_chars
         true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   rcases recordMeritsSubmission_with_materials_result
       s t "rebuttals" action.actor_role "plaintiff"
       "rebuttal" s.policy.max_rebuttal_chars action.payload hSubmit with
@@ -948,7 +970,7 @@ theorem step_submit_surrebuttal_preserves_pristineCouncilState
     (action : CourtAction)
     (hType : action.action_type = "submit_surrebuttal")
     (hPristine : pristineCouncilState s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     pristineCouncilState t.case := by
   have hSubmit :
       recordMeritsSubmission
@@ -958,19 +980,28 @@ theorem step_submit_surrebuttal_preserves_pristineCouncilState
         "defendant"
         "surrebuttal"
         s.policy.max_surrebuttal_chars
-        false
+        true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
-  rcases recordMeritsSubmission_without_materials_result
+    simpa [stepCore, hType] using hStep
+  rcases recordMeritsSubmission_with_materials_result
       s t "surrebuttals" action.actor_role "defendant"
       "surrebuttal" s.policy.max_surrebuttal_chars action.payload hSubmit with
-    ⟨rawText, rfl⟩
+    ⟨rawText, offered, reports, rfl⟩
   exact pristineCouncilState_congr
     (c := s.case)
-    (d := addFiling s.case "surrebuttals" "defendant" (trimString rawText))
-    (addFiling_preserves_council_votes s.case "surrebuttals" "defendant" (trimString rawText))
-    (addFiling_preserves_deliberation_round s.case "surrebuttals" "defendant" (trimString rawText))
-    (addFiling_preserves_council_members s.case "surrebuttals" "defendant" (trimString rawText))
+    (d := appendSupplementalMaterials
+      (addFiling s.case "surrebuttals" "defendant" (trimString rawText))
+      offered
+      reports)
+    (by
+      rw [appendSupplementalMaterials_preserves_council_votes]
+      exact addFiling_preserves_council_votes s.case "surrebuttals" "defendant" (trimString rawText))
+    (by
+      rw [appendSupplementalMaterials_preserves_deliberation_round]
+      exact addFiling_preserves_deliberation_round s.case "surrebuttals" "defendant" (trimString rawText))
+    (by
+      rw [appendSupplementalMaterials_preserves_council_members]
+      exact addFiling_preserves_council_members s.case "surrebuttals" "defendant" (trimString rawText))
     hPristine
 
 theorem step_deliver_closing_statement_preserves_pristineCouncilState
@@ -978,7 +1009,7 @@ theorem step_deliver_closing_statement_preserves_pristineCouncilState
     (action : CourtAction)
     (hType : action.action_type = "deliver_closing_statement")
     (hPristine : pristineCouncilState s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     pristineCouncilState t.case := by
   rcases step_deliver_closing_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact pristineCouncilState_congr
@@ -1002,7 +1033,7 @@ theorem step_pass_phase_opportunity_preserves_pristineCouncilState
     (action : CourtAction)
     (hType : action.action_type = "pass_phase_opportunity")
     (hPristine : pristineCouncilState s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     pristineCouncilState t.case := by
   by_cases hRebuttals : s.case.phase = "rebuttals"
   · have hPass :
@@ -1011,7 +1042,7 @@ theorem step_pass_phase_opportunity_preserves_pristineCouncilState
           if !s.case.rebuttals.isEmpty then
             throw "rebuttal already submitted"
           pure <| stateWithCase s { s.case with phase := "surrebuttals" }) = .ok t := by
-      simpa [step, hType, hRebuttals] using hStep
+      simpa [stepCore, hType, hRebuttals] using hStep
     cases hRole : requireRole action.actor_role "plaintiff" with
     | error err =>
         rw [hRole] at hPass
@@ -1037,7 +1068,7 @@ theorem step_pass_phase_opportunity_preserves_pristineCouncilState
             if !s.case.surrebuttals.isEmpty then
               throw "surrebuttal already submitted"
             pure <| stateWithCase s { s.case with phase := "closings" }) = .ok t := by
-        simpa [step, hType, hRebuttals, hSurrebuttals] using hStep
+        simpa [stepCore, hType, hRebuttals, hSurrebuttals] using hStep
       cases hRole : requireRole action.actor_role "defendant" with
       | error err =>
           rw [hRole] at hPass
@@ -1056,17 +1087,17 @@ theorem step_pass_phase_opportunity_preserves_pristineCouncilState
                 (c := s.case)
                 (d := { s.case with phase := "closings" })
                 rfl rfl rfl hPristine
-    · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
+    · simp [stepCore, hType, hRebuttals, hSurrebuttals] at hStep
 
 theorem step_submit_evidence_preserves_pristineCouncilState
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_evidence")
     (hPristine : pristineCouncilState s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     pristineCouncilState t.case := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
   exact pristineCouncilState_congr
     (by simp [stateWithCase, appendSubmittedEvidence])
@@ -1089,16 +1120,17 @@ theorem reachable_meritsPhase_pristineCouncilState
   | init req s hInit =>
       exact initializeCase_establishes_pristineCouncilState req s hInit
   | step u t action hu hStep ih =>
+      have hStepCore := stepCore_ok_of_step_ok u t action hStep
       by_cases hOpening : action.action_type = "record_opening_statement"
       · have hPhase : u.case.phase = "openings" := by
           by_cases hOpen : u.case.phase = "openings"
           · exact hOpen
           · have hClosed : u.case.phase != "openings" := by simpa using hOpen
-            simp [step, hOpening, hClosed] at hStep
-            cases hStep
+            simp [stepCore, hOpening, hClosed] at hStepCore
+            cases hStepCore
         have hMeritsU : meritsPhase u.case.phase := Or.inl hPhase
         exact step_record_opening_statement_preserves_pristineCouncilState
-          u t action hOpening (ih hMeritsU) hStep
+          u t action hOpening (ih hMeritsU) hStepCore
       · by_cases hArgument : action.action_type = "submit_argument"
         · have hSubmit :
               recordMeritsSubmission
@@ -1110,7 +1142,7 @@ theorem reachable_meritsPhase_pristineCouncilState
                 u.policy.max_argument_chars
                 true
                 action.payload = .ok t := by
-            simpa [step, hArgument] using hStep
+            simpa [stepCore, hArgument] using hStepCore
           have hPhase : u.case.phase = "arguments" := by
             by_cases hArg : u.case.phase = "arguments"
             · exact hArg
@@ -1119,7 +1151,7 @@ theorem reachable_meritsPhase_pristineCouncilState
               cases hSubmit
           have hMeritsU : meritsPhase u.case.phase := Or.inr <| Or.inl hPhase
           exact step_submit_argument_preserves_pristineCouncilState
-            u t action hArgument (ih hMeritsU) hStep
+            u t action hArgument (ih hMeritsU) hStepCore
         · by_cases hRebuttal : action.action_type = "submit_rebuttal"
           · have hSubmit :
                 recordMeritsSubmission
@@ -1131,7 +1163,7 @@ theorem reachable_meritsPhase_pristineCouncilState
                   u.policy.max_rebuttal_chars
                   true
                   action.payload = .ok t := by
-              simpa [step, hRebuttal] using hStep
+              simpa [stepCore, hRebuttal] using hStepCore
             have hPhase : u.case.phase = "rebuttals" := by
               by_cases hRebuttalPhase : u.case.phase = "rebuttals"
               · exact hRebuttalPhase
@@ -1140,7 +1172,7 @@ theorem reachable_meritsPhase_pristineCouncilState
                 cases hSubmit
             have hMeritsU : meritsPhase u.case.phase := Or.inr <| Or.inr <| Or.inl hPhase
             exact step_submit_rebuttal_preserves_pristineCouncilState
-              u t action hRebuttal (ih hMeritsU) hStep
+              u t action hRebuttal (ih hMeritsU) hStepCore
           · by_cases hSurrebuttal : action.action_type = "submit_surrebuttal"
             · have hSubmit :
                   recordMeritsSubmission
@@ -1150,9 +1182,9 @@ theorem reachable_meritsPhase_pristineCouncilState
                     "defendant"
                     "surrebuttal"
                     u.policy.max_surrebuttal_chars
-                    false
+                    true
                     action.payload = .ok t := by
-                simpa [step, hSurrebuttal] using hStep
+                simpa [stepCore, hSurrebuttal] using hStepCore
               have hPhase : u.case.phase = "surrebuttals" := by
                 by_cases hSurrebuttalPhase : u.case.phase = "surrebuttals"
                 · exact hSurrebuttalPhase
@@ -1161,36 +1193,36 @@ theorem reachable_meritsPhase_pristineCouncilState
                   cases hSubmit
               have hMeritsU : meritsPhase u.case.phase := Or.inr <| Or.inr <| Or.inr <| Or.inl hPhase
               exact step_submit_surrebuttal_preserves_pristineCouncilState
-                u t action hSurrebuttal (ih hMeritsU) hStep
+                u t action hSurrebuttal (ih hMeritsU) hStepCore
             · by_cases hClosing : action.action_type = "deliver_closing_statement"
               · have hPhase : u.case.phase = "closings" := by
                   by_cases hClosingPhase : u.case.phase = "closings"
                   · exact hClosingPhase
                   · have hClosed : u.case.phase != "closings" := by simpa using hClosingPhase
-                    simp [step, hClosing, hClosed] at hStep
-                    cases hStep
+                    simp [stepCore, hClosing, hClosed] at hStepCore
+                    cases hStepCore
                 have hMeritsU : meritsPhase u.case.phase := Or.inr <| Or.inr <| Or.inr <| Or.inr hPhase
                 exact step_deliver_closing_statement_preserves_pristineCouncilState
-                  u t action hClosing (ih hMeritsU) hStep
+                  u t action hClosing (ih hMeritsU) hStepCore
               · by_cases hPass : action.action_type = "pass_phase_opportunity"
                 · by_cases hRebuttals : u.case.phase = "rebuttals"
                   · have hMeritsU : meritsPhase u.case.phase := Or.inr <| Or.inr <| Or.inl hRebuttals
                     exact step_pass_phase_opportunity_preserves_pristineCouncilState
-                      u t action hPass (ih hMeritsU) hStep
+                      u t action hPass (ih hMeritsU) hStepCore
                   · by_cases hSurrebuttals : u.case.phase = "surrebuttals"
                     · have hMeritsU : meritsPhase u.case.phase := Or.inr <| Or.inr <| Or.inr <| Or.inl hSurrebuttals
                       exact step_pass_phase_opportunity_preserves_pristineCouncilState
-                        u t action hPass (ih hMeritsU) hStep
-                    · simp [step, hPass, hRebuttals, hSurrebuttals] at hStep
+                        u t action hPass (ih hMeritsU) hStepCore
+                    · simp [stepCore, hPass, hRebuttals, hSurrebuttals] at hStepCore
                 · by_cases hEvidence : action.action_type = "submit_evidence"
                   · have hSubmit : submitEvidence u action.actor_role action.payload = .ok t := by
-                      simpa [step, hEvidence] using hStep
+                      simpa [stepCore, hEvidence] using hStepCore
                     have hMeritsU : meritsPhase u.case.phase :=
                       submitEvidence_source_meritsPhase u t action.actor_role action.payload hSubmit
                     exact step_submit_evidence_preserves_pristineCouncilState
-                      u t action hEvidence (ih hMeritsU) hStep
+                      u t action hEvidence (ih hMeritsU) hStepCore
                   · by_cases hVote : action.action_type = "submit_council_vote"
-                    · rcases step_submit_council_vote_result u t action hVote hStep with
+                    · rcases step_submit_council_vote_result u t action hVote hStepCore with
                       ⟨memberId, vote, rationale, hDeliberation, hCont⟩
                       let c1 := { u.case with council_votes := u.case.council_votes.concat {
                         member_id := memberId
@@ -1205,14 +1237,14 @@ theorem reachable_meritsPhase_pristineCouncilState
                       · simp [meritsPhase, hDelibOut] at hMerits
                       · simp [meritsPhase, hClosedOut] at hMerits
                     · by_cases hRemoval : action.action_type = "remove_council_member"
-                      · rcases step_remove_council_member_result u t action hRemoval hStep with
+                      · rcases step_remove_council_member_result u t action hRemoval hStepCore with
                         ⟨memberId, status, hDeliberation, hCont⟩
                         let c1 := {
-                        u.case with council_members := u.case.council_members.map (fun (member : CouncilMember) =>
-                          if member.member_id = memberId then
-                            { member with status := trimString status }
-                          else
-                            member)
+                          u.case with council_members := u.case.council_members.map (fun (member : CouncilMember) =>
+                            if member.member_id = memberId then
+                              { member with status := trimString status }
+                            else
+                              member)
                         }
                         have hPhaseOut := continueDeliberation_phase_deliberation_or_closed u t c1
                           (by simpa [c1] using hDeliberation)
@@ -1220,7 +1252,23 @@ theorem reachable_meritsPhase_pristineCouncilState
                         rcases hPhaseOut with hDelibOut | hClosedOut
                         · simp [meritsPhase, hDelibOut] at hMerits
                         · simp [meritsPhase, hClosedOut] at hMerits
-                      · simp [step] at hStep
+                      · by_cases hFail : action.action_type = "fail_opportunity"
+                        · have hFailOp := step_fail_opportunity_result u t action hFail hStepCore
+                          rcases failOpportunity_result u t action.payload hFailOp with hCouncil | hParty
+                          · rcases hCouncil with ⟨_memberId, _reason, _opportunityId, _message,
+                              c1, hC1, hDeliberation, _hSeated, _hFresh, hCont⟩
+                            have hPhaseOut := continueDeliberation_phase_deliberation_or_closed u t c1
+                              (by
+                                rw [hC1]
+                                simpa using hDeliberation)
+                              hCont
+                            rcases hPhaseOut with hDelibOut | hClosedOut
+                            · simp [meritsPhase, hDelibOut] at hMerits
+                            · simp [meritsPhase, hClosedOut] at hMerits
+                          · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+                            exact pristineCouncilState_congr rfl rfl rfl (ih (by
+                              simpa [meritsPhase, stateWithCase] using hMerits))
+                        · simp [stepCore] at hStepCore
 
 /--
 A positive seated-member count gives a nonempty seated roster.
@@ -1281,7 +1329,7 @@ theorem continueDeliberation_live_has_nextCouncilMember
     (hIntegrity : councilVoteIntegrity c)
     (hCont : continueDeliberation s c = .ok t)
     (hPhase : t.case.phase = "deliberation")
-    (hStatus : t.case.status ≠ "closed") :
+    (hStatus : t.case.status = "active") :
     ∃ member, nextCouncilMember? t.case = some member := by
   unfold continueDeliberation at hCont
   by_cases hRoundComplete : (currentRoundVotes c).length = seatedCouncilMemberCount c
@@ -1331,34 +1379,35 @@ theorem reachable_deliberation_has_nextCouncilMember
     (s : ArbitrationState)
     (hs : Reachable s)
     (hPhase : s.case.phase = "deliberation")
-    (hStatus : s.case.status ≠ "closed") :
+    (hStatus : s.case.status = "active") :
     ∃ member, nextCouncilMember? s.case = some member := by
   induction hs with
   | init req s hInit =>
       have hOpenings := initializeCase_phase_openings req s hInit
       simp [hOpenings] at hPhase
   | step u t action hu hStep _ =>
+      have hStepCore := stepCore_ok_of_step_ok u t action hStep
       by_cases hOpening : action.action_type = "record_opening_statement"
-      · exact False.elim ((step_record_opening_statement_phase_ne_deliberation u t action hOpening hStep) hPhase)
+      · exact False.elim ((step_record_opening_statement_phase_ne_deliberation u t action hOpening hStepCore) hPhase)
       · by_cases hArgument : action.action_type = "submit_argument"
-        · exact False.elim ((step_submit_argument_phase_ne_deliberation u t action hArgument hStep) hPhase)
+        · exact False.elim ((step_submit_argument_phase_ne_deliberation u t action hArgument hStepCore) hPhase)
         · by_cases hRebuttal : action.action_type = "submit_rebuttal"
-          · exact False.elim ((step_submit_rebuttal_phase_ne_deliberation u t action hRebuttal hStep) hPhase)
+          · exact False.elim ((step_submit_rebuttal_phase_ne_deliberation u t action hRebuttal hStepCore) hPhase)
           · by_cases hSurrebuttal : action.action_type = "submit_surrebuttal"
-            · exact False.elim ((step_submit_surrebuttal_phase_ne_deliberation u t action hSurrebuttal hStep) hPhase)
+            · exact False.elim ((step_submit_surrebuttal_phase_ne_deliberation u t action hSurrebuttal hStepCore) hPhase)
             · by_cases hClosing : action.action_type = "deliver_closing_statement"
               · have hPhaseU : u.case.phase = "closings" := by
                   by_cases hClosingPhase : u.case.phase = "closings"
                   · exact hClosingPhase
                   · have hClosed : u.case.phase != "closings" := by simpa using hClosingPhase
-                    simp [step, hClosing, hClosed] at hStep
-                    cases hStep
+                    simp [stepCore, hClosing, hClosed] at hStepCore
+                    cases hStepCore
                 have hMeritsU : meritsPhase u.case.phase := Or.inr <| Or.inr <| Or.inr <| Or.inr hPhaseU
                 have hPristineU : pristineCouncilState u.case :=
                   reachable_meritsPhase_pristineCouncilState u hu hMeritsU
                 have hPristineT : pristineCouncilState t.case :=
                   step_deliver_closing_statement_preserves_pristineCouncilState
-                    u t action hClosing hPristineU hStep
+                    u t action hClosing hPristineU hStepCore
                 have hNonemptyCouncil : t.case.council_members ≠ [] := by
                   exact step_preserves_nonempty_council u t action
                     (reachable_nonempty_council u hu) hStep
@@ -1369,11 +1418,11 @@ theorem reachable_deliberation_has_nextCouncilMember
                   exact seatedCouncilMembers_nonempty_of_pristine t.case hPristineT hNonemptyCouncil
                 exact nextCouncilMember_some_of_empty_currentRoundVotes t.case hNoVotes hSeatedNonempty
               · by_cases hPass : action.action_type = "pass_phase_opportunity"
-                · exact False.elim ((step_pass_phase_opportunity_phase_ne_deliberation u t action hPass hStep) hPhase)
+                · exact False.elim ((step_pass_phase_opportunity_phase_ne_deliberation u t action hPass hStepCore) hPhase)
                 · by_cases hEvidence : action.action_type = "submit_evidence"
-                  · exact False.elim ((step_submit_evidence_phase_ne_deliberation u t action hEvidence hStep) hPhase)
+                  · exact False.elim ((step_submit_evidence_phase_ne_deliberation u t action hEvidence hStepCore) hPhase)
                   · by_cases hVote : action.action_type = "submit_council_vote"
-                    · rcases step_submit_council_vote_details u t action hVote hStep with
+                    · rcases step_submit_council_vote_details u t action hVote hStepCore with
                       ⟨memberId, vote, rationale, _hPhaseU, hSeated, hFresh, hCont⟩
                       let c1 := { u.case with council_votes := u.case.council_votes.concat {
                         member_id := memberId
@@ -1396,14 +1445,14 @@ theorem reachable_deliberation_has_nextCouncilMember
                         u t c1 hPositive hUnique1 hIntegrity1
                         (by simpa [c1] using hCont) hPhase hStatus
                     · by_cases hRemoval : action.action_type = "remove_council_member"
-                      · rcases step_remove_council_member_details u t action hRemoval hStep with
+                      · rcases step_remove_council_member_details u t action hRemoval hStepCore with
                         ⟨memberId, status, _hPhaseU, _hSeated, hFresh, _hStatus, hCont⟩
                         let c1 := {
-                        u.case with council_members := u.case.council_members.map (fun (member : CouncilMember) =>
-                          if member.member_id = memberId then
-                            { member with status := trimString status }
-                          else
-                            member)
+                          u.case with council_members := u.case.council_members.map (fun (member : CouncilMember) =>
+                            if member.member_id = memberId then
+                              { member with status := trimString status }
+                            else
+                              member)
                         }
                         have hPositive : 0 < u.policy.required_votes_for_decision :=
                           reachable_required_votes_positive u hu
@@ -1420,7 +1469,32 @@ theorem reachable_deliberation_has_nextCouncilMember
                         exact continueDeliberation_live_has_nextCouncilMember
                           u t c1 hPositive hUnique1 hIntegrity1
                           (by simpa [c1] using hCont) hPhase hStatus
-                      · simp [step] at hStep
+                      · by_cases hFail : action.action_type = "fail_opportunity"
+                        · have hFailOp := step_fail_opportunity_result u t action hFail hStepCore
+                          rcases failOpportunity_result u t action.payload hFailOp with hCouncil | hParty
+                          · rcases hCouncil with ⟨memberId, reason, opportunityId, message,
+                              c1, hC1, hDeliberation, _hSeated, hFresh, hCont⟩
+                            have hPositive : 0 < u.policy.required_votes_for_decision :=
+                              reachable_required_votes_positive u hu
+                            have hUniqueU : councilIdsUnique u.case :=
+                              reachable_councilIdsUnique u hu
+                            have hIntegrityU : councilVoteIntegrity u.case :=
+                              reachable_councilVoteIntegrity u hu
+                            have hFreshIds : memberId ∉ currentRoundVoteIds u.case := by
+                              simpa [currentRoundVoteIds] using hFresh
+                            have hIntegrity1 : councilVoteIntegrity c1 := by
+                              rw [hC1]
+                              exact failUnvotedCouncilMember_preserves_councilVoteIntegrity
+                                u.case memberId reason opportunityId message hIntegrityU hFreshIds
+                            have hUnique1 : councilIdsUnique c1 := by
+                              rw [hC1]
+                              unfold councilIdsUnique
+                              simpa [councilMemberIds_failure_update] using hUniqueU
+                            exact continueDeliberation_live_has_nextCouncilMember
+                              u t c1 hPositive hUnique1 hIntegrity1 hCont hPhase hStatus
+                          · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+                            simp [stateWithCase] at hStatus
+                        · simp [stepCore] at hStepCore
 
 /--
 In a reachable live deliberation state, the summary records that the current
@@ -1430,7 +1504,7 @@ theorem reachable_live_deliberation_deliberationSummary_has_round_capacity
     (s : ArbitrationState)
     (hs : Reachable s)
     (hPhase : s.case.phase = "deliberation")
-    (hStatus : s.case.status ≠ "closed") :
+    (hStatus : s.case.status = "active") :
     (deliberationSummary s).current_round_vote_count <
       (deliberationSummary s).seated_count := by
   rcases reachable_deliberation_has_nextCouncilMember s hs hPhase hStatus with
@@ -1441,7 +1515,7 @@ theorem reachable_live_deliberation_deliberationSummary_has_round_capacity
     s member hUnique hIntegrity hNext
 
 /--
-Every reachable non-closed state has a next opportunity.
+Every reachable active state has a next opportunity.
 
 This is the Stage 3 theorem.  It says the engine does not strand a live case.
 The proof splits by phase.
@@ -1452,10 +1526,10 @@ reachable, and those prefixes line up with the executable selectors in
 
 For deliberation, the previous theorem supplies the next council voter.
 -/
-theorem reachable_nonclosed_has_nextOpportunity
+theorem reachable_active_has_nextOpportunity
     (s : ArbitrationState)
     (hs : Reachable s)
-    (hStatus : s.case.status ≠ "closed") :
+    (hStatus : s.case.status = "active") :
     (nextOpportunity s).terminal = false ∧
       ∃ opp, (nextOpportunity s).opportunity = some opp := by
   have hShape : phaseShape s.case := reachable_phaseShape s hs
@@ -1580,7 +1654,9 @@ theorem reachable_nonclosed_has_nextOpportunity
                 simp [nextOpportunity, hStatus, nextOpportunityForPhase, hDeliberation, hMember]
             · have hPhaseNotClosed : s.case.phase ≠ "closed" := by
                 intro hClosed
-                exact hStatus (reachable_phase_closed_implies_status_closed s hs hClosed)
+                have hClosedStatus := reachable_phase_closed_implies_status_closed s hs hClosed
+                rw [hClosedStatus] at hStatus
+                simp at hStatus
               have hImpossible : False := by
                 simp [phaseShape] at hShape
               exact False.elim hImpossible

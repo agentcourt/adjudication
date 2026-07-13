@@ -689,47 +689,63 @@ def failCouncilMemberOpportunity
   }
   continueDeliberation s c1
 
-def failOpportunity (s : ArbitrationState) (payload : Json) : Except String ArbitrationState := do
-  let opportunityId := trimString (← getString payload "opportunity_id")
-  let role := trimString (← getString payload "role")
-  let phase := trimString (← getString payload "phase")
-  let reason := trimString (← getString payload "reason")
-  let message := getOptionalString payload "message"
-  let memberId := getOptionalString payload "member_id"
-  let model := getOptionalString payload "model"
-  if opportunityId = "" then
-    throw "opportunity failure requires opportunity_id"
-  if role = "" then
-    throw "opportunity failure requires role"
-  if phase = "" then
-    throw "opportunity failure requires phase"
-  if reason = "" then
-    throw "opportunity failure requires reason"
-  match (nextOpportunity s).opportunity with
-  | none => throw "no active opportunity can fail"
-  | some opportunity =>
-      if opportunity.opportunity_id != opportunityId then
-        throw s!"opportunity_id {opportunityId} does not match current opportunity {opportunity.opportunity_id}"
-      if opportunity.role != role then
-        throw s!"opportunity role {role} does not match current role {opportunity.role}"
-      if opportunity.phase != phase then
-        throw s!"opportunity phase {phase} does not match current phase {opportunity.phase}"
-      if role = "council" then
-        failCouncilMemberOpportunity s memberId reason opportunityId message
-      else if role = "plaintiff" || role = "defendant" then
-        let failure : OpportunityFailure := {
-          failure_type := "opportunity_failed"
-          role := role
-          phase := phase
-          opportunity_id := opportunityId
-          reason := reason
-          message := message
-          member_id := memberId
-          model := model
-        }
-        pure <| stateWithCase s { s.case with status := "failed", failure := some failure }
-      else
-        throw s!"unsupported opportunity failure role: {role}"
+def failOpportunity (s : ArbitrationState) (payload : Json) : Except String ArbitrationState :=
+  match getString payload "opportunity_id" with
+  | .error err => .error err
+  | .ok rawOpportunityId =>
+      match getString payload "role" with
+      | .error err => .error err
+      | .ok rawRole =>
+          match getString payload "phase" with
+          | .error err => .error err
+          | .ok rawPhase =>
+              match getString payload "reason" with
+              | .error err => .error err
+              | .ok rawReason =>
+                  let opportunityId := trimString rawOpportunityId
+                  let role := trimString rawRole
+                  let phase := trimString rawPhase
+                  let reason := trimString rawReason
+                  let message := getOptionalString payload "message"
+                  let memberId := getOptionalString payload "member_id"
+                  let model := getOptionalString payload "model"
+                  if opportunityId = "" then
+                    .error "opportunity failure requires opportunity_id"
+                  else if role = "" then
+                    .error "opportunity failure requires role"
+                  else if phase = "" then
+                    .error "opportunity failure requires phase"
+                  else if reason = "" then
+                    .error "opportunity failure requires reason"
+                  else
+                    match (nextOpportunity s).opportunity with
+                    | none => .error "no active opportunity can fail"
+                    | some opportunity =>
+                        if opportunity.opportunity_id != opportunityId then
+                          .error s!"opportunity_id {opportunityId} does not match current opportunity {opportunity.opportunity_id}"
+                        else if opportunity.role != role then
+                          .error s!"opportunity role {role} does not match current role {opportunity.role}"
+                        else if opportunity.phase != phase then
+                          .error s!"opportunity phase {phase} does not match current phase {opportunity.phase}"
+                        else if role = "council" then
+                          failCouncilMemberOpportunity s memberId reason opportunityId message
+                        else if role = "plaintiff" || role = "defendant" then
+                          let failure : OpportunityFailure := {
+                            failure_type := "opportunity_failed"
+                            role := role
+                            phase := phase
+                            opportunity_id := opportunityId
+                            reason := reason
+                            message := message
+                            member_id := memberId
+                            model := model
+                          }
+                          .ok <| stateWithCase s
+                            { s.case with
+                              status := "failed"
+                              failure := some failure }
+                        else
+                          .error s!"unsupported opportunity failure role: {role}"
 
 def initializeCase (req : InitializeCaseRequest) : Except String ArbitrationState := do
   let proposition := trimString req.proposition
@@ -771,7 +787,7 @@ def initializeCase (req : InitializeCaseRequest) : Except String ArbitrationStat
   }
   pure <| stateWithCase req.state c
 
-def step (req : StepRequest) : Except String ArbitrationState := do
+def stepCore (req : StepRequest) : Except String ArbitrationState := do
   let c := req.state.case
   match req.action.action_type with
   | "record_opening_statement" =>
@@ -851,6 +867,15 @@ def step (req : StepRequest) : Except String ArbitrationState := do
       requireRole req.action.actor_role "system"
       failOpportunity req.state req.action.payload
   | _ => throw s!"unknown action type: {req.action.action_type}"
+
+def step (req : StepRequest) : Except String ArbitrationState :=
+  let c := req.state.case
+  if c.status = "closed" then
+    .error "case is closed"
+  else if c.status = "failed" then
+    .error "case has failed"
+  else
+    stepCore req
 
 def parseJsonInput (input : String) : Except String Json := do
   Json.parse input

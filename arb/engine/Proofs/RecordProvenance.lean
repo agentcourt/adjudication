@@ -31,7 +31,8 @@ it may leave both lists unchanged.  It does not rewrite prior entries.
 
 def materialOriginAllowed (phase role : String) : Prop :=
   (phase = "arguments" ∧ (role = "plaintiff" ∨ role = "defendant")) ∨
-    (phase = "rebuttals" ∧ role = "plaintiff")
+    (phase = "rebuttals" ∧ role = "plaintiff") ∨
+    (phase = "surrebuttals" ∧ role = "defendant")
 
 def offeredEvidenceOriginAllowed (item : OfferedEvidence) : Prop :=
   materialOriginAllowed item.phase item.role
@@ -60,7 +61,11 @@ theorem materialOriginAllowed_of_arguments
 
 theorem materialOriginAllowed_of_rebuttals :
     materialOriginAllowed "rebuttals" "plaintiff" := by
-  exact Or.inr ⟨rfl, rfl⟩
+  exact Or.inr <| Or.inl ⟨rfl, rfl⟩
+
+theorem materialOriginAllowed_of_surrebuttals :
+    materialOriginAllowed "surrebuttals" "defendant" := by
+  exact Or.inr <| Or.inr ⟨rfl, rfl⟩
 
 /--
 Every successfully parsed offered-file entry carries the phase supplied to the
@@ -488,7 +493,7 @@ theorem step_record_opening_statement_preserves_recordProvenance
     (action : CourtAction)
     (hType : action.action_type = "record_opening_statement")
     (hProv : recordProvenance s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     recordProvenance t := by
   rcases step_record_opening_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact stateWithCase_preserves_recordProvenance s _
@@ -504,7 +509,7 @@ theorem step_record_opening_statement_extends_materials
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "record_opening_statement")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialsExtend s t := by
   rcases step_record_opening_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact stateWithCase_extends_materials s _
@@ -520,13 +525,13 @@ theorem step_submit_argument_preserves_recordProvenance
     (action : CourtAction)
     (hType : action.action_type = "submit_argument")
     (hProv : recordProvenance s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     recordProvenance t := by
   let role := if s.case.arguments.isEmpty then "plaintiff" else "defendant"
   rcases recordMeritsSubmission_with_materials_details
       s t "arguments" action.actor_role role
       "argument" s.policy.max_argument_chars action.payload
-      (by simpa [step, hType, role] using hStep) with
+      (by simpa [stepCore, hType, role] using hStep) with
     ⟨rawText, offered, reports, hOfferedParse, hReportsParse, _hOfferedCap, _hReportsCap, rfl⟩
   have hRoleCase : role = "plaintiff" ∨ role = "defendant" := by
     unfold role
@@ -560,13 +565,13 @@ theorem step_submit_argument_extends_materials
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_argument")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialsExtend s t := by
   let role := if s.case.arguments.isEmpty then "plaintiff" else "defendant"
   rcases recordMeritsSubmission_with_materials_result
       s t "arguments" action.actor_role role
       "argument" s.policy.max_argument_chars action.payload
-      (by simpa [step, hType, role] using hStep) with
+      (by simpa [stepCore, hType, role] using hStep) with
     ⟨rawText, offered, reports, rfl⟩
   exact appendSupplementalMaterials_extends_materials s
     (addFiling s.case "arguments" role (trimString rawText))
@@ -579,12 +584,12 @@ theorem step_submit_rebuttal_preserves_recordProvenance
     (action : CourtAction)
     (hType : action.action_type = "submit_rebuttal")
     (hProv : recordProvenance s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     recordProvenance t := by
   rcases recordMeritsSubmission_with_materials_details
       s t "rebuttals" action.actor_role "plaintiff"
       "rebuttal" s.policy.max_rebuttal_chars action.payload
-      (by simpa [step, hType] using hStep) with
+      (by simpa [stepCore, hType] using hStep) with
     ⟨rawText, offered, reports, hOfferedParse, hReportsParse, _hOfferedCap, _hReportsCap, rfl⟩
   have hOfferedNew : ∀ item ∈ offered, offeredEvidenceOriginAllowed item := by
     intro item hMem
@@ -611,12 +616,12 @@ theorem step_submit_rebuttal_extends_materials
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_rebuttal")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialsExtend s t := by
   rcases recordMeritsSubmission_with_materials_result
       s t "rebuttals" action.actor_role "plaintiff"
       "rebuttal" s.policy.max_rebuttal_chars action.payload
-      (by simpa [step, hType] using hStep) with
+      (by simpa [stepCore, hType] using hStep) with
     ⟨rawText, offered, reports, rfl⟩
   exact appendSupplementalMaterials_extends_materials s
     (addFiling s.case "rebuttals" "plaintiff" (trimString rawText))
@@ -629,30 +634,48 @@ theorem step_submit_surrebuttal_preserves_recordProvenance
     (action : CourtAction)
     (hType : action.action_type = "submit_surrebuttal")
     (hProv : recordProvenance s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     recordProvenance t := by
-  rcases recordMeritsSubmission_without_materials_result
+  rcases recordMeritsSubmission_with_materials_details
       s t "surrebuttals" action.actor_role "defendant"
       "surrebuttal" s.policy.max_surrebuttal_chars action.payload
-      (by simpa [step, hType] using hStep) with
-    ⟨rawText, rfl⟩
-  exact stateWithCase_preserves_recordProvenance s _
+      (by simpa [stepCore, hType] using hStep) with
+    ⟨rawText, offered, reports, hOfferedParse, hReportsParse, _hOfferedCap, _hReportsCap, rfl⟩
+  have hOfferedNew : ∀ item ∈ offered, offeredEvidenceOriginAllowed item := by
+    intro item hMem
+    have hItemPhase : item.phase = "surrebuttals" :=
+      parseOfferedEvidence_all_phase action.payload "surrebuttals" "defendant" offered hOfferedParse item hMem
+    have hItemRole : item.role = "defendant" :=
+      parseOfferedEvidence_all_role action.payload "surrebuttals" "defendant" offered hOfferedParse item hMem
+    simpa [offeredEvidenceOriginAllowed, hItemPhase, hItemRole] using materialOriginAllowed_of_surrebuttals
+  have hReportsNew : ∀ item ∈ reports, technicalReportOriginAllowed item := by
+    intro item hMem
+    have hItemPhase : item.phase = "surrebuttals" :=
+      parseTechnicalReports_all_phase action.payload "surrebuttals" "defendant" reports hReportsParse item hMem
+    have hItemRole : item.role = "defendant" :=
+      parseTechnicalReports_all_role action.payload "surrebuttals" "defendant" reports hReportsParse item hMem
+    simpa [technicalReportOriginAllowed, hItemPhase, hItemRole] using materialOriginAllowed_of_surrebuttals
+  exact appendSupplementalMaterials_preserves_recordProvenance s
+    (addFiling s.case "surrebuttals" "defendant" (trimString rawText))
+    offered reports
     (addFiling_preserves_offered_evidence s.case "surrebuttals" "defendant" (trimString rawText))
     (addFiling_preserves_technical_reports s.case "surrebuttals" "defendant" (trimString rawText))
-    hProv
+    hProv hOfferedNew hReportsNew
 
 theorem step_submit_surrebuttal_extends_materials
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_surrebuttal")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialsExtend s t := by
-  rcases recordMeritsSubmission_without_materials_result
+  rcases recordMeritsSubmission_with_materials_result
       s t "surrebuttals" action.actor_role "defendant"
       "surrebuttal" s.policy.max_surrebuttal_chars action.payload
-      (by simpa [step, hType] using hStep) with
-    ⟨rawText, rfl⟩
-  exact stateWithCase_extends_materials s _
+      (by simpa [stepCore, hType] using hStep) with
+    ⟨rawText, offered, reports, rfl⟩
+  exact appendSupplementalMaterials_extends_materials s
+    (addFiling s.case "surrebuttals" "defendant" (trimString rawText))
+    offered reports
     (addFiling_preserves_offered_evidence s.case "surrebuttals" "defendant" (trimString rawText))
     (addFiling_preserves_technical_reports s.case "surrebuttals" "defendant" (trimString rawText))
 
@@ -661,10 +684,10 @@ theorem step_submit_evidence_preserves_recordProvenance
     (action : CourtAction)
     (hType : action.action_type = "submit_evidence")
     (hProv : recordProvenance s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     recordProvenance t := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
   exact stateWithCase_preserves_recordProvenance s _
     (by simp [appendSubmittedEvidence])
@@ -675,10 +698,10 @@ theorem step_submit_evidence_extends_materials
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_evidence")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialsExtend s t := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
   exact stateWithCase_extends_materials s _
     (by simp [appendSubmittedEvidence])
@@ -689,7 +712,7 @@ theorem step_deliver_closing_statement_preserves_recordProvenance
     (action : CourtAction)
     (hType : action.action_type = "deliver_closing_statement")
     (hProv : recordProvenance s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     recordProvenance t := by
   rcases step_deliver_closing_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact stateWithCase_preserves_recordProvenance s _
@@ -705,7 +728,7 @@ theorem step_deliver_closing_statement_extends_materials
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "deliver_closing_statement")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialsExtend s t := by
   rcases step_deliver_closing_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact stateWithCase_extends_materials s _
@@ -721,7 +744,7 @@ theorem step_pass_phase_opportunity_preserves_recordProvenance
     (action : CourtAction)
     (hType : action.action_type = "pass_phase_opportunity")
     (hProv : recordProvenance s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     recordProvenance t := by
   by_cases hRebuttals : s.case.phase = "rebuttals"
   · have hPass :
@@ -730,7 +753,7 @@ theorem step_pass_phase_opportunity_preserves_recordProvenance
           if !s.case.rebuttals.isEmpty then
             throw "rebuttal already submitted"
           pure <| stateWithCase s { s.case with phase := "surrebuttals" }) = .ok t := by
-      simpa [step, hType, hRebuttals] using hStep
+      simpa [stepCore, hType, hRebuttals] using hStep
     cases hRole : requireRole action.actor_role "plaintiff" with
     | error err =>
         rw [hRole] at hPass
@@ -754,7 +777,7 @@ theorem step_pass_phase_opportunity_preserves_recordProvenance
             if !s.case.surrebuttals.isEmpty then
               throw "surrebuttal already submitted"
             pure <| stateWithCase s { s.case with phase := "closings" }) = .ok t := by
-        simpa [step, hType, hRebuttals, hSurrebuttals] using hStep
+        simpa [stepCore, hType, hRebuttals, hSurrebuttals] using hStep
       cases hRole : requireRole action.actor_role "defendant" with
       | error err =>
           rw [hRole] at hPass
@@ -771,13 +794,13 @@ theorem step_pass_phase_opportunity_preserves_recordProvenance
               simp [hEmpty] at hPass
               cases hPass
               exact stateWithCase_preserves_recordProvenance s _ rfl rfl hProv
-    · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
+    · simp [stepCore, hType, hRebuttals, hSurrebuttals] at hStep
 
 theorem step_pass_phase_opportunity_extends_materials
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "pass_phase_opportunity")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialsExtend s t := by
   by_cases hRebuttals : s.case.phase = "rebuttals"
   · have hPass :
@@ -786,7 +809,7 @@ theorem step_pass_phase_opportunity_extends_materials
           if !s.case.rebuttals.isEmpty then
             throw "rebuttal already submitted"
           pure <| stateWithCase s { s.case with phase := "surrebuttals" }) = .ok t := by
-      simpa [step, hType, hRebuttals] using hStep
+      simpa [stepCore, hType, hRebuttals] using hStep
     cases hRole : requireRole action.actor_role "plaintiff" with
     | error err =>
         rw [hRole] at hPass
@@ -810,7 +833,7 @@ theorem step_pass_phase_opportunity_extends_materials
             if !s.case.surrebuttals.isEmpty then
               throw "surrebuttal already submitted"
             pure <| stateWithCase s { s.case with phase := "closings" }) = .ok t := by
-        simpa [step, hType, hRebuttals, hSurrebuttals] using hStep
+        simpa [stepCore, hType, hRebuttals, hSurrebuttals] using hStep
       cases hRole : requireRole action.actor_role "defendant" with
       | error err =>
           rw [hRole] at hPass
@@ -827,14 +850,14 @@ theorem step_pass_phase_opportunity_extends_materials
               simp [hEmpty] at hPass
               cases hPass
               exact stateWithCase_extends_materials s _ rfl rfl
-    · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
+    · simp [stepCore, hType, hRebuttals, hSurrebuttals] at hStep
 
 theorem step_submit_council_vote_preserves_recordProvenance
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_council_vote")
     (hProv : recordProvenance s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     recordProvenance t := by
   rcases step_submit_council_vote_result s t action hType hStep with
     ⟨memberId, vote, rationale, _hPhase, hCont⟩
@@ -853,7 +876,7 @@ theorem step_submit_council_vote_extends_materials
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_council_vote")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialsExtend s t := by
   rcases step_submit_council_vote_result s t action hType hStep with
     ⟨memberId, vote, rationale, _hPhase, hCont⟩
@@ -873,7 +896,7 @@ theorem step_remove_council_member_preserves_recordProvenance
     (action : CourtAction)
     (hType : action.action_type = "remove_council_member")
     (hProv : recordProvenance s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     recordProvenance t := by
   rcases step_remove_council_member_result s t action hType hStep with
     ⟨memberId, status, _hPhase, hCont⟩
@@ -893,7 +916,7 @@ theorem step_remove_council_member_extends_materials
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "remove_council_member")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialsExtend s t := by
   rcases step_remove_council_member_result s t action hType hStep with
     ⟨memberId, status, _hPhase, hCont⟩
@@ -909,6 +932,78 @@ theorem step_remove_council_member_extends_materials
     (by simp [c1])
     hCont
 
+theorem failOpportunity_preserves_recordProvenance
+    (s t : ArbitrationState)
+    (payload : Lean.Json)
+    (hProv : recordProvenance s)
+    (hFail : failOpportunity s payload = .ok t) :
+    recordProvenance t := by
+  rcases failOpportunity_result s t payload hFail with hCouncil | hParty
+  · rcases hCouncil with ⟨_memberId, _reason, _opportunityId, _message, c1, hC1,
+      _hDelib, _hSeated, _hFresh, hCont⟩
+    exact continueDeliberation_preserves_recordProvenance_for s t c1 hProv
+      (by rw [hC1])
+      (by rw [hC1])
+      hCont
+  · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+    exact stateWithCase_preserves_recordProvenance s _ rfl rfl hProv
+
+theorem failOpportunity_extends_materials
+    (s t : ArbitrationState)
+    (payload : Lean.Json)
+    (hFail : failOpportunity s payload = .ok t) :
+    materialsExtend s t := by
+  rcases failOpportunity_result s t payload hFail with hCouncil | hParty
+  · rcases hCouncil with ⟨_memberId, _reason, _opportunityId, _message, c1, hC1,
+      _hDelib, _hSeated, _hFresh, hCont⟩
+    exact continueDeliberation_extends_materials_for s t c1
+      (by rw [hC1])
+      (by rw [hC1])
+      hCont
+  · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+    exact stateWithCase_extends_materials s _ rfl rfl
+
+theorem step_fail_opportunity_preserves_recordProvenance
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "fail_opportunity")
+    (hProv : recordProvenance s)
+    (hStep : stepCore { state := s, action := action } = .ok t) :
+    recordProvenance t := by
+  have hStep' :
+      (do
+        requireRole action.actor_role "system"
+        failOpportunity s action.payload) = .ok t := by
+    simpa [stepCore, hType] using hStep
+  cases hRole : requireRole action.actor_role "system" with
+  | error err =>
+      rw [hRole] at hStep'
+      cases hStep'
+  | ok okv =>
+      cases okv
+      rw [hRole] at hStep'
+      exact failOpportunity_preserves_recordProvenance s t action.payload hProv hStep'
+
+theorem step_fail_opportunity_extends_materials
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "fail_opportunity")
+    (hStep : stepCore { state := s, action := action } = .ok t) :
+    materialsExtend s t := by
+  have hStep' :
+      (do
+        requireRole action.actor_role "system"
+        failOpportunity s action.payload) = .ok t := by
+    simpa [stepCore, hType] using hStep
+  cases hRole : requireRole action.actor_role "system" with
+  | error err =>
+      rw [hRole] at hStep'
+      cases hStep'
+  | ok okv =>
+      cases okv
+      rw [hRole] at hStep'
+      exact failOpportunity_extends_materials s t action.payload hStep'
+
 /--
 Every successful public step preserves record provenance.
 -/
@@ -916,7 +1011,7 @@ theorem step_preserves_recordProvenance
     (s t : ArbitrationState)
     (action : CourtAction)
     (hProv : recordProvenance s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     recordProvenance t := by
   by_cases hOpening : action.action_type = "record_opening_statement"
   · exact step_record_opening_statement_preserves_recordProvenance s t action hOpening hProv hStep
@@ -936,7 +1031,9 @@ theorem step_preserves_recordProvenance
                 · exact step_submit_council_vote_preserves_recordProvenance s t action hVote hProv hStep
                 · by_cases hRemoval : action.action_type = "remove_council_member"
                   · exact step_remove_council_member_preserves_recordProvenance s t action hRemoval hProv hStep
-                  · simp [step] at hStep
+                  · by_cases hFail : action.action_type = "fail_opportunity"
+                    · exact step_fail_opportunity_preserves_recordProvenance s t action hFail hProv hStep
+                    · simp [stepCore] at hStep
 
 /--
 Every successful public step extends the admitted-material lists by appending a
@@ -945,7 +1042,7 @@ suffix or leaves them unchanged.
 theorem step_extends_materials
     (s t : ArbitrationState)
     (action : CourtAction)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialsExtend s t := by
   by_cases hOpening : action.action_type = "record_opening_statement"
   · exact step_record_opening_statement_extends_materials s t action hOpening hStep
@@ -965,7 +1062,9 @@ theorem step_extends_materials
                 · exact step_submit_council_vote_extends_materials s t action hVote hStep
                 · by_cases hRemoval : action.action_type = "remove_council_member"
                   · exact step_remove_council_member_extends_materials s t action hRemoval hStep
-                  · simp [step] at hStep
+                  · by_cases hFail : action.action_type = "fail_opportunity"
+                    · exact step_fail_opportunity_extends_materials s t action hFail hStep
+                    · simp [stepCore] at hStep
 
 /--
 Every reachable state satisfies record provenance.
@@ -978,7 +1077,8 @@ theorem reachable_recordProvenance
   | init req s hInit =>
       exact initializeCase_establishes_recordProvenance req s hInit
   | step s t action hs hStep ih =>
-      exact step_preserves_recordProvenance s t action ih hStep
+      exact step_preserves_recordProvenance s t action ih
+        (stepCore_ok_of_step_ok s t action hStep)
 
 /--
 Along any successful public run, the admitted-material lists change only by
@@ -992,6 +1092,7 @@ theorem stepReachableFrom_materialsExtend
   | refl =>
       exact materialsExtend_refl start
   | step u t action hu hStep ih =>
-      exact materialsExtend_trans start u t ih (step_extends_materials u t action hStep)
+      exact materialsExtend_trans start u t ih
+        (step_extends_materials u t action (stepCore_ok_of_step_ok u t action hStep))
 
 end ArbProofs

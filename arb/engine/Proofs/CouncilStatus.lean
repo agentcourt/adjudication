@@ -204,6 +204,78 @@ theorem setMemberStatus_shrinks_seatedCouncilMemberIds
       (show ∃ candidate, candidate ∈ c.council_members.filter memberIsSeated ∧ candidate.member_id = source.member_id from
         ⟨source, hSourceSeatMem, rfl⟩)
 
+theorem failMemberStatus_shrinks_seatedCouncilMemberIds
+    (c : ArbitrationCase)
+    (memberId reason opportunityId message : String) :
+    councilMemberIds
+        ((c.council_members.map (fun member =>
+            if member.member_id = memberId then
+              { member with
+                status := "failed"
+                failure_reason := reason
+                failure_opportunity_id := opportunityId
+                failure_message := message }
+            else
+              member)).filter memberIsSeated)
+      ⊆ councilMemberIds (c.council_members.filter memberIsSeated) := by
+  intro target hTarget
+  have hWitness :
+      ∃ member,
+        member ∈
+            (c.council_members.map (fun member =>
+              if member.member_id = memberId then
+                { member with
+                  status := "failed"
+                  failure_reason := reason
+                  failure_opportunity_id := opportunityId
+                  failure_message := message }
+              else
+                member)).filter memberIsSeated ∧
+          member.member_id = target := by
+    simpa [councilMemberIds] using hTarget
+  rcases hWitness with ⟨member, hMemberMem, rfl⟩
+  have hMemberMap :
+      member ∈
+        c.council_members.map (fun member =>
+          if member.member_id = memberId then
+            { member with
+              status := "failed"
+              failure_reason := reason
+              failure_opportunity_id := opportunityId
+              failure_message := message }
+          else
+            member) := by
+    exact (List.mem_filter.mp hMemberMem).1
+  have hMemberSeated : memberIsSeated member = true := by
+    exact (List.mem_filter.mp hMemberMem).2
+  rcases List.mem_map.mp hMemberMap with ⟨source, hSourceMem, hSourceEq⟩
+  by_cases hSourceId : source.member_id = memberId
+  · have hUpdatedSeated :
+        memberIsSeated
+          { source with
+            status := "failed"
+            failure_reason := reason
+            failure_opportunity_id := opportunityId
+            failure_message := message } = true := by
+      have hUpdatedEq :
+          { source with
+            status := "failed"
+            failure_reason := reason
+            failure_opportunity_id := opportunityId
+            failure_message := message } = member := by
+        simpa [hSourceId] using hSourceEq
+      simpa [hUpdatedEq] using hMemberSeated
+    simp [memberIsSeated] at hUpdatedSeated
+  · have hMemberEq : member = source := by
+      simpa [hSourceId] using hSourceEq.symm
+    have hSourceSeated : memberIsSeated source = true := by
+      simpa [hMemberEq] using hMemberSeated
+    have hSourceSeatMem : source ∈ c.council_members.filter memberIsSeated := by
+      exact List.mem_filter.mpr ⟨hSourceMem, hSourceSeated⟩
+    simpa [councilMemberIds, hMemberEq] using
+      (show ∃ candidate, candidate ∈ c.council_members.filter memberIsSeated ∧ candidate.member_id = source.member_id from
+        ⟨source, hSourceSeatMem, rfl⟩)
+
 /--
 Every successful public step can only shrink the seated roster.
 
@@ -216,8 +288,9 @@ theorem step_shrinks_seatedCouncilMemberIds
     (action : CourtAction)
     (hStep : step { state := s, action := action } = .ok t) :
     seatedCouncilMemberIdsShrink s t := by
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
   by_cases hOpening : action.action_type = "record_opening_statement"
-  · rcases step_record_opening_statement_result s t action hOpening hStep with ⟨rawText, rfl⟩
+  · rcases step_record_opening_statement_result s t action hOpening hStepCore with ⟨rawText, rfl⟩
     exact seatedCouncilMemberIdsShrink_of_same_members <|
       addFiling_preserves_council_members s.case "openings"
         (if s.case.openings.isEmpty then "plaintiff" else "defendant")
@@ -233,7 +306,7 @@ theorem step_shrinks_seatedCouncilMemberIds
             s.policy.max_argument_chars
             true
             action.payload = .ok t := by
-        simpa [step, hOpening, hArgument] using hStep
+        simpa [stepCore, hOpening, hArgument] using hStepCore
       rcases recordMeritsSubmission_with_materials_result
           s t "arguments" action.actor_role
           (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
@@ -261,7 +334,7 @@ theorem step_shrinks_seatedCouncilMemberIds
               s.policy.max_rebuttal_chars
               true
               action.payload = .ok t := by
-          simpa [step, hOpening, hArgument, hRebuttal] using hStep
+          simpa [stepCore, hOpening, hArgument, hRebuttal] using hStepCore
         rcases recordMeritsSubmission_with_materials_result
             s t "rebuttals" action.actor_role "plaintiff"
             "rebuttal" s.policy.max_rebuttal_chars action.payload hSubmit with
@@ -278,17 +351,18 @@ theorem step_shrinks_seatedCouncilMemberIds
                 "defendant"
                 "surrebuttal"
                 s.policy.max_surrebuttal_chars
-                false
+                true
                 action.payload = .ok t := by
-            simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal] using hStep
-          rcases recordMeritsSubmission_without_materials_result
+            simpa [stepCore, hOpening, hArgument, hRebuttal, hSurrebuttal] using hStepCore
+          rcases recordMeritsSubmission_with_materials_result
               s t "surrebuttals" action.actor_role "defendant"
               "surrebuttal" s.policy.max_surrebuttal_chars action.payload hSubmit with
-            ⟨rawText, rfl⟩
-          exact seatedCouncilMemberIdsShrink_of_same_members <|
-            addFiling_preserves_council_members s.case "surrebuttals" "defendant" (trimString rawText)
+            ⟨rawText, offered, reports, rfl⟩
+          exact seatedCouncilMemberIdsShrink_of_same_members <| by
+            simp [stateWithCase, appendSupplementalMaterials_preserves_council_members,
+              addFiling_preserves_council_members s.case "surrebuttals" "defendant" (trimString rawText)]
         · by_cases hClosing : action.action_type = "deliver_closing_statement"
-          · rcases step_deliver_closing_statement_result s t action hClosing hStep with ⟨rawText, rfl⟩
+          · rcases step_deliver_closing_statement_result s t action hClosing hStepCore with ⟨rawText, rfl⟩
             exact seatedCouncilMemberIdsShrink_of_same_members <|
               by
                 simpa [List.isEmpty_iff] using
@@ -303,7 +377,7 @@ theorem step_shrinks_seatedCouncilMemberIds
                       if !s.case.rebuttals.isEmpty then
                         throw "rebuttal already submitted"
                       pure <| stateWithCase s { s.case with phase := "surrebuttals" }) = .ok t := by
-                  simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing, hPass, hRebuttals] using hStep
+                  simpa [stepCore, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing, hPass, hRebuttals] using hStepCore
                 cases hRole : requireRole action.actor_role "plaintiff" with
                 | error err =>
                     rw [hRole] at hPassResult
@@ -326,7 +400,7 @@ theorem step_shrinks_seatedCouncilMemberIds
                         if !s.case.surrebuttals.isEmpty then
                           throw "surrebuttal already submitted"
                         pure <| stateWithCase s { s.case with phase := "closings" }) = .ok t := by
-                    simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing, hPass, hRebuttals, hSurrebuttals] using hStep
+                    simpa [stepCore, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing, hPass, hRebuttals, hSurrebuttals] using hStepCore
                   cases hRole : requireRole action.actor_role "defendant" with
                   | error err =>
                       rw [hRole] at hPassResult
@@ -342,15 +416,15 @@ theorem step_shrinks_seatedCouncilMemberIds
                           simp [hEmpty] at hPassResult
                           cases hPassResult
                           exact seatedCouncilMemberIdsShrink_of_same_members rfl
-                · simp [step, hPass, hRebuttals, hSurrebuttals] at hStep
+                · simp [stepCore, hPass, hRebuttals, hSurrebuttals] at hStepCore
             · by_cases hEvidence : action.action_type = "submit_evidence"
               · have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-                  simpa [step, hEvidence] using hStep
+                  simpa [stepCore, hEvidence] using hStepCore
                 rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
                 exact seatedCouncilMemberIdsShrink_of_same_members <| by
                   simp [stateWithCase, appendSubmittedEvidence]
               · by_cases hVote : action.action_type = "submit_council_vote"
-                · rcases step_submit_council_vote_details s t action hVote hStep with
+                · rcases step_submit_council_vote_details s t action hVote hStepCore with
                   ⟨memberId, vote, rationale, _hPhase, _hSeated, _hFresh, hCont⟩
                   let c1 := { s.case with council_votes := s.case.council_votes.concat {
                     member_id := memberId
@@ -363,7 +437,7 @@ theorem step_shrinks_seatedCouncilMemberIds
                       continueDeliberation_preserves_council_members s t c1 hCont
                     simpa [c1] using hMembers
                 · by_cases hRemoval : action.action_type = "remove_council_member"
-                  · rcases step_remove_council_member_details s t action hRemoval hStep with
+                  · rcases step_remove_council_member_details s t action hRemoval hStepCore with
                     ⟨memberId, status, _hPhase, _hSeated, _hFresh, hStatus, hCont⟩
                     let c1 := { s.case with
                     council_members := s.case.council_members.map (fun (member : CouncilMember) =>
@@ -378,9 +452,24 @@ theorem step_shrinks_seatedCouncilMemberIds
                         continueDeliberation_preserves_council_members s t c1 hCont
                       simpa [seatedCouncilMemberIds, seatedCouncilMembers, c1, hMembers] using hTarget
                     exact setMemberStatus_shrinks_seatedCouncilMemberIds s.case memberId status hStatus hTarget1
-                  · cases hType : action.action_type <;>
-                      simp [hType] at hOpening hArgument hRebuttal hSurrebuttal hClosing hPass hEvidence hVote hRemoval <;>
-                      simp [step, hType] at hStep
+                  · by_cases hFail : action.action_type = "fail_opportunity"
+                    · have hFailOp := step_fail_opportunity_result s t action hFail hStepCore
+                      rcases failOpportunity_result s t action.payload hFailOp with hCouncil | hParty
+                      · rcases hCouncil with ⟨memberId, reason, opportunityId, message,
+                          c1, hC1, _hDeliberation, _hSeated, _hFresh, hCont⟩
+                        intro target hTarget
+                        have hTarget1 : target ∈ seatedCouncilMemberIds c1 := by
+                          have hMembers : t.case.council_members = c1.council_members :=
+                            continueDeliberation_preserves_council_members s t c1 hCont
+                          simpa [seatedCouncilMemberIds, seatedCouncilMembers, hMembers] using hTarget
+                        rw [hC1] at hTarget1
+                        exact failMemberStatus_shrinks_seatedCouncilMemberIds
+                          s.case memberId reason opportunityId message hTarget1
+                      · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+                        exact seatedCouncilMemberIdsShrink_of_same_members rfl
+                    · cases hType : action.action_type <;>
+                      simp [hType] at hOpening hArgument hRebuttal hSurrebuttal hClosing hPass hEvidence hVote hRemoval hFail <;>
+                      simp [stepCore, hType] at hStepCore
 
 /--
 Any successful public run can only shrink the seated roster.
@@ -428,7 +517,7 @@ theorem step_submit_council_vote_introduces_only_seated_currentRoundVote
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_council_vote")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     newCouncilVotesComeFromSeated s t := by
   rcases step_submit_council_vote_details s t action hType hStep with
     ⟨memberId, vote, rationale, _hPhase, hSeated, _hFresh, hCont⟩
@@ -465,8 +554,9 @@ theorem step_introduces_newCouncilVotes_only_from_seated
     (action : CourtAction)
     (hStep : step { state := s, action := action } = .ok t) :
     newCouncilVotesComeFromSeated s t := by
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
   by_cases hOpening : action.action_type = "record_opening_statement"
-  · rcases step_record_opening_statement_result s t action hOpening hStep with ⟨rawText, rfl⟩
+  · rcases step_record_opening_statement_result s t action hOpening hStepCore with ⟨rawText, rfl⟩
     exact newCouncilVotesComeFromSeated_of_same_votes <|
       addFiling_preserves_council_votes s.case "openings"
         (if s.case.openings.isEmpty then "plaintiff" else "defendant")
@@ -482,7 +572,7 @@ theorem step_introduces_newCouncilVotes_only_from_seated
             s.policy.max_argument_chars
             true
             action.payload = .ok t := by
-        simpa [step, hOpening, hArgument] using hStep
+        simpa [stepCore, hOpening, hArgument] using hStepCore
       rcases recordMeritsSubmission_with_materials_result
           s t "arguments" action.actor_role
           (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
@@ -510,7 +600,7 @@ theorem step_introduces_newCouncilVotes_only_from_seated
               s.policy.max_rebuttal_chars
               true
               action.payload = .ok t := by
-          simpa [step, hOpening, hArgument, hRebuttal] using hStep
+          simpa [stepCore, hOpening, hArgument, hRebuttal] using hStepCore
         rcases recordMeritsSubmission_with_materials_result
             s t "rebuttals" action.actor_role "plaintiff"
             "rebuttal" s.policy.max_rebuttal_chars action.payload hSubmit with
@@ -527,17 +617,18 @@ theorem step_introduces_newCouncilVotes_only_from_seated
                 "defendant"
                 "surrebuttal"
                 s.policy.max_surrebuttal_chars
-                false
+                true
                 action.payload = .ok t := by
-            simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal] using hStep
-          rcases recordMeritsSubmission_without_materials_result
+            simpa [stepCore, hOpening, hArgument, hRebuttal, hSurrebuttal] using hStepCore
+          rcases recordMeritsSubmission_with_materials_result
               s t "surrebuttals" action.actor_role "defendant"
               "surrebuttal" s.policy.max_surrebuttal_chars action.payload hSubmit with
-            ⟨rawText, rfl⟩
-          exact newCouncilVotesComeFromSeated_of_same_votes <|
-            addFiling_preserves_council_votes s.case "surrebuttals" "defendant" (trimString rawText)
+            ⟨rawText, offered, reports, rfl⟩
+          exact newCouncilVotesComeFromSeated_of_same_votes <| by
+            simp [stateWithCase, appendSupplementalMaterials_preserves_council_votes,
+              addFiling_preserves_council_votes s.case "surrebuttals" "defendant" (trimString rawText)]
         · by_cases hClosing : action.action_type = "deliver_closing_statement"
-          · rcases step_deliver_closing_statement_result s t action hClosing hStep with ⟨rawText, rfl⟩
+          · rcases step_deliver_closing_statement_result s t action hClosing hStepCore with ⟨rawText, rfl⟩
             exact newCouncilVotesComeFromSeated_of_same_votes <|
               by
                 simpa [List.isEmpty_iff] using
@@ -552,7 +643,7 @@ theorem step_introduces_newCouncilVotes_only_from_seated
                       if !s.case.rebuttals.isEmpty then
                         throw "rebuttal already submitted"
                       pure <| stateWithCase s { s.case with phase := "surrebuttals" }) = .ok t := by
-                  simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing, hPass, hRebuttals] using hStep
+                  simpa [stepCore, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing, hPass, hRebuttals] using hStepCore
                 cases hRole : requireRole action.actor_role "plaintiff" with
                 | error err =>
                     rw [hRole] at hPassResult
@@ -575,7 +666,7 @@ theorem step_introduces_newCouncilVotes_only_from_seated
                         if !s.case.surrebuttals.isEmpty then
                           throw "surrebuttal already submitted"
                         pure <| stateWithCase s { s.case with phase := "closings" }) = .ok t := by
-                    simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing, hPass, hRebuttals, hSurrebuttals] using hStep
+                    simpa [stepCore, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing, hPass, hRebuttals, hSurrebuttals] using hStepCore
                   cases hRole : requireRole action.actor_role "defendant" with
                   | error err =>
                       rw [hRole] at hPassResult
@@ -591,18 +682,18 @@ theorem step_introduces_newCouncilVotes_only_from_seated
                           simp [hEmpty] at hPassResult
                           cases hPassResult
                           exact newCouncilVotesComeFromSeated_of_same_votes rfl
-                · simp [step, hPass, hRebuttals, hSurrebuttals] at hStep
+                · simp [stepCore, hPass, hRebuttals, hSurrebuttals] at hStepCore
             · by_cases hEvidence : action.action_type = "submit_evidence"
               · have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-                  simpa [step, hEvidence] using hStep
+                  simpa [stepCore, hEvidence] using hStepCore
                 rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
                 exact newCouncilVotesComeFromSeated_of_same_votes <| by
                   simp [stateWithCase, appendSubmittedEvidence]
               · by_cases hVote : action.action_type = "submit_council_vote"
                 · exact step_submit_council_vote_introduces_only_seated_currentRoundVote
-                    s t action hVote hStep
+                    s t action hVote hStepCore
                 · by_cases hRemoval : action.action_type = "remove_council_member"
-                  · rcases step_remove_council_member_details s t action hRemoval hStep with
+                  · rcases step_remove_council_member_details s t action hRemoval hStepCore with
                     ⟨memberId, status, _hPhase, _hSeated, _hFresh, _hStatus, hCont⟩
                     let c1 := { s.case with
                     council_members := s.case.council_members.map (fun (member : CouncilMember) =>
@@ -613,8 +704,20 @@ theorem step_introduces_newCouncilVotes_only_from_seated
                     }
                     exact newCouncilVotesComeFromSeated_of_same_votes <|
                       continueDeliberation_preserves_council_votes s t c1 hCont
-                  · cases hType : action.action_type <;>
-                      simp [hType] at hOpening hArgument hRebuttal hSurrebuttal hClosing hPass hEvidence hVote hRemoval <;>
-                      simp [step, hType] at hStep
+                  · by_cases hFail : action.action_type = "fail_opportunity"
+                    · have hFailOp := step_fail_opportunity_result s t action hFail hStepCore
+                      rcases failOpportunity_result s t action.payload hFailOp with hCouncil | hParty
+                      · rcases hCouncil with ⟨_memberId, _reason, _opportunityId, _message,
+                          c1, hC1, _hDeliberation, _hSeated, _hFresh, hCont⟩
+                        exact newCouncilVotesComeFromSeated_of_same_votes <| by
+                          have hVotes : t.case.council_votes = c1.council_votes :=
+                            continueDeliberation_preserves_council_votes s t c1 hCont
+                          rw [hC1] at hVotes
+                          simpa using hVotes
+                      · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+                        exact newCouncilVotesComeFromSeated_of_same_votes rfl
+                    · cases hType : action.action_type <;>
+                      simp [hType] at hOpening hArgument hRebuttal hSurrebuttal hClosing hPass hEvidence hVote hRemoval hFail <;>
+                      simp [stepCore, hType] at hStepCore
 
 end ArbProofs

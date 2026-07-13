@@ -214,7 +214,8 @@ theorem step_submit_council_vote_same_round_establishes_viableOutcomesShrink
     (hUnique : councilIdsUnique s.case)
     (hIntegrity : councilVoteIntegrity s.case) :
     viableOutcomesShrink s t := by
-  rcases step_submit_council_vote_details_with_valid_vote s t action hType hStep with
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
+  rcases step_submit_council_vote_details_with_valid_vote s t action hType hStepCore with
     ⟨memberId, vote, rationale, _hPhase, hSeated, hFresh, hVote, hCont⟩
   constructor
   · intro hViable

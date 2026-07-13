@@ -158,6 +158,29 @@ theorem appendSubmittedEvidence_preserves_councilMemberIds
       councilMemberIds c.council_members := by
   simp [appendSubmittedEvidence, councilMemberIds]
 
+theorem councilMemberIds_failure_update
+    (members : List CouncilMember)
+    (memberId reason opportunityId message : String) :
+    councilMemberIds
+      (List.map (fun (member : CouncilMember) =>
+        if member.member_id = memberId then
+          { member with
+            status := "failed"
+            failure_reason := reason
+            failure_opportunity_id := opportunityId
+            failure_message := message }
+        else
+          member) members) =
+      councilMemberIds members := by
+  unfold councilMemberIds
+  induction members with
+  | nil =>
+      simp
+  | cons head tail ih =>
+      by_cases h : head.member_id = memberId
+      · simp [h, ih]
+      · simp [h, ih]
+
 theorem stateWithCase_preserves_caseFrame
     (s : ArbitrationState)
     (c : ArbitrationCase)
@@ -269,7 +292,7 @@ theorem step_pass_phase_opportunity_preserves_caseFrame
     (memberIds : List String)
     (hType : action.action_type = "pass_phase_opportunity")
     (hFrame : caseFrameMatches proposition policy memberIds s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     caseFrameMatches proposition policy memberIds t := by
   rcases hFrame with ⟨hProp, hPolicy, hMembers⟩
   by_cases hRebuttals : s.case.phase = "rebuttals"
@@ -279,7 +302,7 @@ theorem step_pass_phase_opportunity_preserves_caseFrame
           if !s.case.rebuttals.isEmpty then
             throw "rebuttal already submitted"
           pure <| stateWithCase s { s.case with phase := "surrebuttals" }) = .ok t := by
-      simpa [step, hType, hRebuttals] using hStep
+      simpa [stepCore, hType, hRebuttals] using hStep
     cases hRole : requireRole action.actor_role "plaintiff" with
     | error err =>
         rw [hRole] at hPass
@@ -310,7 +333,7 @@ theorem step_pass_phase_opportunity_preserves_caseFrame
             if !s.case.surrebuttals.isEmpty then
               throw "surrebuttal already submitted"
             pure <| stateWithCase s { s.case with phase := "closings" }) = .ok t := by
-        simpa [step, hType, hRebuttals, hSurrebuttals] using hStep
+        simpa [stepCore, hType, hRebuttals, hSurrebuttals] using hStep
       cases hRole : requireRole action.actor_role "defendant" with
       | error err =>
           rw [hRole] at hPass
@@ -334,7 +357,7 @@ theorem step_pass_phase_opportunity_preserves_caseFrame
                 hFrame'
                 (by simp)
                 (by simp [councilMemberIds])
-    · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
+    · simp [stepCore, hType, hRebuttals, hSurrebuttals] at hStep
 
 theorem step_submit_evidence_preserves_caseFrame
     (s t : ArbitrationState)
@@ -344,14 +367,62 @@ theorem step_submit_evidence_preserves_caseFrame
     (memberIds : List String)
     (hType : action.action_type = "submit_evidence")
     (hFrame : caseFrameMatches proposition policy memberIds s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     caseFrameMatches proposition policy memberIds t := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
   exact stateWithCase_preserves_caseFrame s _ proposition policy memberIds hFrame
     (appendSubmittedEvidence_preserves_proposition s.case evidence)
     (appendSubmittedEvidence_preserves_councilMemberIds s.case evidence)
+
+theorem failOpportunity_preserves_caseFrame
+    (s t : ArbitrationState)
+    (payload : Lean.Json)
+    (proposition : String)
+    (policy : ArbitrationPolicy)
+    (memberIds : List String)
+    (hFrame : caseFrameMatches proposition policy memberIds s)
+    (hFail : failOpportunity s payload = .ok t) :
+    caseFrameMatches proposition policy memberIds t := by
+  rcases failOpportunity_result s t payload hFail with hCouncil | hParty
+  · rcases hCouncil with ⟨memberId, reason, opportunityId, message, c1, hC1,
+      _hDelib, _hSeated, _hFresh, hCont⟩
+    exact continueDeliberation_preserves_caseFrame_for s t c1 proposition policy memberIds
+      hFrame
+      (by rw [hC1])
+      (by
+        rw [hC1]
+        exact councilMemberIds_failure_update s.case.council_members memberId reason
+          opportunityId message)
+      hCont
+  · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+    exact stateWithCase_preserves_caseFrame s _ proposition policy memberIds hFrame rfl rfl
+
+theorem step_fail_opportunity_preserves_caseFrame
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (proposition : String)
+    (policy : ArbitrationPolicy)
+    (memberIds : List String)
+    (hType : action.action_type = "fail_opportunity")
+    (hFrame : caseFrameMatches proposition policy memberIds s)
+    (hStep : stepCore { state := s, action := action } = .ok t) :
+    caseFrameMatches proposition policy memberIds t := by
+  have hStep' :
+      (do
+        requireRole action.actor_role "system"
+        failOpportunity s action.payload) = .ok t := by
+    simpa [stepCore, hType] using hStep
+  cases hRole : requireRole action.actor_role "system" with
+  | error err =>
+      rw [hRole] at hStep'
+      cases hStep'
+  | ok okv =>
+      cases okv
+      rw [hRole] at hStep'
+      exact failOpportunity_preserves_caseFrame s t action.payload proposition policy memberIds
+        hFrame hStep'
 
 /--
 Every successful public step preserves the case frame.
@@ -369,8 +440,9 @@ theorem step_preserves_caseFrame
     (hFrame : caseFrameMatches proposition policy memberIds s)
     (hStep : step { state := s, action := action } = .ok t) :
     caseFrameMatches proposition policy memberIds t := by
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
   by_cases hOpening : action.action_type = "record_opening_statement"
-  · rcases step_record_opening_statement_result s t action hOpening hStep with ⟨rawText, rfl⟩
+  · rcases step_record_opening_statement_result s t action hOpening hStepCore with ⟨rawText, rfl⟩
     exact stateWithCase_preserves_caseFrame s _
       proposition policy memberIds hFrame
       (addFiling_preserves_proposition s.case "openings"
@@ -391,7 +463,7 @@ theorem step_preserves_caseFrame
             s.policy.max_argument_chars
             true
             action.payload = .ok t := by
-        simpa [step, hArgument, role] using hStep
+        simpa [stepCore, hArgument, role] using hStepCore
       rcases recordMeritsSubmission_with_materials_result
           s t "arguments" action.actor_role role
           "argument" s.policy.max_argument_chars action.payload hSubmit with
@@ -415,7 +487,7 @@ theorem step_preserves_caseFrame
               s.policy.max_rebuttal_chars
               true
               action.payload = .ok t := by
-          simpa [step, hRebuttal] using hStep
+          simpa [stepCore, hRebuttal] using hStepCore
         rcases recordMeritsSubmission_with_materials_result
             s t "rebuttals" action.actor_role "plaintiff"
             "rebuttal" s.policy.max_rebuttal_chars action.payload hSubmit with
@@ -437,19 +509,23 @@ theorem step_preserves_caseFrame
                 "defendant"
                 "surrebuttal"
                 s.policy.max_surrebuttal_chars
-                false
+                true
                 action.payload = .ok t := by
-            simpa [step, hSurrebuttal] using hStep
-          rcases recordMeritsSubmission_without_materials_result
+            simpa [stepCore, hSurrebuttal] using hStepCore
+          rcases recordMeritsSubmission_with_materials_result
               s t "surrebuttals" action.actor_role "defendant"
               "surrebuttal" s.policy.max_surrebuttal_chars action.payload hSubmit with
-            ⟨rawText, rfl⟩
+            ⟨rawText, offered, reports, rfl⟩
           exact stateWithCase_preserves_caseFrame s _
             proposition policy memberIds hFrame
-            (addFiling_preserves_proposition s.case "surrebuttals" "defendant" (trimString rawText))
-            (addFiling_preserves_councilMemberIds s.case "surrebuttals" "defendant" (trimString rawText))
+            (by
+              simp [appendSupplementalMaterials_preserves_proposition,
+                addFiling_preserves_proposition])
+            (by
+              simp [appendSupplementalMaterials_preserves_councilMemberIds,
+                addFiling_preserves_councilMemberIds])
         · by_cases hClosing : action.action_type = "deliver_closing_statement"
-          · rcases step_deliver_closing_statement_result s t action hClosing hStep with ⟨rawText, rfl⟩
+          · rcases step_deliver_closing_statement_result s t action hClosing hStepCore with ⟨rawText, rfl⟩
             exact stateWithCase_preserves_caseFrame s _
               proposition policy memberIds hFrame
               (addFiling_preserves_proposition s.case "closings"
@@ -460,12 +536,12 @@ theorem step_preserves_caseFrame
                 (trimString rawText))
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
             · exact step_pass_phase_opportunity_preserves_caseFrame
-                s t action proposition policy memberIds hPass hFrame hStep
+                s t action proposition policy memberIds hPass hFrame hStepCore
             · by_cases hEvidence : action.action_type = "submit_evidence"
               · exact step_submit_evidence_preserves_caseFrame
-                  s t action proposition policy memberIds hEvidence hFrame hStep
+                  s t action proposition policy memberIds hEvidence hFrame hStepCore
               · by_cases hVote : action.action_type = "submit_council_vote"
-                · rcases step_submit_council_vote_result s t action hVote hStep with
+                · rcases step_submit_council_vote_result s t action hVote hStepCore with
                   ⟨memberId, vote, rationale, _hPhase, hCont⟩
                   let c1 := { s.case with council_votes := s.case.council_votes.concat {
                     member_id := memberId
@@ -479,7 +555,7 @@ theorem step_preserves_caseFrame
                     (by simp [c1, councilMemberIds])
                     hCont
                 · by_cases hRemoval : action.action_type = "remove_council_member"
-                  · rcases step_remove_council_member_result s t action hRemoval hStep with
+                  · rcases step_remove_council_member_result s t action hRemoval hStepCore with
                     ⟨memberId, status, _hPhase, hCont⟩
                     let c1 := {
                       s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
@@ -495,7 +571,10 @@ theorem step_preserves_caseFrame
                         simpa [c1] using
                           councilMemberIds_status_update s.case.council_members memberId (trimString status))
                       hCont
-                  · simp [step] at hStep
+                  · by_cases hFail : action.action_type = "fail_opportunity"
+                    · exact step_fail_opportunity_preserves_caseFrame s t action
+                        proposition policy memberIds hFail hFrame hStepCore
+                    · simp [stepCore] at hStepCore
 
 /--
 Any run that begins at a successful initialization preserves the initialized

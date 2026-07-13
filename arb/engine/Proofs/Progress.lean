@@ -188,7 +188,7 @@ theorem step_pass_phase_opportunity_result
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "pass_phase_opportunity")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     (s.case.phase = "rebuttals" ∧
       t = stateWithCase s { s.case with phase := "surrebuttals" }) ∨
     (s.case.phase = "surrebuttals" ∧
@@ -203,7 +203,7 @@ theorem step_pass_phase_opportunity_result
             if !s.case.rebuttals.isEmpty then
               throw "rebuttal already submitted"
             pure <| stateWithCase s { s.case with phase := "surrebuttals" }) = .ok t := by
-        simpa [step, hType, hRebuttals] using hStep
+        simpa [stepCore, hType, hRebuttals] using hStep
       cases hRole : requireRole action.actor_role "plaintiff" with
       | error err =>
           rw [hRole] at hPass
@@ -230,7 +230,7 @@ theorem step_pass_phase_opportunity_result
               if !s.case.surrebuttals.isEmpty then
                 throw "surrebuttal already submitted"
               pure <| stateWithCase s { s.case with phase := "closings" }) = .ok t := by
-          simpa [step, hType, hRebuttals, hSurrebuttals] using hStep
+          simpa [stepCore, hType, hRebuttals, hSurrebuttals] using hStep
         cases hRole : requireRole action.actor_role "defendant" with
         | error err =>
             rw [hRole] at hPass
@@ -247,7 +247,7 @@ theorem step_pass_phase_opportunity_result
                 simp [hEmpty] at hPass
                 cases hPass
                 rfl
-    · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
+    · simp [stepCore, hType, hRebuttals, hSurrebuttals] at hStep
 
 /--
 `fixedFrameProgress` packages the monotone state-to-state coordinates
@@ -283,8 +283,9 @@ theorem step_phaseRank_mono
     (action : CourtAction)
     (hStep : step { state := s, action := action } = .ok t) :
     phaseRank s.case.phase ≤ phaseRank t.case.phase := by
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
   by_cases hOpening : action.action_type = "record_opening_statement"
-  · rcases step_record_opening_statement_result s t action hOpening hStep with ⟨rawText, rfl⟩
+  · rcases step_record_opening_statement_result s t action hOpening hStepCore with ⟨rawText, rfl⟩
     simpa [stateWithCase] using
       addFiling_phaseRank_mono s.case "openings"
         (if s.case.openings.isEmpty then "plaintiff" else "defendant")
@@ -300,7 +301,7 @@ theorem step_phaseRank_mono
             s.policy.max_argument_chars
             true
             action.payload = .ok t := by
-        simpa [step, hOpening, hArgument] using hStep
+        simpa [stepCore, hOpening, hArgument] using hStepCore
       rcases recordMeritsSubmission_with_materials_result
           s t "arguments" action.actor_role
           (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
@@ -326,7 +327,7 @@ theorem step_phaseRank_mono
               s.policy.max_rebuttal_chars
               true
               action.payload = .ok t := by
-          simpa [step, hOpening, hArgument, hRebuttal] using hStep
+          simpa [stepCore, hOpening, hArgument, hRebuttal] using hStepCore
         rcases recordMeritsSubmission_with_materials_result
             s t "rebuttals" action.actor_role "plaintiff"
             "rebuttal" s.policy.max_rebuttal_chars action.payload hSubmit with
@@ -345,35 +346,38 @@ theorem step_phaseRank_mono
                 "defendant"
                 "surrebuttal"
                 s.policy.max_surrebuttal_chars
-                false
+                true
                 action.payload = .ok t := by
-            simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal] using hStep
-          rcases recordMeritsSubmission_without_materials_result
+            simpa [stepCore, hOpening, hArgument, hRebuttal, hSurrebuttal] using hStepCore
+          rcases recordMeritsSubmission_with_materials_result
               s t "surrebuttals" action.actor_role "defendant"
               "surrebuttal" s.policy.max_surrebuttal_chars action.payload hSubmit with
-            ⟨rawText, rfl⟩
-          simpa [stateWithCase] using
+            ⟨rawText, offered, reports, rfl⟩
+          have hPhase :
+              phaseRank s.case.phase ≤
+                phaseRank (addFiling s.case "surrebuttals" "defendant" (trimString rawText)).phase :=
             addFiling_phaseRank_mono s.case "surrebuttals" "defendant" (trimString rawText)
+          simpa [stateWithCase, appendSupplementalMaterials_preserves_phaseRank] using hPhase
         · by_cases hClosing : action.action_type = "deliver_closing_statement"
-          · rcases step_deliver_closing_statement_result s t action hClosing hStep with ⟨rawText, rfl⟩
+          · rcases step_deliver_closing_statement_result s t action hClosing hStepCore with ⟨rawText, rfl⟩
             simpa [stateWithCase] using
               addFiling_phaseRank_mono s.case "closings"
                 (if s.case.closings.isEmpty then "plaintiff" else "defendant")
                 (trimString rawText)
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
-            · rcases step_pass_phase_opportunity_result s t action hPass hStep with
+            · rcases step_pass_phase_opportunity_result s t action hPass hStepCore with
                 (⟨hPhase, rfl⟩ | ⟨hPhase, rfl⟩)
               · simp [stateWithCase, hPhase, phaseRank]
               · simp [stateWithCase, hPhase, phaseRank]
             · by_cases hEvidence : action.action_type = "submit_evidence"
               · have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-                  simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing,
-                    hPass, hEvidence] using hStep
+                  simpa [stepCore, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing,
+                    hPass, hEvidence] using hStepCore
                 rcases submitEvidence_result s t action.actor_role action.payload hSubmit with
                   ⟨evidence, rfl⟩
                 simp [stateWithCase, appendSubmittedEvidence]
               · by_cases hVote : action.action_type = "submit_council_vote"
-                · rcases step_submit_council_vote_result s t action hVote hStep with
+                · rcases step_submit_council_vote_result s t action hVote hStepCore with
                     ⟨memberId, vote, rationale, hPhase, hCont⟩
                   let c1 := { s.case with council_votes := s.case.council_votes.concat {
                     member_id := memberId
@@ -385,7 +389,7 @@ theorem step_phaseRank_mono
                     simpa [c1] using hPhase
                   exact continueDeliberation_phaseRank_mono s t c1 hPhase1 hCont
                 · by_cases hRemoval : action.action_type = "remove_council_member"
-                  · rcases step_remove_council_member_result s t action hRemoval hStep with
+                  · rcases step_remove_council_member_result s t action hRemoval hStepCore with
                       ⟨memberId, status, hPhase, hCont⟩
                     let c1 := {
                       s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
@@ -397,15 +401,28 @@ theorem step_phaseRank_mono
                     have hPhase1 : c1.phase = "deliberation" := by
                       simpa [c1] using hPhase
                     exact continueDeliberation_phaseRank_mono s t c1 hPhase1 hCont
-                  · simp [step] at hStep
+                  · by_cases hFail : action.action_type = "fail_opportunity"
+                    · have hFailOp := step_fail_opportunity_result s t action hFail hStepCore
+                      rcases failOpportunity_result s t action.payload hFailOp with hCouncil | hParty
+                      · rcases hCouncil with ⟨_memberId, _reason, _opportunityId, _message,
+                          c1, hC1, hPhase, _hSeated, _hFresh, hCont⟩
+                        have hPhase1 : c1.phase = "deliberation" := by
+                          rw [hC1]
+                          simpa using hPhase
+                        have hRank := continueDeliberation_phaseRank_mono s t c1 hPhase1 hCont
+                        simpa [hC1] using hRank
+                      · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+                        simp [stateWithCase]
+                    · simp [stepCore] at hStepCore
 
 theorem step_deliberation_round_mono
     (s t : ArbitrationState)
     (action : CourtAction)
     (hStep : step { state := s, action := action } = .ok t) :
     s.case.deliberation_round ≤ t.case.deliberation_round := by
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
   by_cases hOpening : action.action_type = "record_opening_statement"
-  · rcases step_record_opening_statement_result s t action hOpening hStep with ⟨rawText, rfl⟩
+  · rcases step_record_opening_statement_result s t action hOpening hStepCore with ⟨rawText, rfl⟩
     simpa [stateWithCase] using Nat.le_of_eq
       (addFiling_preserves_deliberation_round s.case "openings"
         (if s.case.openings.isEmpty then "plaintiff" else "defendant")
@@ -421,7 +438,7 @@ theorem step_deliberation_round_mono
             s.policy.max_argument_chars
             true
             action.payload = .ok t := by
-        simpa [step, hOpening, hArgument] using hStep
+        simpa [stepCore, hOpening, hArgument] using hStepCore
       rcases recordMeritsSubmission_with_materials_result
           s t "arguments" action.actor_role
           (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
@@ -448,7 +465,7 @@ theorem step_deliberation_round_mono
               s.policy.max_rebuttal_chars
               true
               action.payload = .ok t := by
-          simpa [step, hOpening, hArgument, hRebuttal] using hStep
+          simpa [stepCore, hOpening, hArgument, hRebuttal] using hStepCore
         rcases recordMeritsSubmission_with_materials_result
             s t "rebuttals" action.actor_role "plaintiff"
             "rebuttal" s.policy.max_rebuttal_chars action.payload hSubmit with
@@ -468,20 +485,21 @@ theorem step_deliberation_round_mono
                 "defendant"
                 "surrebuttal"
                 s.policy.max_surrebuttal_chars
-                false
+                true
                 action.payload = .ok t := by
-            simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal] using hStep
-          rcases recordMeritsSubmission_without_materials_result
+            simpa [stepCore, hOpening, hArgument, hRebuttal, hSurrebuttal] using hStepCore
+          rcases recordMeritsSubmission_with_materials_result
               s t "surrebuttals" action.actor_role "defendant"
               "surrebuttal" s.policy.max_surrebuttal_chars action.payload hSubmit with
-            ⟨rawText, rfl⟩
+            ⟨rawText, offered, reports, rfl⟩
           have hRound :
               (addFiling s.case "surrebuttals" "defendant" (trimString rawText)).deliberation_round =
                 s.case.deliberation_round :=
             addFiling_preserves_deliberation_round s.case "surrebuttals" "defendant" (trimString rawText)
-          simpa [stateWithCase] using Nat.le_of_eq hRound.symm
+          simpa [stateWithCase, appendSupplementalMaterials_preserves_deliberation_round] using
+            Nat.le_of_eq hRound.symm
         · by_cases hClosing : action.action_type = "deliver_closing_statement"
-          · rcases step_deliver_closing_statement_result s t action hClosing hStep with ⟨rawText, rfl⟩
+          · rcases step_deliver_closing_statement_result s t action hClosing hStepCore with ⟨rawText, rfl⟩
             have hRound :
                 (addFiling s.case "closings"
                   (if s.case.closings.isEmpty then "plaintiff" else "defendant")
@@ -491,19 +509,19 @@ theorem step_deliberation_round_mono
                 (trimString rawText)
             simpa [stateWithCase] using Nat.le_of_eq hRound.symm
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
-            · rcases step_pass_phase_opportunity_result s t action hPass hStep with
+            · rcases step_pass_phase_opportunity_result s t action hPass hStepCore with
                 (⟨_hPhase, rfl⟩ | ⟨_hPhase, rfl⟩)
               · simp [stateWithCase]
               · simp [stateWithCase]
             · by_cases hEvidence : action.action_type = "submit_evidence"
               · have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-                  simpa [step, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing,
-                    hPass, hEvidence] using hStep
+                  simpa [stepCore, hOpening, hArgument, hRebuttal, hSurrebuttal, hClosing,
+                    hPass, hEvidence] using hStepCore
                 rcases submitEvidence_result s t action.actor_role action.payload hSubmit with
                   ⟨evidence, rfl⟩
                 simp [stateWithCase, appendSubmittedEvidence]
               · by_cases hVote : action.action_type = "submit_council_vote"
-                · rcases step_submit_council_vote_result s t action hVote hStep with
+                · rcases step_submit_council_vote_result s t action hVote hStepCore with
                     ⟨memberId, vote, rationale, _hPhase, hCont⟩
                   let c1 := { s.case with council_votes := s.case.council_votes.concat {
                     member_id := memberId
@@ -517,7 +535,7 @@ theorem step_deliberation_round_mono
                     continueDeliberation_deliberation_round_mono s t c1 hCont
                   simpa [hRoundEq] using hMono
                 · by_cases hRemoval : action.action_type = "remove_council_member"
-                  · rcases step_remove_council_member_result s t action hRemoval hStep with
+                  · rcases step_remove_council_member_result s t action hRemoval hStepCore with
                       ⟨memberId, status, _hPhase, hCont⟩
                     let c1 := {
                       s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
@@ -531,13 +549,26 @@ theorem step_deliberation_round_mono
                     have hMono : c1.deliberation_round ≤ t.case.deliberation_round :=
                       continueDeliberation_deliberation_round_mono s t c1 hCont
                     simpa [hRoundEq] using hMono
-                  · simp [step] at hStep
+                  · by_cases hFail : action.action_type = "fail_opportunity"
+                    · have hFailOp := step_fail_opportunity_result s t action hFail hStepCore
+                      rcases failOpportunity_result s t action.payload hFailOp with hCouncil | hParty
+                      · rcases hCouncil with ⟨_memberId, _reason, _opportunityId, _message,
+                          c1, hC1, _hPhase, _hSeated, _hFresh, hCont⟩
+                        have hRoundEq : c1.deliberation_round = s.case.deliberation_round := by
+                          rw [hC1]
+                        have hMono : c1.deliberation_round ≤ t.case.deliberation_round :=
+                          continueDeliberation_deliberation_round_mono s t c1 hCont
+                        simpa [hRoundEq] using hMono
+                      · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+                        simp [stateWithCase]
+                    · simp [stepCore] at hStepCore
 
 theorem step_establishes_fixedFrameProgress
     (s t : ArbitrationState)
     (action : CourtAction)
     (hStep : step { state := s, action := action } = .ok t) :
     fixedFrameProgress s t := by
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
   have hFrame :
       caseFrameMatches
         s.case.proposition
@@ -551,7 +582,7 @@ theorem step_establishes_fixedFrameProgress
       (councilMemberIds s.case.council_members)
       hFrame
       hStep,
-    step_extends_materials s t action hStep,
+    step_extends_materials s t action hStepCore,
     step_shrinks_seatedCouncilMemberIds s t action hStep,
     step_phaseRank_mono s t action hStep,
     step_deliberation_round_mono s t action hStep⟩

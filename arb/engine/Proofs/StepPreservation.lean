@@ -34,7 +34,7 @@ theorem step_record_opening_statement_result
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "record_opening_statement")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     ∃ rawText : String,
       t =
         stateWithCase s
@@ -45,7 +45,7 @@ theorem step_record_opening_statement_result
     by_cases hOpen : s.case.phase = "openings"
     · exact hOpen
     · have hClosed : s.case.phase != "openings" := by simpa using hOpen
-      simp [step, hType, hClosed] at hStep
+      simp [stepCore, hType, hClosed] at hStep
       cases hStep
   let role := if s.case.openings.isEmpty then "plaintiff" else "defendant"
   have hStep' :
@@ -57,7 +57,7 @@ theorem step_record_opening_statement_result
         pure <| stateWithCase s
           (addFiling s.case "openings"
             (if s.case.openings.isEmpty then "plaintiff" else "defendant") text)) = .ok t := by
-            simpa [step, hType, hPhase] using hStep
+            simpa [stepCore, hType, hPhase] using hStep
   cases hRoleCheck : requireRole action.actor_role role with
   | error err =>
       rw [hRoleCheck] at hStep'
@@ -107,14 +107,14 @@ theorem step_record_opening_statement_preserves_phaseShape
     (action : CourtAction)
     (hType : action.action_type = "record_opening_statement")
     (hShape : phaseShape s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     phaseShape t.case := by
   rcases step_record_opening_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   have hPhase : s.case.phase = "openings" := by
     by_cases hOpen : s.case.phase = "openings"
     · exact hOpen
     · have hClosed : s.case.phase != "openings" := by simpa using hOpen
-      simp [step, hType, hClosed] at hStep
+      simp [stepCore, hType, hClosed] at hStep
       cases hStep
   exact stateWithCase_preserves_phaseShape s _
     (addOpening_preserves_phaseShape s.case (trimString rawText) hShape hPhase)
@@ -133,7 +133,7 @@ theorem step_record_opening_statement_preserves_material_limits
     (action : CourtAction)
     (hType : action.action_type = "record_opening_statement")
     (hLimits : materialLimitsRespected s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialLimitsRespected t := by
   rcases step_record_opening_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact stateWithCase_preserves_material_limits s _ hLimits
@@ -156,7 +156,7 @@ theorem step_deliver_closing_statement_result
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "deliver_closing_statement")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     ∃ rawText : String,
       t =
         stateWithCase s
@@ -167,7 +167,7 @@ theorem step_deliver_closing_statement_result
     by_cases hOpen : s.case.phase = "closings"
     · exact hOpen
     · have hClosed : s.case.phase != "closings" := by simpa using hOpen
-      simp [step, hType, hClosed] at hStep
+      simp [stepCore, hType, hClosed] at hStep
       cases hStep
   let role := if s.case.closings.isEmpty then "plaintiff" else "defendant"
   have hStep' :
@@ -180,7 +180,7 @@ theorem step_deliver_closing_statement_result
         pure <| stateWithCase s
           (addFiling s.case "closings"
             (if s.case.closings.isEmpty then "plaintiff" else "defendant") text)) = .ok t := by
-    simpa [step, hType, hPhase] using hStep
+    simpa [stepCore, hType, hPhase] using hStep
   cases hRoleCheck : requireRole action.actor_role role with
   | error err =>
       rw [hRoleCheck] at hStep'
@@ -249,14 +249,14 @@ theorem step_deliver_closing_statement_preserves_phaseShape
     (action : CourtAction)
     (hType : action.action_type = "deliver_closing_statement")
     (hShape : phaseShape s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     phaseShape t.case := by
   rcases step_deliver_closing_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   have hPhase : s.case.phase = "closings" := by
     by_cases hOpen : s.case.phase = "closings"
     · exact hOpen
     · have hClosed : s.case.phase != "closings" := by simpa using hOpen
-      simp [step, hType, hClosed] at hStep
+      simp [stepCore, hType, hClosed] at hStep
       cases hStep
   exact stateWithCase_preserves_phaseShape s _
     (addClosing_preserves_phaseShape s.case (trimString rawText) hShape hPhase)
@@ -272,7 +272,7 @@ theorem step_deliver_closing_statement_preserves_material_limits
     (action : CourtAction)
     (hType : action.action_type = "deliver_closing_statement")
     (hLimits : materialLimitsRespected s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialLimitsRespected t := by
   rcases step_deliver_closing_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact stateWithCase_preserves_material_limits s _ hLimits
@@ -942,7 +942,7 @@ theorem step_submit_argument_preserves_phaseShape
     (action : CourtAction)
     (hType : action.action_type = "submit_argument")
     (hShape : phaseShape s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     phaseShape t.case := by
   have hSubmit :
       recordMeritsSubmission
@@ -954,7 +954,7 @@ theorem step_submit_argument_preserves_phaseShape
         s.policy.max_argument_chars
         true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   rcases recordMeritsSubmission_with_materials_result
       s t "arguments" action.actor_role
       (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
@@ -983,7 +983,7 @@ theorem step_submit_argument_preserves_material_limits
     (action : CourtAction)
     (hType : action.action_type = "submit_argument")
     (hLimits : materialLimitsRespected s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialLimitsRespected t := by
   let role := if s.case.arguments.isEmpty then "plaintiff" else "defendant"
   have hSubmit :
@@ -996,7 +996,7 @@ theorem step_submit_argument_preserves_material_limits
         s.policy.max_argument_chars
         true
         action.payload = .ok t := by
-    simpa [step, hType, role] using hStep
+    simpa [stepCore, hType, role] using hStep
   rcases recordMeritsSubmission_with_materials_details
       s t "arguments" action.actor_role role
       "argument" s.policy.max_argument_chars action.payload hSubmit with
@@ -1033,7 +1033,7 @@ theorem step_submit_rebuttal_preserves_phaseShape
     (action : CourtAction)
     (hType : action.action_type = "submit_rebuttal")
     (hShape : phaseShape s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     phaseShape t.case := by
   have hSubmit :
       recordMeritsSubmission
@@ -1045,7 +1045,7 @@ theorem step_submit_rebuttal_preserves_phaseShape
         s.policy.max_rebuttal_chars
         true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   rcases recordMeritsSubmission_with_materials_result
       s t "rebuttals" action.actor_role "plaintiff"
       "rebuttal" s.policy.max_rebuttal_chars action.payload hSubmit with
@@ -1068,7 +1068,7 @@ theorem step_submit_rebuttal_preserves_material_limits
     (action : CourtAction)
     (hType : action.action_type = "submit_rebuttal")
     (hLimits : materialLimitsRespected s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialLimitsRespected t := by
   have hSubmit :
       recordMeritsSubmission
@@ -1080,7 +1080,7 @@ theorem step_submit_rebuttal_preserves_material_limits
         s.policy.max_rebuttal_chars
         true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   rcases recordMeritsSubmission_with_materials_details
       s t "rebuttals" action.actor_role "plaintiff"
       "rebuttal" s.policy.max_rebuttal_chars action.payload hSubmit with
@@ -1224,33 +1224,69 @@ theorem submitEvidence_result
           simpa [submitEvidence, hArgs, hRebuttals, hEmpty] using hSubmit
         change Except.error "rebuttal evidence is closed" = .ok t at hClosed
         cases hClosed
-    · have hClosed :
-          (do
-            let expectedRole ← (throw "submitted evidence is allowed only in arguments and rebuttals" : Except String String)
-            requireRole actorRole expectedRole
-            let parsedEvidence ← parseSubmittedEvidence payload s.case.phase expectedRole
-            let evidence := { parsedEvidence with role := expectedRole }
-            if s.case.submitted_evidence.any (fun item => item.evidence_id = evidence.evidence_id) then
-              throw s!"duplicate submitted evidence_id: {evidence.evidence_id}"
-            else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
-              throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
-            else
-              let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
-              requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
-              pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
-        simpa [submitEvidence, hArgs, hRebuttals] using hSubmit
-      change Except.error "submitted evidence is allowed only in arguments and rebuttals" = .ok t at hClosed
-      cases hClosed
+    · by_cases hSurrebuttals : s.case.phase = "surrebuttals"
+      · cases hEmpty : s.case.surrebuttals.isEmpty with
+        | true =>
+          have hCore :
+              (do
+                requireRole actorRole "defendant"
+                let parsedEvidence ← parseSubmittedEvidence payload s.case.phase "defendant"
+                let evidence := { parsedEvidence with role := "defendant" }
+                if s.case.submitted_evidence.any (fun item => item.evidence_id = evidence.evidence_id) then
+                  throw s!"duplicate submitted evidence_id: {evidence.evidence_id}"
+                else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
+                  throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+                else
+                  let total := submittedEvidenceCountForRole s.case.submitted_evidence "defendant" + 1
+                  requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
+                  pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
+              simpa [submitEvidence, hArgs, hRebuttals, hSurrebuttals, hEmpty] using hSubmit
+          exact handle "defendant" hCore
+        | false =>
+          have hClosed :
+              (do
+                let expectedRole ← (throw "surrebuttal evidence is closed" : Except String String)
+                requireRole actorRole expectedRole
+                let parsedEvidence ← parseSubmittedEvidence payload s.case.phase expectedRole
+                let evidence := { parsedEvidence with role := expectedRole }
+                if s.case.submitted_evidence.any (fun item => item.evidence_id = evidence.evidence_id) then
+                  throw s!"duplicate submitted evidence_id: {evidence.evidence_id}"
+                else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
+                  throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+                else
+                  let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
+                  requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
+                  pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
+            simpa [submitEvidence, hArgs, hRebuttals, hSurrebuttals, hEmpty] using hSubmit
+          change Except.error "surrebuttal evidence is closed" = .ok t at hClosed
+          cases hClosed
+      · have hClosed :
+            (do
+              let expectedRole ← (throw "submitted evidence is allowed only in arguments, rebuttals, and surrebuttals" : Except String String)
+              requireRole actorRole expectedRole
+              let parsedEvidence ← parseSubmittedEvidence payload s.case.phase expectedRole
+              let evidence := { parsedEvidence with role := expectedRole }
+              if s.case.submitted_evidence.any (fun item => item.evidence_id = evidence.evidence_id) then
+                throw s!"duplicate submitted evidence_id: {evidence.evidence_id}"
+              else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
+                throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+              else
+                let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
+                requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
+                pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
+          simpa [submitEvidence, hArgs, hRebuttals, hSurrebuttals] using hSubmit
+        change Except.error "submitted evidence is allowed only in arguments, rebuttals, and surrebuttals" = .ok t at hClosed
+        cases hClosed
 
 theorem step_submit_evidence_preserves_phaseShape
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_evidence")
     (hShape : phaseShape s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     phaseShape t.case := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
   exact stateWithCase_preserves_phaseShape s _
     (appendSubmittedEvidence_preserves_phaseShape s.case evidence hShape)
@@ -1260,25 +1296,25 @@ theorem step_submit_evidence_preserves_material_limits
     (action : CourtAction)
     (hType : action.action_type = "submit_evidence")
     (hLimits : materialLimitsRespected s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialLimitsRespected t := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
   simpa [stateWithCase] using appendSubmittedEvidence_preserves_material_limits s evidence hLimits
 
 /--
 A successful surrebuttal step preserves the merits-sequence invariant.
 
-Surrebuttal cannot append new exhibits or reports.  The only structural change
-is the single defendant surrebuttal filing.
+Surrebuttal shares the supplemental-material path with arguments and rebuttal.
+The structural filing change remains the single defendant surrebuttal filing.
 -/
 theorem step_submit_surrebuttal_preserves_phaseShape
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_surrebuttal")
     (hShape : phaseShape s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     phaseShape t.case := by
   have hSubmit :
       recordMeritsSubmission
@@ -1288,13 +1324,13 @@ theorem step_submit_surrebuttal_preserves_phaseShape
         "defendant"
         "surrebuttal"
         s.policy.max_surrebuttal_chars
-        false
+        true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
-  rcases recordMeritsSubmission_without_materials_result
+    simpa [stepCore, hType] using hStep
+  rcases recordMeritsSubmission_with_materials_result
       s t "surrebuttals" action.actor_role "defendant"
       "surrebuttal" s.policy.max_surrebuttal_chars action.payload hSubmit with
-    ⟨rawText, rfl⟩
+    ⟨rawText, offered, reports, rfl⟩
   have hPhase : s.case.phase = "surrebuttals" := by
     by_cases hSur : s.case.phase = "surrebuttals"
     · exact hSur
@@ -1302,21 +1338,21 @@ theorem step_submit_surrebuttal_preserves_phaseShape
       simp [recordMeritsSubmission, hClosed] at hSubmit
       cases hSubmit
   exact stateWithCase_preserves_phaseShape s _
-    (addSurrebuttal_preserves_phaseShape s.case (trimString rawText) hShape hPhase)
+    (appendSupplementalMaterials_preserves_phaseShape _ _ _
+      (addSurrebuttal_preserves_phaseShape s.case (trimString rawText) hShape hPhase))
 
 /--
 A successful surrebuttal step preserves the aggregate material limits.
 
-Surrebuttal cannot append new exhibits or reports, so the remaining proof is a
-wrapper around the no-supplemental-material branch of
-`recordMeritsSubmission`.
+Surrebuttal uses the same material-limit path as argument and rebuttal
+submissions.
 -/
 theorem step_submit_surrebuttal_preserves_material_limits
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_surrebuttal")
     (hLimits : materialLimitsRespected s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialLimitsRespected t := by
   have hSubmit :
       recordMeritsSubmission
@@ -1326,16 +1362,32 @@ theorem step_submit_surrebuttal_preserves_material_limits
         "defendant"
         "surrebuttal"
         s.policy.max_surrebuttal_chars
-        false
+        true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
-  rcases recordMeritsSubmission_without_materials_result
+    simpa [stepCore, hType] using hStep
+  rcases recordMeritsSubmission_with_materials_details
       s t "surrebuttals" action.actor_role "defendant"
       "surrebuttal" s.policy.max_surrebuttal_chars action.payload hSubmit with
-    ⟨rawText, rfl⟩
-  exact stateWithCase_preserves_material_limits s _ hLimits
-    (addFiling_preserves_offered_evidence s.case "surrebuttals" "defendant" (trimString rawText))
-    (addFiling_preserves_technical_reports s.case "surrebuttals" "defendant" (trimString rawText))
+    ⟨rawText, offered, reports, hOfferedParse, hReportsParse, hOfferedCap, hReportCap, rfl⟩
+  let c1 := addFiling s.case "surrebuttals" "defendant" (trimString rawText)
+  let s1 := stateWithCase s c1
+  have hBase1 : materialLimitsRespected s1 := by
+    exact stateWithCase_preserves_material_limits s c1 hLimits
+      (addFiling_preserves_offered_evidence s.case "surrebuttals" "defendant" (trimString rawText))
+      (addFiling_preserves_technical_reports s.case "surrebuttals" "defendant" (trimString rawText))
+  have hOfferedRole : ∀ item ∈ offered, item.role = "defendant" := by
+    exact parseOfferedEvidence_all_role action.payload "surrebuttals" "defendant" offered hOfferedParse
+  have hReportRole : ∀ item ∈ reports, item.role = "defendant" := by
+    exact parseTechnicalReports_all_role action.payload "surrebuttals" "defendant" reports hReportsParse
+  have hOfferedCap1 :
+      offeredCount s1.case.offered_evidence "defendant" + offered.length ≤ s1.policy.max_exhibits_per_side := by
+    simpa [s1, c1, stateWithCase, addFiling_preserves_offered_evidence] using hOfferedCap
+  have hReportCap1 :
+      reportCount s1.case.technical_reports "defendant" + reports.length ≤ s1.policy.max_reports_per_side := by
+    simpa [s1, c1, stateWithCase, addFiling_preserves_technical_reports] using hReportCap
+  simpa [s1, c1, stateWithCase] using
+    appendSupplementalMaterials_preserves_material_limits
+      s1 offered reports "defendant" hBase1 hOfferedRole hReportRole hOfferedCap1 hReportCap1
 
 /--
 Passing an optional phase preserves the global filing shape.
@@ -1349,7 +1401,7 @@ theorem step_pass_phase_opportunity_preserves_phaseShape
     (action : CourtAction)
     (hType : action.action_type = "pass_phase_opportunity")
     (hShape : phaseShape s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     phaseShape t.case := by
   by_cases hRebuttals : s.case.phase = "rebuttals"
   · have hPass :
@@ -1358,7 +1410,7 @@ theorem step_pass_phase_opportunity_preserves_phaseShape
           if !s.case.rebuttals.isEmpty then
             throw "rebuttal already submitted"
           pure <| stateWithCase s { s.case with phase := "surrebuttals" }) = .ok t := by
-      simpa [step, hType, hRebuttals] using hStep
+      simpa [stepCore, hType, hRebuttals] using hStep
     have hEmpty : s.case.rebuttals = [] := by
       simp [phaseShape, hRebuttals] at hShape
       exact hShape.2.2.1
@@ -1380,7 +1432,7 @@ theorem step_pass_phase_opportunity_preserves_phaseShape
             if !s.case.surrebuttals.isEmpty then
               throw "surrebuttal already submitted"
             pure <| stateWithCase s { s.case with phase := "closings" }) = .ok t := by
-        simpa [step, hType, hRebuttals, hSurrebuttals] using hStep
+        simpa [stepCore, hType, hRebuttals, hSurrebuttals] using hStep
       have hEmpty : s.case.surrebuttals = [] := by
         simp [phaseShape, hSurrebuttals] at hShape
         exact hShape.2.2.2.1
@@ -1395,7 +1447,7 @@ theorem step_pass_phase_opportunity_preserves_phaseShape
           cases hPass
           simpa [stateWithCase, hEmpty] using
             passSurrebuttal_preserves_phaseShape s.case hShape hSurrebuttals
-    · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
+    · simp [stepCore, hType, hRebuttals, hSurrebuttals] at hStep
 
 /--
 Passing an optional phase preserves the aggregate material limits.
@@ -1408,7 +1460,7 @@ theorem step_pass_phase_opportunity_preserves_material_limits
     (action : CourtAction)
     (hType : action.action_type = "pass_phase_opportunity")
     (hLimits : materialLimitsRespected s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialLimitsRespected t := by
   by_cases hRebuttals : s.case.phase = "rebuttals"
   · have hPass :
@@ -1417,7 +1469,7 @@ theorem step_pass_phase_opportunity_preserves_material_limits
           if !s.case.rebuttals.isEmpty then
             throw "rebuttal already submitted"
           pure <| stateWithCase s { s.case with phase := "surrebuttals" }) = .ok t := by
-      simpa [step, hType, hRebuttals] using hStep
+      simpa [stepCore, hType, hRebuttals] using hStep
     cases hRole : requireRole action.actor_role "plaintiff" with
     | error err =>
         rw [hRole] at hPass
@@ -1440,7 +1492,7 @@ theorem step_pass_phase_opportunity_preserves_material_limits
             if !s.case.surrebuttals.isEmpty then
               throw "surrebuttal already submitted"
             pure <| stateWithCase s { s.case with phase := "closings" }) = .ok t := by
-        simpa [step, hType, hRebuttals, hSurrebuttals] using hStep
+        simpa [stepCore, hType, hRebuttals, hSurrebuttals] using hStep
       cases hRole : requireRole action.actor_role "defendant" with
       | error err =>
           rw [hRole] at hPass
@@ -1456,7 +1508,7 @@ theorem step_pass_phase_opportunity_preserves_material_limits
               simp [hEmpty] at hPass
               cases hPass
               exact stateWithCase_preserves_material_limits s _ hLimits rfl rfl
-    · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
+    · simp [stepCore, hType, hRebuttals, hSurrebuttals] at hStep
 
 /--
 Changing council votes does not affect the merits-sequence predicate.
@@ -1578,7 +1630,7 @@ theorem step_submit_council_vote_result
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_council_vote")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     ∃ memberId vote rationale,
       s.case.phase = "deliberation" ∧
       continueDeliberation s
@@ -1595,7 +1647,7 @@ theorem step_submit_council_vote_result
         let vote := trimString (← getString action.payload "vote")
         let rationale := getOptionalString action.payload "rationale"
         recordCouncilVote s memberId vote rationale) = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   cases hRole : requireRole action.actor_role "council" with
   | error err =>
       rw [hRole] at hStep'
@@ -1678,7 +1730,7 @@ private theorem step_submit_council_vote_details_core
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_council_vote")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     ∃ memberId vote rationale,
       s.case.phase = "deliberation" ∧
       memberId ∈ councilMemberIds (seatedCouncilMembers s.case) ∧
@@ -1698,7 +1750,7 @@ private theorem step_submit_council_vote_details_core
         let vote := trimString (← getString action.payload "vote")
         let rationale := getOptionalString action.payload "rationale"
         recordCouncilVote s memberId vote rationale) = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   cases hRole : requireRole action.actor_role "council" with
   | error err =>
       rw [hRole] at hStep'
@@ -1815,7 +1867,7 @@ theorem step_submit_council_vote_details
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_council_vote")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     ∃ memberId vote rationale,
       s.case.phase = "deliberation" ∧
       memberId ∈ councilMemberIds (seatedCouncilMembers s.case) ∧
@@ -1835,7 +1887,7 @@ theorem step_submit_council_vote_details_with_valid_vote
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_council_vote")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     ∃ memberId vote rationale,
       s.case.phase = "deliberation" ∧
       memberId ∈ councilMemberIds (seatedCouncilMembers s.case) ∧
@@ -1862,7 +1914,7 @@ theorem step_remove_council_member_result
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "remove_council_member")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     ∃ memberId status,
       s.case.phase = "deliberation" ∧
       continueDeliberation s
@@ -1878,7 +1930,7 @@ theorem step_remove_council_member_result
         let memberId := trimString (← getString action.payload "member_id")
         let status := (← getString action.payload "status")
         removeCouncilMember s memberId status) = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   cases hRole : requireRole action.actor_role "system" with
   | error err =>
       rw [hRole] at hStep'
@@ -1962,7 +2014,7 @@ theorem step_remove_council_member_details
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "remove_council_member")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     ∃ memberId status,
       s.case.phase = "deliberation" ∧
       memberId ∈ councilMemberIds (seatedCouncilMembers s.case) ∧
@@ -1981,7 +2033,7 @@ theorem step_remove_council_member_details
         let memberId := trimString (← getString action.payload "member_id")
         let status := (← getString action.payload "status")
         removeCouncilMember s memberId status) = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   cases hRole : requireRole action.actor_role "system" with
   | error err =>
       rw [hRole] at hStep'
@@ -2085,6 +2137,384 @@ theorem step_remove_council_member_details
                               exact ⟨memberId, status, hPhase, hMemberSeated, hNotAlready,
                                 hSeatedStatus, hRemove⟩
 
+theorem failCouncilMemberOpportunity_result
+    (s t : ArbitrationState)
+    (memberId reason opportunityId message : String)
+    (hFail :
+      failCouncilMemberOpportunity s memberId reason opportunityId message = .ok t) :
+    ∃ c1,
+      c1 =
+        { s.case with
+          council_members := s.case.council_members.map (fun (member : CouncilMember) =>
+            if member.member_id = memberId then
+              { member with
+                status := "failed"
+                failure_reason := reason
+                failure_opportunity_id := opportunityId
+                failure_message := message
+              }
+            else
+          member) } ∧
+      s.case.phase = "deliberation" ∧
+      memberId ∈ councilMemberIds (seatedCouncilMembers s.case) ∧
+      memberId ∉ (currentRoundVotes s.case).map (·.member_id) ∧
+      continueDeliberation s c1 = .ok t := by
+  let c1 : ArbitrationCase :=
+    { s.case with
+      council_members := s.case.council_members.map (fun (member : CouncilMember) =>
+        if member.member_id = memberId then
+          { member with
+            status := "failed"
+            failure_reason := reason
+            failure_opportunity_id := opportunityId
+            failure_message := message
+          }
+        else
+          member) }
+  by_cases hPhase : s.case.phase = "deliberation"
+  · unfold failCouncilMemberOpportunity at hFail
+    rw [if_neg (by simp [hPhase])] at hFail
+    by_cases hMemberEmpty : memberId = ""
+    · rw [if_pos hMemberEmpty] at hFail
+      change (throw "council opportunity failure requires member_id" :
+        Except String ArbitrationState) = .ok t at hFail
+      cases hFail
+    · rw [if_neg hMemberEmpty] at hFail
+      by_cases hReasonEmpty : reason = ""
+      · rw [if_pos hReasonEmpty] at hFail
+        change (throw "opportunity failure requires reason" :
+          Except String ArbitrationState) = .ok t at hFail
+        cases hFail
+      · rw [if_neg hReasonEmpty] at hFail
+        cases hKnown : s.case.council_members.any (fun member => member.member_id = memberId) with
+        | false =>
+            rw [if_pos (by simp [hKnown])] at hFail
+            change (throw (toString "unknown council member: " ++ toString memberId) :
+              Except String ArbitrationState) = .ok t at hFail
+            cases hFail
+        | true =>
+            rw [if_neg (by simp [hKnown])] at hFail
+            cases hSeated :
+                s.case.council_members.any
+                  (fun member => member.member_id = memberId && memberIsSeated member) with
+            | false =>
+                rw [if_pos (by simp [hSeated])] at hFail
+                change (throw (toString "council member is not seated: " ++
+                  toString memberId) : Except String ArbitrationState) = .ok t at hFail
+                cases hFail
+            | true =>
+                rw [if_neg (by simp [hSeated])] at hFail
+                let votes := currentRoundVotes s.case
+                cases hAlready : votes.any (fun vote => vote.member_id = memberId) with
+                | true =>
+                    rw [if_pos (by simp [votes, hAlready])] at hFail
+                    change (throw (toString "cannot fail council member after current-round vote: " ++
+                      toString memberId) : Except String ArbitrationState) = .ok t at hFail
+                    cases hFail
+                | false =>
+                    rw [if_neg (by simp [votes, hAlready])] at hFail
+                    have hMemberSeated :
+                        memberId ∈ councilMemberIds (seatedCouncilMembers s.case) := by
+                      rcases List.any_eq_true.mp hSeated with ⟨member, hMemberMem, hSeatPair⟩
+                      have hSeatParts :
+                          decide (member.member_id = memberId) = true ∧
+                            memberIsSeated member = true := by
+                        simpa using hSeatPair
+                      have hMemberId : member.member_id = memberId := by
+                        exact of_decide_eq_true hSeatParts.1
+                      have hSeat : memberIsSeated member = true := by
+                        exact hSeatParts.2
+                      have hSeatMem : member ∈ seatedCouncilMembers s.case := by
+                        unfold seatedCouncilMembers
+                        simp [hMemberMem, hSeat]
+                      have hSeatId :
+                          ∃ candidate, candidate ∈ seatedCouncilMembers s.case ∧
+                            candidate.member_id = memberId := by
+                        exact ⟨member, hSeatMem, hMemberId⟩
+                      simpa [councilMemberIds] using hSeatId
+                    have hNotAlready :
+                        memberId ∉ (currentRoundVotes s.case).map (·.member_id) := by
+                      intro hMemId
+                      have hVoteMem :
+                          ∃ vote : CouncilVote,
+                            vote ∈ currentRoundVotes s.case ∧ vote.member_id = memberId := by
+                        simpa using hMemId
+                      rcases hVoteMem with ⟨existing, hExistingMem, hExistingId⟩
+                      have hAnyTrue :
+                          votes.any (fun vote => vote.member_id = memberId) = true := by
+                        exact List.any_eq_true.mpr ⟨existing, by simpa [votes] using hExistingMem,
+                          by simp [hExistingId]⟩
+                      simp [hAlready] at hAnyTrue
+                    refine ⟨c1, rfl, hPhase, hMemberSeated, hNotAlready, ?_⟩
+                    simpa [c1] using hFail
+  · have hNotDelib : (s.case.phase != "deliberation") = true := by
+      simpa using hPhase
+    unfold failCouncilMemberOpportunity at hFail
+    rw [if_pos hNotDelib] at hFail
+    change (throw "council opportunity failure is allowed only in deliberation" :
+      Except String ArbitrationState) = .ok t at hFail
+    cases hFail
+
+theorem failCase_preserves_phaseShape
+    (c : ArbitrationCase)
+    (failure : OpportunityFailure)
+    (hShape : phaseShape c) :
+    phaseShape
+      { c with
+        status := "failed"
+        failure := some failure } := by
+  cases hPhase : c.phase <;> simpa [phaseShape, hPhase] using hShape
+
+theorem failCase_preserves_material_limits
+    (s : ArbitrationState)
+    (failure : OpportunityFailure)
+    (hLimits : materialLimitsRespected s) :
+    materialLimitsRespected
+      (stateWithCase s
+        { s.case with
+          status := "failed"
+          failure := some failure }) := by
+  exact stateWithCase_preserves_material_limits s _ hLimits rfl rfl
+
+theorem failOpportunity_result
+    (s t : ArbitrationState)
+    (payload : Lean.Json)
+    (hFail : failOpportunity s payload = .ok t) :
+    (∃ memberId reason opportunityId message c1,
+      c1 =
+        { s.case with
+          council_members := List.map (fun (member : CouncilMember) =>
+            if member.member_id = memberId then
+              { member with
+                status := "failed"
+                failure_reason := reason
+                failure_opportunity_id := opportunityId
+                failure_message := message }
+            else member) s.case.council_members } ∧
+      s.case.phase = "deliberation" ∧
+      memberId ∈ councilMemberIds (seatedCouncilMembers s.case) ∧
+      memberId ∉ (currentRoundVotes s.case).map (·.member_id) ∧
+      continueDeliberation s c1 = .ok t) ∨
+    (∃ failure : OpportunityFailure,
+      t = stateWithCase s
+        { s.case with
+          status := "failed"
+          failure := some failure } ∧
+      t.case.phase ≠ "closed" ∧
+      s.case.phase ≠ "deliberation") := by
+  unfold failOpportunity at hFail
+  cases hOpportunityIdText : getString payload "opportunity_id" with
+  | error err =>
+      rw [hOpportunityIdText] at hFail
+      cases hFail
+  | ok rawOpportunityId =>
+      rw [hOpportunityIdText] at hFail
+      cases hRoleText : getString payload "role" with
+      | error err =>
+          rw [hRoleText] at hFail
+          cases hFail
+      | ok rawRole =>
+          rw [hRoleText] at hFail
+          cases hPhaseText : getString payload "phase" with
+          | error err =>
+              rw [hPhaseText] at hFail
+              cases hFail
+          | ok rawPhase =>
+              rw [hPhaseText] at hFail
+              cases hReasonText : getString payload "reason" with
+              | error err =>
+                  rw [hReasonText] at hFail
+                  cases hFail
+              | ok rawReason =>
+                  rw [hReasonText] at hFail
+                  let opportunityId := trimString rawOpportunityId
+                  let role := trimString rawRole
+                  let phase := trimString rawPhase
+                  let reason := trimString rawReason
+                  let message := getOptionalString payload "message"
+                  let memberId := getOptionalString payload "member_id"
+                  let model := getOptionalString payload "model"
+                  by_cases hOpportunityEmpty : opportunityId = ""
+                  · simp [opportunityId, hOpportunityEmpty] at hFail
+                  · by_cases hRoleEmpty : role = ""
+                    · simp [opportunityId, role, hOpportunityEmpty, hRoleEmpty] at hFail
+                    · by_cases hPhaseEmpty : phase = ""
+                      · simp [opportunityId, role, phase, hOpportunityEmpty, hRoleEmpty,
+                          hPhaseEmpty] at hFail
+                      · by_cases hReasonEmpty : reason = ""
+                        · simp [opportunityId, role, phase, reason, hOpportunityEmpty, hRoleEmpty,
+                            hPhaseEmpty, hReasonEmpty] at hFail
+                        · cases hNext : (nextOpportunity s).opportunity with
+                          | none =>
+                              simp [opportunityId, role, phase, reason, hOpportunityEmpty,
+                                hRoleEmpty, hPhaseEmpty, hReasonEmpty, hNext] at hFail
+                          | some opportunity =>
+                              by_cases hOpportunityMismatch :
+                                  opportunity.opportunity_id != opportunityId
+                              · simp [opportunityId, role, phase, reason, hOpportunityEmpty,
+                                  hRoleEmpty, hPhaseEmpty, hReasonEmpty, hNext,
+                                  hOpportunityMismatch] at hFail
+                              · by_cases hRoleMismatch : opportunity.role != role
+                                · simp [opportunityId, role, phase, reason, hOpportunityEmpty,
+                                    hRoleEmpty, hPhaseEmpty, hReasonEmpty, hNext,
+                                    hOpportunityMismatch, hRoleMismatch] at hFail
+                                · by_cases hPhaseMismatch : opportunity.phase != phase
+                                  · simp [opportunityId, role, phase, reason, hOpportunityEmpty,
+                                      hRoleEmpty, hPhaseEmpty, hReasonEmpty, hNext,
+                                      hOpportunityMismatch, hRoleMismatch, hPhaseMismatch] at hFail
+                                  · have hOpportunityMatch :
+                                        (opportunity.opportunity_id != opportunityId) = false := by
+                                      simpa using hOpportunityMismatch
+                                    have hRoleMatch : (opportunity.role != role) = false := by
+                                      simpa using hRoleMismatch
+                                    have hPhaseMatch : (opportunity.phase != phase) = false := by
+                                      simpa using hPhaseMismatch
+                                    have hOpportunityEq :
+                                        opportunity.opportunity_id = opportunityId := by
+                                      by_cases hEq : opportunity.opportunity_id = opportunityId
+                                      · exact hEq
+                                      · have hTrue :
+                                            (opportunity.opportunity_id != opportunityId) = true := by
+                                          simp [hEq]
+                                        simp [hOpportunityMatch] at hTrue
+                                    have hRoleEq : opportunity.role = role := by
+                                      by_cases hEq : opportunity.role = role
+                                      · exact hEq
+                                      · have hTrue : (opportunity.role != role) = true := by
+                                          simp [hEq]
+                                        simp [hRoleMatch] at hTrue
+                                    have hPhaseEq : opportunity.phase = phase := by
+                                      by_cases hEq : opportunity.phase = phase
+                                      · exact hEq
+                                      · have hTrue : (opportunity.phase != phase) = true := by
+                                          simp [hEq]
+                                        simp [hPhaseMatch] at hTrue
+                                    by_cases hCouncil : role = "council"
+                                    · have hFailCouncil :
+                                          failCouncilMemberOpportunity s memberId reason opportunityId message =
+                                            .ok t := by
+                                        simpa [opportunityId, role, phase, reason, message, memberId,
+                                          model, hOpportunityEmpty, hRoleEmpty, hPhaseEmpty,
+                                          hReasonEmpty, hNext, hOpportunityMatch, hRoleMatch,
+                                          hPhaseMatch, hOpportunityEq, hRoleEq, hPhaseEq, hCouncil]
+                                          using hFail
+                                      rcases failCouncilMemberOpportunity_result s t memberId reason
+                                          opportunityId message hFailCouncil with
+                                        ⟨c1, hC1, hDelib, hSeated, hFresh, hCont⟩
+                                      exact Or.inl ⟨memberId, reason, opportunityId, message, c1,
+                                        hC1, hDelib, hSeated, hFresh, hCont⟩
+                                    · by_cases hParty : role = "plaintiff" || role = "defendant"
+                                      · let failure : OpportunityFailure := {
+                                          failure_type := "opportunity_failed"
+                                          role := role
+                                          phase := phase
+                                          opportunity_id := opportunityId
+                                          reason := reason
+                                          message := message
+                                          member_id := memberId
+                                          model := model
+                                        }
+                                        have hEq :
+                                            t = stateWithCase s
+                                              { s.case with
+                                                status := "failed"
+                                                failure := some failure } := by
+                                          simpa [opportunityId, role, phase, reason, message, memberId,
+                                            model, failure, hOpportunityEmpty, hRoleEmpty, hPhaseEmpty,
+                                            hReasonEmpty, hNext, hOpportunityMatch, hRoleMatch,
+                                            hPhaseMatch, hOpportunityEq, hRoleEq, hPhaseEq, hCouncil,
+                                            hParty] using hFail.symm
+                                        have hSourceNotClosed : s.case.phase ≠ "closed" := by
+                                          intro hClosed
+                                          unfold nextOpportunity at hNext
+                                          by_cases hStatusClosed : s.case.status = "closed"
+                                          · simp [hStatusClosed] at hNext
+                                          · by_cases hStatusFailed : s.case.status = "failed"
+                                            · cases hFailure : s.case.failure with
+                                              | none =>
+                                                  simp [hStatusFailed, hFailure] at hNext
+                                              | some failure =>
+                                                  simp [hStatusFailed, hFailure] at hNext
+                                            · simp [hStatusClosed, hStatusFailed, nextOpportunityForPhase,
+                                                hClosed] at hNext
+                                        have hClosedT : t.case.phase ≠ "closed" := by
+                                          rw [hEq]
+                                          simpa [stateWithCase] using hSourceNotClosed
+                                        have hSourceNotDeliberation :
+                                            s.case.phase ≠ "deliberation" := by
+                                          intro hDeliberation
+                                          unfold nextOpportunity at hNext
+                                          by_cases hStatusClosed : s.case.status = "closed"
+                                          · simp [hStatusClosed] at hNext
+                                          · by_cases hStatusFailed : s.case.status = "failed"
+                                            · cases hFailure : s.case.failure with
+                                              | none =>
+                                                  simp [hStatusFailed, hFailure] at hNext
+                                              | some failure =>
+                                                  simp [hStatusFailed, hFailure] at hNext
+                                            · cases hMember : nextCouncilMember? s.case with
+                                              | none =>
+                                                  simp [hStatusClosed, hStatusFailed, nextOpportunityForPhase,
+                                                    hDeliberation, hMember] at hNext
+                                              | some member =>
+                                                  simp [hStatusClosed, hStatusFailed, nextOpportunityForPhase,
+                                                    hDeliberation, hMember] at hNext
+                                                  have hRoleCouncil : opportunity.role = "council" := by
+                                                    cases hNext
+                                                    rfl
+                                                  have hRoleIsCouncil : role = "council" := by
+                                                    rw [← hRoleEq]
+                                                    exact hRoleCouncil
+                                                  exact hCouncil hRoleIsCouncil
+                                        exact Or.inr ⟨failure, hEq, hClosedT, hSourceNotDeliberation⟩
+                                      · simp [opportunityId, role, phase, reason, hOpportunityEmpty,
+                                          hRoleEmpty, hPhaseEmpty, hReasonEmpty, hNext, hOpportunityEq,
+                                          hRoleEq, hPhaseEq, hCouncil, hParty] at hFail
+
+theorem failOpportunity_preserves_phaseShape
+    (s t : ArbitrationState)
+    (payload : Lean.Json)
+    (hShape : phaseShape s.case)
+    (hFail : failOpportunity s payload = .ok t) :
+    phaseShape t.case := by
+  rcases failOpportunity_result s t payload hFail with hCouncil | hParty
+  · rcases hCouncil with ⟨memberId, reason, opportunityId, message, c1, hC1,
+      hDelib, _hSeated, _hFresh, hCont⟩
+    have hShape1 : phaseShape c1 := by
+      rw [hC1]
+      exact setCouncilMembers_preserves_phaseShape s.case
+        (List.map (fun (member : CouncilMember) =>
+          if member.member_id = memberId then
+            { member with
+              status := "failed"
+              failure_reason := reason
+              failure_opportunity_id := opportunityId
+              failure_message := message }
+          else member) s.case.council_members) hShape
+    have hPhase1 : c1.phase = "deliberation" := by
+      rw [hC1]
+      simpa using hDelib
+    exact continueDeliberation_preserves_phaseShape_for s t c1 hShape1 hPhase1 hCont
+  · rcases hParty with ⟨failure, rfl, _hNotClosed, _hNotDeliberation⟩
+    exact stateWithCase_preserves_phaseShape s _
+      (failCase_preserves_phaseShape s.case failure hShape)
+
+theorem failOpportunity_preserves_material_limits
+    (s t : ArbitrationState)
+    (payload : Lean.Json)
+    (hLimits : materialLimitsRespected s)
+    (hFail : failOpportunity s payload = .ok t) :
+    materialLimitsRespected t := by
+  rcases failOpportunity_result s t payload hFail with hCouncil | hParty
+  · rcases hCouncil with ⟨_memberId, _reason, _opportunityId, _message, c1, hC1,
+      _hDelib, _hSeated, _hFresh, hCont⟩
+    exact continueDeliberation_preserves_material_limits_for s t c1 hLimits
+      (by rw [hC1])
+      (by rw [hC1])
+      hCont
+  · rcases hParty with ⟨failure, rfl, _hNotClosed, _hNotDeliberation⟩
+    exact failCase_preserves_material_limits s failure hLimits
+
 /--
 A successful council-vote step preserves the merits-sequence invariant.
 
@@ -2098,7 +2528,7 @@ theorem step_submit_council_vote_preserves_phaseShape
     (action : CourtAction)
     (hType : action.action_type = "submit_council_vote")
     (hShape : phaseShape s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     phaseShape t.case := by
   rcases step_submit_council_vote_result s t action hType hStep with
     ⟨memberId, vote, rationale, hPhase, hCont⟩
@@ -2129,7 +2559,7 @@ theorem step_submit_council_vote_preserves_material_limits
     (action : CourtAction)
     (hType : action.action_type = "submit_council_vote")
     (hLimits : materialLimitsRespected s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialLimitsRespected t := by
   rcases step_submit_council_vote_result s t action hType hStep with
     ⟨memberId, vote, rationale, _hPhase, hCont⟩
@@ -2155,7 +2585,7 @@ theorem step_remove_council_member_preserves_phaseShape
     (action : CourtAction)
     (hType : action.action_type = "remove_council_member")
     (hShape : phaseShape s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     phaseShape t.case := by
   rcases step_remove_council_member_result s t action hType hStep with
     ⟨memberId, status, hPhase, hCont⟩
@@ -2186,7 +2616,7 @@ theorem step_remove_council_member_preserves_material_limits
     (action : CourtAction)
     (hType : action.action_type = "remove_council_member")
     (hLimits : materialLimitsRespected s)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     materialLimitsRespected t := by
   rcases step_remove_council_member_result s t action hType hStep with
     ⟨memberId, status, _hPhase, hCont⟩
@@ -2201,5 +2631,47 @@ theorem step_remove_council_member_preserves_material_limits
     (by simp [c1])
     (by simp [c1])
     hCont
+
+theorem step_fail_opportunity_preserves_phaseShape
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "fail_opportunity")
+    (hShape : phaseShape s.case)
+    (hStep : stepCore { state := s, action := action } = .ok t) :
+    phaseShape t.case := by
+  have hStep' :
+      (do
+        requireRole action.actor_role "system"
+        failOpportunity s action.payload) = .ok t := by
+    simpa [stepCore, hType] using hStep
+  cases hRole : requireRole action.actor_role "system" with
+  | error err =>
+      rw [hRole] at hStep'
+      cases hStep'
+  | ok okv =>
+      cases okv
+      rw [hRole] at hStep'
+      exact failOpportunity_preserves_phaseShape s t action.payload hShape hStep'
+
+theorem step_fail_opportunity_preserves_material_limits
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "fail_opportunity")
+    (hLimits : materialLimitsRespected s)
+    (hStep : stepCore { state := s, action := action } = .ok t) :
+    materialLimitsRespected t := by
+  have hStep' :
+      (do
+        requireRole action.actor_role "system"
+        failOpportunity s action.payload) = .ok t := by
+    simpa [stepCore, hType] using hStep
+  cases hRole : requireRole action.actor_role "system" with
+  | error err =>
+      rw [hRole] at hStep'
+      cases hStep'
+  | ok okv =>
+      cases okv
+      rw [hRole] at hStep'
+      exact failOpportunity_preserves_material_limits s t action.payload hLimits hStep'
 
 end ArbProofs

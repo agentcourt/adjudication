@@ -350,6 +350,70 @@ theorem removeUnvotedCouncilMember_preserves_councilVoteIntegrity
   · simpa [currentRoundVoteIdsDistinct, currentRoundVoteIds, currentRoundVotes, members] using hIntegrity.1
   · simpa [councilVoteRoundsBounded, members] using hIntegrity.2.2
 
+theorem failUnvotedCouncilMember_preserves_councilVoteIntegrity
+    (c : ArbitrationCase)
+    (memberId reason opportunityId message : String)
+    (hIntegrity : councilVoteIntegrity c)
+    (hFresh : memberId ∉ currentRoundVoteIds c) :
+    councilVoteIntegrity
+      { c with council_members := List.map (fun (member : CouncilMember) =>
+          if member.member_id = memberId then
+            { member with
+              status := "failed"
+              failure_reason := reason
+              failure_opportunity_id := opportunityId
+              failure_message := message }
+          else
+            member) c.council_members } := by
+  let members :=
+    List.map (fun (member : CouncilMember) =>
+      if member.member_id = memberId then
+        { member with
+          status := "failed"
+          failure_reason := reason
+          failure_opportunity_id := opportunityId
+          failure_message := message }
+      else
+        member) c.council_members
+  have hFromSeated :
+      currentRoundVotesFromSeatedMembers { c with council_members := members } := by
+    intro currentVote hVote
+    have hOld : currentVote ∈ currentRoundVotes c := by
+      simpa [currentRoundVotes, members] using hVote
+    have hOldSeat : currentVote.member_id ∈ seatedCouncilMemberIds c :=
+      hIntegrity.2.1 currentVote hOld
+    have hNotFailed : currentVote.member_id ≠ memberId := by
+      intro hEq
+      apply hFresh
+      have hMem : currentVote.member_id ∈ currentRoundVoteIds c := by
+        simpa [currentRoundVoteIds] using
+          (show ∃ vote, vote ∈ currentRoundVotes c ∧ vote.member_id = currentVote.member_id from
+            ⟨currentVote, hOld, rfl⟩)
+      simpa [hEq] using hMem
+    rcases (show ∃ member, member ∈ seatedCouncilMembers c ∧ member.member_id = currentVote.member_id from
+      by simpa [seatedCouncilMemberIds, councilMemberIds] using hOldSeat) with
+      ⟨member, hMemberSeat, hMemberId⟩
+    have hMemberMem : member ∈ c.council_members := by
+      exact (List.mem_filter.mp hMemberSeat).1
+    have hMemberStillSeated : memberIsSeated member := by
+      exact (List.mem_filter.mp hMemberSeat).2
+    have hMemberNe : member.member_id ≠ memberId := by
+      simpa [hMemberId] using hNotFailed
+    have hMemberMapped : member ∈ members := by
+      apply List.mem_map.mpr
+      exact ⟨member, hMemberMem, by simp [hMemberNe]⟩
+    have hSeatNew : member ∈ seatedCouncilMembers { c with council_members := members } := by
+      unfold seatedCouncilMembers
+      exact List.mem_filter.mpr ⟨hMemberMapped, by simpa using hMemberStillSeated⟩
+    simpa [seatedCouncilMemberIds, councilMemberIds] using
+      (show ∃ candidate,
+          candidate ∈ seatedCouncilMembers { c with council_members := members } ∧
+            candidate.member_id = currentVote.member_id from
+        ⟨member, hSeatNew, hMemberId⟩)
+  refine ⟨?_, hFromSeated, ?_⟩
+  · simpa [currentRoundVoteIdsDistinct, currentRoundVoteIds, currentRoundVotes, members] using hIntegrity.1
+  · simpa [councilVoteRoundsBounded, members] using hIntegrity.2.2
+
 /--
 Advancing to the next deliberation round preserves deliberation-record
 integrity.
@@ -621,7 +685,7 @@ theorem step_record_opening_statement_preserves_councilVoteIntegrity
     (action : CourtAction)
     (hType : action.action_type = "record_opening_statement")
     (hIntegrity : councilVoteIntegrity s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     councilVoteIntegrity t.case := by
   rcases step_record_opening_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact addFiling_preserves_councilVoteIntegrity
@@ -638,7 +702,7 @@ theorem step_submit_argument_preserves_councilVoteIntegrity
     (action : CourtAction)
     (hType : action.action_type = "submit_argument")
     (hIntegrity : councilVoteIntegrity s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     councilVoteIntegrity t.case := by
   have hSubmit :
       recordMeritsSubmission
@@ -650,7 +714,7 @@ theorem step_submit_argument_preserves_councilVoteIntegrity
         s.policy.max_argument_chars
         true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   exact recordMeritsSubmission_with_materials_preserves_councilVoteIntegrity
     s t "arguments" action.actor_role
     (if s.case.arguments.isEmpty then "plaintiff" else "defendant")
@@ -664,7 +728,7 @@ theorem step_submit_rebuttal_preserves_councilVoteIntegrity
     (action : CourtAction)
     (hType : action.action_type = "submit_rebuttal")
     (hIntegrity : councilVoteIntegrity s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     councilVoteIntegrity t.case := by
   have hSubmit :
       recordMeritsSubmission
@@ -676,7 +740,7 @@ theorem step_submit_rebuttal_preserves_councilVoteIntegrity
         s.policy.max_rebuttal_chars
         true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   exact recordMeritsSubmission_with_materials_preserves_councilVoteIntegrity
     s t "rebuttals" action.actor_role "plaintiff"
     "rebuttal" s.policy.max_rebuttal_chars action.payload hIntegrity hSubmit
@@ -689,7 +753,7 @@ theorem step_submit_surrebuttal_preserves_councilVoteIntegrity
     (action : CourtAction)
     (hType : action.action_type = "submit_surrebuttal")
     (hIntegrity : councilVoteIntegrity s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     councilVoteIntegrity t.case := by
   have hSubmit :
       recordMeritsSubmission
@@ -699,10 +763,10 @@ theorem step_submit_surrebuttal_preserves_councilVoteIntegrity
         "defendant"
         "surrebuttal"
         s.policy.max_surrebuttal_chars
-        false
+        true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
-  exact recordMeritsSubmission_without_materials_preserves_councilVoteIntegrity
+    simpa [stepCore, hType] using hStep
+  exact recordMeritsSubmission_with_materials_preserves_councilVoteIntegrity
     s t "surrebuttals" action.actor_role "defendant"
     "surrebuttal" s.policy.max_surrebuttal_chars action.payload hIntegrity hSubmit
 
@@ -714,7 +778,7 @@ theorem step_deliver_closing_statement_preserves_councilVoteIntegrity
     (action : CourtAction)
     (hType : action.action_type = "deliver_closing_statement")
     (hIntegrity : councilVoteIntegrity s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     councilVoteIntegrity t.case := by
   rcases step_deliver_closing_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   exact addFiling_preserves_councilVoteIntegrity
@@ -731,7 +795,7 @@ theorem step_pass_phase_opportunity_preserves_councilVoteIntegrity
     (action : CourtAction)
     (hType : action.action_type = "pass_phase_opportunity")
     (hIntegrity : councilVoteIntegrity s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     councilVoteIntegrity t.case := by
   by_cases hRebuttals : s.case.phase = "rebuttals"
   · have hPass :
@@ -740,7 +804,7 @@ theorem step_pass_phase_opportunity_preserves_councilVoteIntegrity
           if !s.case.rebuttals.isEmpty then
             throw "rebuttal already submitted"
           pure <| stateWithCase s { s.case with phase := "surrebuttals" }) = .ok t := by
-      simpa [step, hType, hRebuttals] using hStep
+      simpa [stepCore, hType, hRebuttals] using hStep
     cases hRole : requireRole action.actor_role "plaintiff" with
     | error err =>
         rw [hRole] at hPass
@@ -763,7 +827,7 @@ theorem step_pass_phase_opportunity_preserves_councilVoteIntegrity
             if !s.case.surrebuttals.isEmpty then
               throw "surrebuttal already submitted"
             pure <| stateWithCase s { s.case with phase := "closings" }) = .ok t := by
-        simpa [step, hType, hRebuttals, hSurrebuttals] using hStep
+        simpa [stepCore, hType, hRebuttals, hSurrebuttals] using hStep
       cases hRole : requireRole action.actor_role "defendant" with
       | error err =>
           rw [hRole] at hPass
@@ -779,7 +843,7 @@ theorem step_pass_phase_opportunity_preserves_councilVoteIntegrity
               simp [hEmpty] at hPass
               cases hPass
               simpa using hIntegrity
-    · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
+    · simp [stepCore, hType, hRebuttals, hSurrebuttals] at hStep
 
 /--
 A successful evidence submission preserves deliberation-record integrity.
@@ -790,10 +854,10 @@ theorem step_submit_evidence_preserves_councilVoteIntegrity
     (action : CourtAction)
     (hType : action.action_type = "submit_evidence")
     (hIntegrity : councilVoteIntegrity s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     councilVoteIntegrity t.case := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
   simpa [stateWithCase, appendSubmittedEvidence] using hIntegrity
 
@@ -805,7 +869,7 @@ theorem step_submit_council_vote_preserves_councilVoteIntegrity
     (action : CourtAction)
     (hType : action.action_type = "submit_council_vote")
     (hIntegrity : councilVoteIntegrity s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     councilVoteIntegrity t.case := by
   rcases step_submit_council_vote_details s t action hType hStep with
     ⟨memberId, vote, rationale, _hPhase, hSeated, hFresh, hCont⟩
@@ -828,7 +892,7 @@ theorem step_remove_council_member_preserves_councilVoteIntegrity
     (action : CourtAction)
     (hType : action.action_type = "remove_council_member")
     (hIntegrity : councilVoteIntegrity s.case)
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     councilVoteIntegrity t.case := by
   rcases step_remove_council_member_details s t action hType hStep with
     ⟨memberId, status, _hPhase, _hSeated, hFresh, _hStatus, hCont⟩
@@ -845,6 +909,46 @@ theorem step_remove_council_member_preserves_councilVoteIntegrity
   exact continueDeliberation_preserves_councilVoteIntegrity_for s t c1 hIntegrity1 (by
     simpa [c1] using hCont)
 
+theorem failOpportunity_preserves_councilVoteIntegrity
+    (s t : ArbitrationState)
+    (payload : Lean.Json)
+    (hIntegrity : councilVoteIntegrity s.case)
+    (hFail : failOpportunity s payload = .ok t) :
+    councilVoteIntegrity t.case := by
+  rcases failOpportunity_result s t payload hFail with hCouncil | hParty
+  · rcases hCouncil with ⟨memberId, reason, opportunityId, message, c1, hC1,
+      _hDelib, _hSeated, hFresh, hCont⟩
+    have hFreshIds : memberId ∉ currentRoundVoteIds s.case := by
+      simpa [currentRoundVoteIds] using hFresh
+    have hIntegrity1 : councilVoteIntegrity c1 := by
+      rw [hC1]
+      exact failUnvotedCouncilMember_preserves_councilVoteIntegrity
+        s.case memberId reason opportunityId message hIntegrity hFreshIds
+    exact continueDeliberation_preserves_councilVoteIntegrity_for s t c1 hIntegrity1 hCont
+  · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+    simpa [stateWithCase] using hIntegrity
+
+theorem step_fail_opportunity_preserves_councilVoteIntegrity
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "fail_opportunity")
+    (hIntegrity : councilVoteIntegrity s.case)
+    (hStep : stepCore { state := s, action := action } = .ok t) :
+    councilVoteIntegrity t.case := by
+  have hStep' :
+      (do
+        requireRole action.actor_role "system"
+        failOpportunity s action.payload) = .ok t := by
+    simpa [stepCore, hType] using hStep
+  cases hRole : requireRole action.actor_role "system" with
+  | error err =>
+      rw [hRole] at hStep'
+      cases hStep'
+  | ok okv =>
+      cases okv
+      rw [hRole] at hStep'
+      exact failOpportunity_preserves_councilVoteIntegrity s t action.payload hIntegrity hStep'
+
 /--
 Every successful public step preserves deliberation-record integrity.
 
@@ -859,34 +963,38 @@ theorem step_preserves_councilVoteIntegrity
     (hIntegrity : councilVoteIntegrity s.case)
     (hStep : step { state := s, action := action } = .ok t) :
     councilVoteIntegrity t.case := by
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
   by_cases hOpening : action.action_type = "record_opening_statement"
   · exact step_record_opening_statement_preserves_councilVoteIntegrity
-      s t action hOpening hIntegrity hStep
+      s t action hOpening hIntegrity hStepCore
   · by_cases hArgument : action.action_type = "submit_argument"
     · exact step_submit_argument_preserves_councilVoteIntegrity
-        s t action hArgument hIntegrity hStep
+        s t action hArgument hIntegrity hStepCore
     · by_cases hRebuttal : action.action_type = "submit_rebuttal"
       · exact step_submit_rebuttal_preserves_councilVoteIntegrity
-          s t action hRebuttal hIntegrity hStep
+          s t action hRebuttal hIntegrity hStepCore
       · by_cases hSurrebuttal : action.action_type = "submit_surrebuttal"
         · exact step_submit_surrebuttal_preserves_councilVoteIntegrity
-            s t action hSurrebuttal hIntegrity hStep
+            s t action hSurrebuttal hIntegrity hStepCore
         · by_cases hClosing : action.action_type = "deliver_closing_statement"
           · exact step_deliver_closing_statement_preserves_councilVoteIntegrity
-              s t action hClosing hIntegrity hStep
+              s t action hClosing hIntegrity hStepCore
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
             · exact step_pass_phase_opportunity_preserves_councilVoteIntegrity
-                s t action hPass hIntegrity hStep
+                s t action hPass hIntegrity hStepCore
             · by_cases hEvidence : action.action_type = "submit_evidence"
               · exact step_submit_evidence_preserves_councilVoteIntegrity
-                  s t action hEvidence hIntegrity hStep
+                  s t action hEvidence hIntegrity hStepCore
               · by_cases hVote : action.action_type = "submit_council_vote"
                 · exact step_submit_council_vote_preserves_councilVoteIntegrity
-                    s t action hVote hIntegrity hStep
+                    s t action hVote hIntegrity hStepCore
                 · by_cases hRemoval : action.action_type = "remove_council_member"
                   · exact step_remove_council_member_preserves_councilVoteIntegrity
-                      s t action hRemoval hIntegrity hStep
-                  · simp [step] at hStep
+                      s t action hRemoval hIntegrity hStepCore
+                  · by_cases hFail : action.action_type = "fail_opportunity"
+                    · exact step_fail_opportunity_preserves_councilVoteIntegrity
+                        s t action hFail hIntegrity hStepCore
+                    · simp [stepCore] at hStepCore
 
 /--
 Every reachable state preserves deliberation-record integrity.

@@ -535,13 +535,13 @@ theorem step_record_opening_statement_phase_ne_closed
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "record_opening_statement")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase ≠ "closed" := by
   have hPhase : s.case.phase = "openings" := by
     by_cases hOpen : s.case.phase = "openings"
     · exact hOpen
     · have hClosed : s.case.phase != "openings" := by simpa using hOpen
-      simp [step, hType, hClosed] at hStep
+      simp [stepCore, hType, hClosed] at hStep
       cases hStep
   rcases step_record_opening_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   by_cases hAdvance : 1 ≤ s.case.openings.length
@@ -557,7 +557,7 @@ theorem step_submit_argument_phase_ne_closed
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_argument")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase ≠ "closed" := by
   have hSubmit :
       recordMeritsSubmission
@@ -569,7 +569,7 @@ theorem step_submit_argument_phase_ne_closed
         s.policy.max_argument_chars
         true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   have hPhase : s.case.phase = "arguments" := by
     unfold recordMeritsSubmission at hSubmit
     by_cases hArg : s.case.phase = "arguments"
@@ -595,7 +595,7 @@ theorem step_submit_rebuttal_phase_ne_closed
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_rebuttal")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase ≠ "closed" := by
   have hSubmit :
       recordMeritsSubmission
@@ -607,7 +607,7 @@ theorem step_submit_rebuttal_phase_ne_closed
         s.policy.max_rebuttal_chars
         true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   have hPhase : s.case.phase = "rebuttals" := by
     unfold recordMeritsSubmission at hSubmit
     by_cases hRebuttal : s.case.phase = "rebuttals"
@@ -630,7 +630,7 @@ theorem step_submit_surrebuttal_phase_ne_closed
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_surrebuttal")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase ≠ "closed" := by
   have hSubmit :
       recordMeritsSubmission
@@ -640,9 +640,9 @@ theorem step_submit_surrebuttal_phase_ne_closed
         "defendant"
         "surrebuttal"
         s.policy.max_surrebuttal_chars
-        false
+        true
         action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   have hPhase : s.case.phase = "surrebuttals" := by
     unfold recordMeritsSubmission at hSubmit
     by_cases hSurrebuttal : s.case.phase = "surrebuttals"
@@ -650,11 +650,11 @@ theorem step_submit_surrebuttal_phase_ne_closed
     · have hClosed : s.case.phase != "surrebuttals" := by simpa using hSurrebuttal
       simp [hClosed] at hSubmit
       cases hSubmit
-  rcases recordMeritsSubmission_without_materials_result
+  rcases recordMeritsSubmission_with_materials_result
       s t "surrebuttals" action.actor_role "defendant"
       "surrebuttal" s.policy.max_surrebuttal_chars action.payload hSubmit with
-    ⟨rawText, rfl⟩
-  simp [stateWithCase, addFiling, advanceAfterMerits, hPhase]
+    ⟨rawText, offered, reports, rfl⟩
+  simp [stateWithCase, appendSupplementalMaterials, addFiling, advanceAfterMerits, hPhase]
 
 /--
 A closing-statement step never closes the case.
@@ -665,13 +665,13 @@ theorem step_deliver_closing_statement_phase_ne_closed
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "deliver_closing_statement")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase ≠ "closed" := by
   have hPhase : s.case.phase = "closings" := by
     by_cases hClosing : s.case.phase = "closings"
     · exact hClosing
     · have hClosed : s.case.phase != "closings" := by simpa using hClosing
-      simp [step, hType, hClosed] at hStep
+      simp [stepCore, hType, hClosed] at hStep
       cases hStep
   rcases step_deliver_closing_statement_result s t action hType hStep with ⟨rawText, rfl⟩
   by_cases hAdvance : 1 ≤ s.case.closings.length
@@ -688,7 +688,7 @@ theorem step_pass_phase_opportunity_phase_ne_closed
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "pass_phase_opportunity")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase ≠ "closed" := by
   by_cases hRebuttals : s.case.phase = "rebuttals"
   · have hPass :
@@ -697,7 +697,7 @@ theorem step_pass_phase_opportunity_phase_ne_closed
           if !s.case.rebuttals.isEmpty then
             throw "rebuttal already submitted"
           pure <| stateWithCase s { s.case with phase := "surrebuttals" }) = .ok t := by
-      simpa [step, hType, hRebuttals] using hStep
+      simpa [stepCore, hType, hRebuttals] using hStep
     cases hRole : requireRole action.actor_role "plaintiff" with
     | error err =>
         rw [hRole] at hPass
@@ -721,7 +721,7 @@ theorem step_pass_phase_opportunity_phase_ne_closed
             if !s.case.surrebuttals.isEmpty then
               throw "surrebuttal already submitted"
             pure <| stateWithCase s { s.case with phase := "closings" }) = .ok t := by
-        simpa [step, hType, hRebuttals, hSurrebuttals] using hStep
+        simpa [stepCore, hType, hRebuttals, hSurrebuttals] using hStep
       cases hRole : requireRole action.actor_role "defendant" with
       | error err =>
           rw [hRole] at hPass
@@ -738,7 +738,7 @@ theorem step_pass_phase_opportunity_phase_ne_closed
               simp [hEmpty] at hPass
               cases hPass
               simp [stateWithCase]
-    · simp [step, hType, hRebuttals, hSurrebuttals] at hStep
+    · simp [stepCore, hType, hRebuttals, hSurrebuttals] at hStep
 
 /--
 Evidence submission never closes the case.  It is accepted only during the
@@ -749,10 +749,10 @@ theorem step_submit_evidence_phase_ne_closed
     (s t : ArbitrationState)
     (action : CourtAction)
     (hType : action.action_type = "submit_evidence")
-    (hStep : step { state := s, action := action } = .ok t) :
+    (hStep : stepCore { state := s, action := action } = .ok t) :
     t.case.phase ≠ "closed" := by
   have hSubmit : submitEvidence s action.actor_role action.payload = .ok t := by
-    simpa [step, hType] using hStep
+    simpa [stepCore, hType] using hStep
   by_cases hArgs : s.case.phase = "arguments"
   · rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
     simp [stateWithCase, appendSubmittedEvidence, hArgs]
@@ -778,22 +778,127 @@ theorem step_submit_evidence_phase_ne_closed
             simpa [submitEvidence, hArgs, hRebuttals, hEmpty] using hSubmit
           change Except.error "rebuttal evidence is closed" = .ok t at hClosed
           cases hClosed
-    · have hClosed :
-          (do
-            let expectedRole ← (throw "submitted evidence is allowed only in arguments and rebuttals" : Except String String)
-            requireRole action.actor_role expectedRole
-            let evidence ← parseSubmittedEvidence action.payload s.case.phase expectedRole
-            if s.case.submitted_evidence.any (fun item => item.evidence_id = evidence.evidence_id) then
-              throw s!"duplicate submitted evidence_id: {evidence.evidence_id}"
-            else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
-              throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
-            else
-              let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
-              requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
-              pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
-          simpa [submitEvidence, hArgs, hRebuttals] using hSubmit
-      change Except.error "submitted evidence is allowed only in arguments and rebuttals" = .ok t at hClosed
-      cases hClosed
+    · by_cases hSurrebuttals : s.case.phase = "surrebuttals"
+      · cases hEmpty : s.case.surrebuttals.isEmpty with
+        | true =>
+            rcases submitEvidence_result s t action.actor_role action.payload hSubmit with ⟨evidence, rfl⟩
+            simp [stateWithCase, appendSubmittedEvidence, hSurrebuttals]
+        | false =>
+            have hClosed :
+                (do
+                  let expectedRole ← (throw "surrebuttal evidence is closed" : Except String String)
+                  requireRole action.actor_role expectedRole
+                  let evidence ← parseSubmittedEvidence action.payload s.case.phase expectedRole
+                  if s.case.submitted_evidence.any (fun item => item.evidence_id = evidence.evidence_id) then
+                    throw s!"duplicate submitted evidence_id: {evidence.evidence_id}"
+                  else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
+                    throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+                  else
+                    let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
+                    requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
+                    pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
+              simpa [submitEvidence, hArgs, hRebuttals, hSurrebuttals, hEmpty] using hSubmit
+            change Except.error "surrebuttal evidence is closed" = .ok t at hClosed
+            cases hClosed
+      · have hClosed :
+            (do
+              let expectedRole ←
+                (throw "submitted evidence is allowed only in arguments, rebuttals, and surrebuttals" :
+                  Except String String)
+              requireRole action.actor_role expectedRole
+              let evidence ← parseSubmittedEvidence action.payload s.case.phase expectedRole
+              if s.case.submitted_evidence.any (fun item => item.evidence_id = evidence.evidence_id) then
+                throw s!"duplicate submitted evidence_id: {evidence.evidence_id}"
+              else if evidence.size_bytes > s.policy.max_submitted_evidence_bytes then
+                throw s!"submitted evidence exceeds byte limit of {s.policy.max_submitted_evidence_bytes}"
+              else
+                let total := submittedEvidenceCountForRole s.case.submitted_evidence expectedRole + 1
+                requireCountWithinLimit "submitted_evidence for this side" total s.policy.max_submitted_evidence_per_side
+                pure <| stateWithCase s (appendSubmittedEvidence s.case evidence)) = .ok t := by
+            simpa [submitEvidence, hArgs, hRebuttals, hSurrebuttals] using hSubmit
+        change Except.error
+          "submitted evidence is allowed only in arguments, rebuttals, and surrebuttals" = .ok t at hClosed
+        cases hClosed
+
+theorem step_fail_opportunity_result
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "fail_opportunity")
+    (hStep : stepCore { state := s, action := action } = .ok t) :
+    failOpportunity s action.payload = .ok t := by
+  have hStep' :
+      (do
+        requireRole action.actor_role "system"
+        failOpportunity s action.payload) = .ok t := by
+    simpa [stepCore, hType] using hStep
+  cases hRole : requireRole action.actor_role "system" with
+  | error err =>
+      rw [hRole] at hStep'
+      cases hStep'
+  | ok okv =>
+      cases okv
+      rw [hRole] at hStep'
+      exact hStep'
+
+theorem step_fail_opportunity_closed_demonstrated_sound
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "fail_opportunity")
+    (hStep : stepCore { state := s, action := action } = .ok t)
+    (hClosed : t.case.phase = "closed")
+    (hResolution : t.case.resolution = "demonstrated") :
+    demonstratedOutcomeSound t := by
+  have hFail := step_fail_opportunity_result s t action hType hStep
+  rcases failOpportunity_result s t action.payload hFail with hCouncil | hParty
+  · rcases hCouncil with ⟨_memberId, _reason, _opportunityId, _message, c1, hC1,
+      hDeliberation, _hSeated, _hFresh, hCont⟩
+    have hDeliberation1 : c1.phase = "deliberation" := by
+      rw [hC1]
+      simpa using hDeliberation
+    exact continueDeliberation_closed_demonstrated_sound s t c1
+      hDeliberation1 hCont hClosed hResolution
+  · rcases hParty with ⟨_failure, _hEq, hNotClosed, _hNotDeliberation⟩
+    exact False.elim (hNotClosed hClosed)
+
+theorem step_fail_opportunity_closed_not_demonstrated_sound
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "fail_opportunity")
+    (hStep : stepCore { state := s, action := action } = .ok t)
+    (hClosed : t.case.phase = "closed")
+    (hResolution : t.case.resolution = "not_demonstrated") :
+    notDemonstratedOutcomeSound t := by
+  have hFail := step_fail_opportunity_result s t action hType hStep
+  rcases failOpportunity_result s t action.payload hFail with hCouncil | hParty
+  · rcases hCouncil with ⟨_memberId, _reason, _opportunityId, _message, c1, hC1,
+      hDeliberation, _hSeated, _hFresh, hCont⟩
+    have hDeliberation1 : c1.phase = "deliberation" := by
+      rw [hC1]
+      simpa using hDeliberation
+    exact continueDeliberation_closed_not_demonstrated_sound s t c1
+      hDeliberation1 hCont hClosed hResolution
+  · rcases hParty with ⟨_failure, _hEq, hNotClosed, _hNotDeliberation⟩
+    exact False.elim (hNotClosed hClosed)
+
+theorem step_fail_opportunity_closed_no_majority_sound
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "fail_opportunity")
+    (hStep : stepCore { state := s, action := action } = .ok t)
+    (hClosed : t.case.phase = "closed")
+    (hResolution : t.case.resolution = "no_majority") :
+    noMajorityOutcomeSound t := by
+  have hFail := step_fail_opportunity_result s t action hType hStep
+  rcases failOpportunity_result s t action.payload hFail with hCouncil | hParty
+  · rcases hCouncil with ⟨_memberId, _reason, _opportunityId, _message, c1, hC1,
+      hDeliberation, _hSeated, _hFresh, hCont⟩
+    have hDeliberation1 : c1.phase = "deliberation" := by
+      rw [hC1]
+      simpa using hDeliberation
+    exact continueDeliberation_closed_no_majority_sound s t c1
+      hDeliberation1 hCont hClosed hResolution
+  · rcases hParty with ⟨_failure, _hEq, hNotClosed, _hNotDeliberation⟩
+    exact False.elim (hNotClosed hClosed)
 
 /--
 Any successful public step that closes as `demonstrated` is sound.
@@ -809,22 +914,23 @@ theorem step_closed_demonstrated_sound
     (hClosed : t.case.phase = "closed")
     (hResolution : t.case.resolution = "demonstrated") :
     demonstratedOutcomeSound t := by
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
   by_cases hOpening : action.action_type = "record_opening_statement"
-  · exact False.elim ((step_record_opening_statement_phase_ne_closed s t action hOpening hStep) hClosed)
+  · exact False.elim ((step_record_opening_statement_phase_ne_closed s t action hOpening hStepCore) hClosed)
   · by_cases hArgument : action.action_type = "submit_argument"
-    · exact False.elim ((step_submit_argument_phase_ne_closed s t action hArgument hStep) hClosed)
+    · exact False.elim ((step_submit_argument_phase_ne_closed s t action hArgument hStepCore) hClosed)
     · by_cases hRebuttal : action.action_type = "submit_rebuttal"
-      · exact False.elim ((step_submit_rebuttal_phase_ne_closed s t action hRebuttal hStep) hClosed)
+      · exact False.elim ((step_submit_rebuttal_phase_ne_closed s t action hRebuttal hStepCore) hClosed)
       · by_cases hSurrebuttal : action.action_type = "submit_surrebuttal"
-        · exact False.elim ((step_submit_surrebuttal_phase_ne_closed s t action hSurrebuttal hStep) hClosed)
+        · exact False.elim ((step_submit_surrebuttal_phase_ne_closed s t action hSurrebuttal hStepCore) hClosed)
         · by_cases hClosing : action.action_type = "deliver_closing_statement"
-          · exact False.elim ((step_deliver_closing_statement_phase_ne_closed s t action hClosing hStep) hClosed)
+          · exact False.elim ((step_deliver_closing_statement_phase_ne_closed s t action hClosing hStepCore) hClosed)
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
-            · exact False.elim ((step_pass_phase_opportunity_phase_ne_closed s t action hPass hStep) hClosed)
+            · exact False.elim ((step_pass_phase_opportunity_phase_ne_closed s t action hPass hStepCore) hClosed)
             · by_cases hEvidence : action.action_type = "submit_evidence"
-              · exact False.elim ((step_submit_evidence_phase_ne_closed s t action hEvidence hStep) hClosed)
+              · exact False.elim ((step_submit_evidence_phase_ne_closed s t action hEvidence hStepCore) hClosed)
               · by_cases hVote : action.action_type = "submit_council_vote"
-                · rcases step_submit_council_vote_result s t action hVote hStep with
+                · rcases step_submit_council_vote_result s t action hVote hStepCore with
                   ⟨memberId, vote, rationale, hDeliberation, hCont⟩
                   let c1 := { s.case with council_votes := s.case.council_votes.concat {
                     member_id := memberId
@@ -837,7 +943,7 @@ theorem step_closed_demonstrated_sound
                   exact continueDeliberation_closed_demonstrated_sound s t c1
                     hDeliberation1 hCont hClosed hResolution
                 · by_cases hRemoval : action.action_type = "remove_council_member"
-                  · rcases step_remove_council_member_result s t action hRemoval hStep with
+                  · rcases step_remove_council_member_result s t action hRemoval hStepCore with
                     ⟨memberId, status, hDeliberation, hCont⟩
                     let c1 := {
                     s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
@@ -850,7 +956,10 @@ theorem step_closed_demonstrated_sound
                       simpa [c1] using hDeliberation
                     exact continueDeliberation_closed_demonstrated_sound s t c1
                       hDeliberation1 hCont hClosed hResolution
-                  · simp [step] at hStep
+                  · by_cases hFail : action.action_type = "fail_opportunity"
+                    · exact step_fail_opportunity_closed_demonstrated_sound s t action
+                        hFail hStepCore hClosed hResolution
+                    · simp [stepCore] at hStepCore
 
 theorem step_closed_not_demonstrated_sound
     (s t : ArbitrationState)
@@ -859,22 +968,23 @@ theorem step_closed_not_demonstrated_sound
     (hClosed : t.case.phase = "closed")
     (hResolution : t.case.resolution = "not_demonstrated") :
     notDemonstratedOutcomeSound t := by
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
   by_cases hOpening : action.action_type = "record_opening_statement"
-  · exact False.elim ((step_record_opening_statement_phase_ne_closed s t action hOpening hStep) hClosed)
+  · exact False.elim ((step_record_opening_statement_phase_ne_closed s t action hOpening hStepCore) hClosed)
   · by_cases hArgument : action.action_type = "submit_argument"
-    · exact False.elim ((step_submit_argument_phase_ne_closed s t action hArgument hStep) hClosed)
+    · exact False.elim ((step_submit_argument_phase_ne_closed s t action hArgument hStepCore) hClosed)
     · by_cases hRebuttal : action.action_type = "submit_rebuttal"
-      · exact False.elim ((step_submit_rebuttal_phase_ne_closed s t action hRebuttal hStep) hClosed)
+      · exact False.elim ((step_submit_rebuttal_phase_ne_closed s t action hRebuttal hStepCore) hClosed)
       · by_cases hSurrebuttal : action.action_type = "submit_surrebuttal"
-        · exact False.elim ((step_submit_surrebuttal_phase_ne_closed s t action hSurrebuttal hStep) hClosed)
+        · exact False.elim ((step_submit_surrebuttal_phase_ne_closed s t action hSurrebuttal hStepCore) hClosed)
         · by_cases hClosing : action.action_type = "deliver_closing_statement"
-          · exact False.elim ((step_deliver_closing_statement_phase_ne_closed s t action hClosing hStep) hClosed)
+          · exact False.elim ((step_deliver_closing_statement_phase_ne_closed s t action hClosing hStepCore) hClosed)
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
-            · exact False.elim ((step_pass_phase_opportunity_phase_ne_closed s t action hPass hStep) hClosed)
+            · exact False.elim ((step_pass_phase_opportunity_phase_ne_closed s t action hPass hStepCore) hClosed)
             · by_cases hEvidence : action.action_type = "submit_evidence"
-              · exact False.elim ((step_submit_evidence_phase_ne_closed s t action hEvidence hStep) hClosed)
+              · exact False.elim ((step_submit_evidence_phase_ne_closed s t action hEvidence hStepCore) hClosed)
               · by_cases hVote : action.action_type = "submit_council_vote"
-                · rcases step_submit_council_vote_result s t action hVote hStep with
+                · rcases step_submit_council_vote_result s t action hVote hStepCore with
                   ⟨memberId, vote, rationale, hDeliberation, hCont⟩
                   let c1 := { s.case with council_votes := s.case.council_votes.concat {
                     member_id := memberId
@@ -887,7 +997,7 @@ theorem step_closed_not_demonstrated_sound
                   exact continueDeliberation_closed_not_demonstrated_sound s t c1
                     hDeliberation1 hCont hClosed hResolution
                 · by_cases hRemoval : action.action_type = "remove_council_member"
-                  · rcases step_remove_council_member_result s t action hRemoval hStep with
+                  · rcases step_remove_council_member_result s t action hRemoval hStepCore with
                     ⟨memberId, status, hDeliberation, hCont⟩
                     let c1 := {
                     s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
@@ -900,7 +1010,10 @@ theorem step_closed_not_demonstrated_sound
                       simpa [c1] using hDeliberation
                     exact continueDeliberation_closed_not_demonstrated_sound s t c1
                       hDeliberation1 hCont hClosed hResolution
-                  · simp [step] at hStep
+                  · by_cases hFail : action.action_type = "fail_opportunity"
+                    · exact step_fail_opportunity_closed_not_demonstrated_sound s t action
+                        hFail hStepCore hClosed hResolution
+                    · simp [stepCore] at hStepCore
 
 theorem step_closed_no_majority_sound
     (s t : ArbitrationState)
@@ -909,22 +1022,23 @@ theorem step_closed_no_majority_sound
     (hClosed : t.case.phase = "closed")
     (hResolution : t.case.resolution = "no_majority") :
     noMajorityOutcomeSound t := by
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
   by_cases hOpening : action.action_type = "record_opening_statement"
-  · exact False.elim ((step_record_opening_statement_phase_ne_closed s t action hOpening hStep) hClosed)
+  · exact False.elim ((step_record_opening_statement_phase_ne_closed s t action hOpening hStepCore) hClosed)
   · by_cases hArgument : action.action_type = "submit_argument"
-    · exact False.elim ((step_submit_argument_phase_ne_closed s t action hArgument hStep) hClosed)
+    · exact False.elim ((step_submit_argument_phase_ne_closed s t action hArgument hStepCore) hClosed)
     · by_cases hRebuttal : action.action_type = "submit_rebuttal"
-      · exact False.elim ((step_submit_rebuttal_phase_ne_closed s t action hRebuttal hStep) hClosed)
+      · exact False.elim ((step_submit_rebuttal_phase_ne_closed s t action hRebuttal hStepCore) hClosed)
       · by_cases hSurrebuttal : action.action_type = "submit_surrebuttal"
-        · exact False.elim ((step_submit_surrebuttal_phase_ne_closed s t action hSurrebuttal hStep) hClosed)
+        · exact False.elim ((step_submit_surrebuttal_phase_ne_closed s t action hSurrebuttal hStepCore) hClosed)
         · by_cases hClosing : action.action_type = "deliver_closing_statement"
-          · exact False.elim ((step_deliver_closing_statement_phase_ne_closed s t action hClosing hStep) hClosed)
+          · exact False.elim ((step_deliver_closing_statement_phase_ne_closed s t action hClosing hStepCore) hClosed)
           · by_cases hPass : action.action_type = "pass_phase_opportunity"
-            · exact False.elim ((step_pass_phase_opportunity_phase_ne_closed s t action hPass hStep) hClosed)
+            · exact False.elim ((step_pass_phase_opportunity_phase_ne_closed s t action hPass hStepCore) hClosed)
             · by_cases hEvidence : action.action_type = "submit_evidence"
-              · exact False.elim ((step_submit_evidence_phase_ne_closed s t action hEvidence hStep) hClosed)
+              · exact False.elim ((step_submit_evidence_phase_ne_closed s t action hEvidence hStepCore) hClosed)
               · by_cases hVote : action.action_type = "submit_council_vote"
-                · rcases step_submit_council_vote_result s t action hVote hStep with
+                · rcases step_submit_council_vote_result s t action hVote hStepCore with
                   ⟨memberId, vote, rationale, hDeliberation, hCont⟩
                   let c1 := { s.case with council_votes := s.case.council_votes.concat {
                     member_id := memberId
@@ -937,7 +1051,7 @@ theorem step_closed_no_majority_sound
                   exact continueDeliberation_closed_no_majority_sound s t c1
                     hDeliberation1 hCont hClosed hResolution
                 · by_cases hRemoval : action.action_type = "remove_council_member"
-                  · rcases step_remove_council_member_result s t action hRemoval hStep with
+                  · rcases step_remove_council_member_result s t action hRemoval hStepCore with
                     ⟨memberId, status, hDeliberation, hCont⟩
                     let c1 := {
                     s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
@@ -950,7 +1064,10 @@ theorem step_closed_no_majority_sound
                       simpa [c1] using hDeliberation
                     exact continueDeliberation_closed_no_majority_sound s t c1
                       hDeliberation1 hCont hClosed hResolution
-                  · simp [step] at hStep
+                  · by_cases hFail : action.action_type = "fail_opportunity"
+                    · exact step_fail_opportunity_closed_no_majority_sound s t action
+                        hFail hStepCore hClosed hResolution
+                    · simp [stepCore] at hStepCore
 
 /--
 Every reachable closed `demonstrated` result is sound.
@@ -1012,7 +1129,8 @@ theorem step_submit_council_vote_closed_demonstrated_sound
     (hClosed : t.case.phase = "closed")
     (hResolution : t.case.resolution = "demonstrated") :
     demonstratedOutcomeSound t := by
-  rcases step_submit_council_vote_result s t action hType hStep with
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
+  rcases step_submit_council_vote_result s t action hType hStepCore with
     ⟨memberId, vote, rationale, hDeliberation, hCont⟩
   let c1 := { s.case with council_votes := s.case.council_votes.concat {
     member_id := memberId
@@ -1033,7 +1151,8 @@ theorem step_submit_council_vote_closed_not_demonstrated_sound
     (hClosed : t.case.phase = "closed")
     (hResolution : t.case.resolution = "not_demonstrated") :
     notDemonstratedOutcomeSound t := by
-  rcases step_submit_council_vote_result s t action hType hStep with
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
+  rcases step_submit_council_vote_result s t action hType hStepCore with
     ⟨memberId, vote, rationale, hDeliberation, hCont⟩
   let c1 := { s.case with council_votes := s.case.council_votes.concat {
     member_id := memberId
@@ -1054,7 +1173,8 @@ theorem step_submit_council_vote_closed_no_majority_sound
     (hClosed : t.case.phase = "closed")
     (hResolution : t.case.resolution = "no_majority") :
     noMajorityOutcomeSound t := by
-  rcases step_submit_council_vote_result s t action hType hStep with
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
+  rcases step_submit_council_vote_result s t action hType hStepCore with
     ⟨memberId, vote, rationale, hDeliberation, hCont⟩
   let c1 := { s.case with council_votes := s.case.council_votes.concat {
     member_id := memberId
@@ -1083,7 +1203,8 @@ theorem step_remove_council_member_closed_demonstrated_sound
     (hClosed : t.case.phase = "closed")
     (hResolution : t.case.resolution = "demonstrated") :
     demonstratedOutcomeSound t := by
-  rcases step_remove_council_member_result s t action hType hStep with
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
+  rcases step_remove_council_member_result s t action hType hStepCore with
     ⟨memberId, status, hDeliberation, hCont⟩
   let c1 := {
     s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
@@ -1105,7 +1226,8 @@ theorem step_remove_council_member_closed_not_demonstrated_sound
     (hClosed : t.case.phase = "closed")
     (hResolution : t.case.resolution = "not_demonstrated") :
     notDemonstratedOutcomeSound t := by
-  rcases step_remove_council_member_result s t action hType hStep with
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
+  rcases step_remove_council_member_result s t action hType hStepCore with
     ⟨memberId, status, hDeliberation, hCont⟩
   let c1 := {
     s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
@@ -1127,7 +1249,8 @@ theorem step_remove_council_member_closed_no_majority_sound
     (hClosed : t.case.phase = "closed")
     (hResolution : t.case.resolution = "no_majority") :
     noMajorityOutcomeSound t := by
-  rcases step_remove_council_member_result s t action hType hStep with
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
+  rcases step_remove_council_member_result s t action hType hStepCore with
     ⟨memberId, status, hDeliberation, hCont⟩
   let c1 := {
     s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>

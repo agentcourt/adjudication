@@ -6,7 +6,7 @@ namespace ArbProofs
 
 /-
 This file begins the viable-outcomes layer promised by
-`docs/more-verification-notes.md`.
+`docs/verification.md`.
 
 `Proofs.ViableOutcomesCore` now carries the summary-level viability
 definitions, the pure summary theorems, and the state-level wrappers that do
@@ -780,7 +780,8 @@ theorem step_submit_council_vote_same_round_supports_submitted_outcome
     (hUnique : councilIdsUnique s.case)
     (hIntegrity : councilVoteIntegrity s.case) :
     ∃ vote, sameRoundVoteTransport vote s t := by
-  rcases step_submit_council_vote_details s t action hType hStep with
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
+  rcases step_submit_council_vote_details s t action hType hStepCore with
     ⟨memberId, vote, rationale, _hPhase, hSeated, hFresh, hCont⟩
   refine ⟨vote, ?_⟩
   constructor
@@ -829,7 +830,8 @@ theorem step_remove_council_member_same_round_preserves_demonstrated_impossibili
     (hIntegrity : councilVoteIntegrity s.case)
     (hNotViable : ¬ (deliberationSummary s).demonstratedViable) :
     ¬ (deliberationSummary t).demonstratedViable := by
-  rcases step_remove_council_member_details s t action hType hStep with
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
+  rcases step_remove_council_member_details s t action hType hStepCore with
     ⟨memberId, status, _hPhase, hSeated, hFresh, hStatus, hCont⟩
   let c1 : ArbitrationCase := { s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
     if member.member_id = memberId then
@@ -857,7 +859,8 @@ theorem step_remove_council_member_same_round_demonstratedViable_implies
     (hIntegrity : councilVoteIntegrity s.case)
     (hViable : (deliberationSummary t).demonstratedViable) :
     (deliberationSummary s).demonstratedViable := by
-  rcases step_remove_council_member_details s t action hType hStep with
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
+  rcases step_remove_council_member_details s t action hType hStepCore with
     ⟨memberId, status, _hPhase, hSeated, hFresh, hStatus, hCont⟩
   let c1 : ArbitrationCase := { s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
     if member.member_id = memberId then
@@ -885,7 +888,8 @@ theorem step_remove_council_member_same_round_preserves_notDemonstrated_impossib
     (hIntegrity : councilVoteIntegrity s.case)
     (hNotViable : ¬ (deliberationSummary s).notDemonstratedViable) :
     ¬ (deliberationSummary t).notDemonstratedViable := by
-  rcases step_remove_council_member_details s t action hType hStep with
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
+  rcases step_remove_council_member_details s t action hType hStepCore with
     ⟨memberId, status, _hPhase, hSeated, hFresh, hStatus, hCont⟩
   let c1 : ArbitrationCase := { s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
     if member.member_id = memberId then
@@ -913,7 +917,8 @@ theorem step_remove_council_member_same_round_notDemonstratedViable_implies
     (hIntegrity : councilVoteIntegrity s.case)
     (hViable : (deliberationSummary t).notDemonstratedViable) :
     (deliberationSummary s).notDemonstratedViable := by
-  rcases step_remove_council_member_details s t action hType hStep with
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
+  rcases step_remove_council_member_details s t action hType hStepCore with
     ⟨memberId, status, _hPhase, hSeated, hFresh, hStatus, hCont⟩
   let c1 : ArbitrationCase := { s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
     if member.member_id = memberId then
