@@ -349,6 +349,26 @@ theorem checkReplayCertificate_ok_length_le_initializedBudget
   exact replayInitialized_length_le_initializedBudget req actions claimed
     ((checkReplayCertificate_ok_iff req actions claimed).1 hCheck)
 
+theorem checkReplayCertificate_ok_blocked_terminal_accounted
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (claimed : ArbitrationState)
+    (hCheck : checkReplayCertificate req actions claimed = .ok ())
+    (hBlocked : stepBlocked claimed) :
+    (claimed.case.status = "closed" ∧
+        claimed.case.phase = "closed" ∧
+          (claimed.case.resolution = "demonstrated" ∨
+            claimed.case.resolution = "not_demonstrated" ∨
+              claimed.case.resolution = "no_majority")) ∨
+      (claimed.case.status = "failed" ∧
+        ∃ failure,
+          claimed.case.failure = some failure ∧
+            failure.failure_type = "opportunity_failed" ∧
+              (failure.role = "plaintiff" ∨ failure.role = "defendant") ∧
+                failure.phase = claimed.case.phase) := by
+  exact replayInitialized_blocked_terminal_accounted req actions claimed
+    ((checkReplayCertificate_ok_iff req actions claimed).1 hCheck) hBlocked
+
 theorem checkReplayCertificate_ok_terminal_status_accounted
     (req : InitializeCaseRequest)
     (actions : List CourtAction)
