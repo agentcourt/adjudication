@@ -469,6 +469,17 @@ The replay output directory contains `input.json`, `prompt.txt`, `result.json`, 
 
 `aar verify-certificate` checks a completed packet's replay certificate.  The command reads `certificate.json`, replays its initialization request and accepted public actions through the configured Lean engine, and compares the replayed final state to the certificate's claimed final-state hash.  It also reads `state.json` from the same packet and requires that file to match the certificate hash.
 
+The certificate contains the engine-visible transition record.  `initialize_request` contains the exact initial state, proposition, and council roster sent to `initialize_case`.  `actions` contains the public actions the engine accepted, in order, with `action_type`, `actor_role`, and `payload`.  `claimed_final_state_sha256` is the SHA-256 hash of the compact JSON encoding of `claimed_final_state`.
+
+Verification checks four conditions:
+
+| Check | Failure reported |
+| --- | --- |
+| The claimed final-state hash matches `claimed_final_state`. | `certificate final state hash mismatch` |
+| The packet's `state.json` matches the claimed final-state hash. | `packet final state mismatch` |
+| The Lean engine accepts `initialize_case` and every recorded action. | `initialize_case rejected` or `certificate action N (...) rejected` |
+| Replaying the recorded actions yields the claimed final state. | `replayed final state mismatch` |
+
 Basic command:
 
 ```bash
