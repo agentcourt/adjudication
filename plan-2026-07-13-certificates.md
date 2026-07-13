@@ -18,7 +18,7 @@ The proof boundary now covers both terminal outcomes.  `checkReplayCertificate_t
 
 ADC needs a separate certificate schema because its initialization request and terminal states differ from ARB.  Its initialization request includes the court state, case summary or claim packet fields, parties, filing date, jurisdiction facts, and attachment seeds.  Its accepted actions span pleadings, motions, discovery, trial, jury acts, judgment, and failure reports, so the certificate should store the same `action_type`, `actor_role`, and payload boundary used by the runtime's Lean `Step` calls.
 
-ADC should write `certificate.json` beside `run.json` in terminal output directories.  If ADC later adds a separate `state.json`, the verifier should compare against that file; until then, it should compare against the final state embedded in `run.json` or another documented terminal state artifact.  The artifact route should list and fetch the certificate after the runtime writes it, without adding service-side verification.
+ADC writes `state.json` beside `run.json` in terminal output directories.  The certificate verifier should compare the claimed final state against that file, matching the ARB and AARD packet boundary.  The artifact route should list and fetch the certificate after the runtime writes it, without adding service-side verification.
 
 The first Lean target should mirror ARB's replay foundation: exact replay, reachability, and terminal-state accounting for accepted certificates.  The next proof target should cover verdict and judgment soundness, including the configured jury threshold and the existing effective-concurrence rule after juror failure.  A failed certificate package should account for lawyer failure and juror failure separately, because those failures have different legal effects in ADC.
 
@@ -34,7 +34,7 @@ The first Lean target should be exact replay with reachability and terminal acco
 
 | Order | System | Work |
 | --- | --- | --- |
-| 1 | ADC | Identify the final-state artifact boundary and certificate initialization schema. |
+| 1 | ADC | Use `state.json` as the final-state artifact boundary and identify the certificate initialization schema. |
 | 2 | ADC | Add runtime certificate writing and an explicit `adc verify-certificate` command. |
 | 3 | ADC | Expose the certificate artifact through service artifact lists and fetch routes. |
 | 4 | ADC | Prove exact replay, reachability, terminal accounting, verdict soundness, and failed-certificate accounting. |

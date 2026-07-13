@@ -124,7 +124,7 @@ curl -sS -X POST http://127.0.0.1:19870/clerk/v1/cases \
 
 ## Output
 
-Run output contains `run.json`, `runtime.json`, `events.ndjson`, `run.db`, `transcript.md`, `digest.md`, and `work-notes.ndjson`.  Complaint-driven runs also write `normalized-case.json`, `plaintiff-strategy.md`, `defense-strategy.md`, and `generated-scenario.json`.  `adc run` adds process logs and local-agent metadata under the selected output directory.
+Run output contains `run.json`, `state.json`, `runtime.json`, `events.ndjson`, `run.db`, `transcript.md`, `digest.md`, and `work-notes.ndjson`.  Complaint-driven runs also write `normalized-case.json`, `plaintiff-strategy.md`, `defense-strategy.md`, and `generated-scenario.json`.  `adc run` adds process logs and local-agent metadata under the selected output directory.
 
 ## License
 

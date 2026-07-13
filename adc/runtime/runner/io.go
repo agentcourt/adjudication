@@ -275,6 +275,9 @@ func (r *Runner) writeEvidence(result Result) error {
 	if err := os.WriteFile(r.cfg.OutputPath, raw, 0o644); err != nil {
 		return fmt.Errorf("write evidence: %w", err)
 	}
+	if err := writeJSONFileAtomic(filepath.Join(filepath.Dir(r.cfg.OutputPath), "state.json"), result.FinalState); err != nil {
+		return fmt.Errorf("write final state: %w", err)
+	}
 	if err := exportExternalWorkProduct(filepath.Dir(r.cfg.OutputPath), r.workProductDirs); err != nil {
 		return err
 	}

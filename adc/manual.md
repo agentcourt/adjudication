@@ -28,7 +28,7 @@ MCP is an adapter over the Role API.  An MCP session binds to one case id and on
 
 Select the command by the boundary under test.  Use `adc case` or `adc scenario` for the legal state machine, Role API, and direct model behavior.  Use `adc run` for local agent execution, including OpenClaw lawyers, Pi jurors, MCP, container credentials, and process supervision.  Use `adc service` for HTTP creation, status, artifacts, evidence, kill, and attestation routes.
 
-Treat each output directory as the record for one case.  Preserve `run.json`, `events.ndjson`, `run.db`, transcripts, digests, work notes, and service records together.  Use `events.ndjson` for lifecycle reconstruction, `run.json` for machine status and final state, `digest.md` for a short written account, and `work-notes.ndjson` when evaluating agent planning and evidence strategy.
+Treat each output directory as the record for one case.  Preserve `run.json`, `state.json`, `events.ndjson`, `run.db`, transcripts, digests, work notes, and service records together.  Use `events.ndjson` for lifecycle reconstruction, `run.json` for the machine-readable result, `state.json` for the terminal Lean state, `digest.md` for a short written account, and `work-notes.ndjson` when evaluating agent planning and evidence strategy.
 
 ## Choosing A Command
 
@@ -125,7 +125,7 @@ A scenario JSON describes the case without running complaint setup.  It contains
 .bin/adc validate --scenario out/ex1-local/generated-scenario.json
 ```
 
-`adc scenario` runs an existing scenario JSON.  It can run deterministic scenarios offline when `--offline` is set, and it can expose selected roles through the Role API with repeated `--external-role` flags.  It writes `run.json`, `runtime.json`, `events.ndjson`, `run.db`, and optional transcript or digest files at the paths supplied by flags.
+`adc scenario` runs an existing scenario JSON.  It can run deterministic scenarios offline when `--offline` is set, and it can expose selected roles through the Role API with repeated `--external-role` flags.  It writes `run.json`, `state.json`, `runtime.json`, `events.ndjson`, `run.db`, and optional transcript or digest files at the paths supplied by flags.
 
 ```bash
 .bin/adc scenario \
@@ -424,7 +424,7 @@ Endpoints:
 
 The `/api/v1/cases` paths use the same implementation as `/clerk/v1/cases`.  They exist as service API aliases.  A bearer token can protect all service routes when `--bearer-token` is set.
 
-Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, `evidence-manifest.json`, `service-logs/adc.stdout`, and `service-logs/adc.stderr`.  They do not serve arbitrary output files, process logs outside the listed set, generated remote-lawyer instruction files, or staged Codex auth directories.  An unlisted artifact name returns `unknown_artifact`; a listed artifact whose file is absent returns `artifact_missing`.  The evidence route reads `evidence-manifest.json` and serves submitted evidence by evidence id when the manifest maps that id to a readable file.  Local case processes write the manifest when the runner initializes and after case-file state changes, so active cases can serve evidence after the corresponding manifest update.  An active case that has not yet written the manifest returns HTTP `409` with error code `evidence_manifest_pending`; a terminal output packet without a manifest returns HTTP `404` with error code `manifest_missing`.
+Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `state.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, `evidence-manifest.json`, `service-logs/adc.stdout`, and `service-logs/adc.stderr`.  They do not serve arbitrary output files, process logs outside the listed set, generated remote-lawyer instruction files, or staged Codex auth directories.  An unlisted artifact name returns `unknown_artifact`; a listed artifact whose file is absent returns `artifact_missing`.  The evidence route reads `evidence-manifest.json` and serves submitted evidence by evidence id when the manifest maps that id to a readable file.  Local case processes write the manifest when the runner initializes and after case-file state changes, so active cases can serve evidence after the corresponding manifest update.  An active case that has not yet written the manifest returns HTTP `409` with error code `evidence_manifest_pending`; a terminal output packet without a manifest returns HTTP `404` with error code `manifest_missing`.
 
 The create request is structured JSON.  Common fields include `case_id`, `run_id`, exactly one of `complaint_path` or `scenario_path`, `out_dir`, `model`, `juror_personas`, `engine_path`, `timeout_seconds`, `invalid_attempt_limit`, and `max_response_bytes`.  Jury configuration fields are `juror_count`, `unanimous_required`, and `minimum_concurring`; the service passes them to the child case process for local-agent and direct runs.  If `out_dir` is supplied, it must be an immediate child of the service `--output-root`; when it is omitted, the service uses `OUTPUT_ROOT/CASE_ID`.  Complaint-based runs also accept setup fields such as `court`, `non_juror_model`, `plaintiff_model`, `defendant_model`, `judge_model`, `clerk_model`, `planner_model`, `report_model`, `trial_mode`, and `skip_voir_dire`.
 
@@ -521,6 +521,7 @@ Case output depends on the command, but the main files are stable.  Complaint-dr
 | `events.ndjson` | Runtime event log. |
 | `run.db` | SQLite store. |
 | `run.json` | Authoritative machine-readable result. |
+| `state.json` | Terminal Lean state copied from `run.json` for certificate and artifact review. |
 | `transcript.md` | Human-readable transcript. |
 | `digest.md` | Human-readable digest. |
 | `work-notes.ndjson` | Private role work notes sent through `send_work_notes`. |
@@ -529,7 +530,7 @@ Case output depends on the command, but the main files are stable.  Complaint-dr
 | `service-case.json` | Service record for service-created cases. |
 | `service-logs/` | Child stdout and stderr logs for service-created cases. |
 
-Use `run.json` for machine inspection and `digest.md` for a concise written account.  Use `events.ndjson` to trace actions and agent events.  Use `work-notes.ndjson` when evaluating external-agent planning and work logs.
+Use `run.json` for machine inspection and `state.json` when a tool needs the terminal state without the result envelope.  Use `digest.md` for a concise written account.  Use `events.ndjson` to trace actions and agent events, and use `work-notes.ndjson` when evaluating external-agent planning and work logs.
 
 ## Example Flows
 

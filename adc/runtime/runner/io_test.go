@@ -121,6 +121,42 @@ func TestWriteEvidenceManifestUsesEmptyArray(t *testing.T) {
 	}
 }
 
+func TestWriteEvidenceWritesStateArtifact(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	finalState := map[string]any{
+		"case": map[string]any{
+			"case_id":    "case-1",
+			"case_files": []any{},
+		},
+		"status": "judgment_entered",
+	}
+	r := &Runner{
+		cfg:   Config{OutputPath: filepath.Join(tmpDir, "run.json")},
+		state: finalState,
+	}
+
+	if err := r.writeEvidence(Result{Scenario: "scenario-1", FinalState: finalState}); err != nil {
+		t.Fatalf("writeEvidence returned error: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(tmpDir, "state.json"))
+	if err != nil {
+		t.Fatalf("read state artifact: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal state artifact: %v", err)
+	}
+	if stringOrDefault(got["status"], "") != "judgment_entered" {
+		t.Fatalf("state artifact = %s", string(raw))
+	}
+	caseObj, _ := got["case"].(map[string]any)
+	if stringOrDefault(caseObj["case_id"], "") != "case-1" {
+		t.Fatalf("state artifact case = %s", string(raw))
+	}
+}
+
 func TestWriteEvidenceManifestCopiesCaseFile(t *testing.T) {
 	t.Parallel()
 

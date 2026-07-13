@@ -1,5 +1,23 @@
 # Development Notes
 
+## 2026-07-13: Terminal state artifact
+
+### References
+
+- Runner output writer: [`runtime/runner/io.go`](runtime/runner/io.go)
+- Service artifact route: [`runtime/service/service.go`](runtime/service/service.go)
+- ADC manual output section: [`manual.md`](manual.md#output-artifacts)
+- Certificate plan: [`../plan-2026-07-13-certificates.md`](../plan-2026-07-13-certificates.md)
+
+### Decisions
+
+ADC terminal packets now include `state.json` beside `run.json`.  The runner writes `state.json` from the same `Result.FinalState` value embedded in `run.json`, so certificate verification has a stable file boundary without reconstructing state from the result envelope.  The service artifact API lists and fetches `state.json` through the same allowlist path used for `run.json`, logs, transcripts, and manifests.
+
+### Verification
+
+- [x] `go test ./adc/runtime/runner ./adc/runtime/service`
+- [x] `go test ./adc/runtime/...`
+
 ## 2026-07-10: Service process record reconciliation
 
 ### References
