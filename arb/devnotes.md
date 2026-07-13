@@ -71,6 +71,17 @@ Verification:
 - [x] `lake build Proofs.Replay`
 - [x] `lake build Proofs`
 
+### Initialized replay certificate wrapper
+
+Reference: `engine/Proofs/Replay.lean`, `engine/Proofs/MaximalRuns.lean`
+
+ARB now has a proof-local `replayInitialized` checker that runs `initializeCase` and then replays a public action list.  A successful initialized replay exposes its initialized start state and step replay, proves the final state reachable, yields a `StepPath` with length equal to the action-list length, inherits the initialized length bound, and accounts for terminal endpoints.  Blocked endpoints reuse the maximal-run terminal theorem; endpoints already known to have closed or failed status reuse the reachable terminal-state theorems.
+
+Verification:
+
+- [x] `lake build Proofs.Replay`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation

@@ -1,4 +1,4 @@
-import Proofs.BoundedTermination
+import Proofs.MaximalRuns
 
 namespace ArbProofs
 
@@ -7,6 +7,13 @@ def replaySteps : ArbitrationState → List CourtAction → Except String Arbitr
   | s, action :: rest => do
       let t ← step { state := s, action := action }
       replaySteps t rest
+
+def replayInitialized
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction) :
+    Except String ArbitrationState := do
+  let start ← initializeCase req
+  replaySteps start actions
 
 theorem initializeCase_deterministic
     (req : InitializeCaseRequest)
@@ -167,5 +174,108 @@ theorem replaySteps_length_le_initializedBudget
       8 + start.policy.max_deliberation_rounds * start.policy.council_size := by
   exact stepPath_length_le_initializedBudget req start target actions.length hInit
     (replaySteps_success_stepPath start target actions hReplay)
+
+theorem replayInitialized_success_components
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (target : ArbitrationState)
+    (hReplay : replayInitialized req actions = .ok target) :
+    ∃ start,
+      initializeCase req = .ok start ∧
+        replaySteps start actions = .ok target := by
+  unfold replayInitialized at hReplay
+  cases hInit : initializeCase req with
+  | error err =>
+      simp [hInit] at hReplay
+      cases hReplay
+  | ok start =>
+      have hSteps : replaySteps start actions = .ok target := by
+        simpa [hInit] using hReplay
+      exact ⟨start, rfl, hSteps⟩
+
+theorem replayInitialized_success_reachable
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (target : ArbitrationState)
+    (hReplay : replayInitialized req actions = .ok target) :
+    Reachable target := by
+  rcases replayInitialized_success_components req actions target hReplay with
+    ⟨start, hInit, hSteps⟩
+  exact replaySteps_success_reachable start target actions
+    (Reachable.init req start hInit) hSteps
+
+theorem replayInitialized_success_stepPath
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (target : ArbitrationState)
+    (hReplay : replayInitialized req actions = .ok target) :
+    ∃ start,
+      initializeCase req = .ok start ∧
+        StepPath start actions.length target := by
+  rcases replayInitialized_success_components req actions target hReplay with
+    ⟨start, hInit, hSteps⟩
+  exact ⟨start, hInit, replaySteps_success_stepPath start target actions hSteps⟩
+
+theorem replayInitialized_length_le_initializedBudget
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (target : ArbitrationState)
+    (hReplay : replayInitialized req actions = .ok target) :
+    ∃ start,
+      initializeCase req = .ok start ∧
+        actions.length ≤ 2 * start.policy.max_submitted_evidence_per_side +
+          8 + start.policy.max_deliberation_rounds * start.policy.council_size := by
+  rcases replayInitialized_success_components req actions target hReplay with
+    ⟨start, hInit, hSteps⟩
+  exact ⟨start, hInit, replaySteps_length_le_initializedBudget
+    req start target actions hInit hSteps⟩
+
+theorem replayInitialized_blocked_terminal_accounted
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (target : ArbitrationState)
+    (hReplay : replayInitialized req actions = .ok target)
+    (hBlocked : stepBlocked target) :
+    (target.case.status = "closed" ∧
+        target.case.phase = "closed" ∧
+          (target.case.resolution = "demonstrated" ∨
+            target.case.resolution = "not_demonstrated" ∨
+              target.case.resolution = "no_majority")) ∨
+      (target.case.status = "failed" ∧
+        ∃ failure,
+          target.case.failure = some failure ∧
+            failure.failure_type = "opportunity_failed" ∧
+              (failure.role = "plaintiff" ∨ failure.role = "defendant") ∧
+                failure.phase = target.case.phase) := by
+  rcases replayInitialized_success_components req actions target hReplay with
+    ⟨start, hInit, hSteps⟩
+  exact initializedStepPathMaximal_terminal_accounted
+    req start target actions.length hInit
+    ⟨replaySteps_success_stepPath start target actions hSteps, hBlocked⟩
+
+theorem replayInitialized_terminal_status_accounted
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (target : ArbitrationState)
+    (hReplay : replayInitialized req actions = .ok target)
+    (hTerminal : target.case.status = "closed" ∨ target.case.status = "failed") :
+    (target.case.status = "closed" ∧
+        target.case.phase = "closed" ∧
+          (target.case.resolution = "demonstrated" ∨
+            target.case.resolution = "not_demonstrated" ∨
+              target.case.resolution = "no_majority")) ∨
+      (target.case.status = "failed" ∧
+        ∃ failure,
+          target.case.failure = some failure ∧
+            failure.failure_type = "opportunity_failed" ∧
+              (failure.role = "plaintiff" ∨ failure.role = "defendant") ∧
+                failure.phase = target.case.phase) := by
+  have hReachable := replayInitialized_success_reachable req actions target hReplay
+  rcases hTerminal with hClosed | hFailed
+  · have hPhase := reachable_status_closed_implies_phase_closed target hReachable hClosed
+    have hResolution := reachable_closed_resolution_enum target hReachable hPhase
+    exact Or.inl ⟨hClosed, hPhase, hResolution⟩
+  · have hFailure := reachable_failed_has_failure target hReachable hFailed
+    exact Or.inr ⟨hFailed, hFailure⟩
 
 end ArbProofs
