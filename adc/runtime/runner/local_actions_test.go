@@ -2,9 +2,13 @@ package runner
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"adjudication/adc/runtime/lean"
 )
 
 func TestNextExhibitIDForParty(t *testing.T) {
@@ -41,6 +45,69 @@ func TestNextExhibitIDForParty(t *testing.T) {
 	}
 	if caseFileAlreadyOfferedByParty(caseObj, "defendant", "file-0001") {
 		t.Fatalf("did not expect file-0001 to count as already offered by defendant")
+	}
+}
+
+func TestOfferCaseFileAsExhibitPayloadCarriesFileEventFields(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	requestPath := filepath.Join(tmpDir, "request.json")
+	enginePath := filepath.Join(tmpDir, "engine.sh")
+	script := `#!/bin/sh
+cat > "$1"
+printf '%s\n' '{"ok":true,"state":{"case":{"case_files":[{"file_id":"file-0001","original_name":"record.txt"}],"file_events":[]}}}'
+`
+	if err := os.WriteFile(enginePath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write engine script: %v", err)
+	}
+	r := &Runner{
+		lean: lean.New([]string{enginePath, requestPath}),
+		state: map[string]any{
+			"case": map[string]any{
+				"case_files": []any{
+					map[string]any{
+						"file_id":       "file-0001",
+						"original_name": "record.txt",
+					},
+				},
+				"file_events": []any{},
+			},
+		},
+	}
+
+	res, handled, err := r.executeLocalAction("plaintiff", "offer_case_file_as_exhibit", map[string]any{
+		"file_id":    "file-0001",
+		"exhibit_id": "PX-7",
+		"admitted":   false,
+	})
+	if err != nil {
+		t.Fatalf("executeLocalAction returned error: %v", err)
+	}
+	if !handled {
+		t.Fatalf("offer_case_file_as_exhibit was not handled")
+	}
+	if ok, _ := res.Result["ok"].(bool); !ok {
+		t.Fatalf("result = %#v", res.Result)
+	}
+	raw, err := os.ReadFile(requestPath)
+	if err != nil {
+		t.Fatalf("read engine request: %v", err)
+	}
+	var req map[string]any
+	if err := json.Unmarshal(raw, &req); err != nil {
+		t.Fatalf("unmarshal request: %v", err)
+	}
+	action, _ := req["action"].(map[string]any)
+	payload, _ := action["payload"].(map[string]any)
+	if action["action_type"] != "offer_exhibit" || action["actor_role"] != "plaintiff" {
+		t.Fatalf("action = %#v", action)
+	}
+	if payload["file_id"] != "file-0001" || payload["party"] != "plaintiff" || payload["exhibit_id"] != "PX-7" || payload["admitted"] != false {
+		t.Fatalf("payload = %#v", payload)
+	}
+	if _, err := time.Parse(time.RFC3339, stringOrDefault(payload["offered_at"], "")); err != nil {
+		t.Fatalf("offered_at = %#v: %v", payload["offered_at"], err)
 	}
 }
 

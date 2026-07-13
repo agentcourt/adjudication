@@ -4119,8 +4119,16 @@ def step (s : CourtState) (a : CourtAction) : Except String CourtState := do
       let exhibitId ← getString a.payload "exhibit_id"
       let description ← getString a.payload "description"
       let admitted ← getBoolD a.payload "admitted" true
+      let fileId := trimString ((← getStringOpt a.payload "file_id").getD "")
+      let offeredAt := trimString ((← getStringOpt a.payload "offered_at").getD c.filed_on)
+      if fileId != "" && !hasCaseFileId c fileId then
+        throw s!"unknown case file: {fileId}"
       let usage := setLimitUsage c.limit_usage "trial.exhibits_offered_per_side" party phase nextCount
-      pure <| updateCase s (appendDocket { c with limit_usage := usage } s!"Exhibit {exhibitId} - {if admitted then "admitted" else "excluded"}" s!"{party}: {description}")
+      let c1 := { c with limit_usage := usage }
+      let c2 :=
+        if fileId = "" then c1
+        else appendFileEvent c1 offeredAt "offer_case_file_as_exhibit" fileId party s!"exhibit_id={exhibitId} admitted={admitted}"
+      pure <| updateCase s (appendDocket c2 s!"Exhibit {exhibitId} - {if admitted then "admitted" else "excluded"}" s!"{party}: {description}")
   | "rest_case" =>
       requireRole a ["plaintiff", "defendant"]
       validateTrialActionPhase c .restCase

@@ -685,9 +685,11 @@ func (r *Runner) executeLocalAction(actorRole, actionType string, payload map[st
 		}
 		leanPayload := map[string]any{
 			"party":       party,
+			"file_id":     fileID,
 			"exhibit_id":  exhibitID,
 			"description": description,
 			"admitted":    admitted,
+			"offered_at":  time.Now().UTC().Format(time.RFC3339),
 		}
 		leanRes, err := r.lean.Step(r.state, "offer_exhibit", actorRole, leanPayload)
 		if err != nil {
@@ -698,12 +700,6 @@ func (r *Runner) executeLocalAction(actorRole, actionType string, payload map[st
 			if nextState == nil {
 				return ActionExecution{}, true, fmt.Errorf("lean response missing state for offer_exhibit")
 			}
-			nextCase, _ := nextState["case"].(map[string]any)
-			if nextCase == nil {
-				return ActionExecution{}, true, fmt.Errorf("lean state missing case for offer_exhibit")
-			}
-			appendFileEvent(nextCase, "offer_case_file_as_exhibit", fileID, party, fmt.Sprintf("exhibit_id=%s admitted=%v", exhibitID, admitted))
-			nextState["case"] = nextCase
 			r.state = nextState
 			leanRes["state"] = nextState
 			if err := r.writeEvidenceManifest(); err != nil {

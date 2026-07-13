@@ -5,6 +5,7 @@
 ### References
 
 - Runner output writer: [`runtime/runner/io.go`](runtime/runner/io.go)
+- Exhibit action boundary: [`engine/Main.lean`](engine/Main.lean)
 - Service artifact route: [`runtime/service/service.go`](runtime/service/service.go)
 - ADC manual output section: [`manual.md`](manual.md#output-artifacts)
 - Certificate plan: [`../plan-2026-07-13-certificates.md`](../plan-2026-07-13-certificates.md)
@@ -13,10 +14,14 @@
 
 ADC terminal packets now include `state.json` beside `run.json`.  The runner writes `state.json` from the same `Result.FinalState` value embedded in `run.json`, so certificate verification has a stable file boundary without reconstructing state from the result envelope.  The service artifact API lists and fetches `state.json` through the same allowlist path used for `run.json`, logs, transcripts, and manifests.
 
+`offer_case_file_as_exhibit` now sends `file_id` and `offered_at` into the Lean `offer_exhibit` action.  Lean validates the file id when present and records the corresponding `file_events` entry.  The runner no longer appends that event after the engine returns, so the terminal state is reproducible from accepted engine transitions.
+
 ### Verification
 
 - [x] `go test ./adc/runtime/runner ./adc/runtime/service`
 - [x] `go test ./adc/runtime/...`
+- [x] `lake build Proofs.RecentExhibitLimits`
+- [x] `lake build Proofs adcengine`
 
 ## 2026-07-10: Service process record reconciliation
 

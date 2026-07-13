@@ -95,9 +95,11 @@ def offerPlaintiffExhibitAction : CourtAction :=
   , actor_role := "plaintiff"
   , payload := Json.mkObj
       [ ("party", Json.str "plaintiff")
+      , ("file_id", Json.str "f2")
       , ("exhibit_id", Json.str "PX-2")
       , ("description", Json.str "printing-invoice.txt")
       , ("admitted", Json.bool true)
+      , ("offered_at", Json.str "2026-03-16T01:00:00Z")
       ]
   }
 
@@ -110,6 +112,7 @@ def offerExhibitWithinLimitSummary : Bool :=
   match step (exhibitEvidenceState 2) offerPlaintiffExhibitAction with
   | .ok nextState =>
       (countExhibitsOfferedByParty nextState.case "plaintiff" == 2) &&
+      caseFileOfferedByParty nextState.case "plaintiff" "f2" &&
       match nextState.case.limit_usage with
       | [usage] =>
           usage.limit_key == "trial.exhibits_offered_per_side" &&

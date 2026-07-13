@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
-	"time"
 )
 
 func marshalString(v any) string {
@@ -91,19 +90,6 @@ func normalizeCitation(v string) string {
 	s = strings.ReplaceAll(s, "(", "")
 	s = strings.ReplaceAll(s, ")", "")
 	return s
-}
-
-func appendFileEvent(caseObj map[string]any, action, fileID, actor, details string) {
-	events, _ := caseObj["file_events"].([]any)
-	event := map[string]any{
-		"recorded_at": time.Now().UTC().Format(time.RFC3339),
-		"action":      action,
-		"file_id":     fileID,
-		"actor":       actor,
-		"details":     details,
-	}
-	events = append(events, event)
-	caseObj["file_events"] = events
 }
 
 func hasCaseFile(caseObj map[string]any, fileID string) bool {
