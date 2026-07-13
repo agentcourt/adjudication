@@ -82,6 +82,17 @@ Verification:
 - [x] `lake build Proofs.Replay`
 - [x] `lake build Proofs`
 
+### Replay certificate acceptance theorem
+
+Reference: `engine/Proofs/Replay.lean`
+
+ARB now has a proof-local `checkReplayCertificate` checker for an initialization request, public action list, and claimed final state.  The main theorem proves that the checker accepts exactly when initialized replay produces the claimed state.  Accepted certificates inherit reachability, an indexed `StepPath`, the initialized length bound, and terminal-state accounting for closed or failed claimed states.
+
+Verification:
+
+- [x] `lake build Proofs.Replay`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation

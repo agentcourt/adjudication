@@ -15,6 +15,17 @@ def replayInitialized
   let start ← initializeCase req
   replaySteps start actions
 
+def checkReplayCertificate
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (claimed : ArbitrationState) :
+    Except String Unit := do
+  let replayed ← replayInitialized req actions
+  if replayed = claimed then
+    pure ()
+  else
+    throw "final state mismatch"
+
 theorem initializeCase_deterministic
     (req : InitializeCaseRequest)
     (s t : ArbitrationState)
@@ -277,5 +288,85 @@ theorem replayInitialized_terminal_status_accounted
     exact Or.inl ⟨hClosed, hPhase, hResolution⟩
   · have hFailure := reachable_failed_has_failure target hReachable hFailed
     exact Or.inr ⟨hFailed, hFailure⟩
+
+theorem checkReplayCertificate_ok_iff
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (claimed : ArbitrationState) :
+    checkReplayCertificate req actions claimed = .ok () ↔
+      replayInitialized req actions = .ok claimed := by
+  constructor
+  · intro hCheck
+    unfold checkReplayCertificate at hCheck
+    cases hReplay : replayInitialized req actions with
+    | error err =>
+        rw [hReplay] at hCheck
+        cases hCheck
+    | ok replayed =>
+        rw [hReplay] at hCheck
+        by_cases hEq : replayed = claimed
+        · cases hEq
+          rfl
+        · change (if replayed = claimed then (Except.ok () : Except String Unit)
+            else Except.error "final state mismatch") = Except.ok () at hCheck
+          simp [hEq] at hCheck
+  · intro hReplay
+    unfold checkReplayCertificate
+    rw [hReplay]
+    change (if claimed = claimed then (Except.ok () : Except String Unit)
+      else Except.error "final state mismatch") = Except.ok ()
+    simp
+
+theorem checkReplayCertificate_ok_reachable
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (claimed : ArbitrationState)
+    (hCheck : checkReplayCertificate req actions claimed = .ok ()) :
+    Reachable claimed := by
+  exact replayInitialized_success_reachable req actions claimed
+    ((checkReplayCertificate_ok_iff req actions claimed).1 hCheck)
+
+theorem checkReplayCertificate_ok_stepPath
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (claimed : ArbitrationState)
+    (hCheck : checkReplayCertificate req actions claimed = .ok ()) :
+    ∃ start,
+      initializeCase req = .ok start ∧
+        StepPath start actions.length claimed := by
+  exact replayInitialized_success_stepPath req actions claimed
+    ((checkReplayCertificate_ok_iff req actions claimed).1 hCheck)
+
+theorem checkReplayCertificate_ok_length_le_initializedBudget
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (claimed : ArbitrationState)
+    (hCheck : checkReplayCertificate req actions claimed = .ok ()) :
+    ∃ start,
+      initializeCase req = .ok start ∧
+        actions.length ≤ 2 * start.policy.max_submitted_evidence_per_side +
+          8 + start.policy.max_deliberation_rounds * start.policy.council_size := by
+  exact replayInitialized_length_le_initializedBudget req actions claimed
+    ((checkReplayCertificate_ok_iff req actions claimed).1 hCheck)
+
+theorem checkReplayCertificate_ok_terminal_status_accounted
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (claimed : ArbitrationState)
+    (hCheck : checkReplayCertificate req actions claimed = .ok ())
+    (hTerminal : claimed.case.status = "closed" ∨ claimed.case.status = "failed") :
+    (claimed.case.status = "closed" ∧
+        claimed.case.phase = "closed" ∧
+          (claimed.case.resolution = "demonstrated" ∨
+            claimed.case.resolution = "not_demonstrated" ∨
+              claimed.case.resolution = "no_majority")) ∨
+      (claimed.case.status = "failed" ∧
+        ∃ failure,
+          claimed.case.failure = some failure ∧
+            failure.failure_type = "opportunity_failed" ∧
+              (failure.role = "plaintiff" ∨ failure.role = "defendant") ∧
+                failure.phase = claimed.case.phase) := by
+  exact replayInitialized_terminal_status_accounted req actions claimed
+    ((checkReplayCertificate_ok_iff req actions claimed).1 hCheck) hTerminal
 
 end ArbProofs
