@@ -497,6 +497,8 @@ Important flags:
 
 Successful verification prints a JSON object with `status: "ok"`, the case id, the run id when present, the accepted action count, and the final-state hash.  A certificate hash mismatch, packet-state mismatch, rejected replay action, or replayed final-state mismatch exits with an error.  The command does not inspect lawyer work notes, logs, or evidence bytes; it checks the engine-visible state transition sequence recorded in the certificate.
 
+The service APIs expose `certificate.json` through artifact routes when the packet contains it.  They do not run certificate verification automatically.  Verification remains an explicit operator action through `aar verify-certificate`.
+
 ## `aar juror-replay`
 
 `aar juror-replay` runs one fresh Pi deliberation from a saved AAR output packet with a model config and persona chosen at command time.  It starts the same frozen Council API, MCP server, Pi container, and replay recorder used by `aar council-replay`.  The command supports persona experiments, alternative-model comparisons, and repeat runs against existing `ex*` output packets.

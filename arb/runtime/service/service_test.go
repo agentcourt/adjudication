@@ -615,6 +615,55 @@ func TestDirectLoadRegistryRepairsDetachedCaseFromRunJSON(t *testing.T) {
 	}
 }
 
+func TestDirectCaseArtifactsExposeCertificate(t *testing.T) {
+	root := t.TempDir()
+	registry := filepath.Join(t.TempDir(), "registry")
+	if err := os.MkdirAll(registry, 0o755); err != nil {
+		t.Fatalf("mkdir registry: %v", err)
+	}
+	outDir := filepath.Join(root, "direct-cert")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatalf("mkdir out dir: %v", err)
+	}
+	rec := CaseRecord{
+		CaseID:    "direct-cert",
+		RunID:     "run-direct-cert",
+		Status:    "completed",
+		OutputDir: outDir,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	raw, err := json.MarshalIndent(rec, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal record: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(registry, rec.CaseID+".json"), raw, 0o644); err != nil {
+		t.Fatalf("write registry record: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "certificate.json"), []byte(`{"schema_version":"aar.replay-certificate.v0"}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write certificate: %v", err)
+	}
+	writeJSONFile(t, filepath.Join(outDir, "run.json"), map[string]any{
+		"status":     "ok",
+		"resolution": "demonstrated",
+	})
+
+	s, err := New(Config{RegistryDir: registry, OutputRoot: root, AARBin: writeFakeAAR(t, "#!/bin/sh\nexit 0\n")})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	status, got := serviceGet(t, s, "/api/v1/cases/direct-cert/artifacts")
+	if status != http.StatusOK {
+		t.Fatalf("artifacts status = %d, body = %#v", status, got)
+	}
+	if !artifactListContains(got["artifacts"], "certificate.json") {
+		t.Fatalf("artifacts missing certificate.json = %#v", got["artifacts"])
+	}
+	rawStatus, body := serviceRawGet(t, s, "/api/v1/cases/direct-cert/artifacts/certificate.json")
+	if rawStatus != http.StatusOK || string(body) != "{\"schema_version\":\"aar.replay-certificate.v0\"}\n" {
+		t.Fatalf("certificate status = %d body = %q", rawStatus, string(body))
+	}
+}
+
 func TestCreateRejectsPathCaseIDs(t *testing.T) {
 	root := t.TempDir()
 	aarBin := writeFakeAAR(t, "#!/bin/sh\nexit 0\n")
@@ -804,6 +853,9 @@ func TestClerkRoutesReadOutputArtifacts(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(outDir, "digest.md"), []byte("digest text\n"), 0o644); err != nil {
 		t.Fatalf("write digest: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(outDir, "certificate.json"), []byte(`{"schema_version":"aar.replay-certificate.v0"}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write certificate: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(outDir, "clerk.stderr"), []byte("clerk stderr\n"), 0o644); err != nil {
 		t.Fatalf("write clerk stderr: %v", err)
 	}
@@ -853,7 +905,7 @@ func TestClerkRoutesReadOutputArtifacts(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("artifacts status = %d, body = %#v", status, got)
 	}
-	if !artifactListContains(got["artifacts"], "run.json") || !artifactListContains(got["artifacts"], "digest.md") {
+	if !artifactListContains(got["artifacts"], "run.json") || !artifactListContains(got["artifacts"], "digest.md") || !artifactListContains(got["artifacts"], "certificate.json") {
 		t.Fatalf("artifacts = %#v", got["artifacts"])
 	}
 	if !artifactListContains(got["artifacts"], "clerk.stderr") {
@@ -866,6 +918,10 @@ func TestClerkRoutesReadOutputArtifacts(t *testing.T) {
 	rawStatus, body := serviceRawGet(t, s, "/clerk/v1/cases/clerk-rich/artifacts/digest.md")
 	if rawStatus != http.StatusOK || string(body) != "digest text\n" {
 		t.Fatalf("digest status = %d body = %q", rawStatus, string(body))
+	}
+	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/clerk-rich/artifacts/certificate.json")
+	if rawStatus != http.StatusOK || string(body) != "{\"schema_version\":\"aar.replay-certificate.v0\"}\n" {
+		t.Fatalf("certificate status = %d body = %q", rawStatus, string(body))
 	}
 	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/clerk-rich/artifacts/clerk.stderr")
 	if rawStatus != http.StatusOK || string(body) != "clerk stderr\n" {
