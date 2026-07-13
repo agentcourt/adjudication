@@ -64,7 +64,7 @@ Verification:
 
 Reference: `engine/Proofs/Replay.lean`, `engine/Proofs.lean`, `engine/Proofs/Reachability.lean`, `engine/Proofs/BoundedTermination.lean`
 
-ARB now has a proof-local replay function over lists of public actions.  The replay theorems connect successful replay to `StepReachableFrom`, `Reachable`, and indexed `StepPath`, and they prove that any existing `StepReachableFrom` or `StepPath` has a replaying action list.  This gives the certificate work a small foundation without changing the runtime API or the engine transition function.
+ARB now has a proof-local replay function over lists of public actions.  The replay theorems connect successful replay to `StepReachableFrom`, `Reachable`, and indexed `StepPath`, and they prove that any existing `StepReachableFrom` or `StepPath` has a replaying action list.  Successful replay from initialization also inherits the explicit run-length bound from bounded termination.  This gives the certificate work a small foundation without changing the runtime API or the engine transition function.
 
 Verification:
 

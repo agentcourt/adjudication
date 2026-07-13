@@ -157,4 +157,15 @@ theorem stepPath_replaySteps_exists
       exact ⟨actions.concat action, by simp [hLength],
         replaySteps_concat_ok start s t actions action hReplay hStep⟩
 
+theorem replaySteps_length_le_initializedBudget
+    (req : InitializeCaseRequest)
+    (start target : ArbitrationState)
+    (actions : List CourtAction)
+    (hInit : initializeCase req = .ok start)
+    (hReplay : replaySteps start actions = .ok target) :
+    actions.length ≤ 2 * start.policy.max_submitted_evidence_per_side +
+      8 + start.policy.max_deliberation_rounds * start.policy.council_size := by
+  exact stepPath_length_le_initializedBudget req start target actions.length hInit
+    (replaySteps_success_stepPath start target actions hReplay)
+
 end ArbProofs
