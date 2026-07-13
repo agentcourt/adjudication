@@ -82,4 +82,24 @@ theorem checkReplayCertificate_closed_filing_counts
     (checkReplayCertificate_ok_reachable req actions claimed hCheck)
     hClosed
 
+theorem checkReplayCertificate_status_closed_filing_counts
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (claimed : ArbitrationState)
+    (hCheck : checkReplayCertificate req actions claimed = .ok ())
+    (hStatus : claimed.case.status = "closed") :
+    filingCount claimed.case.openings "plaintiff" = 1 ∧
+      filingCount claimed.case.openings "defendant" = 1 ∧
+        filingCount claimed.case.arguments "plaintiff" = 1 ∧
+          filingCount claimed.case.arguments "defendant" = 1 ∧
+            filingCount claimed.case.closings "plaintiff" = 1 ∧
+              filingCount claimed.case.closings "defendant" = 1 ∧
+                filingCount claimed.case.rebuttals "plaintiff" ≤ 1 ∧
+                  filingCount claimed.case.rebuttals "defendant" = 0 ∧
+                    filingCount claimed.case.surrebuttals "plaintiff" = 0 ∧
+                      filingCount claimed.case.surrebuttals "defendant" ≤ 1 := by
+  have hReachable := checkReplayCertificate_ok_reachable req actions claimed hCheck
+  exact checkReplayCertificate_closed_filing_counts req actions claimed hCheck
+    (reachable_status_closed_implies_phase_closed claimed hReachable hStatus)
+
 end ArbProofs
