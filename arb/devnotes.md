@@ -159,9 +159,12 @@ Reference: `engine/Proofs/DueProcess.lean`, `engine/Proofs.lean`
 
 ARB now packages the closed-case merits sequence as a direct theorem over reachable states.  If a reachable case is closed, its openings, arguments, and closings each contain one plaintiff filing and one defendant filing in the engine's required order.  Rebuttal remains plaintiff-only and optional, and surrebuttal remains defendant-only and optional.
 
+Accepted replay certificates now inherit the same filing-count package for closed claimed states.  This puts the due-process fact at the certificate boundary alongside outcome soundness, so a checked closed packet carries both its vote justification and its completed merits sequence.
+
 Verification:
 
 - [x] `lake build Proofs.DueProcess`
+- [x] `lake build Proofs.CertificateSoundness`
 - [x] `lake build Proofs`
 
 ## 2026-07-10
