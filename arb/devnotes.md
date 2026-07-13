@@ -115,6 +115,17 @@ Verification:
 - [x] `lake build Proofs.ProgressViability`
 - [x] `lake build Proofs`
 
+### Vote-order invariance foundation
+
+Reference: `engine/Proofs/VoteOrder.lean`, `engine/Proofs.lean`
+
+ARB now proves the pure counting foundation for vote-order invariance.  `voteCountFor` is invariant under `List.Perm`, and `currentResolution?` is unchanged when two cases have permuted current-round vote lists.  This isolates the aggregation fact from the engine transition path: the current resolution depends on vote counts, not list order.
+
+Verification:
+
+- [x] `lake build Proofs.VoteOrder`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation

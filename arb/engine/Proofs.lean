@@ -27,3 +27,4 @@ import Proofs.MaximalRuns
 import Proofs.OpportunityAgreement
 import Proofs.Replay
 import Proofs.CertificateSoundness
+import Proofs.VoteOrder
