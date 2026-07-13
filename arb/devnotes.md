@@ -146,6 +146,8 @@ Reference: `engine/Proofs/ThresholdMonotonicity.lean`, `engine/Proofs.lean`
 
 ARB now proves quota monotonicity for current-round resolutions.  A `demonstrated` current resolution at a higher required-vote quota remains `demonstrated` at a lower quota, and a missing current resolution at a lower quota remains missing at a higher quota.  The `not_demonstrated` theorem includes the rule's ordering caveat: lowering the quota preserves `not_demonstrated` only when the demonstrated count still falls below the lower quota.
 
+The same file now proves the no-majority side for summary closure.  If a case summary closes as `no_majority` at a lower required-vote quota, the same current votes, seating, and round also close as `no_majority` at a higher quota.  The proof factors through two smaller facts: higher quotas preserve the no-substantive-outcome condition, and higher quotas preserve the no-majority closure reason.
+
 Verification:
 
 - [x] `lake build Proofs.ThresholdMonotonicity`
