@@ -17,6 +17,19 @@ Verification:
 - [x] `go test ./arb/runtime/service`
 - [x] `./.bin/aar verify-certificate --dir /tmp/aar-cert-live-ex01.C559OC --engine .bin/aarengine`
 
+### Certificate and failure proof packaging
+
+Reference: `engine/Proofs/CertificateFacts.lean`, `engine/Proofs/ProgressViability.lean`
+
+The closed-certificate fact package now has resolution-specific accessors for demonstrated, not-demonstrated, and no-majority soundness.  A caller that has `ClosedCertificateFacts` and the recorded resolution can extract the matching soundness theorem directly, without redoing the disjunction split.  The package still rests on exact initialized replay and does not change certificate acceptance.
+
+The same-round failure package now records the public `fail_opportunity` consequences needed for the council-failure story.  A successful same-round failure step preserves the stored council vote list, preserves no-substantive-outcome viability, and blocks a new substantive current resolution under that premise.  This packages existing viability and progress facts at the public step boundary.
+
+Verification:
+
+- [x] `lake build Proofs.CertificateFacts`
+- [x] `lake build Proofs.ProgressViability`
+
 ### Active-step realizability proof
 
 Reference: `engine/Proofs/Realizability.lean`, `engine/Proofs.lean`, `engine/Main.lean`, `engine/Proofs/NoStuck.lean`

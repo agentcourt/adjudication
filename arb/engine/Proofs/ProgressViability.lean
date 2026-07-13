@@ -53,6 +53,20 @@ def sameRoundDeliberationProgress (s t : ArbitrationState) : Prop :=
     t.case.deliberation_round = s.case.deliberation_round ∧
     viableOutcomesShrink s t
 
+structure SameRoundFailureResilience (s t : ArbitrationState) : Prop where
+  fixed_frame :
+    fixedFrameProgress s t
+  same_round :
+    t.case.deliberation_round = s.case.deliberation_round
+  council_votes_preserved :
+    t.case.council_votes = s.case.council_votes
+  no_substantive_outcome_preserved :
+    (deliberationSummary s).noSubstantiveOutcomeViable →
+      (deliberationSummary t).noSubstantiveOutcomeViable
+  blocks_substantive_current_resolution :
+    (deliberationSummary s).noSubstantiveOutcomeViable →
+      currentResolution? t.case t.policy.required_votes_for_decision = none
+
 private theorem fixedFrameProgress_preserves_councilIdsUnique
     {s t : ArbitrationState}
     (hProgress : fixedFrameProgress s t)
@@ -432,5 +446,47 @@ theorem step_fail_opportunity_same_round_progress_and_preserves_noSubstantiveOut
     have hFail := step_fail_opportunity_result s t action hType hStepCore
     exact failOpportunity_same_round_preserves_noSubstantiveOutcomeViable
       s t action.payload hFail hSameRound hUnique hIntegrity hNoViable
+
+theorem step_fail_opportunity_preserves_council_votes
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "fail_opportunity")
+    (hStep : step { state := s, action := action } = .ok t) :
+    t.case.council_votes = s.case.council_votes := by
+  have hStepCore := stepCore_ok_of_step_ok s t action hStep
+  have hFail := step_fail_opportunity_result s t action hType hStepCore
+  rcases failOpportunity_result s t action.payload hFail with hCouncil | hParty
+  · rcases hCouncil with ⟨_memberId, _reason, _opportunityId, _message,
+      c1, hC1, _hDeliberation, _hSeated, _hFresh, hCont⟩
+    have hVotes : t.case.council_votes = c1.council_votes :=
+      continueDeliberation_preserves_council_votes s t c1 hCont
+    rw [hC1] at hVotes
+    simpa using hVotes
+  · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation,
+      _hFailureType, _hFailureRole, _hFailurePhase⟩
+    rfl
+
+theorem step_fail_opportunity_same_round_resilience
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "fail_opportunity")
+    (hStep : step { state := s, action := action } = .ok t)
+    (hSameRound : t.case.deliberation_round = s.case.deliberation_round)
+    (hUnique : councilIdsUnique s.case)
+    (hIntegrity : councilVoteIntegrity s.case) :
+    SameRoundFailureResilience s t := by
+  have hProgress :=
+    step_fail_opportunity_same_round_progress_and_preserves_noSubstantiveOutcomeViable
+      s t action hType hStep hSameRound hUnique hIntegrity
+  exact
+    { fixed_frame := hProgress.1
+      same_round := hSameRound
+      council_votes_preserved :=
+        step_fail_opportunity_preserves_council_votes s t action hType hStep
+      no_substantive_outcome_preserved := hProgress.2
+      blocks_substantive_current_resolution := by
+        intro hNoViable
+        exact deliberationSummary_noSubstantiveOutcomeViable_implies_currentResolution_none
+          t (hProgress.2 hNoViable) }
 
 end ArbProofs
