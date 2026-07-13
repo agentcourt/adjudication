@@ -115,6 +115,18 @@ Verification:
 - [x] `lake build Proofs.ProgressViability`
 - [x] `lake build Proofs`
 
+### Council failure resilience
+
+Reference: `engine/Proofs/ViableOutcomes.lean`, `engine/Proofs/ProgressViability.lean`
+
+The same-round failure theorem now covers `fail_opportunity` at the public `step` boundary.  A council opportunity failure removes an unvoted seated member and then runs `continueDeliberation`, while party failure leaves the deliberation summary unchanged.  In either branch, if no substantive outcome was viable before the step and the step stays in the same deliberation round, no substantive outcome becomes viable afterward.
+
+Verification:
+
+- [x] `lake build Proofs.ViableOutcomes`
+- [x] `lake build Proofs.ProgressViability`
+- [x] `lake build Proofs`
+
 ### Vote-order invariance foundation
 
 Reference: `engine/Proofs/VoteOrder.lean`, `engine/Proofs.lean`

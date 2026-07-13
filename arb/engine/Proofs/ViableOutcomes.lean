@@ -239,6 +239,48 @@ theorem deliberationSummary_after_seated_member_removal
   · rfl
   · rfl
 
+theorem deliberationSummary_after_failed_seated_member_removal
+    (s : ArbitrationState)
+    (memberId reason opportunityId message : String)
+    (hUnique : councilIdsUnique s.case)
+    (hSeated : memberId ∈ seatedCouncilMemberIds s.case) :
+    let c1 := { s.case with council_members := s.case.council_members.map (fun member =>
+      if member.member_id = memberId then
+        { member with
+          status := "failed"
+          failure_reason := reason
+          failure_opportunity_id := opportunityId
+          failure_message := message }
+      else
+        member) }
+    deliberationSummary (stateWithCase s c1) =
+      (deliberationSummary s).afterSeatedMemberRemoval := by
+  let c1 : ArbitrationCase := { s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
+    if member.member_id = memberId then
+      { member with
+        status := "failed"
+        failure_reason := reason
+        failure_opportunity_id := opportunityId
+        failure_message := message }
+    else
+      member) }
+  have hSeatedCount :
+      seatedCouncilMemberCount c1 + 1 = seatedCouncilMemberCount s.case := by
+    simpa [c1] using
+      seatedCouncilMemberCount_failUnvotedCouncilMember
+        s.case memberId reason opportunityId message hUnique hSeated
+  have hSeatedPred : seatedCouncilMemberCount c1 = seatedCouncilMemberCount s.case - 1 := by
+    omega
+  apply DeliberationSummary.ext
+  · rfl
+  · simpa [deliberationSummary, deliberationSummaryForCase,
+      DeliberationSummary.afterSeatedMemberRemoval, stateWithCase, c1] using hSeatedPred
+  · rfl
+  · rfl
+  · rfl
+  · rfl
+  · rfl
+
 theorem deliberationSummary_after_append_demonstrated_vote_demonstratedViable_iff_of_fresh_seated
     (s : ArbitrationState)
     (memberId rationale : String)
@@ -560,6 +602,51 @@ theorem deliberationSummary_after_seated_member_removal_preserves_notDemonstrate
     exact hNotViable <|
       (deliberationSummary s).afterSeatedMemberRemoval_notDemonstratedViable_implies hCapacity hAfter
   simpa [c1] using hImp
+
+theorem deliberationSummary_after_failed_seated_member_removal_preserves_noSubstantiveOutcomeViable
+    (s : ArbitrationState)
+    (memberId reason opportunityId message : String)
+    (hUnique : councilIdsUnique s.case)
+    (hIntegrity : councilVoteIntegrity s.case)
+    (hSeated : memberId ∈ seatedCouncilMemberIds s.case)
+    (hFresh : memberId ∉ currentRoundVoteIds s.case)
+    (hNoViable : (deliberationSummary s).noSubstantiveOutcomeViable) :
+    let c1 := { s.case with council_members := s.case.council_members.map (fun member =>
+      if member.member_id = memberId then
+        { member with
+          status := "failed"
+          failure_reason := reason
+          failure_opportunity_id := opportunityId
+          failure_message := message }
+      else
+        member) }
+    (deliberationSummary (stateWithCase s c1)).noSubstantiveOutcomeViable := by
+  let c1 : ArbitrationCase := { s.case with council_members := s.case.council_members.map (fun (member : CouncilMember) =>
+    if member.member_id = memberId then
+      { member with
+        status := "failed"
+        failure_reason := reason
+        failure_opportunity_id := opportunityId
+        failure_message := message }
+    else
+      member) }
+  change (deliberationSummary (stateWithCase s c1)).noSubstantiveOutcomeViable
+  have hCapacity :
+      (deliberationSummary s).current_round_vote_count <
+        (deliberationSummary s).seated_count :=
+    deliberationSummary_current_round_vote_count_lt_seated_count_of_fresh_seated
+      s memberId hUnique hIntegrity hSeated hFresh
+  rw [deliberationSummary_after_failed_seated_member_removal
+    s memberId reason opportunityId message hUnique hSeated]
+  constructor
+  · intro hAfter
+    exact hNoViable.1 <|
+      (deliberationSummary s).afterSeatedMemberRemoval_demonstratedViable_implies
+        hCapacity hAfter
+  · intro hAfter
+    exact hNoViable.2 <|
+      (deliberationSummary s).afterSeatedMemberRemoval_notDemonstratedViable_implies
+        hCapacity hAfter
 
 theorem continueDeliberation_after_append_demonstrated_vote_same_round_demonstratedViable_iff
     (s t : ArbitrationState)
@@ -951,5 +1038,37 @@ theorem step_remove_council_member_same_round_preserves_noSubstantiveOutcomeViab
       s t action hType hStep hSameRound hUnique hIntegrity hNoViable.1
   · exact step_remove_council_member_same_round_preserves_notDemonstrated_impossibility
       s t action hType hStep hSameRound hUnique hIntegrity hNoViable.2
+
+theorem failOpportunity_same_round_preserves_noSubstantiveOutcomeViable
+    (s t : ArbitrationState)
+    (payload : Lean.Json)
+    (hFail : failOpportunity s payload = .ok t)
+    (hSameRound : t.case.deliberation_round = s.case.deliberation_round)
+    (hUnique : councilIdsUnique s.case)
+    (hIntegrity : councilVoteIntegrity s.case)
+    (hNoViable : (deliberationSummary s).noSubstantiveOutcomeViable) :
+    (deliberationSummary t).noSubstantiveOutcomeViable := by
+  rcases failOpportunity_result s t payload hFail with hCouncil | hParty
+  · rcases hCouncil with ⟨memberId, reason, opportunityId, message, c1, hC1,
+      _hDeliberation, hSeatedRaw, hFreshRaw, hCont⟩
+    have hSeated : memberId ∈ seatedCouncilMemberIds s.case := by
+      simpa [seatedCouncilMemberIds] using hSeatedRaw
+    have hFresh : memberId ∉ currentRoundVoteIds s.case := by
+      simpa [currentRoundVoteIds] using hFreshRaw
+    have hMid :
+        (deliberationSummary (stateWithCase s c1)).noSubstantiveOutcomeViable := by
+      rw [hC1]
+      exact
+        deliberationSummary_after_failed_seated_member_removal_preserves_noSubstantiveOutcomeViable
+          s memberId reason opportunityId message hUnique hIntegrity hSeated hFresh hNoViable
+    have hSummaryEq : deliberationSummary t = deliberationSummary (stateWithCase s c1) := by
+      exact continueDeliberation_same_round_preserves_deliberationSummary s t c1
+        hCont
+        (by rw [hC1]; simpa using hSameRound)
+    rw [hSummaryEq]
+    exact hMid
+  · rcases hParty with ⟨failure, rfl, _hNotClosed, _hNotDeliberation,
+      _hFailureType, _hFailureRole, _hFailurePhase⟩
+    simpa [deliberationSummary, deliberationSummaryForCase, stateWithCase] using hNoViable
 
 end ArbProofs

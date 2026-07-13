@@ -414,4 +414,23 @@ theorem step_remove_council_member_same_round_forces_continueDeliberation_closed
     hReason
     hRoundComplete
 
+theorem step_fail_opportunity_same_round_progress_and_preserves_noSubstantiveOutcomeViable
+    (s t : ArbitrationState)
+    (action : CourtAction)
+    (hType : action.action_type = "fail_opportunity")
+    (hStep : step { state := s, action := action } = .ok t)
+    (hSameRound : t.case.deliberation_round = s.case.deliberation_round)
+    (hUnique : councilIdsUnique s.case)
+    (hIntegrity : councilVoteIntegrity s.case) :
+    fixedFrameProgress s t ∧
+      ((deliberationSummary s).noSubstantiveOutcomeViable →
+        (deliberationSummary t).noSubstantiveOutcomeViable) := by
+  constructor
+  · exact step_establishes_fixedFrameProgress s t action hStep
+  · intro hNoViable
+    have hStepCore := stepCore_ok_of_step_ok s t action hStep
+    have hFail := step_fail_opportunity_result s t action hType hStepCore
+    exact failOpportunity_same_round_preserves_noSubstantiveOutcomeViable
+      s t action.payload hFail hSameRound hUnique hIntegrity hNoViable
+
 end ArbProofs
