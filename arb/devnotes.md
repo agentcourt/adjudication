@@ -38,6 +38,17 @@ Verification:
 - [x] `lake build Proofs.NoStuck`
 - [x] `lake build Proofs`
 
+### Opportunity allowed-tool agreement
+
+Reference: `engine/Proofs/OpportunityAgreement.lean`, `engine/Proofs/MaximalRuns.lean`, `engine/Proofs/NoStuck.lean`, `engine/Main.lean`
+
+ARB now proves that every accepted actor-facing public action appears in the current `nextOpportunity` allowed-tool list.  The theorem covers reachable active states and excludes the two system actions, `remove_council_member` and `fail_opportunity`, because those are not advertised as actor tools.  The proof uses the existing reachable liveness theorem to obtain the current opportunity, derives the accepted source phase from the successful step, and then checks the phase-specific allowed-tool list.
+
+Verification:
+
+- [x] `lake build Proofs.OpportunityAgreement`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation
