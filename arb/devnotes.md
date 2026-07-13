@@ -93,6 +93,17 @@ Verification:
 - [x] `lake build Proofs.Replay`
 - [x] `lake build Proofs`
 
+### Certificate outcome soundness
+
+Reference: `engine/Proofs/CertificateSoundness.lean`, `engine/Proofs/Replay.lean`, `engine/Proofs/OutcomeSoundness.lean`
+
+Accepted replay certificates now inherit the outcome-soundness theorems at the certificate boundary.  A certificate for a closed `demonstrated` state has the demonstrated vote threshold in the final current round, a certificate for a closed `not_demonstrated` state has the not-demonstrated threshold, and a certificate for `no_majority` has the recorded no-majority conditions.  The file also packages the substantive-outcome case as one theorem, so failures or missing votes cannot manufacture either substantive result in an accepted certificate.
+
+Verification:
+
+- [x] `lake build Proofs.CertificateSoundness`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation
