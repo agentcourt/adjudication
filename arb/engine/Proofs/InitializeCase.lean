@@ -75,6 +75,44 @@ theorem initializeCase_requires_matching_council_size :
   native_decide
 
 /--
+Initialization rejects an empty council member identifier.
+
+Council-member actions use `member_id` as the identity key.  An empty key
+cannot identify a council seat, so initialization rejects the case before any
+live state exists.
+-/
+theorem initializeCase_rejects_empty_member_id :
+    initErrorMessage
+      (initializeCase
+        { initRequest with
+            council_members :=
+              [ sampleMember "" "m1" "p1" "seated"
+              , sampleMember "C2" "m2" "p2" "seated"
+              , sampleMember "C3" "m3" "p3" "seated"
+              ] }) =
+      "council_members contain empty or untrimmed member_id" := by
+  native_decide
+
+/--
+Initialization rejects a council member identifier with surrounding space.
+
+Runtime actions trim submitted member identifiers before lookup.  Initialization
+therefore requires stored identifiers to be canonical, so a listed council seat
+can be reached by the same identifier later.
+-/
+theorem initializeCase_rejects_untrimmed_member_id :
+    initErrorMessage
+      (initializeCase
+        { initRequest with
+            council_members :=
+              [ sampleMember " C1 " "m1" "p1" "seated"
+              , sampleMember "C2" "m2" "p2" "seated"
+              , sampleMember "C3" "m3" "p3" "seated"
+              ] }) =
+      "council_members contain empty or untrimmed member_id" := by
+  native_decide
+
+/--
 Initialization rejects duplicate council member identifiers.
 
 The engine uses `member_id` as the identity key for voting, removal, and

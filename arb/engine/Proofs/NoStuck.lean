@@ -844,17 +844,21 @@ theorem initializeCase_establishes_pristineCouncilState
           · by_cases hLength : req.council_members.length != req.state.policy.council_size
             · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength] at hInit
               cases hInit
-            · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate] at hInit
+            · by_cases hInvalid : hasInvalidCouncilMemberIds req.council_members
+              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid] at hInit
                 cases hInit
-              · simp [stateWithCase, hPolicy, hProposition, hEvidence, hEmpty, hLength,
-                  hDuplicate] at hInit
-                cases hInit
-                refine ⟨rfl, rfl, ?_⟩
-                intro member hMem
-                simp at hMem
-                rcases hMem with ⟨source, hSourceMem, rfl⟩
-                simp [memberIsSeated]
+              · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate] at hInit
+                  cases hInit
+                · simp [stateWithCase, hPolicy, hProposition, hEvidence, hEmpty, hLength,
+                    hInvalid, hDuplicate] at hInit
+                  cases hInit
+                  refine ⟨rfl, rfl, ?_⟩
+                  intro member hMem
+                  simp at hMem
+                  rcases hMem with ⟨source, hSourceMem, rfl⟩
+                  simp [memberIsSeated]
 
 theorem step_record_opening_statement_preserves_pristineCouncilState
     (s t : ArbitrationState)

@@ -97,12 +97,17 @@ theorem initializeCase_phase_openings
           · by_cases hLength : req.council_members.length != req.state.policy.council_size
             · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength] at hInit
               cases hInit
-            · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate] at hInit
+            · by_cases hInvalid : hasInvalidCouncilMemberIds req.council_members
+              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid] at hInit
                 cases hInit
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate, stateWithCase] at hInit
-                cases hInit
-                simp
+              · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate] at hInit
+                  cases hInit
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate, stateWithCase] at hInit
+                  cases hInit
+                  simp
 
 /--
 The summary-side `noMajorityClosure` predicate is sufficient for

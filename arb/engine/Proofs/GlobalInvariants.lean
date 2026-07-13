@@ -55,12 +55,17 @@ theorem initializeCase_establishes_phaseShape
           · by_cases hLength : req.council_members.length != req.state.policy.council_size
             · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength] at hInit
               cases hInit
-            · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate] at hInit
+            · by_cases hInvalid : hasInvalidCouncilMemberIds req.council_members
+              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid] at hInit
                 cases hInit
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate, Pure.pure] at hInit
-                cases hInit
-                simp [phaseShape, bilateralStarted, stateWithCase]
+              · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate] at hInit
+                  cases hInit
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate, Pure.pure] at hInit
+                  cases hInit
+                  simp [phaseShape, bilateralStarted, stateWithCase]
 
 /--
 Successful initialization also starts with empty admitted-material lists.
@@ -93,12 +98,17 @@ theorem initializeCase_establishes_materialLimits
           · by_cases hLength : req.council_members.length != req.state.policy.council_size
             · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength] at hInit
               cases hInit
-            · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate] at hInit
+            · by_cases hInvalid : hasInvalidCouncilMemberIds req.council_members
+              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid] at hInit
                 cases hInit
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate, Pure.pure] at hInit
-                cases hInit
-                simp [materialLimitsRespected, offeredCount, reportCount, stateWithCase]
+              · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate] at hInit
+                  cases hInit
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate, Pure.pure] at hInit
+                  cases hInit
+                  simp [materialLimitsRespected, offeredCount, reportCount, stateWithCase]
 
 /--
 Appending supplemental materials does not affect the filing shape.

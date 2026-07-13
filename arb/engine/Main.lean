@@ -189,6 +189,10 @@ def hasDuplicateStrings : List String → Bool
 def hasDuplicateCouncilMemberIds (members : List CouncilMember) : Bool :=
   hasDuplicateStrings (members.map (fun member => member.member_id))
 
+def hasInvalidCouncilMemberIds (members : List CouncilMember) : Bool :=
+  members.any (fun member =>
+    trimString member.member_id = "" || trimString member.member_id != member.member_id)
+
 def plaintiffThenDefendant (xs : List Filing) (plaintiffLabel defendantLabel : String) : Option String :=
   if xs.length = 0 then
     some plaintiffLabel
@@ -759,6 +763,8 @@ def initializeCase (req : InitializeCaseRequest) : Except String ArbitrationStat
     throw "at least one council member is required"
   if req.council_members.length != req.state.policy.council_size then
     throw "council_members length does not match policy.council_size"
+  if hasInvalidCouncilMemberIds req.council_members then
+    throw "council_members contain empty or untrimmed member_id"
   if hasDuplicateCouncilMemberIds req.council_members then
     throw "council_members contain duplicate member_id"
   let c := { req.state.case with

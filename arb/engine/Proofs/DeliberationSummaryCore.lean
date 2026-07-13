@@ -42,13 +42,17 @@ theorem initializeCase_establishes_councilMemberCount_eq_policySize
           · simp [hPolicy, hProposition, hEvidence, hEmpty] at hInit
             cases hInit
           · by_cases hLength : req.council_members.length = req.state.policy.council_size
-            · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate] at hInit
+            · by_cases hInvalid : hasInvalidCouncilMemberIds req.council_members
+              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid] at hInit
                 cases hInit
-              · simp [stateWithCase, hPolicy, hProposition, hEvidence, hEmpty, hLength,
-                  hDuplicate] at hInit
-                cases hInit
-                simpa using hLength
+              · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate] at hInit
+                  cases hInit
+                · simp [stateWithCase, hPolicy, hProposition, hEvidence, hEmpty, hLength,
+                    hInvalid, hDuplicate] at hInit
+                  cases hInit
+                  simpa using hLength
             · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength] at hInit
               cases hInit
 

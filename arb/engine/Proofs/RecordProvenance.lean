@@ -314,12 +314,17 @@ theorem initializeCase_establishes_recordProvenance
           · by_cases hLength : req.council_members.length != req.state.policy.council_size
             · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength] at hInit
               cases hInit
-            · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate] at hInit
+            · by_cases hInvalid : hasInvalidCouncilMemberIds req.council_members
+              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid] at hInit
                 cases hInit
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate, Pure.pure] at hInit
-                cases hInit
-                simp [recordProvenance, stateWithCase]
+              · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate] at hInit
+                  cases hInit
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate, Pure.pure] at hInit
+                  cases hInit
+                  simp [recordProvenance, stateWithCase]
 
 /--
 If a replacement case keeps the admitted-material lists unchanged, it preserves

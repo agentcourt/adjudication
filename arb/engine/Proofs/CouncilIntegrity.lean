@@ -130,23 +130,27 @@ theorem initializeCase_establishes_councilIdsUnique
           · by_cases hLength : req.council_members.length != req.state.policy.council_size
             · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength] at hInit
               cases hInit
-            · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate] at hInit
+            · by_cases hInvalid : hasInvalidCouncilMemberIds req.council_members
+              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid] at hInit
                 cases hInit
-              · have hNoDupIds :
+              · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate] at hInit
+                  cases hInit
+                · have hNoDupIds :
                     (req.council_members.map (·.member_id)).Nodup := by
-                  unfold hasDuplicateCouncilMemberIds at hDuplicate
-                  exact by
-                    by_cases hNodup : (req.council_members.map (·.member_id)).Nodup
-                    · exact hNodup
-                    · have hDupTrue :
-                          hasDuplicateStrings (req.council_members.map (·.member_id)) = true :=
-                          hasDuplicateStrings_eq_true_of_not_nodup hNodup
-                      simp [hDupTrue] at hDuplicate
-                simp [hPolicy, hProposition, hEvidence, hEmpty, hLength,
-                  hDuplicate, stateWithCase] at hInit
-                cases hInit
-                simpa [councilIdsUnique, councilMemberIds] using hNoDupIds
+                    unfold hasDuplicateCouncilMemberIds at hDuplicate
+                    exact by
+                      by_cases hNodup : (req.council_members.map (·.member_id)).Nodup
+                      · exact hNodup
+                      · have hDupTrue :
+                            hasDuplicateStrings (req.council_members.map (·.member_id)) = true :=
+                            hasDuplicateStrings_eq_true_of_not_nodup hNodup
+                        simp [hDupTrue] at hDuplicate
+                  simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate, stateWithCase] at hInit
+                  cases hInit
+                  simpa [councilIdsUnique, councilMemberIds] using hNoDupIds
 
 theorem currentRoundVoteIntegrity_empty (c : ArbitrationCase) :
     councilVoteIntegrity { c with council_votes := [] } := by
@@ -590,15 +594,19 @@ theorem initializeCase_establishes_councilVoteIntegrity
           · by_cases hLength : req.council_members.length != req.state.policy.council_size
             · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength] at hInit
               cases hInit
-            · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate] at hInit
+            · by_cases hInvalid : hasInvalidCouncilMemberIds req.council_members
+              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid] at hInit
                 cases hInit
-              · simp [stateWithCase, hPolicy, hProposition, hEvidence, hEmpty, hLength,
-                  hDuplicate] at hInit
-                cases hInit
-                simp [councilVoteIntegrity, currentRoundVoteIdsDistinct,
-                  currentRoundVotesFromSeatedMembers, councilVoteRoundsBounded,
-                  currentRoundVoteIds, currentRoundVotes]
+              · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate] at hInit
+                  cases hInit
+                · simp [stateWithCase, hPolicy, hProposition, hEvidence, hEmpty, hLength,
+                    hInvalid, hDuplicate] at hInit
+                  cases hInit
+                  simp [councilVoteIntegrity, currentRoundVoteIdsDistinct,
+                    currentRoundVotesFromSeatedMembers, councilVoteRoundsBounded,
+                    currentRoundVoteIds, currentRoundVotes]
 
 /--
 `continueDeliberation` preserves deliberation-record integrity.
@@ -1094,13 +1102,17 @@ theorem initializeCase_establishes_nonempty_council
           · by_cases hLength : req.council_members.length != req.state.policy.council_size
             · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength] at hInit
               cases hInit
-            · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate] at hInit
+            · by_cases hInvalid : hasInvalidCouncilMemberIds req.council_members
+              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid] at hInit
                 cases hInit
-              · simp [stateWithCase, hPolicy, hProposition, hEvidence, hEmpty, hLength,
-                  hDuplicate] at hInit
-                cases hInit
-                simpa [List.isEmpty_iff] using hEmpty
+              · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate] at hInit
+                  cases hInit
+                · simp [stateWithCase, hPolicy, hProposition, hEvidence, hEmpty, hLength,
+                    hInvalid, hDuplicate] at hInit
+                  cases hInit
+                  simpa [List.isEmpty_iff] using hEmpty
 
 theorem step_preserves_nonempty_council
     (s t : ArbitrationState)

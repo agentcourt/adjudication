@@ -434,13 +434,17 @@ theorem initializeCase_status_active
           · by_cases hLength : req.council_members.length != req.state.policy.council_size
             · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength] at hInit
               cases hInit
-            · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate] at hInit
+            · by_cases hInvalid : hasInvalidCouncilMemberIds req.council_members
+              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid] at hInit
                 cases hInit
-              · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate,
-                  stateWithCase] at hInit
-                cases hInit
-                rfl
+              · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate] at hInit
+                  cases hInit
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                    hDuplicate, stateWithCase] at hInit
+                  cases hInit
+                  rfl
 
 theorem initializeCase_establishes_max_deliberation_rounds_positive
     (req : InitializeCaseRequest)
@@ -2249,13 +2253,17 @@ theorem initializeCase_remainingStepBudget
             · by_cases hLength : req.council_members.length != req.state.policy.council_size
               · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength] at hInit
                 cases hInit
-              · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
-                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate] at hInit
+              · by_cases hInvalid : hasInvalidCouncilMemberIds req.council_members
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid] at hInit
                   cases hInit
-                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate,
-                    stateWithCase] at hInit
-                  cases hInit
-                  rfl
+                · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
+                  · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                      hDuplicate] at hInit
+                    cases hInit
+                  · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                      hDuplicate, stateWithCase] at hInit
+                    cases hInit
+                    rfl
   have hSubmittedEvidenceEmpty : s.case.submitted_evidence = [] := by
     unfold initializeCase at hInit
     cases hPolicy : validatePolicy req.state.policy with
@@ -2276,13 +2284,17 @@ theorem initializeCase_remainingStepBudget
             · by_cases hLength : req.council_members.length != req.state.policy.council_size
               · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength] at hInit
                 cases hInit
-              · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
-                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate] at hInit
+              · by_cases hInvalid : hasInvalidCouncilMemberIds req.council_members
+                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid] at hInit
                   cases hInit
-                · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hDuplicate,
-                    stateWithCase] at hInit
-                  cases hInit
-                  rfl
+                · by_cases hDuplicate : hasDuplicateCouncilMemberIds req.council_members
+                  · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                      hDuplicate] at hInit
+                    cases hInit
+                  · simp [hPolicy, hProposition, hEvidence, hEmpty, hLength, hInvalid,
+                      hDuplicate, stateWithCase] at hInit
+                    cases hInit
+                    rfl
   rw [remainingStepBudget_of_phase_ne_closed s (by simp [hPhase]) (by
     have hStatus := initializeCase_status_active req s hInit
     simp [hStatus])]
