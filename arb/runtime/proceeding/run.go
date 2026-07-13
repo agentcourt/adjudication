@@ -68,7 +68,12 @@ func runConfigured(ctx context.Context, cfg Config, complaint spec.Complaint) (r
 		return Result{}, err
 	}
 	initialState := initialState(cfg.Policy, cfg.CaseID)
-	initResp, err := cfg.Engine.InitializeCase(initialState, complaint.Proposition, councilSeatMaps(council))
+	councilMembers := councilSeatMaps(council)
+	certificateInit, err := newReplayInitializeRequest(initialState, complaint.Proposition, councilMembers)
+	if err != nil {
+		return Result{}, err
+	}
+	initResp, err := cfg.Engine.InitializeCase(initialState, complaint.Proposition, councilMembers)
 	if err != nil {
 		return Result{}, err
 	}
@@ -79,6 +84,7 @@ func runConfigured(ctx context.Context, cfg Config, complaint spec.Complaint) (r
 		cfg:               cfg,
 		complaint:         complaint,
 		state:             mapAny(initResp["state"]),
+		certificateInit:   certificateInit,
 		caseFiles:         caseFiles,
 		submittedEvidence: []SubmittedEvidenceMeta{},
 		evidenceByID:      map[string]EvidenceMeta{},

@@ -63,6 +63,9 @@ func writeEvidence(cfg Config, result Result, rc *runContext) error {
 	if err := writeJSONFile(filepath.Join(cfg.OutputDir, "state.json"), result.FinalState); err != nil {
 		return err
 	}
+	if err := writeReplayCertificate(cfg, result, rc); err != nil {
+		return err
+	}
 	if err := writeJSONFile(filepath.Join(cfg.OutputDir, "council.json"), result.Council); err != nil {
 		return err
 	}

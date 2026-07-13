@@ -644,6 +644,9 @@ func TestListedArtifactNameRequiresExactName(t *testing.T) {
 	if !listedArtifactName("digest.md") {
 		t.Fatalf("digest.md should be listed")
 	}
+	if !listedArtifactName("certificate.json") {
+		t.Fatalf("certificate.json should be listed")
+	}
 	if !listedArtifactName("service-logs/aar.stderr") {
 		t.Fatalf("service-logs/aar.stderr should be listed")
 	}

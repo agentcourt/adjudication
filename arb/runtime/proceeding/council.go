@@ -127,7 +127,7 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client coun
 			})
 			continue
 		}
-		stepResp, err := rc.cfg.Engine.Step(rc.state, "submit_council_vote", "council", payload)
+		stepResp, err := rc.stepForCertificate("submit_council_vote", "council", payload)
 		if err != nil {
 			return err
 		}

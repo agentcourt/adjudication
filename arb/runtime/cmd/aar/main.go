@@ -45,6 +45,8 @@ func dispatch(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 		return runComplain(args[1:], stdout, stderr)
 	case "validate":
 		return runValidate(args[1:], stdout, stderr)
+	case "verify-certificate":
+		return runVerifyCertificate(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		if len(args) == 1 {
 			printRootUsage(stdout)
@@ -69,6 +71,8 @@ func dispatch(ctx context.Context, args []string, stdout io.Writer, stderr io.Wr
 			return runComplain([]string{"-h"}, stdout, stderr)
 		case "validate":
 			return runValidate([]string{"-h"}, stdout, stderr)
+		case "verify-certificate":
+			return runVerifyCertificate([]string{"-h"}, stdout, stderr)
 		default:
 			printRootUsage(stderr)
 			return fmt.Errorf("unknown help topic %q", args[1])
@@ -92,6 +96,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "  service    Run the multi-case AAR HTTP service")
 	fmt.Fprintln(w, "  complain   Draft complaint.md from a situation markdown file")
 	fmt.Fprintln(w, "  validate   Validate a complaint file")
+	fmt.Fprintln(w, "  verify-certificate  Verify certificate.json against state.json")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Use 'aar help <subcommand>' for subcommand flags.")
 }

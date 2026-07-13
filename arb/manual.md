@@ -29,6 +29,7 @@ A case process owns the arbitration.  It owns the current phase, turn order, dea
 | Drive lawyers or council members by direct HTTP instead of local agents. | `aar case`, or `aar service` with `POST /api/v1/cases`. |
 | Give an MCP client access to an existing case or service role API. | `aar mcp --caseapi-base URL`. |
 | Normalize or check a complaint file. | `aar complain` and `aar validate`. |
+| Replay-check a completed packet against its final state. | `aar verify-certificate --dir DIR`. |
 
 ## Core Concepts
 
@@ -44,7 +45,7 @@ The runtime distinguishes record evidence from work notes.  Evidence is part of 
 
 Use AAR when the proceeding should decide whether one proposition has been demonstrated under an evidence standard.  Keep the proposition narrow enough that lawyers can search for evidence, test provenance, and argue the record within the configured filing limits.  Use AARD when the desired output is a numeric answer or supported degree; AAR reduces the merits question to `demonstrated` or `not_demonstrated`.
 
-Treat the output directory as the case record for one run.  Preserve `run.json`, `state.json`, `transcript.md`, `digest.md`, `events.ndjson`, `work-notes.ndjson`, `evidence-manifest.json`, `evidence-store/`, and `council-turns/` together.  Use `events.ndjson` to reconstruct process sequence, `transcript.md` to read the record, `digest.md` to check the outcome, and `work-notes.ndjson` to review lawyer planning that stayed outside the evidentiary record.
+Treat the output directory as the case record for one run.  Preserve `run.json`, `state.json`, `certificate.json`, `transcript.md`, `digest.md`, `events.ndjson`, `work-notes.ndjson`, `evidence-manifest.json`, `evidence-store/`, and `council-turns/` together.  Use `events.ndjson` to reconstruct process sequence, `transcript.md` to read the record, `digest.md` to check the outcome, `certificate.json` to replay-check the accepted state transitions, and `work-notes.ndjson` to review lawyer planning that stayed outside the evidentiary record.
 
 ## Repository Layout
 
@@ -152,6 +153,7 @@ Use `--file` to provide explicit initial evidence.  The flag may be repeated.  S
 | `aar run` | Run one complete local arbitration with OpenClaw lawyers and Pi council agents. |
 | `aar council-replay` | Re-run one council member against a saved AAR output packet. |
 | `aar juror-replay` | Run one fresh juror deliberation from a saved AAR output packet with an explicit model config and persona. |
+| `aar verify-certificate` | Replay-check `certificate.json` against `state.json` using the Lean engine. |
 | `aar service` | Run the long-lived HTTP service, including Clerk APIs for full `aar run` cases. |
 
 Use command help to see current flags:
@@ -160,6 +162,7 @@ Use command help to see current flags:
 .bin/aar help run
 .bin/aar help council-replay
 .bin/aar help juror-replay
+.bin/aar help verify-certificate
 .bin/aar help service
 ```
 
@@ -461,6 +464,27 @@ go run ./arb/runtime/cmd/aar council-replay \
 ```
 
 The replay output directory contains `input.json`, `prompt.txt`, `result.json`, `tool-calls.ndjson`, one Pi pid file, and logs under `logs/`.  `result.json` records the replay status, vote, rationale, model, source output directory, tool calls, and the replay input.  `tool-calls.ndjson` records each Council API tool call in order, which is the fastest way to see whether the member read evidence bytes before voting.
+
+## `aar verify-certificate`
+
+`aar verify-certificate` checks a completed packet's replay certificate.  The command reads `certificate.json`, replays its initialization request and accepted public actions through the configured Lean engine, and compares the replayed final state to the certificate's claimed final-state hash.  It also reads `state.json` from the same packet and requires that file to match the certificate hash.
+
+Basic command:
+
+```bash
+.bin/aar verify-certificate --dir out/ex01-direct
+```
+
+Important flags:
+
+| Flag | Meaning |
+| --- | --- |
+| `--dir` | Output packet directory containing `certificate.json` and `state.json`. |
+| `--certificate` | Certificate path override. |
+| `--state` | Final state path override. |
+| `--engine` | Lean engine binary. |
+
+Successful verification prints a JSON object with `status: "ok"`, the case id, the run id when present, the accepted action count, and the final-state hash.  A certificate hash mismatch, packet-state mismatch, rejected replay action, or replayed final-state mismatch exits with an error.  The command does not inspect lawyer work notes, logs, or evidence bytes; it checks the engine-visible state transition sequence recorded in the certificate.
 
 ## `aar juror-replay`
 
@@ -836,7 +860,7 @@ curl -sS -X POST http://127.0.0.1:19770/clerk/v1/cases/arb-custom-20260603123000
 
 Kill sends interrupt, waits 10 seconds, and then kills the child process if it has not exited.  After a service restart, Clerk reads disk records from the output root and reconciles active-looking records before returning them.  If terminal `run.json` exists, Clerk marks the record completed or failed from that artifact; otherwise it marks the record failed with `service restarted and child process is not attached`.
 
-Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, `evidence-manifest.json`, `clerk.stdout`, and `clerk.stderr`.  For attested Clerk records, the same endpoint also lists downloaded top-level attestation files when present: `run.env`, `progress.log`, `launcher.log`, `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, `attestation.txt`, `verification.log`, `case.tar.gz`, `case-packet.json`, `aar-output.tar.gz`, and `aar-partial.tar.gz`.  Artifact routes do not serve arbitrary output files, process logs outside the listed set, generated remote-lawyer skill files, or staged Codex auth directories.  An unlisted artifact name returns `unknown_artifact`; a listed artifact whose file is absent returns `artifact_missing`.
+Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `certificate.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, `evidence-manifest.json`, `clerk.stdout`, and `clerk.stderr`.  For attested Clerk records, the same endpoint also lists downloaded top-level attestation files when present: `run.env`, `progress.log`, `launcher.log`, `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, `attestation.txt`, `verification.log`, `case.tar.gz`, `case-packet.json`, `aar-output.tar.gz`, and `aar-partial.tar.gz`.  Artifact routes do not serve arbitrary output files, process logs outside the listed set, generated remote-lawyer skill files, or staged Codex auth directories.  An unlisted artifact name returns `unknown_artifact`; a listed artifact whose file is absent returns `artifact_missing`.
 
 The result route reads terminal `run.json`; the evidence route reads `evidence-manifest.json` and `evidence-store/` from the effective output directory.  Local Clerk runs use the run output directory directly, and the case process writes `evidence-manifest.json` at evidence-registry initialization and after each accepted submitted-evidence item.  An active local run that has not yet written the manifest returns HTTP `409` with error code `evidence_manifest_pending`; a terminal packet without a manifest returns HTTP `404` with error code `manifest_missing`.  Attested Clerk runs use the extracted `aar-output/` directory after verification, or the extracted `aar-partial/` directory for inspection after a failed remote run.
 
@@ -948,7 +972,7 @@ Cancel:
 curl -sS -X POST http://127.0.0.1:19770/api/v1/cases/api-case-1/cancel
 ```
 
-Artifact routes serve only listed artifact names from a case output directory, including `service-logs/aar.stdout` and `service-logs/aar.stderr` for service child process logs.  `GET /api/v1/cases/{case_id}/artifacts` lists known artifacts, and `GET /api/v1/cases/{case_id}/artifacts/{name}` serves one exact listed artifact name.  An unlisted artifact name returns `unknown_artifact`; a listed artifact whose file is absent returns `artifact_missing`.  `GET /api/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted evidence by evidence id when the manifest contains a readable file name.
+Artifact routes serve only listed artifact names from a case output directory, including `certificate.json`, `service-logs/aar.stdout`, and `service-logs/aar.stderr` for service child process logs.  `GET /api/v1/cases/{case_id}/artifacts` lists known artifacts, and `GET /api/v1/cases/{case_id}/artifacts/{name}` serves one exact listed artifact name.  An unlisted artifact name returns `unknown_artifact`; a listed artifact whose file is absent returns `artifact_missing`.  `GET /api/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted evidence by evidence id when the manifest contains a readable file name.
 
 ## Output Packet
 
@@ -961,6 +985,7 @@ Every completed or failed case writes a run packet under its output directory.  
 | `runtime.json` | Effective runtime limits. |
 | `run.json` | Final structured result. |
 | `state.json` | Final case state. |
+| `certificate.json` | Initialization request, accepted public actions, claimed final state, and final-state hash for replay checking. |
 | `council.json` | Council roster and related council metadata. |
 | `digest.md` | Human-readable summary. |
 | `transcript.md` | Human-readable transcript with filings and council votes. |
@@ -978,11 +1003,12 @@ Useful inspection commands:
 ```bash
 jq '{status, phase, resolution, final_reason, failure}' "$out/run.json"
 jq '.final_state.case.council_votes' "$out/run.json"
+jq '{case_id, run_id, actions:(.actions|length), claimed_final_state_sha256}' "$out/certificate.json"
 jq -r '[.timestamp,.role,.phase,.event_type] | @tsv' "$out/events.ndjson"
 jq -r '[.timestamp,.role,.phase,(.notes|length)] | @tsv' "$out/work-notes.ndjson"
 ```
 
-Use `transcript.md` when reading the full procedural record.  Use `digest.md` when checking the final outcome and vote tally.  Use `evidence-manifest.json` and `evidence-store/` when exact source bytes, hashes, or evidence custody matter.
+Use `transcript.md` when reading the full procedural record.  Use `digest.md` when checking the final outcome and vote tally.  Use `certificate.json` with `aar verify-certificate` when checking that the recorded accepted actions replay to the packet's final state.  Use `evidence-manifest.json` and `evidence-store/` when exact source bytes, hashes, or evidence custody matter.
 
 ## Policy And Limits
 

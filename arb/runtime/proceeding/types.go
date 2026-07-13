@@ -224,21 +224,23 @@ type WorkNote struct {
 }
 
 type runContext struct {
-	cfg               Config
-	complaint         spec.Complaint
-	state             map[string]any
-	caseFiles         []CaseFile
-	fileByID          map[string]CaseFile
-	submittedEvidence []SubmittedEvidenceMeta
-	evidence          []EvidenceMeta
-	evidenceByID      map[string]EvidenceMeta
-	evidenceStoreDir  string
-	uploadSessions    map[string]*EvidenceUploadSession
-	council           []CouncilSeat
-	attorneys         map[string]AttorneyRunInfo
-	lawyerAPI         *lawyerAPIServer
-	councilAPI        *councilAPIServer
-	workProductDirs   map[string]string
-	events            []Event
-	turn              int
+	cfg                Config
+	complaint          spec.Complaint
+	state              map[string]any
+	certificateInit    ReplayInitializeRequest
+	certificateActions []ReplayAction
+	caseFiles          []CaseFile
+	fileByID           map[string]CaseFile
+	submittedEvidence  []SubmittedEvidenceMeta
+	evidence           []EvidenceMeta
+	evidenceByID       map[string]EvidenceMeta
+	evidenceStoreDir   string
+	uploadSessions     map[string]*EvidenceUploadSession
+	council            []CouncilSeat
+	attorneys          map[string]AttorneyRunInfo
+	lawyerAPI          *lawyerAPIServer
+	councilAPI         *councilAPIServer
+	workProductDirs    map[string]string
+	events             []Event
+	turn               int
 }
