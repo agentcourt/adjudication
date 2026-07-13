@@ -1,3 +1,6 @@
+ClosedCertificateFacts.demonstrated_sound	Proofs/CertificateFacts.lean	medium	Extracts demonstrated-outcome soundness from the closed certificate fact package.
+ClosedCertificateFacts.no_majority_sound	Proofs/CertificateFacts.lean	medium	Extracts no-majority soundness from the closed certificate fact package.
+ClosedCertificateFacts.not_demonstrated_sound	Proofs/CertificateFacts.lean	medium	Extracts not-demonstrated outcome soundness from the closed certificate fact package.
 addArgument_decreases_remainingMeritsSteps	Proofs/BoundedTermination.lean
 addArgument_preserves_phaseShape	Proofs/GlobalInvariants.lean
 addClosing_decreases_remainingMeritsSteps	Proofs/BoundedTermination.lean
@@ -25,6 +28,16 @@ appendSupplementalMaterials_preserves_recordProvenance	Proofs/RecordProvenance.l
 append_preserves_membership_property	Proofs/RecordProvenance.lean
 bilateralComplete_implies_bilateral_parity	Proofs/ProcedureShape.lean
 bilateralStarted_implies_bilateral_parity	Proofs/ProcedureShape.lean
+checkReplayCertificate_closed_demonstrated_sound	Proofs/CertificateSoundness.lean	high	Shows that an accepted replay certificate for a closed demonstrated state satisfies the demonstrated vote threshold.
+checkReplayCertificate_closed_no_majority_sound	Proofs/CertificateSoundness.lean	high	Shows that an accepted replay certificate for a closed no-majority state satisfies the executable no-majority conditions.
+checkReplayCertificate_closed_not_demonstrated_sound	Proofs/CertificateSoundness.lean	high	Shows that an accepted replay certificate for a closed not-demonstrated state satisfies the not-demonstrated vote threshold.
+checkReplayCertificate_ok_iff	Proofs/Replay.lean	high	Shows that certificate acceptance is exact initialized replay to the claimed state.
+checkReplayCertificate_ok_length_le_initializedBudget	Proofs/Replay.lean	medium	Bounds the accepted certificate action list by the initialized procedural budget.
+checkReplayCertificate_ok_reachable	Proofs/Replay.lean	high	Shows that an accepted replay certificate claims a reachable state.
+checkReplayCertificate_ok_terminal_status_accounted	Proofs/Replay.lean	high	Accounts for accepted replay certificates whose claimed state is closed or failed.
+checkReplayCertificate_status_closed_facts	Proofs/CertificateFacts.lean	high	Packages exact replay, reachability, terminal accounting, merits completion, filing counts, outcome soundness, and decision-summary replay for accepted closed certificates.
+checkReplayCertificate_status_failed_facts	Proofs/CertificateFacts.lean	high	Packages exact replay, reachability, length bound, failure record, and decision-summary replay for accepted failed certificates.
+checkReplayCertificate_terminal_facts	Proofs/CertificateFacts.lean	high	Packages accepted terminal certificates as either closed facts or failed facts.
 closeDeliberation_preserves_phaseShape	Proofs/GlobalInvariants.lean
 concat_length_ge_two_of_isEmpty_false	Proofs/BoundedTermination.lean
 continueDeliberation_closed_demonstrated_sound	Proofs/OutcomeSoundness.lean	high	Shows that a closed `demonstrated` result from deliberation meets the configured vote threshold.
@@ -142,6 +155,7 @@ reportCount_eq_length_of_all_role	Proofs/AggregateLimits.lean
 reportCount_nil	Proofs/Reachability.lean
 reportCount_zero_of_all_other_role	Proofs/AggregateLimits.lean
 requireCountWithinLimit_ok_implies_le	Proofs/StepPreservation.lean
+sameRoundDeliberationProgress_blocks_substantive_currentResolution	Proofs/ProgressViability.lean	medium	Shows that same-round deliberation progress cannot create a current substantive resolution after both substantive outcomes are impossible.
 seatedCouncilMemberCount_eq_length_of_all_seated	Proofs/BoundedTermination.lean
 seatedCouncilMemberCount_le_memberCount	Proofs/BoundedTermination.lean
 seatedCouncilMemberCount_removeUnvotedCouncilMember	Proofs/BoundedTermination.lean
@@ -180,6 +194,8 @@ step_deliver_closing_statement_preserves_phaseShape	Proofs/StepPreservation.lean
 step_deliver_closing_statement_preserves_recordProvenance	Proofs/RecordProvenance.lean
 step_deliver_closing_statement_result	Proofs/StepPreservation.lean
 step_extends_materials	Proofs/RecordProvenance.lean	medium	Every successful public step leaves prior admitted materials intact and may append new ones.
+step_fail_opportunity_preserves_council_votes	Proofs/ProgressViability.lean	medium	Shows that a successful fail-opportunity step preserves the stored council vote list.
+step_fail_opportunity_same_round_resilience	Proofs/ProgressViability.lean	high	Packages same-round failure progress, council-vote preservation, no-substantive-outcome preservation, and the blocked substantive current resolution.
 step_introduces_newCouncilVotes_only_from_seated	Proofs/CouncilStatus.lean	high	Any newly introduced council vote comes from a member seated in the source state.
 step_pass_phase_opportunity_decreases_remainingStepBudget	Proofs/BoundedTermination.lean
 step_pass_phase_opportunity_extends_materials	Proofs/RecordProvenance.lean
