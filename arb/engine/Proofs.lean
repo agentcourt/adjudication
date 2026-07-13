@@ -33,3 +33,4 @@ import Proofs.DueProcess
 import Proofs.DecisionSummary
 import Proofs.CertificateFacts
 import Proofs.DecisionRuleFacts
+import Proofs.DecisionRuleCharacterization

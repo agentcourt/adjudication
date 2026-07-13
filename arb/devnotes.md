@@ -200,6 +200,17 @@ Verification:
 - [x] `lake build Proofs.DecisionRuleFacts`
 - [x] `lake build Proofs`
 
+### Decision-rule characterization
+
+Reference: `engine/Proofs/DecisionRuleCharacterization.lean`, `engine/Proofs.lean`
+
+ARB now has a count-level characterization of the executable threshold rule.  `DecisionCounts` records the quota, seated count, and two substantive vote counts, with admissibility requiring that substantive counts fit within seated membership and that seated membership is below twice the quota.  Any count rule with normalized outputs, vote-flip neutrality, demonstrated-threshold decisiveness, and no-result behavior below both thresholds agrees with the engine rule on every admissible input.  The engine count rule satisfies the same specification, and deliberation summaries can use the theorem when their count bound and strict-majority bound are available.
+
+Verification:
+
+- [x] `lake build Proofs.DecisionRuleCharacterization`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation
