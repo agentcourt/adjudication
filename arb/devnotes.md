@@ -49,6 +49,17 @@ Verification:
 - [x] `lake build Proofs.OpportunityAgreement`
 - [x] `lake build Proofs`
 
+### Opportunity actor-role agreement
+
+Reference: `engine/Proofs/OpportunityAgreement.lean`, `engine/Main.lean`
+
+ARB now proves that every accepted actor-facing public action from a reachable active state uses the actor role advertised by the current `nextOpportunity`.  The proof covers merits filings, submitted evidence, optional phase passes, and council votes.  It extracts the role accepted by each `stepCore` branch and matches it against the role returned by the corresponding `nextOpportunityForPhase` branch.
+
+Verification:
+
+- [x] `lake build Proofs.OpportunityAgreement`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation
