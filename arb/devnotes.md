@@ -167,6 +167,17 @@ Verification:
 - [x] `lake build Proofs.CertificateSoundness`
 - [x] `lake build Proofs`
 
+### Decision summary projection
+
+Reference: `engine/Proofs/DecisionSummary.lean`, `engine/Proofs.lean`
+
+ARB now has a proof-side `DecisionSummary` projection for decision-relevant fields: terminal labels, resolution, policy quota, round cap, current-round vote counts, seating, and deliberation round.  The replay certificate checker remains exact: it still accepts only when replay reproduces the claimed final state.  The new certificate theorem proves that an accepted certificate's decision summary is produced by exact initialized replay, and the permutation theorem proves that matching structural fields and permuted current-round votes yield the same decision summary and the same summary-side closed-resolution value.
+
+Verification:
+
+- [x] `lake build Proofs.DecisionSummary`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation
