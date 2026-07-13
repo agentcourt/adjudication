@@ -60,6 +60,17 @@ Verification:
 - [x] `lake build Proofs.OpportunityAgreement`
 - [x] `lake build Proofs`
 
+### Replay certificate foundation
+
+Reference: `engine/Proofs/Replay.lean`, `engine/Proofs.lean`, `engine/Proofs/Reachability.lean`, `engine/Proofs/BoundedTermination.lean`
+
+ARB now has a proof-local replay function over lists of public actions.  The replay theorems connect successful replay to `StepReachableFrom`, `Reachable`, and indexed `StepPath`, and they prove that any existing `StepReachableFrom` or `StepPath` has a replaying action list.  This gives the certificate work a small foundation without changing the runtime API or the engine transition function.
+
+Verification:
+
+- [x] `lake build Proofs.Replay`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation
