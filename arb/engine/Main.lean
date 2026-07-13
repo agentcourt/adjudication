@@ -293,7 +293,7 @@ def nextOpportunityForPhase (s : ArbitrationState) : NextOpportunityOk :=
             phase := "surrebuttals"
             may_pass := true
             objective := "defendant surrebuttal"
-            allowed_tools := ["submit_surrebuttal", "pass_phase_opportunity"]
+            allowed_tools := ["submit_evidence", "submit_surrebuttal", "pass_phase_opportunity"]
           } }
       else
         { terminal := true, reason := "no_surrebuttal_opportunity", state_version := s.state_version }

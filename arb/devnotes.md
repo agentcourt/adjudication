@@ -26,6 +26,18 @@ Verification:
 - [x] `lake build Proofs.MaximalRuns`
 - [x] `lake build Proofs`
 
+### Surrebuttal opportunity tool list
+
+Reference: `engine/Main.lean`, `engine/Proofs/ProcedureShape.lean`, `engine/Proofs/NoStuck.lean`, `manual.md`
+
+The opportunity API now lists `submit_evidence` during the defendant's surrebuttal opportunity.  The engine already accepted submitted evidence during arguments, rebuttals, and surrebuttals, and the manual already described that behavior.  The opportunity spec now matches the accepted actor-facing action set for that phase.
+
+Verification:
+
+- [x] `lake build Proofs.ProcedureShape`
+- [x] `lake build Proofs.NoStuck`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation

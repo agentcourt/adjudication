@@ -1624,7 +1624,7 @@ theorem reachable_active_has_nextOpportunity
               phase := "surrebuttals"
               may_pass := true
               objective := "defendant surrebuttal"
-              allowed_tools := ["submit_surrebuttal", "pass_phase_opportunity"]
+              allowed_tools := ["submit_evidence", "submit_surrebuttal", "pass_phase_opportunity"]
             }, ?_⟩
             simp [nextOpportunity, hStatus, nextOpportunityForPhase, hSurrebuttals, hEmpty]
         · by_cases hClosings : s.case.phase = "closings"
