@@ -38,4 +38,65 @@ theorem currentResolution_eq_of_currentRoundVotes_perm
     voteCountFor_perm "not_demonstrated" hVotes
   simp [currentResolution?, hDemonstrated, hNotDemonstrated]
 
+theorem deliberationSummaryForCase_eq_of_currentRoundVotes_perm
+    (c d : ArbitrationCase)
+    (requiredVotes maxRounds : Nat)
+    (hVotes : List.Perm (currentRoundVotes c) (currentRoundVotes d))
+    (hSeated : seatedCouncilMemberCount c = seatedCouncilMemberCount d)
+    (hRound : c.deliberation_round = d.deliberation_round) :
+    deliberationSummaryForCase c requiredVotes maxRounds =
+      deliberationSummaryForCase d requiredVotes maxRounds := by
+  apply DeliberationSummary.ext
+  · rfl
+  · simpa [deliberationSummaryForCase] using hSeated
+  · simpa [deliberationSummaryForCase] using hVotes.length_eq
+  · simpa [deliberationSummaryForCase] using
+      voteCountFor_perm "demonstrated" hVotes
+  · simpa [deliberationSummaryForCase] using
+      voteCountFor_perm "not_demonstrated" hVotes
+  · simpa [deliberationSummaryForCase] using hRound
+  · rfl
+
+theorem deliberationSummaryForCase_closedResolution_eq_of_currentRoundVotes_perm
+    (c d : ArbitrationCase)
+    (requiredVotes maxRounds : Nat)
+    (hVotes : List.Perm (currentRoundVotes c) (currentRoundVotes d))
+    (hSeated : seatedCouncilMemberCount c = seatedCouncilMemberCount d)
+    (hRound : c.deliberation_round = d.deliberation_round) :
+    (deliberationSummaryForCase c requiredVotes maxRounds).closedResolution? =
+      (deliberationSummaryForCase d requiredVotes maxRounds).closedResolution? := by
+  rw [deliberationSummaryForCase_eq_of_currentRoundVotes_perm
+    c d requiredVotes maxRounds hVotes hSeated hRound]
+
+theorem continueDeliberation_closes_same_resolution_of_currentRoundVotes_perm
+    (s : ArbitrationState)
+    (c d : ArbitrationCase)
+    (resolution : String)
+    (hVotes : List.Perm (currentRoundVotes c) (currentRoundVotes d))
+    (hSeated : seatedCouncilMemberCount c = seatedCouncilMemberCount d)
+    (hRound : c.deliberation_round = d.deliberation_round)
+    (hClosed :
+      (deliberationSummaryForCase
+        c
+        s.policy.required_votes_for_decision
+        s.policy.max_deliberation_rounds).closedResolution? = some resolution) :
+    continueDeliberation s d =
+      .ok (stateWithCase s { d with status := "closed", phase := "closed", resolution := resolution }) := by
+  have hClosedD :
+      (deliberationSummaryForCase
+        d
+        s.policy.required_votes_for_decision
+        s.policy.max_deliberation_rounds).closedResolution? = some resolution := by
+    have hEq :=
+      deliberationSummaryForCase_closedResolution_eq_of_currentRoundVotes_perm
+        c
+        d
+        s.policy.required_votes_for_decision
+        s.policy.max_deliberation_rounds
+        hVotes
+        hSeated
+        hRound
+    simpa [hEq] using hClosed
+  exact continueDeliberation_closed_of_summary_closedResolution s d resolution hClosedD
+
 end ArbProofs

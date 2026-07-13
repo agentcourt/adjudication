@@ -121,6 +121,8 @@ Reference: `engine/Proofs/VoteOrder.lean`, `engine/Proofs.lean`
 
 ARB now proves the pure counting foundation for vote-order invariance.  `voteCountFor` is invariant under `List.Perm`, and `currentResolution?` is unchanged when two cases have permuted current-round vote lists.  This isolates the aggregation fact from the engine transition path: the current resolution depends on vote counts, not list order.
 
+The proof now lifts that result to `deliberationSummaryForCase` when the seated count and deliberation round match.  Those hypotheses account for the summary fields that do not come from the current-round vote list.  The closure wrapper proves that if the source summary closes with a resolution, `continueDeliberation` closes the permuted destination case with the same resolution.
+
 Verification:
 
 - [x] `lake build Proofs.VoteOrder`
