@@ -40,7 +40,7 @@ The first Lean target should be exact replay with reachability and terminal acco
 | 4 | ADC | Prove exact replay, reachability, terminal accounting, verdict soundness, and failed-certificate accounting. |
 | 5 | AARD | Done: add runtime certificate writing and an explicit `aard verify-certificate` command using `state.json`. |
 | 6 | AARD | Done: expose the certificate artifact through service artifact lists and fetch routes. |
-| 7 | AARD | Prove exact replay, reachability, terminal accounting, and answer-map preservation. |
+| 7 | AARD | Done: prove exact replay, reachability, terminal accounting, and replayed answer-pair exposure. |
 
 ## Non-Goals
 

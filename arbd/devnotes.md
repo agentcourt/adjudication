@@ -14,6 +14,8 @@ Manual HTTP testing of a real AARD case found that the council prompt path still
 
 The live test ran `aard case` with the real `aardengine`, `councilapi`, one council member, and `arbd/examples/ex1`.  Manual Lawyer API calls filed both openings, both arguments, a pass sequence, and both closings; a manual Council API call submitted answer `68`.  The run wrote `/tmp/aard-cert-live-20260713d`, and `aard verify-certificate --dir /tmp/aard-cert-live-20260713d` accepted 9 recorded actions with final-state hash `27c942a1039b9b2b6c2b0eb93fb24f44adef0b1eb64f1f684ce3148622a026b6`.
 
+The AARD proof layer now has certificate modules under `engine/Proofs/`.  `Reachability.lean` defines valid engine histories, `Replay.lean` defines initialized replay and accepted-certificate checking, `CertificateFacts.lean` packages closed and failed terminal facts, and `CertificateExamples.lean` checks a complete sample certificate.  The closed facts expose the answer pairs from the replayed final state, matching the runtime's answer report boundary while leaving aggregate-degree rules for later AARD design work.
+
 ## 2026-07-10
 
 ### Service process record reconciliation
