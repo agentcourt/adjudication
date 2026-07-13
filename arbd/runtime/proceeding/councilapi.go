@@ -571,7 +571,7 @@ func (api *councilAPIServer) submitCouncilAnswerLocked(turn *councilTurn, args m
 	if err != nil {
 		return nil, err
 	}
-	stepResp, err := api.rc.cfg.Engine.Step(api.rc.state, "submit_council_answer", "council", normalizedPayload)
+	stepResp, err := api.rc.stepForCertificate("submit_council_answer", "council", normalizedPayload)
 	if err != nil {
 		return nil, err
 	}

@@ -77,7 +77,7 @@ Start the Clerk service when cases should be created and managed through HTTP:
 
 ## Output
 
-Run output contains `run.json`, `state.json`, `transcript.md`, `digest.md`, `events.ndjson`, `work-notes.ndjson`, `evidence-manifest.json`, `evidence-store/`, process logs, and local-run metadata.  Attested runs add launcher logs, progress logs, manifests, attestation files, verification logs, and output archives described in the [AARD Docker Image Runbook](Dockerfile.md).  The manual lists output files for ordinary, service-managed, and attested runs.
+Run output contains `run.json`, `state.json`, `certificate.json`, `transcript.md`, `digest.md`, `events.ndjson`, `work-notes.ndjson`, `evidence-manifest.json`, `evidence-store/`, process logs, and local-run metadata.  Attested runs add launcher logs, progress logs, manifests, attestation files, verification logs, and output archives described in the [AARD Docker Image Runbook](Dockerfile.md).  The manual lists output files for ordinary, service-managed, and attested runs.
 
 ## License
 

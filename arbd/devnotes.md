@@ -1,5 +1,19 @@
 # Development Notes
 
+## 2026-07-13
+
+### Replay certificates
+
+Reference: `runtime/proceeding/certificate.go`, `runtime/cmd/aard/verify_certificate.go`, `runtime/service/service.go`, `manual.md`
+
+AARD now writes `certificate.json` beside `run.json` and `state.json` in terminal output directories.  The certificate records the initial state, degree question, council roster, accepted engine actions, claimed final state, and compact JSON final-state hash.  `aard verify-certificate` reads `certificate.json` and `state.json`, replays the initialization request and accepted actions through the Lean engine, and reports the accepted action count plus final-state hash when replay succeeds.
+
+The service artifact list now includes `state.json` and `certificate.json` for direct case and Clerk artifact routes.  The service still treats verification as an operator action through `aard verify-certificate`; case creation, listing, result polling, and artifact reads do not run replay verification.  Focused tests cover replay acceptance, packet-state mismatch, rejected replay actions, accepted-step recording, and artifact allowlist behavior.
+
+Manual HTTP testing of a real AARD case found that the council prompt path still used the package-level default prompt directory when the process was started from the repository root.  The lawyer prompts already respected `--prompt-dir`, but the council prompt entered deliberation through `renderPromptFile` rather than the `Config` method.  `buildCouncilPrompt` now uses the configured prompt resolver, and a focused test covers a custom council prompt directory.
+
+The live test ran `aard case` with the real `aardengine`, `councilapi`, one council member, and `arbd/examples/ex1`.  Manual Lawyer API calls filed both openings, both arguments, a pass sequence, and both closings; a manual Council API call submitted answer `68`.  The run wrote `/tmp/aard-cert-live-20260713d`, and `aard verify-certificate --dir /tmp/aard-cert-live-20260713d` accepted 9 recorded actions with final-state hash `27c942a1039b9b2b6c2b0eb93fb24f44adef0b1eb64f1f684ce3148622a026b6`.
+
 ## 2026-07-10
 
 ### Service process record reconciliation

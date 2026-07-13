@@ -1631,6 +1631,40 @@ func TestBuildCouncilPromptIncludesPersonaAndRecord(t *testing.T) {
 	}
 }
 
+func TestBuildCouncilPromptUsesConfiguredPromptDir(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "council.md"), []byte("custom council prompt for {{MEMBER_ID}} on {{QUESTION}}\n{{RECORD}}\n"), 0o644); err != nil {
+		t.Fatalf("write council prompt: %v", err)
+	}
+	rc := &runContext{
+		cfg: Config{
+			PromptDir: dir,
+			Policy:    DefaultPolicy(),
+		},
+		complaint: spec.Complaint{Question: "Degree question?"},
+		state: map[string]any{
+			"case": map[string]any{
+				"deliberation_round": 1,
+				"openings":           []map[string]any{},
+				"arguments":          []map[string]any{},
+				"rebuttals":          []map[string]any{},
+				"surrebuttals":       []map[string]any{},
+				"closings":           []map[string]any{},
+				"offered_evidence":   []map[string]any{},
+				"technical_reports":  []map[string]any{},
+				"council_answers":    []map[string]any{},
+			},
+		},
+	}
+	prompt, err := rc.buildCouncilPrompt(CouncilSeat{MemberID: "C1"}, Opportunity{ID: "deliberation:1:C1", Role: "council", Phase: "deliberation"})
+	if err != nil {
+		t.Fatalf("buildCouncilPrompt returned error: %v", err)
+	}
+	if !strings.Contains(prompt, "custom council prompt for C1 on Degree question?") {
+		t.Fatalf("prompt did not use configured prompt dir:\n%s", prompt)
+	}
+}
+
 func TestIsFunctionArgumentParseError(t *testing.T) {
 	t.Parallel()
 

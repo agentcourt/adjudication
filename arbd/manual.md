@@ -29,6 +29,7 @@ A case process owns the arbitration.  It owns the current phase, turn order, dea
 | Give an MCP client access to an existing case or service role API. | `aard mcp --caseapi-base URL`. |
 | Normalize or check a complaint file. | `aard complain` and `aard validate`. |
 | Build a deterministic case packet for attested complaint input. | `aard case-packet --complaint FILE --packet case.tar.gz --manifest case-packet.json`. |
+| Replay-check a completed packet against its final state. | `aard verify-certificate --dir DIR`. |
 
 ## Core Concepts
 
@@ -44,7 +45,7 @@ The runtime distinguishes record evidence from work notes.  Evidence is part of 
 
 Use AARD when the proceeding should answer one question with one or more scores from 0 through 100.  Keep the question narrow enough that lawyers can identify evidence, attack missing provenance, and argue an answer range within the configured filing limits.  Use AAR instead when the desired output is a binary demonstrated or not-demonstrated decision under an evidence standard.
 
-Treat the output directory as the case record for one run.  Preserve `run.json`, `state.json`, `transcript.md`, `digest.md`, `events.ndjson`, `work-notes.ndjson`, `evidence-manifest.json`, and `evidence-store/` together.  Use `events.ndjson` to reconstruct process sequence, `transcript.md` to read the record, `digest.md` to check the answer set, and `work-notes.ndjson` to review lawyer planning that stayed outside the evidentiary record.
+Treat the output directory as the case record for one run.  Preserve `run.json`, `state.json`, `certificate.json`, `transcript.md`, `digest.md`, `events.ndjson`, `work-notes.ndjson`, `evidence-manifest.json`, and `evidence-store/` together.  Use `events.ndjson` to reconstruct process sequence, `transcript.md` to read the record, `digest.md` to check the answer set, `certificate.json` to replay-check accepted state transitions, and `work-notes.ndjson` to review lawyer planning that stayed outside the evidentiary record.
 
 ## Repository Layout
 
@@ -155,6 +156,7 @@ Use `--file` to provide explicit initial evidence.  The flag may be repeated.  S
 | `aard mcp` | Run an MCP server that forwards tools to a Case API or service API base. |
 | `aard run` | Run one complete local arbitration with OpenClaw lawyers and Pi council agents. |
 | `aard service` | Run the long-lived HTTP service, including Clerk APIs for full `aard run` cases. |
+| `aard verify-certificate` | Replay-check `certificate.json` against `state.json` using the Lean engine. |
 
 Use command help to see current flags:
 
@@ -162,6 +164,29 @@ Use command help to see current flags:
 .bin/aard help run
 .bin/aard help service
 ```
+
+## `aard verify-certificate`
+
+`aard verify-certificate` checks a completed packet's replay certificate.  The command reads `certificate.json`, replays the initialization request and accepted public actions through the configured Lean engine, and compares the replayed final state to the certificate's claimed final-state hash.  It also reads `state.json` from the same packet and requires that file to match the certificate hash.
+
+The certificate contains the engine-visible transition record.  `initialize_request` contains the exact initial state, degree question, and council roster sent to `initialize_case`.  `actions` contains the public actions the engine accepted, in order, with `action_type`, `actor_role`, and `payload`.  `claimed_final_state_sha256` is the SHA-256 hash of the compact JSON encoding of `claimed_final_state`.
+
+Basic command:
+
+```bash
+.bin/aard verify-certificate --dir out/ex1-direct
+```
+
+Important flags:
+
+| Flag | Meaning |
+| --- | --- |
+| `--dir` | Output packet directory containing `certificate.json` and `state.json`. |
+| `--certificate` | Certificate path override. |
+| `--state` | Final state path override. |
+| `--engine` | Lean engine binary. |
+
+Successful verification prints a JSON object with `status: "ok"`, the case id, the run id when present, the accepted action count, and the final-state hash.  A certificate hash mismatch, packet-state mismatch, rejected replay action, or replayed final-state mismatch exits with an error.  The command checks the engine-visible state transition sequence recorded in the certificate; it does not inspect lawyer work notes, logs, or evidence bytes.
 
 ## `aard case`
 
@@ -645,7 +670,7 @@ curl -sS -X POST http://127.0.0.1:19790/clerk/v1/cases/arbd-custom-2026060312300
 
 Kill sends interrupt, waits 10 seconds, and then kills the child process if it has not exited.  After a service restart, Clerk reads disk records from the output root and reconciles active-looking records before returning them.  If terminal `run.json` exists, Clerk marks the record completed or failed from that artifact; otherwise it marks the record failed with `service restarted and child process is not attached`.
 
-Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, `evidence-manifest.json`, `clerk.stdout`, and `clerk.stderr`.  For attested Clerk records, the same endpoint also lists downloaded top-level attestation files when present: `run.env`, `progress.log`, `launcher.log`, `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, `attestation.txt`, `verification.log`, `case.tar.gz`, `case-packet.json`, `aard-output.tar.gz`, and `aard-partial.tar.gz`.  Artifact routes do not serve arbitrary output files, process logs outside the listed set, generated remote-lawyer skill files, or staged Codex auth directories.  An unlisted artifact name returns `unknown_artifact`; a listed artifact whose file is absent returns `artifact_missing`.
+Artifact routes serve only the exact artifact names returned by the artifact list endpoint, such as `run.json`, `state.json`, `certificate.json`, `digest.md`, `transcript.md`, `work-notes.ndjson`, `events.ndjson`, `evidence-manifest.json`, `clerk.stdout`, and `clerk.stderr`.  For attested Clerk records, the same endpoint also lists downloaded top-level attestation files when present: `run.env`, `progress.log`, `launcher.log`, `run.log`, `manifest.json`, `manifest.sha384`, `attestation.b64`, `attestation.txt`, `verification.log`, `case.tar.gz`, `case-packet.json`, `aard-output.tar.gz`, and `aard-partial.tar.gz`.  Artifact routes do not serve arbitrary output files, process logs outside the listed set, generated remote-lawyer skill files, or staged Codex auth directories.  An unlisted artifact name returns `unknown_artifact`; a listed artifact whose file is absent returns `artifact_missing`.
 
 The result and evidence routes read from the materialized AARD output packet.  Local Clerk runs use the run output directory directly.  Attested Clerk runs use the extracted `aard-output/` directory after verification, or the extracted `aard-partial/` directory for inspection after a failed remote run.
 
@@ -757,7 +782,7 @@ Cancel:
 curl -sS -X POST http://127.0.0.1:19790/api/v1/cases/api-case-1/cancel
 ```
 
-Artifact routes serve only listed artifact names from a case output directory, including `service-logs/aard.stdout` and `service-logs/aard.stderr` for service child process logs.  `GET /api/v1/cases/{case_id}/artifacts` lists known artifacts, and `GET /api/v1/cases/{case_id}/artifacts/{name}` serves one exact listed artifact name.  An unlisted artifact name returns `unknown_artifact`; a listed artifact whose file is absent returns `artifact_missing`.  `GET /api/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted evidence by evidence id when the manifest contains a readable file name.
+Artifact routes serve only listed artifact names from a case output directory, including `state.json`, `certificate.json`, `service-logs/aard.stdout`, and `service-logs/aard.stderr` for service child process logs.  `GET /api/v1/cases/{case_id}/artifacts` lists known artifacts, and `GET /api/v1/cases/{case_id}/artifacts/{name}` serves one exact listed artifact name.  An unlisted artifact name returns `unknown_artifact`; a listed artifact whose file is absent returns `artifact_missing`.  `GET /api/v1/cases/{case_id}/evidence/{evidence_id}` serves accepted evidence by evidence id when the manifest contains a readable file name.
 
 ## Output Packet
 
@@ -770,6 +795,7 @@ Every completed or failed case writes a run packet under its output directory.  
 | `runtime.json` | Effective runtime limits. |
 | `run.json` | Final structured result. |
 | `state.json` | Final case state. |
+| `certificate.json` | Initialization request, accepted public actions, claimed final state, and final-state hash for replay checking. |
 | `council.json` | Council roster, final council statuses, request specs, and failure details when applicable. |
 | `digest.md` | Human-readable summary. |
 | `transcript.md` | Human-readable transcript with filings and council answers. |

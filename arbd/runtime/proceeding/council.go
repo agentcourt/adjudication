@@ -116,7 +116,7 @@ func (rc *runContext) executeCouncilOpportunity(ctx context.Context, client coun
 			})
 			continue
 		}
-		stepResp, err := rc.cfg.Engine.Step(rc.state, "submit_council_answer", "council", normalizedPayload)
+		stepResp, err := rc.stepForCertificate("submit_council_answer", "council", normalizedPayload)
 		if err != nil {
 			return err
 		}
@@ -260,7 +260,7 @@ func (rc *runContext) buildCouncilPrompt(seat CouncilSeat, _ Opportunity) (strin
 	if strings.TrimSpace(seat.PersonaText) != "" {
 		personaSection = "Persona:\n" + strings.TrimSpace(seat.PersonaText) + "\n"
 	}
-	return renderPromptFile("council.md", map[string]string{
+	return rc.cfg.renderPromptFile("council.md", map[string]string{
 		"MEMBER_ID":          seat.MemberID,
 		"DELIBERATION_ROUND": fmt.Sprintf("%v", mapAny(rc.state["case"])["deliberation_round"]),
 		"QUESTION":           rc.complaint.Question,

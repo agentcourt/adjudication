@@ -1172,7 +1172,7 @@ func listArtifacts(root string) ([]map[string]any, error) {
 }
 
 func listedArtifactNames() []string {
-	return []string{"run.json", "digest.md", "transcript.md", "work-notes.ndjson", "events.ndjson", "evidence-manifest.json", "service-logs/aard.stdout", "service-logs/aard.stderr"}
+	return []string{"run.json", "state.json", "certificate.json", "digest.md", "transcript.md", "work-notes.ndjson", "events.ndjson", "evidence-manifest.json", "service-logs/aard.stdout", "service-logs/aard.stderr"}
 }
 
 func listedArtifactName(name string) bool {

@@ -723,7 +723,7 @@ func (api *lawyerAPIServer) commitEvidenceUploadLocked(turn *lawyerTurn, args ma
 		return nil, err
 	}
 	payload := submittedEvidencePayload(meta)
-	stepResp, err := api.rc.cfg.Engine.Step(api.rc.state, "submit_evidence", turn.opportunity.Role, payload)
+	stepResp, err := api.rc.stepForCertificate("submit_evidence", turn.opportunity.Role, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -761,7 +761,7 @@ func (api *lawyerAPIServer) submitEvidenceLocked(turn *lawyerTurn, args map[stri
 		return nil, err
 	}
 	payload := submittedEvidencePayload(meta)
-	stepResp, err := api.rc.cfg.Engine.Step(api.rc.state, "submit_evidence", turn.opportunity.Role, payload)
+	stepResp, err := api.rc.stepForCertificate("submit_evidence", turn.opportunity.Role, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -809,7 +809,7 @@ func (api *lawyerAPIServer) submitDecisionLocked(turn *lawyerTurn, args map[stri
 	if err := api.rc.validateAttorneyPayloadAgainstState(turn.opportunity, actionType, payload); err != nil {
 		return nil, err
 	}
-	stepResp, err := api.rc.cfg.Engine.Step(api.rc.state, actionType, turn.opportunity.Role, payload)
+	stepResp, err := api.rc.stepForCertificate(actionType, turn.opportunity.Role, payload)
 	if err != nil {
 		return nil, err
 	}

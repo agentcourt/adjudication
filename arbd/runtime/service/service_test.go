@@ -645,6 +645,12 @@ func TestListedArtifactNameRequiresExactName(t *testing.T) {
 	if !listedArtifactName("digest.md") {
 		t.Fatalf("digest.md should be listed")
 	}
+	if !listedArtifactName("state.json") {
+		t.Fatalf("state.json should be listed")
+	}
+	if !listedArtifactName("certificate.json") {
+		t.Fatalf("certificate.json should be listed")
+	}
 	if !listedArtifactName("service-logs/aard.stderr") {
 		t.Fatalf("service-logs/aard.stderr should be listed")
 	}
@@ -802,6 +808,12 @@ func TestClerkRoutesReadOutputArtifacts(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(outDir, "digest.md"), []byte("digest text\n"), 0o644); err != nil {
 		t.Fatalf("write digest: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(outDir, "state.json"), []byte("{\"case\":{\"status\":\"completed\"}}\n"), 0o644); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "certificate.json"), []byte("{\"schema_version\":\"aard.replay-certificate.v0\"}\n"), 0o644); err != nil {
+		t.Fatalf("write certificate: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(outDir, "clerk.stderr"), []byte("clerk stderr\n"), 0o644); err != nil {
 		t.Fatalf("write clerk stderr: %v", err)
 	}
@@ -854,6 +866,9 @@ func TestClerkRoutesReadOutputArtifacts(t *testing.T) {
 	if !artifactListContains(got["artifacts"], "run.json") || !artifactListContains(got["artifacts"], "digest.md") {
 		t.Fatalf("artifacts = %#v", got["artifacts"])
 	}
+	if !artifactListContains(got["artifacts"], "state.json") || !artifactListContains(got["artifacts"], "certificate.json") {
+		t.Fatalf("artifacts missing certificate inputs = %#v", got["artifacts"])
+	}
 	if !artifactListContains(got["artifacts"], "clerk.stderr") {
 		t.Fatalf("artifacts missing clerk stderr log = %#v", got["artifacts"])
 	}
@@ -868,6 +883,10 @@ func TestClerkRoutesReadOutputArtifacts(t *testing.T) {
 	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/clerk-rich/artifacts/clerk.stderr")
 	if rawStatus != http.StatusOK || string(body) != "clerk stderr\n" {
 		t.Fatalf("clerk stderr status = %d body = %q", rawStatus, string(body))
+	}
+	rawStatus, body = serviceRawGet(t, s, "/clerk/v1/cases/clerk-rich/artifacts/certificate.json")
+	if rawStatus != http.StatusOK || !strings.Contains(string(body), "aard.replay-certificate.v0") {
+		t.Fatalf("certificate status = %d body = %q", rawStatus, string(body))
 	}
 	status, got = serviceGet(t, s, "/clerk/v1/cases/clerk-rich/artifacts/work-notes.ndjson")
 	if status != http.StatusNotFound {
