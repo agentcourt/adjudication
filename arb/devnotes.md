@@ -1,5 +1,18 @@
 # Development Notes
 
+## 2026-07-13
+
+### Active-step realizability proof
+
+Reference: `engine/Proofs/Realizability.lean`, `engine/Proofs.lean`, `engine/Main.lean`, `engine/Proofs/NoStuck.lean`
+
+ARB now has a proof that every reachable active state admits at least one successful public `step`.  The proof composes existing reachability invariants with executable witness actions: a one-character merits filing in merits phases, pass actions for optional rebuttal phases, and a council vote for deliberation using the next seated member.  It records the additional invariants needed for those witnesses: validated text limits remain positive, initialized council member IDs are nonempty and trimmed, and those facts persist across successful steps.
+
+Verification:
+
+- [x] `lake build Proofs.Realizability`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation
