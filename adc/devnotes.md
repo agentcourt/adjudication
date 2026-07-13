@@ -5,6 +5,8 @@
 ### References
 
 - Runner output writer: [`runtime/runner/io.go`](runtime/runner/io.go)
+- Replay certificate implementation: [`runtime/runner/certificate.go`](runtime/runner/certificate.go)
+- Certificate verifier command: [`runtime/cli/verify_certificate.go`](runtime/cli/verify_certificate.go)
 - Exhibit action boundary: [`engine/Main.lean`](engine/Main.lean)
 - Service artifact route: [`runtime/service/service.go`](runtime/service/service.go)
 - ADC manual output section: [`manual.md`](manual.md#output-artifacts)
@@ -16,12 +18,16 @@ ADC terminal packets now include `state.json` beside `run.json`.  The runner wri
 
 `offer_case_file_as_exhibit` now sends `file_id` and `offered_at` into the Lean `offer_exhibit` action.  Lean validates the file id when present and records the corresponding `file_events` entry.  The runner no longer appends that event after the engine returns, so the terminal state is reproducible from accepted engine transitions.
 
+ADC terminal packets now include `certificate.json`.  The certificate stores the initial state, optional seeded complaint initialization, accepted `step` transitions, accepted pass decisions, the claimed final state, and a compact JSON SHA-256 hash of that final state.  `adc verify-certificate` reads `certificate.json` and `state.json`, replays the recorded transitions through the Lean engine, and requires the certificate hash, packet-state hash, and replayed-state hash to match.
+
 ### Verification
 
 - [x] `go test ./adc/runtime/runner ./adc/runtime/service`
+- [x] `go test ./adc/runtime/runner ./adc/runtime/service ./adc/runtime/cli`
 - [x] `go test ./adc/runtime/...`
 - [x] `lake build Proofs.RecentExhibitLimits`
 - [x] `lake build Proofs adcengine`
+- [x] Real no-LLM smoke run with `adc scenario`, followed by `adc verify-certificate`
 
 ## 2026-07-10: Service process record reconciliation
 

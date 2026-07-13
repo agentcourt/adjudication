@@ -471,7 +471,7 @@ func (r *Runner) executeLocalAction(actorRole, actionType string, payload map[st
 			"sha256":          hex.EncodeToString(digest[:]),
 			"size_bytes":      len(raw),
 		}
-		leanRes, err := r.lean.Step(r.state, "import_case_file", actorRole, record)
+		leanRes, err := r.stepForCertificate("import_case_file", actorRole, record)
 		if err != nil {
 			return ActionExecution{}, true, err
 		}
@@ -623,7 +623,7 @@ func (r *Runner) executeLocalAction(actorRole, actionType string, payload map[st
 		if requestRef, _ := payload["request_ref"].(string); strings.TrimSpace(requestRef) != "" {
 			leanPayload["request_ref"] = requestRef
 		}
-		leanRes, err := r.lean.Step(r.state, "produce_case_file", actorRole, leanPayload)
+		leanRes, err := r.stepForCertificate("produce_case_file", actorRole, leanPayload)
 		if err != nil {
 			return ActionExecution{}, true, err
 		}
@@ -691,7 +691,7 @@ func (r *Runner) executeLocalAction(actorRole, actionType string, payload map[st
 			"admitted":    admitted,
 			"offered_at":  time.Now().UTC().Format(time.RFC3339),
 		}
-		leanRes, err := r.lean.Step(r.state, "offer_exhibit", actorRole, leanPayload)
+		leanRes, err := r.stepForCertificate("offer_exhibit", actorRole, leanPayload)
 		if err != nil {
 			return ActionExecution{}, true, err
 		}
@@ -708,7 +708,7 @@ func (r *Runner) executeLocalAction(actorRole, actionType string, payload map[st
 		}
 		return ActionExecution{Result: leanRes}, true, nil
 	case "rest_case":
-		leanRes, err := r.lean.Step(r.state, "rest_case", actorRole, map[string]any{})
+		leanRes, err := r.stepForCertificate("rest_case", actorRole, map[string]any{})
 		if err != nil {
 			return ActionExecution{}, true, err
 		}

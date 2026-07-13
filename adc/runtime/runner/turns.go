@@ -521,6 +521,9 @@ func (r *Runner) executeOpportunityTurn(
 			if state == nil {
 				return TurnLog{}, fmt.Errorf("lean apply_decision pass_recorded missing state")
 			}
+			if err := r.recordApplyDecisionForCertificate(stateVersion, opportunity.OpportunityID, role.Name, decision, rolesPayload, opportunity.StepBudget); err != nil {
+				return TurnLog{}, err
+			}
 			r.state = mergeLocalCaseExtensions(r.state, state)
 			if err := recordCompletionResult(resp, "accepted", nil, 0); err != nil {
 				return TurnLog{}, err

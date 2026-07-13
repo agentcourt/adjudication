@@ -356,6 +356,9 @@ func TestListedArtifactNameRequiresExactName(t *testing.T) {
 	if !listedArtifactName("state.json") {
 		t.Fatalf("state.json should be listed")
 	}
+	if !listedArtifactName("certificate.json") {
+		t.Fatalf("certificate.json should be listed")
+	}
 	if !listedArtifactName("service-logs/adc.stderr") {
 		t.Fatalf("service-logs/adc.stderr should be listed")
 	}
@@ -379,6 +382,9 @@ func TestArtifactRouteServesOnlyListedArtifacts(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(outDir, "state.json"), []byte("{\"status\":\"judgment_entered\"}\n"), 0o644); err != nil {
 		t.Fatalf("write state: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "certificate.json"), []byte("{\"status\":\"ok\"}\n"), 0o644); err != nil {
+		t.Fatalf("write certificate: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(outDir, "service-logs", "adc.stderr"), []byte("child stderr\n"), 0o644); err != nil {
 		t.Fatalf("write service log: %v", err)
@@ -417,12 +423,19 @@ func TestArtifactRouteServesOnlyListedArtifacts(t *testing.T) {
 	if !artifactListContains(got["artifacts"], "state.json") {
 		t.Fatalf("artifacts missing state.json = %#v", got["artifacts"])
 	}
+	if !artifactListContains(got["artifacts"], "certificate.json") {
+		t.Fatalf("artifacts missing certificate.json = %#v", got["artifacts"])
+	}
 	if !artifactListContains(got["artifacts"], "service-logs/adc.stderr") {
 		t.Fatalf("artifacts missing service stderr log = %#v", got["artifacts"])
 	}
 	status, body = serviceRawGet(t, s, "/api/v1/cases/case-1/artifacts/state.json")
 	if status != http.StatusOK || string(body) != "{\"status\":\"judgment_entered\"}\n" {
 		t.Fatalf("state status = %d body = %q", status, string(body))
+	}
+	status, body = serviceRawGet(t, s, "/api/v1/cases/case-1/artifacts/certificate.json")
+	if status != http.StatusOK || string(body) != "{\"status\":\"ok\"}\n" {
+		t.Fatalf("certificate status = %d body = %q", status, string(body))
 	}
 	status, body = serviceRawGet(t, s, "/api/v1/cases/case-1/artifacts/service-logs/adc.stderr")
 	if status != http.StatusOK || string(body) != "child stderr\n" {

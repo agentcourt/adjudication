@@ -70,6 +70,8 @@ type Runner struct {
 	state                   map[string]any
 	roles                   map[string]spec.RoleSpec
 	courtProfile            courts.Profile
+	certificateInit         ReplayInitializeRequest
+	certificateTransitions  []ReplayTransition
 	workProductDirs         map[string]string
 	jurorPersonaPool        *jurorPersonaPool
 	jurorPersonaAssignments map[string]jurorPersonaPair
@@ -133,9 +135,17 @@ func New(st *store.Store, le lean.Engine, client *openai.Client, jurorClient *op
 	if err := validateScenarioActions(scenario, roles); err != nil {
 		return nil, err
 	}
-	r.state = buildInitialState(scenario, courtProfile)
+	initialState := buildInitialState(scenario, courtProfile)
+	certificateInit, err := newReplayInitializeRequest(initialState)
+	if err != nil {
+		return nil, err
+	}
+	r.certificateInit = certificateInit
+	r.state = initialState
 	if scenario.CaseInit != nil {
-		state, err := initializeSeededCase(le, r.state, *scenario.CaseInit)
+		initReq := replayInitializeCaseRequest(*scenario.CaseInit)
+		r.certificateInit.InitializeCase = &initReq
+		state, err := initializeSeededCase(le, r.state, initReq)
 		if err != nil {
 			return nil, err
 		}
@@ -163,7 +173,7 @@ func resolveScenarioCourtProfile(scenario spec.FormalScenario) (courts.Profile, 
 	return courts.Resolve(strings.TrimSpace(scenario.CourtName))
 }
 
-func initializeSeededCase(le lean.Engine, state map[string]any, init spec.CaseInitializationSpec) (map[string]any, error) {
+func replayInitializeCaseRequest(init spec.CaseInitializationSpec) ReplayInitializeCaseRequest {
 	attachments := make([]map[string]any, 0, len(init.Attachments))
 	for _, attachment := range init.Attachments {
 		attachments = append(attachments, map[string]any{
@@ -191,13 +201,23 @@ func initializeSeededCase(le lean.Engine, state map[string]any, init spec.CaseIn
 	addString("plaintiff_citizenship", init.PlaintiffCitizenship)
 	addString("defendant_citizenship", init.DefendantCitizenship)
 	addString("amount_in_controversy", init.AmountInControversy)
+	return ReplayInitializeCaseRequest{
+		ComplaintSummary:          strings.TrimSpace(init.ComplaintSummary),
+		FiledBy:                   strings.TrimSpace(init.FiledBy),
+		JuryDemandedOn:            strings.TrimSpace(init.JuryDemandedOn),
+		JurisdictionalAllegations: jurisdictionalAllegations,
+		Attachments:               attachments,
+	}
+}
+
+func initializeSeededCase(le lean.Engine, state map[string]any, init ReplayInitializeCaseRequest) (map[string]any, error) {
 	resp, err := le.InitializeCase(
 		state,
-		strings.TrimSpace(init.ComplaintSummary),
-		strings.TrimSpace(init.FiledBy),
-		strings.TrimSpace(init.JuryDemandedOn),
-		jurisdictionalAllegations,
-		attachments,
+		init.ComplaintSummary,
+		init.FiledBy,
+		init.JuryDemandedOn,
+		init.JurisdictionalAllegations,
+		init.Attachments,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("lean initialize_case failed: %w", err)
@@ -380,7 +400,7 @@ func (r *Runner) executeAction(turnIndex, stepIndex int, actorRole, actionType s
 		return ActionExecution{}, err
 	}
 	if !handled {
-		res, err := r.lean.Step(r.state, actionType, actorRole, payload)
+		res, err := r.stepForCertificate(actionType, actorRole, payload)
 		if err != nil {
 			return ActionExecution{}, err
 		}

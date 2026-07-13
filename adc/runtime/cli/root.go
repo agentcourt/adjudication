@@ -33,6 +33,8 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) error {
 		return RunPacer(args[1:], stdout, stderr)
 	case "validate":
 		return RunValidate(args[1:], stdout, stderr)
+	case "verify-certificate":
+		return RunVerifyCertificate(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		if len(args) == 1 {
 			printRootUsage(stdout)
@@ -61,6 +63,8 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) error {
 			return RunPacer([]string{"-h"}, stdout, stderr)
 		case "validate":
 			return RunValidate([]string{"-h"}, stdout, stderr)
+		case "verify-certificate":
+			return RunVerifyCertificate([]string{"-h"}, stdout, stderr)
 		default:
 			printRootUsage(stderr)
 			return fmt.Errorf("unknown help topic %q", args[1])
@@ -86,6 +90,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "  service    Run the ADC clerk service")
 	fmt.Fprintln(w, "  pacer      List or fetch PACER-style documents from sqlite")
 	fmt.Fprintln(w, "  validate   Validate a scenario file for the Go runner")
+	fmt.Fprintln(w, "  verify-certificate  Verify certificate.json against state.json")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Use 'adc help <subcommand>' for subcommand flags.")
 }

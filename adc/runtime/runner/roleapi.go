@@ -808,6 +808,9 @@ func (api *roleAPIServer) submitDecisionLocked(turn *externalOpportunityTurn, ar
 		if state == nil {
 			return nil, map[string]any{"ok": false, "case_id": api.caseID(), "error": roleAPIError("bad_lean_response", "pass_recorded missing state")}
 		}
+		if err := api.r.recordApplyDecisionForCertificate(turn.stateVersion, turn.opportunity.OpportunityID, turn.role.Name, decision, turn.rolesPayload, turn.opportunity.StepBudget); err != nil {
+			return nil, map[string]any{"ok": false, "case_id": api.caseID(), "error": roleAPIError("certificate_record_failed", err.Error())}
+		}
 		api.r.state = mergeLocalCaseExtensions(api.r.state, state)
 		if err := api.r.persistActionEvent(turn.turnIndex, turn.stepsUsed, turn.role.Name, "pass_turn", args, acceptResp); err != nil {
 			return nil, map[string]any{"ok": false, "case_id": api.caseID(), "error": roleAPIError("persist_action_failed", err.Error())}

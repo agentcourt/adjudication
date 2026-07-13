@@ -133,8 +133,19 @@ func TestWriteEvidenceWritesStateArtifact(t *testing.T) {
 		"status": "judgment_entered",
 	}
 	r := &Runner{
-		cfg:   Config{OutputPath: filepath.Join(tmpDir, "run.json")},
+		cfg: Config{
+			OutputPath: filepath.Join(tmpDir, "run.json"),
+			CaseID:     "case-1",
+			RunID:      "run-1",
+		},
 		state: finalState,
+		certificateInit: ReplayInitializeRequest{
+			State: map[string]any{
+				"case": map[string]any{
+					"case_id": "case-1",
+				},
+			},
+		},
 	}
 
 	if err := r.writeEvidence(Result{Scenario: "scenario-1", FinalState: finalState}); err != nil {
@@ -154,6 +165,17 @@ func TestWriteEvidenceWritesStateArtifact(t *testing.T) {
 	caseObj, _ := got["case"].(map[string]any)
 	if stringOrDefault(caseObj["case_id"], "") != "case-1" {
 		t.Fatalf("state artifact case = %s", string(raw))
+	}
+	raw, err = os.ReadFile(filepath.Join(tmpDir, ReplayCertificateFileName))
+	if err != nil {
+		t.Fatalf("read certificate: %v", err)
+	}
+	var cert ReplayCertificate
+	if err := json.Unmarshal(raw, &cert); err != nil {
+		t.Fatalf("unmarshal certificate: %v", err)
+	}
+	if cert.CaseID != "case-1" || cert.RunID != "run-1" || cert.ClaimedFinalStateSHA256 == "" {
+		t.Fatalf("certificate = %#v", cert)
 	}
 }
 

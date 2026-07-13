@@ -278,6 +278,9 @@ func (r *Runner) writeEvidence(result Result) error {
 	if err := writeJSONFileAtomic(filepath.Join(filepath.Dir(r.cfg.OutputPath), "state.json"), result.FinalState); err != nil {
 		return fmt.Errorf("write final state: %w", err)
 	}
+	if err := r.writeReplayCertificate(result); err != nil {
+		return fmt.Errorf("write replay certificate: %w", err)
+	}
 	if err := exportExternalWorkProduct(filepath.Dir(r.cfg.OutputPath), r.workProductDirs); err != nil {
 		return err
 	}
