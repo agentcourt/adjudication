@@ -13,6 +13,19 @@ Verification:
 - [x] `lake build Proofs.Realizability`
 - [x] `lake build Proofs`
 
+### Maximal-run terminal proof
+
+Reference: `engine/Proofs/MaximalRuns.lean`, `engine/Proofs/Realizability.lean`, `engine/Proofs/TerminalStates.lean`, `engine/Proofs/BoundedTermination.lean`
+
+ARB now has a run-level theorem for maximal successful public paths.  `StepPathMaximal` combines the existing indexed successful-run relation with the absence of any further successful public `step`.  The terminal theorem proves that any maximal path from a reachable state ends with either a closed case whose phase is closed and whose resolution is one of `demonstrated`, `not_demonstrated`, or `no_majority`, or a failed case with an `opportunity_failed` record identifying the party role and phase.
+
+The proof adds a status invariant for reachable states: a reachable case is active, closed with `phase = "closed"`, or failed.  The maximal result then uses `reachable_active_has_successful_step` to rule out an active endpoint, and it reuses the existing terminal-state facts for closed and failed endpoints.
+
+Verification:
+
+- [x] `lake build Proofs.MaximalRuns`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation
