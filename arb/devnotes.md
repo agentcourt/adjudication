@@ -140,6 +140,17 @@ Verification:
 - [x] `lake build Proofs.VoteOrder`
 - [x] `lake build Proofs`
 
+### Threshold monotonicity
+
+Reference: `engine/Proofs/ThresholdMonotonicity.lean`, `engine/Proofs.lean`
+
+ARB now proves quota monotonicity for current-round resolutions.  A `demonstrated` current resolution at a higher required-vote quota remains `demonstrated` at a lower quota, and a missing current resolution at a lower quota remains missing at a higher quota.  The `not_demonstrated` theorem includes the rule's ordering caveat: lowering the quota preserves `not_demonstrated` only when the demonstrated count still falls below the lower quota.
+
+Verification:
+
+- [x] `lake build Proofs.ThresholdMonotonicity`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation
