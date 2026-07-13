@@ -130,6 +130,14 @@ theorem sameRoundDeliberationProgress_preserves_noSubstantiveOutcomeViable
     (deliberationSummary t).noSubstantiveOutcomeViable := by
   exact viableOutcomesShrink_preserves_noSubstantiveOutcomeViable hProgress.2.2 hNoViable
 
+theorem sameRoundDeliberationProgress_blocks_substantive_currentResolution
+    {s t : ArbitrationState}
+    (hProgress : sameRoundDeliberationProgress s t)
+    (hNoViable : (deliberationSummary s).noSubstantiveOutcomeViable) :
+    currentResolution? t.case t.policy.required_votes_for_decision = none := by
+  exact deliberationSummary_noSubstantiveOutcomeViable_implies_currentResolution_none t
+    (sameRoundDeliberationProgress_preserves_noSubstantiveOutcomeViable hProgress hNoViable)
+
 theorem sameRoundDeliberationProgress_preserves_noMajorityClosureReason_of_round_complete
     {s t : ArbitrationState}
     (hProgress : sameRoundDeliberationProgress s t)

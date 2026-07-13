@@ -104,6 +104,17 @@ Verification:
 - [x] `lake build Proofs.CertificateSoundness`
 - [x] `lake build Proofs`
 
+### Same-round impossibility preservation
+
+Reference: `engine/Proofs/ProgressViability.lean`, `engine/Proofs/ViableOutcomesCore.lean`
+
+Same-round deliberation progress now exposes the operational consequence of the existing viability-shrink theorem: once neither substantive outcome remains viable, later same-round progress still has no current substantive resolution.  This packages the failure-resilience point in executable terms, because same-round votes and removals cannot turn an impossible substantive outcome back into `demonstrated` or `not_demonstrated`.
+
+Verification:
+
+- [x] `lake build Proofs.ProgressViability`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation
