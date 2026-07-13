@@ -925,7 +925,8 @@ theorem failOpportunity_preserves_councilVoteIntegrity
       exact failUnvotedCouncilMember_preserves_councilVoteIntegrity
         s.case memberId reason opportunityId message hIntegrity hFreshIds
     exact continueDeliberation_preserves_councilVoteIntegrity_for s t c1 hIntegrity1 hCont
-  · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+  · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation,
+      _hFailureType, _hFailureRole, _hFailurePhase⟩
     simpa [stateWithCase] using hIntegrity
 
 theorem step_fail_opportunity_preserves_councilVoteIntegrity

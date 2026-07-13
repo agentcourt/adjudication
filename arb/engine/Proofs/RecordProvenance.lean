@@ -945,7 +945,8 @@ theorem failOpportunity_preserves_recordProvenance
       (by rw [hC1])
       (by rw [hC1])
       hCont
-  · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+  · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation,
+      _hFailureType, _hFailureRole, _hFailurePhase⟩
     exact stateWithCase_preserves_recordProvenance s _ rfl rfl hProv
 
 theorem failOpportunity_extends_materials
@@ -960,7 +961,8 @@ theorem failOpportunity_extends_materials
       (by rw [hC1])
       (by rw [hC1])
       hCont
-  · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+  · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation,
+      _hFailureType, _hFailureRole, _hFailurePhase⟩
     exact stateWithCase_extends_materials s _ rfl rfl
 
 theorem step_fail_opportunity_preserves_recordProvenance

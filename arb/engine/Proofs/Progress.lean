@@ -411,7 +411,9 @@ theorem step_phaseRank_mono
                           simpa using hPhase
                         have hRank := continueDeliberation_phaseRank_mono s t c1 hPhase1 hCont
                         simpa [hC1] using hRank
-                      · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+                      · rcases hParty with ⟨_failure, rfl, _hNotClosed,
+                          _hNotDeliberation, _hFailureType, _hFailureRole,
+                          _hFailurePhase⟩
                         simp [stateWithCase]
                     · simp [stepCore] at hStepCore
 
@@ -559,7 +561,9 @@ theorem step_deliberation_round_mono
                         have hMono : c1.deliberation_round ≤ t.case.deliberation_round :=
                           continueDeliberation_deliberation_round_mono s t c1 hCont
                         simpa [hRoundEq] using hMono
-                      · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+                      · rcases hParty with ⟨_failure, rfl, _hNotClosed,
+                          _hNotDeliberation, _hFailureType, _hFailureRole,
+                          _hFailurePhase⟩
                         simp [stateWithCase]
                     · simp [stepCore] at hStepCore
 

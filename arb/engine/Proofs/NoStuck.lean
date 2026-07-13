@@ -262,7 +262,9 @@ theorem reachable_phase_closed_implies_status_closed
                               simpa using hDeliberation
                             exact continueDeliberation_phase_closed_implies_status_closed
                               u t c1 hDeliberation1 hCont hClosed
-                          · rcases hParty with ⟨_failure, _hEq, hNotClosed, _hNotDeliberation⟩
+                          · rcases hParty with ⟨_failure, _hEq, hNotClosed,
+                              _hNotDeliberation, _hFailureType, _hFailureRole,
+                              _hFailurePhase⟩
                             exact False.elim (hNotClosed hClosed)
                         · simp [stepCore] at hStepCore
 
@@ -1265,7 +1267,9 @@ theorem reachable_meritsPhase_pristineCouncilState
                             rcases hPhaseOut with hDelibOut | hClosedOut
                             · simp [meritsPhase, hDelibOut] at hMerits
                             · simp [meritsPhase, hClosedOut] at hMerits
-                          · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+                          · rcases hParty with ⟨_failure, rfl, _hNotClosed,
+                              _hNotDeliberation, _hFailureType, _hFailureRole,
+                              _hFailurePhase⟩
                             exact pristineCouncilState_congr rfl rfl rfl (ih (by
                               simpa [meritsPhase, stateWithCase] using hMerits))
                         · simp [stepCore] at hStepCore
@@ -1492,7 +1496,9 @@ theorem reachable_deliberation_has_nextCouncilMember
                               simpa [councilMemberIds_failure_update] using hUniqueU
                             exact continueDeliberation_live_has_nextCouncilMember
                               u t c1 hPositive hUnique1 hIntegrity1 hCont hPhase hStatus
-                          · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+                          · rcases hParty with ⟨_failure, rfl, _hNotClosed,
+                              _hNotDeliberation, _hFailureType, _hFailureRole,
+                              _hFailurePhase⟩
                             simp [stateWithCase] at hStatus
                         · simp [stepCore] at hStepCore
 

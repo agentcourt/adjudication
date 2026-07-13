@@ -2276,6 +2276,82 @@ theorem failCase_preserves_material_limits
           failure := some failure }) := by
   exact stateWithCase_preserves_material_limits s _ hLimits rfl rfl
 
+set_option linter.unusedSimpArgs false in
+theorem nextOpportunity_phase_eq
+    (s : ArbitrationState)
+    (opportunity : OpportunitySpec)
+    (hNext : (nextOpportunity s).opportunity = some opportunity) :
+    opportunity.phase = s.case.phase := by
+  unfold nextOpportunity at hNext
+  by_cases hClosed : s.case.status = "closed"
+  · simp [hClosed] at hNext
+  · by_cases hFailed : s.case.status = "failed"
+    · cases hFailure : s.case.failure with
+      | none =>
+          simp [hFailed, hFailure] at hNext
+      | some failure =>
+          simp [hFailed, hFailure] at hNext
+    · simp [hClosed, hFailed] at hNext
+      by_cases hOpenings : s.case.phase = "openings"
+      · cases hRole : plaintiffThenDefendant s.case.openings "plaintiff" "defendant" with
+        | none =>
+            simp [nextOpportunityForPhase, hOpenings, hRole] at hNext
+        | some role =>
+            simp [nextOpportunityForPhase, hOpenings, hRole] at hNext
+            cases hNext
+            simp [hOpenings]
+      · by_cases hArguments : s.case.phase = "arguments"
+        · cases hRole : plaintiffThenDefendant s.case.arguments "plaintiff" "defendant" with
+          | none =>
+              simp [nextOpportunityForPhase, hOpenings, hArguments, hRole] at hNext
+          | some role =>
+              simp [nextOpportunityForPhase, hOpenings, hArguments, hRole] at hNext
+              cases hNext
+              simp [hArguments]
+        · by_cases hRebuttals : s.case.phase = "rebuttals"
+          · cases hEmpty : s.case.rebuttals.isEmpty with
+            | false =>
+                simp [nextOpportunityForPhase, hOpenings, hArguments, hRebuttals, hEmpty] at hNext
+            | true =>
+                simp [nextOpportunityForPhase, hOpenings, hArguments, hRebuttals, hEmpty] at hNext
+                cases hNext
+                simp [hRebuttals]
+          · by_cases hSurrebuttals : s.case.phase = "surrebuttals"
+            · cases hEmpty : s.case.surrebuttals.isEmpty with
+              | false =>
+                  simp [nextOpportunityForPhase, hOpenings, hArguments, hRebuttals,
+                    hSurrebuttals, hEmpty] at hNext
+              | true =>
+                  simp [nextOpportunityForPhase, hOpenings, hArguments, hRebuttals,
+                    hSurrebuttals, hEmpty] at hNext
+                  cases hNext
+                  simp [hSurrebuttals]
+            · by_cases hClosings : s.case.phase = "closings"
+              · cases hRole : plaintiffThenDefendant s.case.closings "plaintiff" "defendant" with
+                | none =>
+                    simp [nextOpportunityForPhase, hOpenings, hArguments, hRebuttals,
+                      hSurrebuttals, hClosings, hRole] at hNext
+                | some role =>
+                    simp [nextOpportunityForPhase, hOpenings, hArguments, hRebuttals,
+                      hSurrebuttals, hClosings, hRole] at hNext
+                    cases hNext
+                    simp [hClosings]
+              · by_cases hDeliberation : s.case.phase = "deliberation"
+                · cases hMember : nextCouncilMember? s.case with
+                  | none =>
+                      simp [nextOpportunityForPhase, hOpenings, hArguments, hRebuttals,
+                        hSurrebuttals, hClosings, hDeliberation, hMember] at hNext
+                  | some member =>
+                      simp [nextOpportunityForPhase, hOpenings, hArguments, hRebuttals,
+                        hSurrebuttals, hClosings, hDeliberation, hMember] at hNext
+                      cases hNext
+                      simp [hDeliberation]
+                · by_cases hClosedPhase : s.case.phase = "closed"
+                  · simp [nextOpportunityForPhase, hOpenings, hArguments, hRebuttals,
+                      hSurrebuttals, hClosings, hDeliberation, hClosedPhase] at hNext
+                  · simp [nextOpportunityForPhase, hOpenings, hArguments, hRebuttals,
+                      hSurrebuttals, hClosings, hDeliberation, hClosedPhase] at hNext
+
 theorem failOpportunity_result
     (s t : ArbitrationState)
     (payload : Lean.Json)
@@ -2301,7 +2377,10 @@ theorem failOpportunity_result
           status := "failed"
           failure := some failure } ∧
       t.case.phase ≠ "closed" ∧
-      s.case.phase ≠ "deliberation") := by
+      s.case.phase ≠ "deliberation" ∧
+      failure.failure_type = "opportunity_failed" ∧
+      (failure.role = "plaintiff" ∨ failure.role = "defendant") ∧
+      failure.phase = s.case.phase) := by
   unfold failOpportunity at hFail
   cases hOpportunityIdText : getString payload "opportunity_id" with
   | error err =>
@@ -2466,7 +2545,30 @@ theorem failOpportunity_result
                                                     rw [← hRoleEq]
                                                     exact hRoleCouncil
                                                   exact hCouncil hRoleIsCouncil
-                                        exact Or.inr ⟨failure, hEq, hClosedT, hSourceNotDeliberation⟩
+                                        have hFailureType :
+                                            failure.failure_type = "opportunity_failed" := by
+                                          simp [failure]
+                                        have hFailureRole :
+                                            failure.role = "plaintiff" ∨
+                                              failure.role = "defendant" := by
+                                          have hRoleParty :
+                                              role = "plaintiff" ∨ role = "defendant" := by
+                                            simpa using hParty
+                                          rcases hRoleParty with hPlaintiff | hDefendant
+                                          · exact Or.inl (by simp [failure, hPlaintiff])
+                                          · exact Or.inr (by simp [failure, hDefendant])
+                                        have hFailurePhase :
+                                            failure.phase = s.case.phase := by
+                                          have hOpportunityPhase :
+                                              opportunity.phase = s.case.phase :=
+                                            nextOpportunity_phase_eq s opportunity hNext
+                                          calc
+                                            failure.phase = phase := by simp [failure]
+                                            _ = opportunity.phase := hPhaseEq.symm
+                                            _ = s.case.phase := hOpportunityPhase
+                                        exact Or.inr ⟨failure, hEq, hClosedT,
+                                          hSourceNotDeliberation, hFailureType, hFailureRole,
+                                          hFailurePhase⟩
                                       · simp [opportunityId, role, phase, reason, hOpportunityEmpty,
                                           hRoleEmpty, hPhaseEmpty, hReasonEmpty, hNext, hOpportunityEq,
                                           hRoleEq, hPhaseEq, hCouncil, hParty] at hFail
@@ -2495,7 +2597,8 @@ theorem failOpportunity_preserves_phaseShape
       rw [hC1]
       simpa using hDelib
     exact continueDeliberation_preserves_phaseShape_for s t c1 hShape1 hPhase1 hCont
-  · rcases hParty with ⟨failure, rfl, _hNotClosed, _hNotDeliberation⟩
+  · rcases hParty with ⟨failure, rfl, _hNotClosed, _hNotDeliberation,
+      _hFailureType, _hFailureRole, _hFailurePhase⟩
     exact stateWithCase_preserves_phaseShape s _
       (failCase_preserves_phaseShape s.case failure hShape)
 
@@ -2512,7 +2615,8 @@ theorem failOpportunity_preserves_material_limits
       (by rw [hC1])
       (by rw [hC1])
       hCont
-  · rcases hParty with ⟨failure, rfl, _hNotClosed, _hNotDeliberation⟩
+  · rcases hParty with ⟨failure, rfl, _hNotClosed, _hNotDeliberation,
+      _hFailureType, _hFailureRole, _hFailurePhase⟩
     exact failCase_preserves_material_limits s failure hLimits
 
 /--

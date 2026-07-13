@@ -396,7 +396,8 @@ theorem failOpportunity_preserves_caseFrame
         exact councilMemberIds_failure_update s.case.council_members memberId reason
           opportunityId message)
       hCont
-  · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+  · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation,
+      _hFailureType, _hFailureRole, _hFailurePhase⟩
     exact stateWithCase_preserves_caseFrame s _ proposition policy memberIds hFrame rfl rfl
 
 theorem step_fail_opportunity_preserves_caseFrame

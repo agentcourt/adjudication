@@ -857,7 +857,8 @@ theorem step_fail_opportunity_closed_demonstrated_sound
       simpa using hDeliberation
     exact continueDeliberation_closed_demonstrated_sound s t c1
       hDeliberation1 hCont hClosed hResolution
-  · rcases hParty with ⟨_failure, _hEq, hNotClosed, _hNotDeliberation⟩
+  · rcases hParty with ⟨_failure, _hEq, hNotClosed, _hNotDeliberation,
+      _hFailureType, _hFailureRole, _hFailurePhase⟩
     exact False.elim (hNotClosed hClosed)
 
 theorem step_fail_opportunity_closed_not_demonstrated_sound
@@ -877,7 +878,8 @@ theorem step_fail_opportunity_closed_not_demonstrated_sound
       simpa using hDeliberation
     exact continueDeliberation_closed_not_demonstrated_sound s t c1
       hDeliberation1 hCont hClosed hResolution
-  · rcases hParty with ⟨_failure, _hEq, hNotClosed, _hNotDeliberation⟩
+  · rcases hParty with ⟨_failure, _hEq, hNotClosed, _hNotDeliberation,
+      _hFailureType, _hFailureRole, _hFailurePhase⟩
     exact False.elim (hNotClosed hClosed)
 
 theorem step_fail_opportunity_closed_no_majority_sound
@@ -897,7 +899,8 @@ theorem step_fail_opportunity_closed_no_majority_sound
       simpa using hDeliberation
     exact continueDeliberation_closed_no_majority_sound s t c1
       hDeliberation1 hCont hClosed hResolution
-  · rcases hParty with ⟨_failure, _hEq, hNotClosed, _hNotDeliberation⟩
+  · rcases hParty with ⟨_failure, _hEq, hNotClosed, _hNotDeliberation,
+      _hFailureType, _hFailureRole, _hFailurePhase⟩
     exact False.elim (hNotClosed hClosed)
 
 /--

@@ -2057,7 +2057,8 @@ theorem step_fail_opportunity_decreases_remainingStepBudget
       remainingStepBudget t + 1 ≤ remainingStepBudget (stateWithCase s c1) + 1 := by
         exact Nat.add_le_add_right hContBudget 1
       _ = remainingStepBudget s := hStepBudget
-  · rcases hParty with ⟨_failure, rfl, hNotClosedTarget, hNotDeliberation⟩
+  · rcases hParty with ⟨_failure, rfl, hNotClosedTarget, hNotDeliberation,
+      _hFailureType, _hFailureRole, _hFailurePhase⟩
     have hSourceOpen : s.case.phase ≠ "closed" := by
       simpa [stateWithCase] using hNotClosedTarget
     have hPositive :

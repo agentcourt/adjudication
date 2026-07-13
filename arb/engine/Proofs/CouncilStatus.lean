@@ -465,7 +465,9 @@ theorem step_shrinks_seatedCouncilMemberIds
                         rw [hC1] at hTarget1
                         exact failMemberStatus_shrinks_seatedCouncilMemberIds
                           s.case memberId reason opportunityId message hTarget1
-                      · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+                      · rcases hParty with ⟨_failure, rfl, _hNotClosed,
+                          _hNotDeliberation, _hFailureType, _hFailureRole,
+                          _hFailurePhase⟩
                         exact seatedCouncilMemberIdsShrink_of_same_members rfl
                     · cases hType : action.action_type <;>
                       simp [hType] at hOpening hArgument hRebuttal hSurrebuttal hClosing hPass hEvidence hVote hRemoval hFail <;>
@@ -714,7 +716,9 @@ theorem step_introduces_newCouncilVotes_only_from_seated
                             continueDeliberation_preserves_council_votes s t c1 hCont
                           rw [hC1] at hVotes
                           simpa using hVotes
-                      · rcases hParty with ⟨_failure, rfl, _hNotClosed, _hNotDeliberation⟩
+                      · rcases hParty with ⟨_failure, rfl, _hNotClosed,
+                          _hNotDeliberation, _hFailureType, _hFailureRole,
+                          _hFailurePhase⟩
                         exact newCouncilVotesComeFromSeated_of_same_votes rfl
                     · cases hType : action.action_type <;>
                       simp [hType] at hOpening hArgument hRebuttal hSurrebuttal hClosing hPass hEvidence hVote hRemoval hFail <;>
