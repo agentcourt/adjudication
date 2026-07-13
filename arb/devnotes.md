@@ -153,6 +153,17 @@ Verification:
 - [x] `lake build Proofs.ThresholdMonotonicity`
 - [x] `lake build Proofs`
 
+### Closed-case due process package
+
+Reference: `engine/Proofs/DueProcess.lean`, `engine/Proofs.lean`
+
+ARB now packages the closed-case merits sequence as a direct theorem over reachable states.  If a reachable case is closed, its openings, arguments, and closings each contain one plaintiff filing and one defendant filing in the engine's required order.  Rebuttal remains plaintiff-only and optional, and surrebuttal remains defendant-only and optional.
+
+Verification:
+
+- [x] `lake build Proofs.DueProcess`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation
