@@ -189,6 +189,17 @@ Verification:
 - [x] `lake build Proofs.CertificateFacts`
 - [x] `lake build Proofs`
 
+### Decision-rule fact package
+
+Reference: `engine/Proofs/DecisionRuleFacts.lean`, `engine/Proofs.lean`
+
+ARB now packages the existing decision-rule facts for the executable `currentResolution?` rule.  `DecisionRuleFacts` gives a reachable state anonymity under current-round vote permutation, closed-resolution anonymity when seating and round match, vote-flip neutrality under the validated strict-majority policy, and quota monotonicity for `demonstrated`, `not_demonstrated`, `none`, and `no_majority`.  This is a composition layer over the engine rule; it does not define an abstract rule space or prove uniqueness.
+
+Verification:
+
+- [x] `lake build Proofs.DecisionRuleFacts`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation
