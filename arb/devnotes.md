@@ -178,6 +178,17 @@ Verification:
 - [x] `lake build Proofs.DecisionSummary`
 - [x] `lake build Proofs`
 
+### Closed-certificate fact package
+
+Reference: `engine/Proofs/CertificateFacts.lean`, `engine/Proofs.lean`
+
+ARB now has a single certificate-facing package for accepted closed replay certificates.  `ClosedCertificateFacts` includes exact initialized replay, reachability, the initialized action-length bound, closed terminal accounting with resolution enumeration, outcome soundness, ordered merits completion, filing counts, and decision-summary production by exact replay.  Callers can cite one theorem when they need the replay, terminal-state, merits, filing-count, outcome, and summary facts together.  The checker remains exact; this file only composes facts already proved for accepted certificates.
+
+Verification:
+
+- [x] `lake build Proofs.CertificateFacts`
+- [x] `lake build Proofs`
+
 ## 2026-07-10
 
 ### Service process record reconciliation
