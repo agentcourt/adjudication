@@ -21,6 +21,8 @@ The Lean library proves AAR properties over reachable executions, not isolated e
 | Fixed-frame progress | `fixedFrameProgress`, `step_establishes_fixedFrameProgress`, `initialized_run_progresses_in_initial_frame` | Successful steps stay inside one case frame while admitted materials only append, seated council identifiers only shrink, phase rank never falls, and deliberation round never decreases. |
 | Bounded termination | `stepPath_length_le_initializedBudget` | Successful public runs from initialization are finite, with an explicit procedural upper bound. |
 | Deliberation neutrality | `reachable_currentResolution_is_neutral_under_vote_flip` | Flipping every current-round substantive vote flips the substantive outcome in the same way. |
+| Replay certificates | `checkReplayCertificate_status_closed_facts`, `ClosedCertificateFacts.demonstrated_sound`, `ClosedCertificateFacts.not_demonstrated_sound`, `ClosedCertificateFacts.no_majority_sound` | Accepted closed certificates inherit exact replay, reachability, terminal accounting, bounded length, merits completion, filing counts, decision-summary replay, and resolution-specific soundness. |
+| Failure resilience | `step_fail_opportunity_same_round_resilience` | Same-round failure steps preserve stored council votes, preserve no-substantive-outcome viability, and block a new substantive current resolution under that premise. |
 
 Together, these theorems show that the engine keeps the procedure in order, preserves record integrity, and closes cases only in ways justified by the stored deliberation state.  They also show that the engine neither strands a live case nor admits an infinite successful public run.
 
@@ -31,6 +33,14 @@ The proof library has three organizing layers.  Reachability and preservation th
 `engine/Proofs/DeliberationSummaryCore.lean` carries the summary definition, direct correspondence with the executable resolution rule, and council arithmetic independent of reachability.  `engine/Proofs/ViableOutcomesCore.lean` carries the pure viability language, closure language for `no_majority`, and monotonicity lemmas.  `engine/Proofs/OutcomeSoundness.lean` and `engine/Proofs/NoStuck.lean` use those layers to prove current outcome and liveness claims over reachable states.
 
 `engine/Proofs/Progress.lean` defines `fixedFrameProgress`, a source-anchored state relation that packages frame preservation, append-only admitted materials, shrinking seated-member identifiers, nondecreasing phase rank, and nondecreasing deliberation round.  `engine/Proofs/ProgressViability.lean` adds same-round deliberation progress, which combines fixed-frame progress with viability shrinkage for same-round council actions.
+
+## Replay Certificates And System Direction
+
+AAR now has a packet-level replay certificate path.  The runtime writes `certificate.json` with the initialization request, accepted public actions, claimed final state, and compact final-state hash.  The `aar verify-certificate` command checks that artifact against `state.json` and the Lean engine, while services list and serve the artifact through ordinary artifact routes.
+
+The same pattern should govern ADC and AARD when they gain certificate support.  Each runtime should write a terminal packet artifact that records the engine initialization request, accepted public actions, claimed final state, and compact final-state hash.  Services should list and fetch that artifact through the case artifact API, while verification remains an explicit operator command.
+
+ADC needs its own certificate schema because its state includes civil-procedure phases, motions, discovery, trial, juror eligibility, verdict, and judgment.  Its first proof target should be exact replay with terminal-state accounting, followed by jury-failure and verdict-soundness facts at the packet boundary.  AARD needs its own schema because its council submits numeric answers and its Lean proof library is smaller; its first target should be exact replay and answer-map preservation before any aggregate rule theorem.
 
 ## Limits
 
