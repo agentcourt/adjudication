@@ -47,6 +47,39 @@ structure ClosedCertificateFacts
       replayInitialized req actions = .ok replayed ∧
         decisionSummary replayed = decisionSummary claimed
 
+structure FailedCertificateFacts
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (claimed : ArbitrationState) : Prop where
+  replay_exact :
+    replayInitialized req actions = .ok claimed
+  reachable :
+    Reachable claimed
+  length_bound :
+    ∃ start,
+      initializeCase req = .ok start ∧
+        actions.length ≤ 2 * start.policy.max_submitted_evidence_per_side +
+          8 + start.policy.max_deliberation_rounds * start.policy.council_size
+  status_failed :
+    claimed.case.status = "failed"
+  failure_record :
+    ∃ failure,
+      claimed.case.failure = some failure ∧
+        failure.failure_type = "opportunity_failed" ∧
+          (failure.role = "plaintiff" ∨ failure.role = "defendant") ∧
+            failure.phase = claimed.case.phase
+  decision_summary_replayed :
+    ∃ replayed,
+      replayInitialized req actions = .ok replayed ∧
+        decisionSummary replayed = decisionSummary claimed
+
+def TerminalCertificateFacts
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (claimed : ArbitrationState) : Prop :=
+  ClosedCertificateFacts req actions claimed ∨
+    FailedCertificateFacts req actions claimed
+
 theorem checkReplayCertificate_status_closed_facts
     (req : InitializeCaseRequest)
     (actions : List CourtAction)
@@ -97,6 +130,45 @@ theorem checkReplayCertificate_status_closed_facts
       decision_summary_replayed :=
         checkReplayCertificate_ok_decisionSummary_replayed
           req actions claimed hCheck }
+
+theorem checkReplayCertificate_status_failed_facts
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (claimed : ArbitrationState)
+    (hCheck : checkReplayCertificate req actions claimed = .ok ())
+    (hStatus : claimed.case.status = "failed") :
+    FailedCertificateFacts req actions claimed := by
+  have hReplay : replayInitialized req actions = .ok claimed :=
+    (checkReplayCertificate_ok_iff req actions claimed).1 hCheck
+  have hReachable : Reachable claimed :=
+    checkReplayCertificate_ok_reachable req actions claimed hCheck
+  exact
+    { replay_exact := hReplay
+      reachable := hReachable
+      length_bound :=
+        checkReplayCertificate_ok_length_le_initializedBudget
+          req actions claimed hCheck
+      status_failed := hStatus
+      failure_record :=
+        reachable_failed_has_failure claimed hReachable hStatus
+      decision_summary_replayed :=
+        checkReplayCertificate_ok_decisionSummary_replayed
+          req actions claimed hCheck }
+
+theorem checkReplayCertificate_terminal_facts
+    (req : InitializeCaseRequest)
+    (actions : List CourtAction)
+    (claimed : ArbitrationState)
+    (hCheck : checkReplayCertificate req actions claimed = .ok ())
+    (hTerminal :
+      claimed.case.status = "closed" ∨
+        claimed.case.status = "failed") :
+    TerminalCertificateFacts req actions claimed := by
+  rcases hTerminal with hClosed | hFailed
+  · exact Or.inl
+      (checkReplayCertificate_status_closed_facts req actions claimed hCheck hClosed)
+  · exact Or.inr
+      (checkReplayCertificate_status_failed_facts req actions claimed hCheck hFailed)
 
 theorem ClosedCertificateFacts.demonstrated_sound
     {req : InitializeCaseRequest}

@@ -23,12 +23,15 @@ Reference: `engine/Proofs/CertificateFacts.lean`, `engine/Proofs/ProgressViabili
 
 The closed-certificate fact package now has resolution-specific accessors for demonstrated, not-demonstrated, and no-majority soundness.  A caller that has `ClosedCertificateFacts` and the recorded resolution can extract the matching soundness theorem directly, without redoing the disjunction split.  The package still rests on exact initialized replay and does not change certificate acceptance.
 
+The certificate package now covers failed terminal packets.  `FailedCertificateFacts` packages exact initialized replay, reachability, the initialized action-length bound, failed status, the recorded `opportunity_failed` object with a plaintiff or defendant role and phase, and decision-summary replay.  `checkReplayCertificate_terminal_facts` exposes the terminal boundary as closed facts or failed facts.
+
 The same-round failure package now records the public `fail_opportunity` consequences needed for the council-failure story.  A successful same-round failure step preserves the stored council vote list, preserves no-substantive-outcome viability, and blocks a new substantive current resolution under that premise.  This packages existing viability and progress facts at the public step boundary.
 
 Verification:
 
 - [x] `lake build Proofs.CertificateFacts`
 - [x] `lake build Proofs.ProgressViability`
+- [x] `lake build Proofs`
 
 ### Active-step realizability proof
 

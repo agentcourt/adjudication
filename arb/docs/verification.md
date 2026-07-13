@@ -21,7 +21,7 @@ The Lean library proves AAR properties over reachable executions, not isolated e
 | Fixed-frame progress | `fixedFrameProgress`, `step_establishes_fixedFrameProgress`, `initialized_run_progresses_in_initial_frame` | Successful steps stay inside one case frame while admitted materials only append, seated council identifiers only shrink, phase rank never falls, and deliberation round never decreases. |
 | Bounded termination | `stepPath_length_le_initializedBudget` | Successful public runs from initialization are finite, with an explicit procedural upper bound. |
 | Deliberation neutrality | `reachable_currentResolution_is_neutral_under_vote_flip` | Flipping every current-round substantive vote flips the substantive outcome in the same way. |
-| Replay certificates | `checkReplayCertificate_status_closed_facts`, `ClosedCertificateFacts.demonstrated_sound`, `ClosedCertificateFacts.not_demonstrated_sound`, `ClosedCertificateFacts.no_majority_sound` | Accepted closed certificates inherit exact replay, reachability, terminal accounting, bounded length, merits completion, filing counts, decision-summary replay, and resolution-specific soundness. |
+| Replay certificates | `checkReplayCertificate_terminal_facts`, `checkReplayCertificate_status_closed_facts`, `checkReplayCertificate_status_failed_facts` | Accepted terminal certificates inherit exact replay, reachability, bounded length, decision-summary replay, and either closed-case soundness or an accounted failed-opportunity record. |
 | Failure resilience | `step_fail_opportunity_same_round_resilience` | Same-round failure steps preserve stored council votes, preserve no-substantive-outcome viability, and block a new substantive current resolution under that premise. |
 
 Together, these theorems show that the engine keeps the procedure in order, preserves record integrity, and closes cases only in ways justified by the stored deliberation state.  They also show that the engine neither strands a live case nor admits an infinite successful public run.
@@ -37,6 +37,8 @@ The proof library has three organizing layers.  Reachability and preservation th
 ## Replay Certificates And System Direction
 
 AAR now has a packet-level replay certificate path.  The runtime writes `certificate.json` with the initialization request, accepted public actions, claimed final state, and compact final-state hash.  The `aar verify-certificate` command checks that artifact against `state.json` and the Lean engine, while services list and serve the artifact through ordinary artifact routes.
+
+The Lean certificate package covers both terminal outcomes.  Closed packets carry exact replay, reachability, terminal accounting, ordered merits completion, filing counts, decision-summary replay, and resolution-specific soundness.  Failed packets carry exact replay, reachability, the initialized action-length bound, decision-summary replay, and an `opportunity_failed` record identifying a plaintiff or defendant role and the failed phase.
 
 The same pattern should govern ADC and AARD when they gain certificate support.  Each runtime should write a terminal packet artifact that records the engine initialization request, accepted public actions, claimed final state, and compact final-state hash.  Services should list and fetch that artifact through the case artifact API, while verification remains an explicit operator command.
 
