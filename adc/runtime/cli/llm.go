@@ -108,7 +108,7 @@ func RunLLM(args []string, stdout io.Writer, stderr io.Writer) error {
 	if requestSpec != nil {
 		resp, err = client.CreateResponseWithRequestSpec(ctx, *requestSpec, input, tools, "")
 	} else {
-		resp, err = client.CreateResponse(ctx, modelName, input, tools, "", nil)
+		resp, err = client.CreateResponse(ctx, modelRef.Model, input, tools, "", nil)
 	}
 	if err != nil {
 		return err
