@@ -198,6 +198,34 @@ theorem ClosedCertificateFacts.decision_rule_facts
     DecisionRuleFacts claimed :=
   facts.decision_rule
 
+theorem ClosedCertificateFacts.closed_resolution_agrees_with_matched_case
+    {req : InitializeCaseRequest}
+    {actions : List CourtAction}
+    {claimed : ArbitrationState}
+    (facts : ClosedCertificateFacts req actions claimed)
+    (c : ArbitrationCase)
+    (requiredVotes maxRounds : Nat)
+    (hVotes :
+      List.Perm
+        (currentRoundVotes claimed.case)
+        (currentRoundVotes c))
+    (hSeated :
+      seatedCouncilMemberCount claimed.case =
+        seatedCouncilMemberCount c)
+    (hRound :
+      claimed.case.deliberation_round =
+        c.deliberation_round) :
+    (deliberationSummaryForCase
+      claimed.case
+      requiredVotes
+      maxRounds).closedResolution? =
+      (deliberationSummaryForCase
+        c
+        requiredVotes
+        maxRounds).closedResolution? :=
+  facts.decision_rule.closed_resolution_anonymous
+    c requiredVotes maxRounds hVotes hSeated hRound
+
 theorem ClosedCertificateFacts.not_demonstrated_sound
     {req : InitializeCaseRequest}
     {actions : List CourtAction}

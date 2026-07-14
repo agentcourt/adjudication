@@ -12,7 +12,7 @@ ARB supplies the reference implementation.  The runtime writes `certificate.json
 
 ARB has the complete first certificate layer.  The runtime records only accepted engine actions, so rejected role attempts, stale opportunities, and invalid tool calls do not enter the certificate.  The verifier checks schema version, procedure name, required fields, claimed-state hash, packet-state hash, Lean replay acceptance, and replayed-state hash.
 
-The proof boundary now covers both terminal outcomes.  `checkReplayCertificate_terminal_facts` returns either `ClosedCertificateFacts` or `FailedCertificateFacts` for an accepted terminal certificate.  Closed facts include replay, reachability, terminal accounting, outcome soundness, decision-rule facts, due-process filing facts, and decision-summary replay.  Failed facts include replay, reachability, the initialized length bound, the failed status, the recorded failed-opportunity object, and decision-summary replay.
+The proof boundary now covers both terminal outcomes.  `checkReplayCertificate_terminal_facts` returns either `ClosedCertificateFacts` or `FailedCertificateFacts` for an accepted terminal certificate.  Closed facts include replay, reachability, terminal accounting, outcome soundness, decision-rule facts, matched-case closed-resolution agreement, due-process filing facts, and decision-summary replay.  Failed facts include replay, reachability, the initialized length bound, the failed status, the recorded failed-opportunity object, and decision-summary replay.
 
 ## ADC Plan
 

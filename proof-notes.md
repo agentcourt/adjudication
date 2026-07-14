@@ -37,9 +37,11 @@ The remaining useful proof work supports operational or adjudicative claims that
 
 | Priority | Candidate | Reason |
 | --- | --- | --- |
-| 1 | ARB removal-interleaving vote-order theorem | Current ARB vote-order work covers current-round vote permutation with fixed seating and round.  Removal interleavings are harder because removals change the denominator, so this should wait for a precise operational claim. |
+| 1 | ARB removal-interleaving step theorem | `ClosedCertificateFacts.closed_resolution_agrees_with_matched_case` covers the matched-state decision-rule claim.  A step-level theorem should wait for a runtime claim about accepted action order, because removals alter the denominator and may change closure timing. |
 
-AARD now covers the current certificate report boundary for both terminal shapes.  ADC now covers both verdict and hung-jury outcomes that derive from a deliberating-juror timeout.  ARB closed certificates now carry the existing decision-rule package.  The remaining ARB item should wait for a precise operational claim about removals and vote order.
+AARD now covers the current certificate report boundary for both terminal shapes.  ADC now covers both verdict and hung-jury outcomes that derive from a deliberating-juror timeout.  ARB closed certificates now carry the existing decision-rule package and expose a matched-case closed-resolution theorem: when another case has the same current-round vote multiset, seated count, and deliberation round, the executable closed-resolution summary agrees for the same required-vote and max-round values.
+
+That theorem supports a narrow operational statement about removals: after the removal effects have been matched at the decision-rule inputs, ordering artifacts do not change the closed-resolution summary.  It does not prove that `submit_council_answer` and `remove_council_member` commute as engine steps, that two action orders reach the same seated set, or that they close at the same time.  A step-level theorem should specify the accepted action pair, distinct member ids, no current-round answer for the removed member, the same final seated set, and the same final current-round vote multiset.
 
 ## Current Limits
 
