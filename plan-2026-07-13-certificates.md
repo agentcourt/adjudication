@@ -39,7 +39,7 @@ The first Lean target should be exact replay with reachability and terminal acco
 | 3 | ADC | Done: expose the certificate artifact through service artifact lists and fetch routes. |
 | 4 | ADC | Done: prove accepted-certificate exact replay, replay-start reachability, closed-terminal accounting, and a concrete closed certificate. |
 | 5 | ADC | Done: add accepted-certificate verdict and judgment accounting predicates, with replayed juror-vote and enter-judgment examples. |
-| 6 | ADC | Settle state-level failure accounting for lawyer and juror failures; the current Lean case state records juror failure as juror status and has no case-level `failed` status. |
+| 6 | ADC | Done: settle failure accounting boundary.  Lawyer and nonjuror failures do not produce replay certificates today; juror failures are replayed `process_juror_timeout` transitions. |
 | 7 | AARD | Done: add runtime certificate writing and an explicit `aard verify-certificate` command using `state.json`. |
 | 8 | AARD | Done: expose the certificate artifact through service artifact lists and fetch routes. |
 | 9 | AARD | Done: prove exact replay, reachability, terminal accounting, and replayed answer-pair exposure. |

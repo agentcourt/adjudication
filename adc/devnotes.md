@@ -24,6 +24,8 @@ The ADC proof layer now has accepted-certificate modules under `engine/Proofs/`.
 
 `CertificateOutcomeFacts.lean` adds verdict and judgment accounting predicates for accepted certificates.  `CertificateOutcomeExamples.lean` checks two concrete replayed outcome certificates: a `submit_juror_vote` transition that derives a plaintiff verdict under the configured concurrence threshold, and an `enter_judgment` transition that carries jury-verdict damages into `monetary_judgment` and records the judgment trace.  These examples exercise the actual certificate transition boundary instead of restating the existing standalone verdict and judgment samples.
 
+ADC failure accounting has two different boundaries.  Lawyer and nonjuror role failures stop the runner before `writeEvidence`, so the current runtime produces no `state.json` or `certificate.json` for those failures.  Juror failures during voir dire or deliberation enter the Lean state through accepted `process_juror_timeout` transitions, and deliberation failures may also derive a verdict or hung jury.  The certificate proof layer should treat those juror failures as ordinary replayed engine transitions; a failed-certificate Lean package should wait for a state-level ADC failure claim in the runtime.
+
 Importing the closed-case opportunity theorem into the certificate proof path exposed an obsolete theorem in `OrchestrationCore.lean`: it still claimed `assignOpportunityIds` returned sequential ids.  The engine now assigns deterministic hash ids from opportunity content.  The theorem now states the property the function actually supports at that level, length preservation.
 
 ### Verification
