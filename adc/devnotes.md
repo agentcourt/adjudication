@@ -1,5 +1,57 @@
 # Development Notes
 
+## 2026-07-14: `adc juror` probe command
+
+### References
+
+- New command: [`runtime/cli/juror.go`](runtime/cli/juror.go)
+- Persona record loading: [`../common/persona/persona.go`](../common/persona/persona.go)
+- Voir dire experiment plan: [`../experiments-1.md`](../experiments-1.md)
+
+### Decisions
+
+`adc juror` asks one juror pool member one question.  It loads a JSONL
+pool (default `common/data/personas/pool.jsonl`), selects a member by
+1-based index or unique substring (`--member`, `--list`), builds the
+runtime juror system prompt from the member's persona, and sends one
+prompt through the member's request spec.  `--repeat K` draws
+independent samples (NDJSON output when K > 1), `--vote` reuses the
+`adc llm` tool-check path to force a `submit_juror_vote` call, and
+`--transcript FILE` gives file-based multi-turn: prior turns in the
+NDJSON file are replayed as conversation history and the new exchange
+is appended, with a member-mismatch check.  The command exists for the
+iterative juror interrogation loop in the experiment plan.
+
+Two defects observed during live testing, both outside the new code.
+`--vote` against checked-in pool members fails at OpenRouter with 404
+"no endpoints found that can handle the requested parameters": the
+derived provider pin (for example `only=["novita/fp8"]` with
+`quantizations=["fp8"]`) plus function tools matches no endpoint on
+`/responses`.  The same record answers plain prompts.  An unpinned
+record (`{"openrouter_model_id":"openai/gpt-4o-mini","persona":...}`)
+completes `--vote` correctly, so the tool path itself works.  This
+needs a decision, because direct-mode juror votes in `adc case` and
+`adc scenario` use the same client with the same tools and may fail
+for pinned members.  Separately, `adc llm --model endpoint://model`
+without a persona record sends the literal `endpoint://model` string
+as the model id and OpenRouter rejects it; the request-spec path
+strips the prefix and works.
+
+The `--model` defect is fixed (2026-07-14, approved): `llm.go` and the
+plain-record branch of `juror.go` now pass the parsed model id from
+`ParseModelRef` to `CreateResponse`, matching `Spec.UpstreamModel()`
+behavior on the request-spec path.  Verified live with
+`adc llm --model openrouter://openai/gpt-4o-mini`.
+
+### Verification
+
+- [x] `gofmt -l runtime/cli/` (clean)
+- [x] `go vet ./runtime/cli/`
+- [x] `go test ./runtime/cli/ -run 'TestSelectJurorMember|TestJurorTranscriptRoundTrip'`
+- [x] Live: `--list`, single prompt, two-turn `--transcript` continuation against pool member 1 (deepseek-r1/novita)
+- [x] Live: `--vote` against an unpinned gpt-4o-mini record
+- [x] Live failure reproduced: `--vote` against pinned pool members returns OpenRouter 404
+
 ## 2026-07-13: Terminal state artifact
 
 ### References

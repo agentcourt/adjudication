@@ -17,6 +17,8 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) error {
 		return RunCasePacket(args[1:], stdout, stderr)
 	case "complain":
 		return RunComplain(args[1:], stdout, stderr)
+	case "juror":
+		return RunJuror(args[1:], stdout, stderr)
 	case "llm":
 		return RunLLM(args[1:], stdout, stderr)
 	case "mcp":
@@ -47,6 +49,8 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) error {
 			return RunCasePacket([]string{"-h"}, stdout, stderr)
 		case "complain":
 			return RunComplain([]string{"-h"}, stdout, stderr)
+		case "juror":
+			return RunJuror([]string{"-h"}, stdout, stderr)
 		case "llm":
 			return RunLLM([]string{"-h"}, stdout, stderr)
 		case "mcp":
@@ -82,6 +86,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "  case       Read a complaint, plan both sides, and run the case")
 	fmt.Fprintln(w, "  case-packet  Build an attested-run complaint packet")
 	fmt.Fprintln(w, "  complain   Draft complaint.md from a situation markdown file")
+	fmt.Fprintln(w, "  juror      Ask a juror pool member one question, with optional transcript continuation")
 	fmt.Fprintln(w, "  llm        Send one prompt through the runtime model client")
 	fmt.Fprintln(w, "  mcp        Run the ADC MCP adapter")
 	fmt.Fprintln(w, "  pool       Sample an experimental juror pool from persona clusters")
