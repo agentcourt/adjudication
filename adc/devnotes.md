@@ -22,6 +22,8 @@ ADC terminal packets now include `certificate.json`.  The certificate stores the
 
 The ADC proof layer now has accepted-certificate modules under `engine/Proofs/`.  `Reachability.lean` defines the typed certificate initialization and transition objects, including accepted `step` transitions and accepted `apply_decision` pass transitions.  `Replay.lean` proves exact replay and reachability from the replay start, `CertificateFacts.lean` packages closed-terminal facts, and `CertificateExamples.lean` checks a concrete closed certificate.  ADC `CourtState` contains JSON and `Float`, so the Lean accepted-certificate boundary is the proposition `replayCertificate init transitions = .ok claimed`; the executable equality check remains in `adc verify-certificate`.
 
+`CertificateOutcomeFacts.lean` adds verdict and judgment accounting predicates for accepted certificates.  `CertificateOutcomeExamples.lean` checks two concrete replayed outcome certificates: a `submit_juror_vote` transition that derives a plaintiff verdict under the configured concurrence threshold, and an `enter_judgment` transition that carries jury-verdict damages into `monetary_judgment` and records the judgment trace.  These examples exercise the actual certificate transition boundary instead of restating the existing standalone verdict and judgment samples.
+
 Importing the closed-case opportunity theorem into the certificate proof path exposed an obsolete theorem in `OrchestrationCore.lean`: it still claimed `assignOpportunityIds` returned sequential ids.  The engine now assigns deterministic hash ids from opportunity content.  The theorem now states the property the function actually supports at that level, length preservation.
 
 ### Verification

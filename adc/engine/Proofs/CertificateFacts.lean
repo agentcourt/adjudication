@@ -28,6 +28,24 @@ def TerminalCertificateFacts
     (claimed : CourtState) : Prop :=
   ClosedCertificateFacts init transitions claimed
 
+def certificateReplayAccepted : Except String CourtState → Bool
+  | .ok _ => true
+  | .error _ => false
+
+def certificateStateOrDefault : Except String CourtState → CourtState
+  | .ok state => state
+  | .error _ => default
+
+theorem certificateStateOrDefault_ok
+    (result : Except String CourtState)
+    (hAccepted : certificateReplayAccepted result = true) :
+    result = .ok (certificateStateOrDefault result) := by
+  cases result with
+  | ok state =>
+      rfl
+  | error err =>
+      simp [certificateReplayAccepted] at hAccepted
+
 theorem terminalClosedAccounted_of_status_closed
     (state : CourtState)
     (hStatus : state.case.status = "closed") :

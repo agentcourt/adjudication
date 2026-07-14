@@ -31,29 +31,11 @@ def sampleClosedCertificateInit : ReplayInitializeRequest :=
 def sampleClosedCertificateTransitions : List ReplayTransition :=
   [ReplayTransition.step certificateExampleDismissRule41Action]
 
-def certificateReplayAccepted : Except String CourtState → Bool
-  | .ok _ => true
-  | .error _ => false
-
-def certificateStateOrDefault : Except String CourtState → CourtState
-  | .ok state => state
-  | .error _ => default
-
 def sampleClosedCertificateState : CourtState :=
   certificateStateOrDefault
     (replayCertificate
       sampleClosedCertificateInit
       sampleClosedCertificateTransitions)
-
-theorem certificateStateOrDefault_ok
-    (result : Except String CourtState)
-    (hAccepted : certificateReplayAccepted result = true) :
-    result = .ok (certificateStateOrDefault result) := by
-  cases result with
-  | ok state =>
-      rfl
-  | error err =>
-      simp [certificateReplayAccepted] at hAccepted
 
 theorem sample_closed_certificate_replay_bool :
     certificateReplayAccepted

@@ -8,3 +8,5 @@ import Proofs.Reachability
 import Proofs.Replay
 import Proofs.CertificateFacts
 import Proofs.CertificateExamples
+import Proofs.CertificateOutcomeFacts
+import Proofs.CertificateOutcomeExamples
