@@ -95,6 +95,35 @@ structure JurorFailureVerdictCertificateFacts
   juror_failure_verdict_accounted :
     jurorFailureVerdictAccounted claimed jurorId = true
 
+inductive OutcomeCertificateFacts
+    (init : ReplayInitializeRequest)
+    (transitions : List ReplayTransition)
+    (claimed : CourtState) : Prop where
+  | closed :
+      ClosedCertificateFacts init transitions claimed →
+        OutcomeCertificateFacts init transitions claimed
+  | verdict :
+      VerdictCertificateFacts init transitions claimed →
+        OutcomeCertificateFacts init transitions claimed
+  | jurorFailureVerdict :
+      (jurorId : String) →
+        JurorFailureVerdictCertificateFacts init transitions claimed jurorId →
+          OutcomeCertificateFacts init transitions claimed
+  | judgment :
+      JudgmentCertificateFacts init transitions claimed →
+        OutcomeCertificateFacts init transitions claimed
+
+theorem acceptedReplayCertificate_status_closed_outcome_facts
+    (init : ReplayInitializeRequest)
+    (transitions : List ReplayTransition)
+    (claimed : CourtState)
+    (hAccepted : AcceptedReplayCertificate init transitions claimed)
+    (hStatus : claimed.case.status = "closed") :
+    OutcomeCertificateFacts init transitions claimed := by
+  exact OutcomeCertificateFacts.closed
+    (acceptedReplayCertificate_status_closed_facts
+      init transitions claimed hAccepted hStatus)
+
 theorem acceptedReplayCertificate_verdict_facts
     (init : ReplayInitializeRequest)
     (transitions : List ReplayTransition)
@@ -108,6 +137,17 @@ theorem acceptedReplayCertificate_verdict_facts
         acceptedReplayCertificate_reachableFrom init transitions claimed hAccepted
       verdict_accounted := hVerdict }
 
+theorem acceptedReplayCertificate_verdict_outcome_facts
+    (init : ReplayInitializeRequest)
+    (transitions : List ReplayTransition)
+    (claimed : CourtState)
+    (hAccepted : AcceptedReplayCertificate init transitions claimed)
+    (hVerdict : juryVerdictAccounted claimed = true) :
+    OutcomeCertificateFacts init transitions claimed := by
+  exact OutcomeCertificateFacts.verdict
+    (acceptedReplayCertificate_verdict_facts
+      init transitions claimed hAccepted hVerdict)
+
 theorem acceptedReplayCertificate_judgment_facts
     (init : ReplayInitializeRequest)
     (transitions : List ReplayTransition)
@@ -120,6 +160,17 @@ theorem acceptedReplayCertificate_judgment_facts
       reachable_from_start :=
         acceptedReplayCertificate_reachableFrom init transitions claimed hAccepted
       judgment_accounted := hJudgment }
+
+theorem acceptedReplayCertificate_judgment_outcome_facts
+    (init : ReplayInitializeRequest)
+    (transitions : List ReplayTransition)
+    (claimed : CourtState)
+    (hAccepted : AcceptedReplayCertificate init transitions claimed)
+    (hJudgment : judgmentFromVerdictAccounted claimed = true) :
+    OutcomeCertificateFacts init transitions claimed := by
+  exact OutcomeCertificateFacts.judgment
+    (acceptedReplayCertificate_judgment_facts
+      init transitions claimed hAccepted hJudgment)
 
 theorem acceptedReplayCertificate_juror_failure_verdict_facts
     (init : ReplayInitializeRequest)
@@ -136,3 +187,16 @@ theorem acceptedReplayCertificate_juror_failure_verdict_facts
         acceptedReplayCertificate_reachableFrom init transitions claimed hAccepted
       timeout_transition_recorded := hTimeout
       juror_failure_verdict_accounted := hVerdict }
+
+theorem acceptedReplayCertificate_juror_failure_verdict_outcome_facts
+    (init : ReplayInitializeRequest)
+    (transitions : List ReplayTransition)
+    (claimed : CourtState)
+    (jurorId : String)
+    (hAccepted : AcceptedReplayCertificate init transitions claimed)
+    (hTimeout : replayTransitionsContainJurorTimeout transitions jurorId = true)
+    (hVerdict : jurorFailureVerdictAccounted claimed jurorId = true) :
+    OutcomeCertificateFacts init transitions claimed := by
+  exact OutcomeCertificateFacts.jurorFailureVerdict jurorId
+    (acceptedReplayCertificate_juror_failure_verdict_facts
+      init transitions claimed jurorId hAccepted hTimeout hVerdict)

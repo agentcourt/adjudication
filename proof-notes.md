@@ -28,7 +28,7 @@ The certificate plan has been carried across all three current adjudication proc
 | System | Runtime boundary | Proof boundary |
 | --- | --- | --- |
 | ARB | Writes `certificate.json`; `aar verify-certificate` replays against `state.json`. | Accepted terminal certificates expose exact replay, reachability, bounded length, closed outcome soundness, due-process facts, decision-summary replay, or failed-opportunity facts. |
-| ADC | Writes `state.json` and `certificate.json`; `adc verify-certificate` checks final-state hashes and replays accepted transitions. | Accepted certificates expose exact replay, replay-start reachability, closed-terminal accounting, verdict facts, juror-failure verdict facts, judgment facts, and concrete replayed examples. |
+| ADC | Writes `state.json` and `certificate.json`; `adc verify-certificate` checks final-state hashes and replays accepted transitions. | Accepted certificates expose exact replay, replay-start reachability, closed-terminal accounting, verdict facts, juror-failure verdict facts, judgment facts, a combined outcome package, and concrete replayed examples. |
 | AARD | Writes `state.json` and `certificate.json`; `aard verify-certificate` replays initialization and accepted actions. | Accepted terminal certificates expose exact replay, reachability, terminal accounting, and closed answer-pair replay. |
 
 ## Remaining Candidates
@@ -37,12 +37,12 @@ The remaining useful proof work supports operational or adjudicative claims that
 
 | Priority | Candidate | Reason |
 | --- | --- | --- |
-| 1 | ADC closed-certificate outcome package | ADC has separate closed-terminal, verdict, juror-failure verdict, and judgment certificate facts.  A single terminal fact package that includes the relevant outcome facts when present would make the certificate boundary easier to cite without adding execution semantics. |
-| 2 | AARD failed-certificate facts | AARD already has failed terminal accounting for accepted certificates.  The useful next step is to expose the failure record fields that the runtime reports, matching the closed answer-pair package. |
+| 1 | AARD failed-certificate facts | AARD already has failed terminal accounting for accepted certificates.  The useful next step is to expose the failure record fields that the runtime reports, matching the closed answer-pair package. |
+| 2 | ADC hung-jury timeout facts | ADC now packages juror-timeout verdict certificates.  A matching hung-jury package is useful if terminal packets report timeout-derived hung juries as a system claim. |
 | 3 | ARB decision-rule package at certificate boundary | ARB has decision-rule facts over reachable states.  Packaging the relevant facts for accepted closed certificates would give a checked packet one certificate-facing decision-rule statement. |
 | 4 | ARB removal-interleaving vote-order theorem | Current ARB vote-order work covers current-round vote permutation with fixed seating and round.  Removal interleavings are harder because removals change the denominator, so this should wait for a precise operational claim. |
 
-ADC remains the next Lean target because its certificate facts are useful but still split across several small packages.  AARD work stays close to exact replay, terminal accounting, and answer-map exposure until the runtime defines an aggregate degree result.  Further ARB work packages existing facts at the certificate boundary before adding new theory.
+AARD is the next Lean target because its failed-certificate package accounts for terminality but not the reported failure fields.  ADC's remaining certificate work is narrower after the outcome package, and it should follow concrete runtime outputs.  Further ARB work packages existing facts at the certificate boundary before adding new theory.
 
 ## Current Limits
 

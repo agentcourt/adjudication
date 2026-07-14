@@ -113,6 +113,14 @@ theorem sample_verdict_certificate_facts :
     sample_verdict_certificate_replay
     sample_verdict_certificate_accounted
 
+theorem sample_verdict_certificate_outcome_facts :
+    OutcomeCertificateFacts
+      sampleVerdictCertificateInit
+      sampleVerdictCertificateTransitions
+      sampleVerdictCertificateState := by
+  exact OutcomeCertificateFacts.verdict
+    sample_verdict_certificate_facts
+
 def certificateJudgmentClaim : Lean.Json :=
   Lean.Json.mkObj
     [ ("claim_id", Lean.Json.str "claim-1")
@@ -205,6 +213,14 @@ theorem sample_judgment_certificate_facts :
     sampleJudgmentCertificateState
     sample_judgment_certificate_replay
     sample_judgment_certificate_accounted
+
+theorem sample_judgment_certificate_outcome_facts :
+    OutcomeCertificateFacts
+      sampleJudgmentCertificateInit
+      sampleJudgmentCertificateTransitions
+      sampleJudgmentCertificateState := by
+  exact OutcomeCertificateFacts.judgment
+    sample_judgment_certificate_facts
 
 def certificateTimeoutInitialCase : CaseState :=
   { (default : CaseState) with
@@ -304,3 +320,11 @@ theorem sample_juror_timeout_certificate_facts :
     sample_juror_timeout_certificate_replay
     sample_juror_timeout_certificate_transition_recorded
     sample_juror_timeout_certificate_accounted
+
+theorem sample_juror_timeout_certificate_outcome_facts :
+    OutcomeCertificateFacts
+      sampleJurorTimeoutCertificateInit
+      sampleJurorTimeoutCertificateTransitions
+      sampleJurorTimeoutCertificateState := by
+  exact OutcomeCertificateFacts.jurorFailureVerdict "J1"
+    sample_juror_timeout_certificate_facts
