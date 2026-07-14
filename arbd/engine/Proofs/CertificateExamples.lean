@@ -73,4 +73,67 @@ theorem sample_closed_certificate_facts :
     sample_closed_certificate_check
     sample_closed_certificate_status.1
 
+def sampleFailedCertificateActions : List CourtAction :=
+  [ failOpportunityAction
+      "openings:plaintiff"
+      "plaintiff"
+      "openings"
+      "agent_error"
+      "plaintiff agent failed"
+      "model-p"
+  ]
+
+def sampleFailedCertificateState : ArbitrationState :=
+  match replayInitialized initRequest sampleFailedCertificateActions with
+  | .ok state => state
+  | .error _ => default
+
+theorem sample_failed_certificate_check_bool :
+    certificateCheckAccepted
+      (checkReplayCertificate
+        initRequest
+        sampleFailedCertificateActions
+        sampleFailedCertificateState) = true := by
+  native_decide
+
+theorem sample_failed_certificate_check :
+    checkReplayCertificate
+      initRequest
+      sampleFailedCertificateActions
+      sampleFailedCertificateState = .ok () := by
+  exact (certificateCheckAccepted_eq_true _).1 sample_failed_certificate_check_bool
+
+theorem sample_failed_certificate_status :
+    sampleFailedCertificateState.case.status = "failed" ∧
+      sampleFailedCertificateState.case.phase = "openings" ∧
+        (nextOpportunity sampleFailedCertificateState).terminal = true ∧
+          (nextOpportunity sampleFailedCertificateState).reason = "agent_error" := by
+  native_decide
+
+theorem sample_failed_certificate_failure_record :
+    reportedFailureRecord sampleFailedCertificateState =
+      some
+        { failure_type := "opportunity_failed"
+        , role := "plaintiff"
+        , phase := "openings"
+        , opportunity_id := "openings:plaintiff"
+        , reason := "agent_error"
+        , message := "plaintiff agent failed"
+        , member_id := ""
+        , model := "model-p"
+        } := by
+  native_decide
+
+theorem sample_failed_certificate_facts :
+    FailedCertificateFacts
+      initRequest
+      sampleFailedCertificateActions
+      sampleFailedCertificateState := by
+  exact checkReplayCertificate_status_failed_facts
+    initRequest
+    sampleFailedCertificateActions
+    sampleFailedCertificateState
+    sample_failed_certificate_check
+    sample_failed_certificate_status.1
+
 end ArbdProofs

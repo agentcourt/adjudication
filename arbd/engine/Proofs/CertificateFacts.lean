@@ -5,6 +5,9 @@ namespace ArbdProofs
 def reportedAnswerPairs (s : ArbitrationState) : List (String × Nat) :=
   s.case.council_answers.map (fun answer => (answer.member_id, answer.answer))
 
+def reportedFailureRecord (s : ArbitrationState) : Option OpportunityFailure :=
+  s.case.failure
+
 def terminalClosedAccounted (s : ArbitrationState) : Prop :=
   s.case.status = "closed" ∧
     (nextOpportunity s).terminal = true ∧
@@ -47,6 +50,10 @@ structure FailedCertificateFacts
         StepReachableFrom start claimed
   terminal_accounted :
     terminalFailedAccounted claimed
+  failure_record_replayed :
+    ∃ replayed,
+      replayInitialized req actions = .ok replayed ∧
+        reportedFailureRecord replayed = reportedFailureRecord claimed
 
 def TerminalCertificateFacts
     (req : InitializeCaseRequest)
@@ -103,7 +110,9 @@ theorem checkReplayCertificate_status_failed_facts
       step_reachable :=
         checkReplayCertificate_ok_stepReachableFrom req actions claimed hCheck
       terminal_accounted :=
-        terminalFailedAccounted_of_status_failed claimed hStatus }
+        terminalFailedAccounted_of_status_failed claimed hStatus
+      failure_record_replayed := ⟨claimed,
+        (checkReplayCertificate_ok_iff req actions claimed).1 hCheck, rfl⟩ }
 
 theorem checkReplayCertificate_terminal_facts
     (req : InitializeCaseRequest)
@@ -129,5 +138,15 @@ theorem ClosedCertificateFacts.answer_pairs_replayed_eq
       replayInitialized req actions = .ok replayed ∧
         reportedAnswerPairs replayed = reportedAnswerPairs claimed :=
   facts.answer_pairs_replayed
+
+theorem FailedCertificateFacts.failure_record_replayed_eq
+    {req : InitializeCaseRequest}
+    {actions : List CourtAction}
+    {claimed : ArbitrationState}
+    (facts : FailedCertificateFacts req actions claimed) :
+    ∃ replayed,
+      replayInitialized req actions = .ok replayed ∧
+        reportedFailureRecord replayed = reportedFailureRecord claimed :=
+  facts.failure_record_replayed
 
 end ArbdProofs

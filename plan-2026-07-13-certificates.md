@@ -28,7 +28,7 @@ AARD is structurally closest to ARB, so its runtime certificate reuses the ARB s
 
 AARD writes `certificate.json` beside `run.json` and `state.json` in terminal output directories.  The verifier replays the certificate through `.bin/aardengine`, compares the certificate hash to `state.json`, and reports the accepted action count and final-state hash.  The service artifact routes list and fetch the certificate through the existing Clerk and direct case artifact APIs.
 
-The first Lean target is complete: exact replay with reachability and terminal accounting.  The second target is also complete for the current runtime boundary: an accepted closed certificate exposes the recorded council answer pairs that the runtime reports.  Aggregate-rule theorems wait until the runtime defines an aggregate degree result; proving an aggregate before the output model exists would create proof work without a system claim to support.
+The Lean certificate package now covers the current runtime report boundary.  Accepted terminal certificates expose exact replay, reachability, and terminal accounting.  Closed certificates expose the recorded council answer pairs, and failed certificates expose the recorded `OpportunityFailure` value.  Checked examples cover both shapes.  Aggregate-rule theorems wait until the runtime defines an aggregate degree result, because the current terminal packet reports individual answers rather than an aggregate degree.
 
 ## Work Order
 
@@ -45,6 +45,7 @@ The first Lean target is complete: exact replay with reachability and terminal a
 | 9 | AARD | Done: add runtime certificate writing and an explicit `aard verify-certificate` command using `state.json`. |
 | 10 | AARD | Done: expose the certificate artifact through service artifact lists and fetch routes. |
 | 11 | AARD | Done: prove exact replay, reachability, terminal accounting, and replayed answer-pair exposure. |
+| 12 | AARD | Done: expose replayed failed-certificate failure records and add a checked party-failure certificate example. |
 
 ## Non-Goals
 

@@ -205,4 +205,18 @@ def removeCouncilMemberAction (memberId status : String) : CourtAction :=
       ]
   }
 
+def failOpportunityAction
+    (opportunityId role phase reason message model : String) : CourtAction :=
+  { action_type := "fail_opportunity"
+  , actor_role := "system"
+  , payload := Json.mkObj
+      [ ("opportunity_id", Json.str opportunityId)
+      , ("role", Json.str role)
+      , ("phase", Json.str phase)
+      , ("reason", Json.str reason)
+      , ("message", Json.str message)
+      , ("model", Json.str model)
+      ]
+  }
+
 end ArbdProofs
