@@ -53,6 +53,18 @@ def jurorFailureVerdictAccounted (state : CourtState) (jurorId : String) : Bool 
     verdictUsesEffectiveConcurrence state &&
       juryVerdictAccounted state
 
+def hungJuryAccounted (state : CourtState) : Bool :=
+  match state.case.hung_jury with
+  | none => false
+  | some hung =>
+      state.case.jury_verdict.isNone &&
+        hung.claim_id != "" &&
+          hung.note != ""
+
+def jurorFailureHungJuryAccounted (state : CourtState) (jurorId : String) : Bool :=
+  timedOutJurorRecorded state jurorId &&
+    hungJuryAccounted state
+
 structure VerdictCertificateFacts
     (init : ReplayInitializeRequest)
     (transitions : List ReplayTransition)
@@ -95,6 +107,22 @@ structure JurorFailureVerdictCertificateFacts
   juror_failure_verdict_accounted :
     jurorFailureVerdictAccounted claimed jurorId = true
 
+structure JurorFailureHungJuryCertificateFacts
+    (init : ReplayInitializeRequest)
+    (transitions : List ReplayTransition)
+    (claimed : CourtState)
+    (jurorId : String) : Prop where
+  replay_exact :
+    AcceptedReplayCertificate init transitions claimed
+  reachable_from_start :
+    ∃ start,
+      replayInitial init = .ok start ∧
+        ReplayReachableFrom start claimed
+  timeout_transition_recorded :
+    replayTransitionsContainJurorTimeout transitions jurorId = true
+  juror_failure_hung_jury_accounted :
+    jurorFailureHungJuryAccounted claimed jurorId = true
+
 inductive OutcomeCertificateFacts
     (init : ReplayInitializeRequest)
     (transitions : List ReplayTransition)
@@ -108,6 +136,10 @@ inductive OutcomeCertificateFacts
   | jurorFailureVerdict :
       (jurorId : String) →
         JurorFailureVerdictCertificateFacts init transitions claimed jurorId →
+          OutcomeCertificateFacts init transitions claimed
+  | jurorFailureHungJury :
+      (jurorId : String) →
+        JurorFailureHungJuryCertificateFacts init transitions claimed jurorId →
           OutcomeCertificateFacts init transitions claimed
   | judgment :
       JudgmentCertificateFacts init transitions claimed →
@@ -200,3 +232,32 @@ theorem acceptedReplayCertificate_juror_failure_verdict_outcome_facts
   exact OutcomeCertificateFacts.jurorFailureVerdict jurorId
     (acceptedReplayCertificate_juror_failure_verdict_facts
       init transitions claimed jurorId hAccepted hTimeout hVerdict)
+
+theorem acceptedReplayCertificate_juror_failure_hung_jury_facts
+    (init : ReplayInitializeRequest)
+    (transitions : List ReplayTransition)
+    (claimed : CourtState)
+    (jurorId : String)
+    (hAccepted : AcceptedReplayCertificate init transitions claimed)
+    (hTimeout : replayTransitionsContainJurorTimeout transitions jurorId = true)
+    (hHung : jurorFailureHungJuryAccounted claimed jurorId = true) :
+    JurorFailureHungJuryCertificateFacts init transitions claimed jurorId := by
+  exact
+    { replay_exact := hAccepted
+      reachable_from_start :=
+        acceptedReplayCertificate_reachableFrom init transitions claimed hAccepted
+      timeout_transition_recorded := hTimeout
+      juror_failure_hung_jury_accounted := hHung }
+
+theorem acceptedReplayCertificate_juror_failure_hung_jury_outcome_facts
+    (init : ReplayInitializeRequest)
+    (transitions : List ReplayTransition)
+    (claimed : CourtState)
+    (jurorId : String)
+    (hAccepted : AcceptedReplayCertificate init transitions claimed)
+    (hTimeout : replayTransitionsContainJurorTimeout transitions jurorId = true)
+    (hHung : jurorFailureHungJuryAccounted claimed jurorId = true) :
+    OutcomeCertificateFacts init transitions claimed := by
+  exact OutcomeCertificateFacts.jurorFailureHungJury jurorId
+    (acceptedReplayCertificate_juror_failure_hung_jury_facts
+      init transitions claimed jurorId hAccepted hTimeout hHung)

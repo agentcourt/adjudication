@@ -328,3 +328,89 @@ theorem sample_juror_timeout_certificate_outcome_facts :
       sampleJurorTimeoutCertificateState := by
   exact OutcomeCertificateFacts.jurorFailureVerdict "J1"
     sample_juror_timeout_certificate_facts
+
+def certificateHungJuryTimeoutInitialCase : CaseState :=
+  { (default : CaseState) with
+    case_id := "certificate-juror-timeout-hung"
+    filed_on := "2026-06-06"
+    status := "trial"
+    trial_mode := "jury"
+    phase := "deliberation"
+    jury_configuration :=
+      some { juror_count := 1, unanimous_required := true, minimum_concurring := 1 }
+    jurors := [certificateOutcomeSwornJuror "J1"]
+  }
+
+def certificateHungJuryTimeoutInitialState : CourtState :=
+  { (default : CourtState) with
+    schema_version := "v1"
+    court_name := "Test Court"
+    case := certificateHungJuryTimeoutInitialCase
+  }
+
+def sampleJurorTimeoutHungJuryCertificateInit : ReplayInitializeRequest :=
+  { state := certificateHungJuryTimeoutInitialState
+  , initialize_case := none
+  }
+
+def sampleJurorTimeoutHungJuryCertificateTransitions : List ReplayTransition :=
+  [ReplayTransition.step certificateJurorTimeoutAction]
+
+def sampleJurorTimeoutHungJuryCertificateState : CourtState :=
+  certificateStateOrDefault
+    (replayCertificate
+      sampleJurorTimeoutHungJuryCertificateInit
+      sampleJurorTimeoutHungJuryCertificateTransitions)
+
+theorem sample_juror_timeout_hung_jury_certificate_replay_bool :
+    certificateReplayAccepted
+      (replayCertificate
+        sampleJurorTimeoutHungJuryCertificateInit
+        sampleJurorTimeoutHungJuryCertificateTransitions) = true := by
+  native_decide
+
+theorem sample_juror_timeout_hung_jury_certificate_replay :
+    AcceptedReplayCertificate
+      sampleJurorTimeoutHungJuryCertificateInit
+      sampleJurorTimeoutHungJuryCertificateTransitions
+      sampleJurorTimeoutHungJuryCertificateState := by
+  exact certificateStateOrDefault_ok
+    (replayCertificate
+      sampleJurorTimeoutHungJuryCertificateInit
+      sampleJurorTimeoutHungJuryCertificateTransitions)
+    sample_juror_timeout_hung_jury_certificate_replay_bool
+
+theorem sample_juror_timeout_hung_jury_certificate_transition_recorded :
+    replayTransitionsContainJurorTimeout
+      sampleJurorTimeoutHungJuryCertificateTransitions
+      "J1" = true := by
+  native_decide
+
+theorem sample_juror_timeout_hung_jury_certificate_accounted :
+    jurorFailureHungJuryAccounted
+      sampleJurorTimeoutHungJuryCertificateState
+      "J1" = true := by
+  native_decide
+
+theorem sample_juror_timeout_hung_jury_certificate_facts :
+    JurorFailureHungJuryCertificateFacts
+      sampleJurorTimeoutHungJuryCertificateInit
+      sampleJurorTimeoutHungJuryCertificateTransitions
+      sampleJurorTimeoutHungJuryCertificateState
+      "J1" := by
+  exact acceptedReplayCertificate_juror_failure_hung_jury_facts
+    sampleJurorTimeoutHungJuryCertificateInit
+    sampleJurorTimeoutHungJuryCertificateTransitions
+    sampleJurorTimeoutHungJuryCertificateState
+    "J1"
+    sample_juror_timeout_hung_jury_certificate_replay
+    sample_juror_timeout_hung_jury_certificate_transition_recorded
+    sample_juror_timeout_hung_jury_certificate_accounted
+
+theorem sample_juror_timeout_hung_jury_certificate_outcome_facts :
+    OutcomeCertificateFacts
+      sampleJurorTimeoutHungJuryCertificateInit
+      sampleJurorTimeoutHungJuryCertificateTransitions
+      sampleJurorTimeoutHungJuryCertificateState := by
+  exact OutcomeCertificateFacts.jurorFailureHungJury "J1"
+    sample_juror_timeout_hung_jury_certificate_facts

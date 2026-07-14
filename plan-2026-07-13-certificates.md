@@ -20,7 +20,7 @@ ADC uses a separate certificate schema because its initialization request and te
 
 ADC writes `state.json` and `certificate.json` beside `run.json` in terminal output directories.  `adc verify-certificate` compares the claimed final state against `state.json`, replays the recorded initialization and accepted engine transitions, and reports the transition count and final-state hash.  The artifact route lists and fetches the certificate without adding service-side verification.
 
-The first Lean targets now mirror ARB's replay foundation: exact replay, reachability, and terminal-state accounting for accepted certificates.  The proof layer also covers verdict, deliberating-juror timeout verdict, judgment, and combined outcome facts at the accepted-certificate boundary, including replayed examples.  A failed-certificate package should wait for a runtime state-level ADC failure claim; lawyer and nonjuror failures currently stop the runner before terminal packet writing, while juror failures enter the replay as accepted engine transitions.
+The first Lean targets now mirror ARB's replay foundation: exact replay, reachability, and terminal-state accounting for accepted certificates.  The proof layer also covers verdict, deliberating-juror timeout verdict, deliberating-juror timeout hung jury, judgment, and combined outcome facts at the accepted-certificate boundary, including replayed examples.  A failed-certificate package should wait for a runtime state-level ADC failure claim.  Lawyer and nonjuror failures currently stop the runner before terminal packet writing, while juror failures enter the replay as accepted engine transitions.
 
 ## AARD Plan
 
@@ -42,10 +42,11 @@ The Lean certificate package now covers the current runtime report boundary.  Ac
 | 6 | ADC | Done: settle failure accounting boundary.  Lawyer and nonjuror failures do not produce replay certificates today; juror failures are replayed `process_juror_timeout` transitions. |
 | 7 | ADC | Done: add accepted-certificate deliberating-juror timeout verdict facts, with a replayed `process_juror_timeout` example. |
 | 8 | ADC | Done: package closed, verdict, juror-timeout verdict, and judgment certificate facts under one outcome certificate type. |
-| 9 | AARD | Done: add runtime certificate writing and an explicit `aard verify-certificate` command using `state.json`. |
-| 10 | AARD | Done: expose the certificate artifact through service artifact lists and fetch routes. |
-| 11 | AARD | Done: prove exact replay, reachability, terminal accounting, and replayed answer-pair exposure. |
-| 12 | AARD | Done: expose replayed failed-certificate failure records and add a checked party-failure certificate example. |
+| 9 | ADC | Done: add deliberating-juror timeout hung-jury facts and a replayed `process_juror_timeout` example. |
+| 10 | AARD | Done: add runtime certificate writing and an explicit `aard verify-certificate` command using `state.json`. |
+| 11 | AARD | Done: expose the certificate artifact through service artifact lists and fetch routes. |
+| 12 | AARD | Done: prove exact replay, reachability, terminal accounting, and replayed answer-pair exposure. |
+| 13 | AARD | Done: expose replayed failed-certificate failure records and add a checked party-failure certificate example. |
 
 ## Non-Goals
 
