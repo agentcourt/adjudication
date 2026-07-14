@@ -34,15 +34,15 @@ The proof library has three organizing layers.  Reachability and preservation th
 
 `engine/Proofs/Progress.lean` defines `fixedFrameProgress`, a source-anchored state relation that packages frame preservation, append-only admitted materials, shrinking seated-member identifiers, nondecreasing phase rank, and nondecreasing deliberation round.  `engine/Proofs/ProgressViability.lean` adds same-round deliberation progress, which combines fixed-frame progress with viability shrinkage for same-round council actions.
 
-## Replay Certificates And System Direction
+## Replay Certificates
 
 AAR now has a packet-level replay certificate path.  The runtime writes `certificate.json` with the initialization request, accepted public actions, claimed final state, and compact final-state hash.  The `aar verify-certificate` command checks that artifact against `state.json` and the Lean engine, while services list and serve the artifact through ordinary artifact routes.
 
 The Lean certificate package covers both terminal outcomes.  Closed packets carry exact replay, reachability, terminal accounting, ordered merits completion, filing counts, decision-summary replay, and resolution-specific soundness.  Failed packets carry exact replay, reachability, the initialized action-length bound, decision-summary replay, and an `opportunity_failed` record identifying a plaintiff or defendant role and the failed phase.
 
-The same pattern should govern ADC and AARD when they gain certificate support.  Each runtime should write a terminal packet artifact that records the engine initialization request, accepted public actions, claimed final state, and compact final-state hash.  Services should list and fetch that artifact through the case artifact API, while verification remains an explicit operator command.
+ADC and AARD now follow the same operator boundary with procedure-specific certificate schemas.  ADC writes `state.json` and `certificate.json`, verifies them with `adc verify-certificate`, and proves accepted-certificate replay, closed-terminal accounting, verdict facts, judgment facts, and concrete replayed examples.  AARD writes `state.json` and `certificate.json`, verifies them with `aard verify-certificate`, and proves exact replay, reachability, terminal accounting, and answer-pair replay for closed certificates.
 
-ADC needs its own certificate schema because its state includes civil-procedure phases, motions, discovery, trial, juror eligibility, verdict, and judgment.  Its first proof target should be exact replay with terminal-state accounting, followed by jury-failure and verdict-soundness facts at the packet boundary.  AARD needs its own schema because its council submits numeric answers and its Lean proof library is smaller; its first target should be exact replay and answer-map preservation before any aggregate rule theorem.
+Services expose certificate artifacts through the existing artifact APIs.  They list and fetch the files when a terminal packet contains them.  They do not run replay verification as part of case creation, listing, polling, or artifact reads.
 
 ## Limits
 

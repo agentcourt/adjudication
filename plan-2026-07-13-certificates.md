@@ -6,7 +6,7 @@ A replay certificate should bind a terminal output packet to the Lean state-tran
 
 Services should expose certificate artifacts through the existing artifact APIs.  They should list and fetch `certificate.json` when the packet contains it, using the same artifact semantics as `run.json`, `state.json`, and logs.  Services should not run certificate verification as part of case creation, listing, result polling, or artifact reads.
 
-ARB now supplies the reference implementation.  The runtime writes `certificate.json`, `aar verify-certificate` checks it against `state.json`, and the proof package exposes accepted terminal certificates as closed facts or failed facts.  ADC and AARD should follow that shape, with schemas and proof targets that match their different engines.
+ARB supplies the reference implementation.  The runtime writes `certificate.json`, `aar verify-certificate` checks it against `state.json`, and the proof package exposes accepted terminal certificates as closed facts or failed facts.  ADC and AARD now follow that shape with schemas and proof targets that match their different engines.
 
 ## ARB Baseline
 
@@ -16,19 +16,19 @@ The proof boundary now covers both terminal outcomes.  `checkReplayCertificate_t
 
 ## ADC Plan
 
-ADC needs a separate certificate schema because its initialization request and terminal states differ from ARB.  Its initialization request includes the court state, case summary or claim packet fields, parties, filing date, jurisdiction facts, and attachment seeds.  Its accepted actions span pleadings, motions, discovery, trial, jury acts, judgment, and failure reports, so the certificate should store the same `action_type`, `actor_role`, and payload boundary used by the runtime's Lean `Step` calls.
+ADC uses a separate certificate schema because its initialization request and terminal states differ from ARB.  Its initialization request includes the court state, case summary or claim packet fields, parties, filing date, jurisdiction facts, and attachment seeds.  Its accepted actions span pleadings, motions, discovery, trial, jury acts, judgment, and failure reports, so the certificate stores the same `action_type`, `actor_role`, and payload boundary used by the runtime's Lean `Step` calls.
 
 ADC writes `state.json` and `certificate.json` beside `run.json` in terminal output directories.  `adc verify-certificate` compares the claimed final state against `state.json`, replays the recorded initialization and accepted engine transitions, and reports the transition count and final-state hash.  The artifact route lists and fetches the certificate without adding service-side verification.
 
-The first Lean target should mirror ARB's replay foundation: exact replay, reachability, and terminal-state accounting for accepted certificates.  The next proof target should cover verdict and judgment soundness, including the configured jury threshold and the existing effective-concurrence rule after juror failure.  A failed certificate package should account for lawyer failure and juror failure separately, because those failures have different legal effects in ADC.
+The first Lean targets now mirror ARB's replay foundation: exact replay, reachability, and terminal-state accounting for accepted certificates.  The proof layer also covers verdict and judgment facts at the accepted-certificate boundary, including replayed examples.  A failed-certificate package should wait for a runtime state-level ADC failure claim; lawyer and nonjuror failures currently stop the runner before terminal packet writing, while juror failures enter the replay as accepted engine transitions.
 
 ## AARD Plan
 
-AARD is structurally closest to ARB, so its runtime certificate should reuse the ARB shape with AARD names and schema version.  The initialization request should contain the initial state, degree question, and council members.  Accepted actions should include merits filings, submitted evidence, council answers, council-member failure, and party failure in the same order accepted by the Lean engine.
+AARD is structurally closest to ARB, so its runtime certificate reuses the ARB shape with AARD names and schema version.  The initialization request contains the initial state, degree question, and council members.  Accepted actions include merits filings, submitted evidence, council answers, council-member failure, and party failure in the same order accepted by the Lean engine.
 
-AARD should write `certificate.json` beside `run.json` and `state.json` in terminal output directories.  The verifier should replay the certificate through `.bin/aardengine`, compare the certificate hash to `state.json`, and report the accepted action count and final-state hash.  The service artifact routes should list and fetch the certificate through the existing Clerk and direct case artifact APIs.
+AARD writes `certificate.json` beside `run.json` and `state.json` in terminal output directories.  The verifier replays the certificate through `.bin/aardengine`, compares the certificate hash to `state.json`, and reports the accepted action count and final-state hash.  The service artifact routes list and fetch the certificate through the existing Clerk and direct case artifact APIs.
 
-The first Lean target should be exact replay with reachability and terminal accounting.  The second target should be answer-map preservation: an accepted certificate ending closed should expose the recorded council answer set that the runtime reports.  Aggregate-rule theorems should wait until the runtime defines an aggregate degree result; proving an aggregate before the output model exists would create proof work without a system claim to support.
+The first Lean target is complete: exact replay with reachability and terminal accounting.  The second target is also complete for the current runtime boundary: an accepted closed certificate exposes the recorded council answer pairs that the runtime reports.  Aggregate-rule theorems wait until the runtime defines an aggregate degree result; proving an aggregate before the output model exists would create proof work without a system claim to support.
 
 ## Work Order
 
