@@ -1,4 +1,5 @@
 import Proofs.DecisionSummary
+import Proofs.DecisionRuleFacts
 
 namespace ArbProofs
 
@@ -25,6 +26,8 @@ structure ClosedCertificateFacts
     (claimed.case.resolution = "demonstrated" ∧ demonstratedOutcomeSound claimed) ∨
       (claimed.case.resolution = "not_demonstrated" ∧ notDemonstratedOutcomeSound claimed) ∨
         (claimed.case.resolution = "no_majority" ∧ noMajorityOutcomeSound claimed)
+  decision_rule :
+    DecisionRuleFacts claimed
   merits_complete :
     bilateralComplete "openings" claimed.case.openings ∧
       bilateralComplete "arguments" claimed.case.arguments ∧
@@ -121,6 +124,8 @@ theorem checkReplayCertificate_status_closed_facts
           req actions claimed hCheck
       terminal_accounted := ⟨hStatus, hPhase, hResolution⟩
       outcome_sound := hSound
+      decision_rule :=
+        reachable_decisionRuleFacts claimed hReachable
       merits_complete :=
         checkReplayCertificate_status_closed_merits_complete
           req actions claimed hCheck hStatus
@@ -184,6 +189,14 @@ theorem ClosedCertificateFacts.demonstrated_sound
         simpa [hResolution] using hNotDemonstrated.1
     · exact False.elim <| by
         simpa [hResolution] using hNoMajority.1
+
+theorem ClosedCertificateFacts.decision_rule_facts
+    {req : InitializeCaseRequest}
+    {actions : List CourtAction}
+    {claimed : ArbitrationState}
+    (facts : ClosedCertificateFacts req actions claimed) :
+    DecisionRuleFacts claimed :=
+  facts.decision_rule
 
 theorem ClosedCertificateFacts.not_demonstrated_sound
     {req : InitializeCaseRequest}
