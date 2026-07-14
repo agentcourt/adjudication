@@ -205,3 +205,102 @@ theorem sample_judgment_certificate_facts :
     sampleJudgmentCertificateState
     sample_judgment_certificate_replay
     sample_judgment_certificate_accounted
+
+def certificateTimeoutInitialCase : CaseState :=
+  { (default : CaseState) with
+    case_id := "certificate-juror-timeout"
+    filed_on := "2026-06-06"
+    status := "trial"
+    trial_mode := "jury"
+    phase := "deliberation"
+    jury_configuration :=
+      some { juror_count := 6, unanimous_required := true, minimum_concurring := 6 }
+    jurors :=
+      [ certificateOutcomeSwornJuror "J1"
+      , certificateOutcomeSwornJuror "J2"
+      , certificateOutcomeSwornJuror "J3"
+      , certificateOutcomeSwornJuror "J4"
+      , certificateOutcomeSwornJuror "J5"
+      , certificateOutcomeSwornJuror "J6"
+      ]
+    juror_votes :=
+      [ certificateOutcomeVote "J2" "plaintiff" 100.0 "J2 explanation"
+      , certificateOutcomeVote "J3" "plaintiff" 100.0 "J3 explanation"
+      , certificateOutcomeVote "J4" "plaintiff" 100.0 "J4 explanation"
+      , certificateOutcomeVote "J5" "plaintiff" 100.0 "J5 explanation"
+      , certificateOutcomeVote "J6" "plaintiff" 100.0 "J6 explanation"
+      ]
+  }
+
+def certificateTimeoutInitialState : CourtState :=
+  { (default : CourtState) with
+    schema_version := "v1"
+    court_name := "Test Court"
+    case := certificateTimeoutInitialCase
+  }
+
+def certificateJurorTimeoutAction : CourtAction :=
+  { action_type := "process_juror_timeout"
+  , actor_role := "system"
+  , payload := Lean.Json.mkObj
+      [ ("juror_id", Lean.Json.str "J1") ]
+  }
+
+def sampleJurorTimeoutCertificateInit : ReplayInitializeRequest :=
+  { state := certificateTimeoutInitialState
+  , initialize_case := none
+  }
+
+def sampleJurorTimeoutCertificateTransitions : List ReplayTransition :=
+  [ReplayTransition.step certificateJurorTimeoutAction]
+
+def sampleJurorTimeoutCertificateState : CourtState :=
+  certificateStateOrDefault
+    (replayCertificate
+      sampleJurorTimeoutCertificateInit
+      sampleJurorTimeoutCertificateTransitions)
+
+theorem sample_juror_timeout_certificate_replay_bool :
+    certificateReplayAccepted
+      (replayCertificate
+        sampleJurorTimeoutCertificateInit
+        sampleJurorTimeoutCertificateTransitions) = true := by
+  native_decide
+
+theorem sample_juror_timeout_certificate_replay :
+    AcceptedReplayCertificate
+      sampleJurorTimeoutCertificateInit
+      sampleJurorTimeoutCertificateTransitions
+      sampleJurorTimeoutCertificateState := by
+  exact certificateStateOrDefault_ok
+    (replayCertificate
+      sampleJurorTimeoutCertificateInit
+      sampleJurorTimeoutCertificateTransitions)
+    sample_juror_timeout_certificate_replay_bool
+
+theorem sample_juror_timeout_certificate_transition_recorded :
+    replayTransitionsContainJurorTimeout
+      sampleJurorTimeoutCertificateTransitions
+      "J1" = true := by
+  native_decide
+
+theorem sample_juror_timeout_certificate_accounted :
+    jurorFailureVerdictAccounted
+      sampleJurorTimeoutCertificateState
+      "J1" = true := by
+  native_decide
+
+theorem sample_juror_timeout_certificate_facts :
+    JurorFailureVerdictCertificateFacts
+      sampleJurorTimeoutCertificateInit
+      sampleJurorTimeoutCertificateTransitions
+      sampleJurorTimeoutCertificateState
+      "J1" := by
+  exact acceptedReplayCertificate_juror_failure_verdict_facts
+    sampleJurorTimeoutCertificateInit
+    sampleJurorTimeoutCertificateTransitions
+    sampleJurorTimeoutCertificateState
+    "J1"
+    sample_juror_timeout_certificate_replay
+    sample_juror_timeout_certificate_transition_recorded
+    sample_juror_timeout_certificate_accounted

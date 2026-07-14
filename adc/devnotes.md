@@ -22,9 +22,11 @@ ADC terminal packets now include `certificate.json`.  The certificate stores the
 
 The ADC proof layer now has accepted-certificate modules under `engine/Proofs/`.  `Reachability.lean` defines the typed certificate initialization and transition objects, including accepted `step` transitions and accepted `apply_decision` pass transitions.  `Replay.lean` proves exact replay and reachability from the replay start, `CertificateFacts.lean` packages closed-terminal facts, and `CertificateExamples.lean` checks a concrete closed certificate.  ADC `CourtState` contains JSON and `Float`, so the Lean accepted-certificate boundary is the proposition `replayCertificate init transitions = .ok claimed`; the executable equality check remains in `adc verify-certificate`.
 
-`CertificateOutcomeFacts.lean` adds verdict and judgment accounting predicates for accepted certificates.  `CertificateOutcomeExamples.lean` checks two concrete replayed outcome certificates: a `submit_juror_vote` transition that derives a plaintiff verdict under the configured concurrence threshold, and an `enter_judgment` transition that carries jury-verdict damages into `monetary_judgment` and records the judgment trace.  These examples exercise the actual certificate transition boundary instead of restating the existing standalone verdict and judgment samples.
+`CertificateOutcomeFacts.lean` adds verdict, juror-failure verdict, and judgment accounting predicates for accepted certificates.  `CertificateOutcomeExamples.lean` checks three concrete replayed outcome certificates: a `submit_juror_vote` transition that derives a plaintiff verdict under the configured concurrence threshold, a `process_juror_timeout` transition that removes a deliberating juror and derives a verdict under the effective concurrence rule, and an `enter_judgment` transition that carries jury-verdict damages into `monetary_judgment` and records the judgment trace.  These examples exercise the actual certificate transition boundary instead of restating the existing standalone verdict and judgment samples.
 
 ADC failure accounting has two different boundaries.  Lawyer and nonjuror role failures stop the runner before `writeEvidence`, so the current runtime produces no `state.json` or `certificate.json` for those failures.  Juror failures during voir dire or deliberation enter the Lean state through accepted `process_juror_timeout` transitions, and deliberation failures may also derive a verdict or hung jury.  The certificate proof layer should treat those juror failures as ordinary replayed engine transitions; a failed-certificate Lean package should wait for a state-level ADC failure claim in the runtime.
+
+The deliberating-juror timeout certificate package now records that boundary directly.  `JurorFailureVerdictCertificateFacts` combines exact accepted replay, replay-start reachability, a recorded `process_juror_timeout` transition for the juror, and a final verdict whose `required_votes` equals `effectiveMinimumConcurring` after the juror has been marked `timed_out`.  The concrete sample mirrors the runner timeout test: J1 times out, J2 through J6 have plaintiff votes, and the replayed state carries a plaintiff verdict with five votes required and five votes cast.
 
 Importing the closed-case opportunity theorem into the certificate proof path exposed an obsolete theorem in `OrchestrationCore.lean`: it still claimed `assignOpportunityIds` returned sequential ids.  The engine now assigns deterministic hash ids from opportunity content.  The theorem now states the property the function actually supports at that level, length preservation.
 
@@ -34,6 +36,7 @@ Importing the closed-case opportunity theorem into the certificate proof path ex
 - [x] `go test ./adc/runtime/runner ./adc/runtime/service ./adc/runtime/cli`
 - [x] `go test ./adc/runtime/...`
 - [x] `lake build Proofs.RecentExhibitLimits`
+- [x] `lake build Proofs.CertificateOutcomeFacts Proofs.CertificateOutcomeExamples`
 - [x] `lake build Proofs adcengine`
 - [x] Real no-LLM smoke run with `adc scenario`, followed by `adc verify-certificate`
 
