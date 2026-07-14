@@ -4,3 +4,7 @@ import Proofs.RecentJudgment
 import Proofs.RecentJurySelection
 import Proofs.RecentVerdictDerivation
 import Proofs.RecentVoirDireLimits
+import Proofs.Reachability
+import Proofs.Replay
+import Proofs.CertificateFacts
+import Proofs.CertificateExamples

@@ -53,10 +53,10 @@ theorem selectLowestPriorityOpportunity_prefers_lower_priority_value :
     (selectLowestPriorityOpportunity? [lowPriorityAction, highPriorityAction]).map (fun t => t.role) = some "judge" := by
   native_decide
 
-theorem assignOpportunityIds_numbers_actions_sequentially :
-    let actions := assignOpportunityIds [lowPriorityAction, highPriorityAction]
-    actions.map (fun a => a.opportunity_id) = ["o1", "o2"] := by
-  native_decide
+theorem assignOpportunityIds_preserves_length
+    (actions : List OpportunitySpec) :
+    (assignOpportunityIds actions).length = actions.length := by
+  simp [assignOpportunityIds]
 
 theorem nextOpportunity_opportunity_eq_currentOpenOpportunity
     (req : OpportunityRequest) :

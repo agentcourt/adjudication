@@ -20,6 +20,10 @@ ADC terminal packets now include `state.json` beside `run.json`.  The runner wri
 
 ADC terminal packets now include `certificate.json`.  The certificate stores the initial state, optional seeded complaint initialization, accepted `step` transitions, accepted pass decisions, the claimed final state, and a compact JSON SHA-256 hash of that final state.  `adc verify-certificate` reads `certificate.json` and `state.json`, replays the recorded transitions through the Lean engine, and requires the certificate hash, packet-state hash, and replayed-state hash to match.
 
+The ADC proof layer now has accepted-certificate modules under `engine/Proofs/`.  `Reachability.lean` defines the typed certificate initialization and transition objects, including accepted `step` transitions and accepted `apply_decision` pass transitions.  `Replay.lean` proves exact replay and reachability from the replay start, `CertificateFacts.lean` packages closed-terminal facts, and `CertificateExamples.lean` checks a concrete closed certificate.  ADC `CourtState` contains JSON and `Float`, so the Lean accepted-certificate boundary is the proposition `replayCertificate init transitions = .ok claimed`; the executable equality check remains in `adc verify-certificate`.
+
+Importing the closed-case opportunity theorem into the certificate proof path exposed an obsolete theorem in `OrchestrationCore.lean`: it still claimed `assignOpportunityIds` returned sequential ids.  The engine now assigns deterministic hash ids from opportunity content.  The theorem now states the property the function actually supports at that level, length preservation.
+
 ### Verification
 
 - [x] `go test ./adc/runtime/runner ./adc/runtime/service`
