@@ -149,7 +149,7 @@ Bench-trial evals should test whether the judge writes findings from admitted ev
 
 Fixture categories should include admitted-document proof, conflicting testimony, missing causation, damages proof gap, credibility explanation, unadmitted exhibit reference, and conclusion that omits an element.  Scoring should check element coverage, admitted-evidence confinement, fact-law separation, and final judgment consistency.  The first version can score structured findings and conclusions before scoring full bench opinions.
 
-This eval should likely have a two-step runner.  First, ask for findings and conclusions through the relevant tools.  Second, ask for `file_bench_opinion` or `enter_judgment` only after the state contains adequate findings and conclusions.
+The first implemented version scores `file_bench_opinion`, because that is the judge opportunity currently exposed at `status=trial`, `trial_mode=bench`, and `phase=verdict_return`.  It checks winner selection, amount, required element reasoning, prohibited reliance on excluded proof, fact-law-judgment separation, and Lean acceptance.  A later version can add a two-step runner for separate findings and conclusions if the Lean opportunity sequence exposes `add_bench_finding` and `add_bench_conclusion` before the filed opinion.
 
 ## Judgment And Post-Judgment Relief
 
@@ -189,7 +189,9 @@ This eval can use deterministic state fixtures more than free-form text.  Many j
 | Rule 37 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 16/16 with no invalid sanction payloads. |
 | Rule 11 sanctions | Implemented under `rules/rule11/`, with a 16-row fixture set and two eval-local prompt candidates. |
 | Rule 11 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 16/16 with no invalid sanction payloads, false grants, false denials, or sanction mismatches. |
-| Next eval | Rule 52 bench findings and conclusions. |
+| Rule 52 bench findings and conclusions | Implemented under `rules/rule52/`, with a 16-row fixture set and one eval-local prompt candidate. |
+| Rule 52 prompt iteration | Production and candidate v1 both scored 16/16 after deterministic scorer correction, so no production prompt change is justified by the current set. |
+| Next eval | Rule 58 judgment entry, followed by Rule 59 and Rule 60 post-judgment relief. |
 
 ## Reporting Rules
 

@@ -1,5 +1,38 @@
 # Development Notes
 
+## 2026-07-15: Judge Rule 52 eval
+
+### References
+
+- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
+- Rule 52 plan: [`evals/judge/rules/rule52/plan.md`](evals/judge/rules/rule52/plan.md)
+- Rule 52 fixtures: [`evals/judge/rules/rule52/fixtures.jsonl`](evals/judge/rules/rule52/fixtures.jsonl)
+- Candidate prompt v1: [`evals/judge/rules/rule52/prompts/candidate-v1.md`](evals/judge/rules/rule52/prompts/candidate-v1.md)
+- Analysis: [`evals/judge/rules/rule52/analysis.md`](evals/judge/rules/rule52/analysis.md)
+- Runner: [`runtime/eval/judge_rule52.go`](runtime/eval/judge_rule52.go)
+- CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
+- ARCP Rule 52: [`docs/ARCP.md`](docs/ARCP.md)
+
+### Decisions
+
+`adc eval judge-rule52` evaluates the judge's `file_bench_opinion` behavior against fixed JSONL fixtures.  The original plan contemplated separate `add_bench_finding` and `add_bench_conclusion` steps, but the current Lean opportunity at `status=trial`, `trial_mode=bench`, and `phase=verdict_return` offers `file_bench_opinion`.  The runner therefore scores the filed opinion text for the same Rule 52 duties: findings from admitted evidence, conclusions tied to claim elements, no reliance on excluded proof, and judgment consistent with the record.
+
+Each fixture builds a completed bench-trial ADC state with complaint and answer text, party theories, admitted bench evidence, excluded evidence when applicable, closing arguments, and decision traces for the trial sequence.  The first fixture set has 16 rows across contract formation, breach proof, credibility, causation, excluded evidence, damages gaps, damages limitation, authentication, agency, and notice.  The scorer checks the judgment winner, expected amount, required concepts, prohibited concepts, findings/conclusions/judgment separation, reason tags, and Lean acceptance.
+
+The fixture set was corrected during iteration where plaintiff-win rows needed admitted proof stated more concretely.  Those corrections added unpaid invoice records, replacement cost records, an express preservation duty, delivery plus nonpayment evidence, and a repair reimbursement duty.  The deterministic scorer was also corrected to accept equivalent legal language observed in live opinions, such as `additional freight charges`, `audit log AL-3 was authenticated`, `did not meet the contractual written-notice requirement`, and `contemporaneous service log and receiving message were more reliable`.
+
+Production and candidate v1 both scored 16/16 after deterministic scorer correction.  Both selected the correct winner and amount in all 16 live cases, returned no invalid payloads, and passed Lean application.  The measured result supports keeping production Rule 52 prompt text unchanged until a harder fixture set exposes a real failure cluster.
+
+### Verification
+
+- [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule52 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule52-production-dry-v2`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule52 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule52-production-live-v2`
+- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule52 --rescore-results adc/evals/judge/out/rule52-production-live-v2/results.jsonl --out-dir adc/evals/judge/out/rule52-production-live-v2-rescored2`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule52 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule52/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule52-candidate-v1-dry-v2`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule52 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule52/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule52-candidate-v1-live-v2`
+- [x] Candidate v1 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule52 --rescore-results adc/evals/judge/out/rule52-candidate-v1-live-v2/results.jsonl --out-dir adc/evals/judge/out/rule52-candidate-v1-live-v2-rescored`
+
 ## 2026-07-15: Judge Rule 11 eval
 
 ### References
