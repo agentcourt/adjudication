@@ -21,6 +21,8 @@ func RunEval(args []string, stdout io.Writer, stderr io.Writer) error {
 	switch args[0] {
 	case "judge-voir-dire":
 		return RunEvalJudgeVoirDire(args[1:], stdout, stderr)
+	case "judge-for-cause":
+		return RunEvalJudgeForCause(args[1:], stdout, stderr)
 	case "judge-rule56":
 		return RunEvalJudgeRule56(args[1:], stdout, stderr)
 	case "judge-rule12":
@@ -35,6 +37,8 @@ func RunEval(args []string, stdout io.Writer, stderr io.Writer) error {
 		switch args[1] {
 		case "judge-voir-dire":
 			return RunEvalJudgeVoirDire([]string{"-h"}, stdout, stderr)
+		case "judge-for-cause":
+			return RunEvalJudgeForCause([]string{"-h"}, stdout, stderr)
 		case "judge-rule56":
 			return RunEvalJudgeRule56([]string{"-h"}, stdout, stderr)
 		case "judge-rule12":
@@ -95,6 +99,73 @@ func RunEvalJudgeVoirDire(args []string, stdout io.Writer, stderr io.Writer) err
 		return err
 	}
 	summary, err := adceval.RunJudgeVoirDire(context.Background(), adceval.JudgeVoirDireOptions{
+		FixturesPath:          strings.TrimSpace(*fixtures),
+		OutputDir:             strings.TrimSpace(*outDir),
+		OpportunityPromptPath: strings.TrimSpace(*opportunityPromptFile),
+		OpportunityPromptName: strings.TrimSpace(*opportunityPromptName),
+		Engine:                lean.New(strings.Fields(strings.TrimSpace(*engineCommand))),
+		Model:                 strings.TrimSpace(*model),
+		Online:                *online,
+		DryRun:                *dryRun,
+		Limit:                 *limit,
+		Timeout:               time.Duration(*timeoutSeconds) * time.Second,
+		Temperature:           tempPtr,
+	})
+	if err != nil {
+		return err
+	}
+	raw, err := json.MarshalIndent(summary, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal eval summary: %w", err)
+	}
+	_, err = fmt.Fprintln(stdout, string(raw))
+	return err
+}
+
+func RunEvalJudgeForCause(args []string, stdout io.Writer, stderr io.Writer) error {
+	var fs *flag.FlagSet
+	fs = newFlagSet("eval judge-for-cause", stderr, func() {
+		fmt.Fprintf(stderr, "Usage: adc eval judge-for-cause [options]\n\n")
+		fs.PrintDefaults()
+	})
+	fixtures := fs.String("fixtures", defaultADCPath("evals", "judge", "rules", "rule47", "for_cause_challenges.jsonl"), "Judge for-cause fixture JSONL file")
+	outDir := fs.String("out-dir", defaultADCPath("evals", "judge", "out", "for-cause-latest"), "Directory for eval results and summary")
+	opportunityPromptFile := fs.String("opportunity-prompt-file", "", "Eval-local opportunity prompt template file")
+	opportunityPromptName := fs.String("opportunity-prompt-name", "", "Name to record for the eval-local opportunity prompt")
+	model := fs.String("model", "openrouter://openai/gpt-5", "Judge model in endpoint://model form")
+	rescoreResults := fs.String("rescore-results", "", "Existing results JSONL to rescore without model calls")
+	dryRun := fs.Bool("dry-run", false, "Use expected for-cause rulings as synthetic model responses")
+	online := fs.Bool("online", false, "Enable online model tool conversion behavior")
+	limit := fs.Int("limit", 0, "Maximum number of fixtures to run; 0 means all")
+	timeoutSeconds := fs.Int("timeout-seconds", defaultLLMTimeoutSeconds, "LLM and fixture timeout in seconds")
+	temperature := fs.String("temperature", "", "Override judge model temperature")
+	engineCommand := fs.String("engine", defaultEngineCommand(), "Engine command string")
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return nil
+		}
+		return err
+	}
+	tempPtr, err := parseOptionalFloat(*temperature)
+	if err != nil {
+		return fmt.Errorf("parse --temperature: %w", err)
+	}
+	if strings.TrimSpace(*rescoreResults) != "" {
+		summary, err := adceval.RescoreJudgeForCause(adceval.JudgeForCauseRescoreOptions{
+			ResultsPath: strings.TrimSpace(*rescoreResults),
+			OutputDir:   strings.TrimSpace(*outDir),
+		})
+		if err != nil {
+			return err
+		}
+		raw, err := json.MarshalIndent(summary, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal eval summary: %w", err)
+		}
+		_, err = fmt.Fprintln(stdout, string(raw))
+		return err
+	}
+	summary, err := adceval.RunJudgeForCause(context.Background(), adceval.JudgeForCauseOptions{
 		FixturesPath:          strings.TrimSpace(*fixtures),
 		OutputDir:             strings.TrimSpace(*outDir),
 		OpportunityPromptPath: strings.TrimSpace(*opportunityPromptFile),
@@ -307,6 +378,7 @@ func printEvalUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: adc eval <eval> [options]")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Evals:")
+	fmt.Fprintln(w, "  judge-for-cause  Evaluate judge rulings on for-cause juror challenges")
 	fmt.Fprintln(w, "  judge-voir-dire  Evaluate judge rulings on proposed voir dire questions")
 	fmt.Fprintln(w, "  judge-rule12     Evaluate judge dispositions of Rule 12 motions")
 	fmt.Fprintln(w, "  judge-rule51     Evaluate judge settlement of jury instructions")

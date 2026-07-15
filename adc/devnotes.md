@@ -1,5 +1,36 @@
 # Development Notes
 
+## 2026-07-15: Judge Rule 47 for-cause eval
+
+### References
+
+- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
+- For-cause plan: [`evals/judge/rules/rule47/for_cause_plan.md`](evals/judge/rules/rule47/for_cause_plan.md)
+- For-cause fixtures: [`evals/judge/rules/rule47/for_cause_challenges.jsonl`](evals/judge/rules/rule47/for_cause_challenges.jsonl)
+- Candidate prompt v1: [`evals/judge/rules/rule47/prompts/for-cause-candidate-v1.md`](evals/judge/rules/rule47/prompts/for-cause-candidate-v1.md)
+- Analysis: [`evals/judge/rules/rule47/for_cause_analysis.md`](evals/judge/rules/rule47/for_cause_analysis.md)
+- Runner: [`runtime/eval/judge_for_cause.go`](runtime/eval/judge_for_cause.go)
+- CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
+
+### Decisions
+
+`adc eval judge-for-cause` evaluates the judge's `decide_juror_for_cause_challenge` behavior against fixed JSONL fixtures.  Each fixture builds a jury-trial ADC state in the voir dire phase with one candidate, one answered exchange, and one pending for-cause challenge, then obtains the real Lean judge opportunity and applies the model's tool call through Lean.  The first fixture set has 16 rows across fixed bias, refusal to follow law, damages precommitment, digital-evidence refusal, relationship interest, sympathy bias, language or attention limitations, hardship, lawful attitudes, and rehabilitation.
+
+The scorer checks a single tool call.  It validates `challenge_id`, `juror_id`, `by_party`, `granted`, `ruling_reason`, deterministic reason tags, and Lean acceptance.  It reports false grants and false denials separately because over-excusing lawful views and retaining disqualified jurors are different failure modes.
+
+Production scored 16/16 on outcome and 14/16 on explanation in the initial live run.  The two explanation misses were scorer vocabulary gaps, because the rulings denied challenges based on rehabilitation, credible assurance, and lawful preference.  Rescoring after adding those ordinary phrases produced 16/16 outcome accuracy and 16/16 explanation matches.
+
+Candidate v1 also scored 16/16 on the live run.  It states the for-cause boundary more directly, but the current set does not show an improvement over production.  The measured result supports keeping production prompt text unchanged and using candidate v1 as a reference for harder Rule 47 for-cause fixtures.
+
+### Verification
+
+- [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-for-cause --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/for-cause-production-dry`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-for-cause --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/for-cause-production-live`
+- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-for-cause --rescore-results adc/evals/judge/out/for-cause-production-live/results.jsonl --out-dir adc/evals/judge/out/for-cause-production-live-rescored`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-for-cause --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/for-cause-candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/for-cause-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-for-cause --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/for-cause-candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/for-cause-candidate-v1-live`
+
 ## 2026-07-15: Judge Rule 51 eval
 
 ### References
