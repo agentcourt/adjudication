@@ -179,7 +179,9 @@ This eval can use deterministic state fixtures more than free-form text.  Many j
 | Rule 47 voir dire question screening | Implemented, reorganized under `rules/rule47/`, and committed. |
 | Rule 56 summary judgment | Implemented under `rules/rule56/`, with a 30-row fixture set and two eval-local prompt candidates. |
 | Rule 56 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 30/30 with no false grants or invalid responses. |
-| Next eval | Rule 12 dismissal and jurisdiction screening. |
+| Rule 12 dismissal and jurisdiction screening | Implemented under `rules/rule12/`, with an 18-row fixture set and two eval-local prompt candidates. |
+| Rule 12 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 18/18 with no false dismissals, false denials, posture mismatches, or invalid responses. |
+| Next eval | Rule 51 jury instructions or Rule 47 for-cause juror challenges. |
 
 ## Reporting Rules
 

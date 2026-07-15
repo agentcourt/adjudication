@@ -1,5 +1,39 @@
 # Development Notes
 
+## 2026-07-15: Judge Rule 12 eval
+
+### References
+
+- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
+- Rule 12 plan: [`evals/judge/rules/rule12/plan.md`](evals/judge/rules/rule12/plan.md)
+- Rule 12 fixtures: [`evals/judge/rules/rule12/fixtures.jsonl`](evals/judge/rules/rule12/fixtures.jsonl)
+- Candidate prompt v1: [`evals/judge/rules/rule12/prompts/candidate-v1.md`](evals/judge/rules/rule12/prompts/candidate-v1.md)
+- Candidate prompt v2: [`evals/judge/rules/rule12/prompts/candidate-v2.md`](evals/judge/rules/rule12/prompts/candidate-v2.md)
+- Analysis: [`evals/judge/rules/rule12/analysis.md`](evals/judge/rules/rule12/analysis.md)
+- Runner: [`runtime/eval/judge_rule12.go`](runtime/eval/judge_rule12.go)
+- CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
+
+### Decisions
+
+`adc eval judge-rule12` evaluates the judge's `decide_rule12_motion` behavior against fixed JSONL fixtures.  Each fixture builds a filed ADC state with a complaint, a Rule 12 motion, an opposition, optional reply text, and jurisdictional allegations, then obtains the real Lean judge opportunity and applies the model's tool call through Lean.  The first fixture set has 18 rows across failure to state a claim, subject-matter jurisdiction, standing, ripeness, and mootness.
+
+The scorer checks disposition, ground, amendment posture, prejudice posture, missing claim elements, rejected jurisdiction basis, missing standing components, reason tags, and Lean acceptance.  It includes `--rescore-results` so deterministic scoring changes can be applied to existing live JSONL output without repeating model calls.  The scorer accepts equivalent missing-element labels and jurisdiction-basis wording when the payload identifies the same legal defect with more specific language.
+
+Production scored 17/18 after rescoring the completed live run.  The remaining failure was `r12-014`, where the model correctly dismissed a moot complaint that admitted complete prefiling payment but incorrectly gave leave to amend.  Candidate v1 fixed that row and introduced three wrong no-leave decisions for curable jurisdiction, standing, and ripeness defects, so it is worse than production on the measured set.
+
+Candidate v2 is the best measured Rule 12 prompt.  It narrows the no-leave rule to mootness cases where the complaint admits full prefiling satisfaction of all requested relief and preserves leave for curable jurisdiction, standing, ripeness, and claim-element defects.  Candidate v2 scored 18 correct dispositions, 18 reason matches, no false dismissals, no false denials, no posture mismatches, and no invalid responses on the full live run.
+
+### Verification
+
+- [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule12 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule12-production-dry`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule12-production-live`
+- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule12 --rescore-results adc/evals/judge/out/rule12-production-live/results.jsonl --out-dir adc/evals/judge/out/rule12-production-live-rescored`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule12/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule12-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule12/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule12-candidate-v1-live`
+- [x] Candidate v2 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule12/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule12-candidate-v2-dry`
+- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule12/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule12-candidate-v2-live`
+
 ## 2026-07-15: Judge Rule 56 eval
 
 ### References
