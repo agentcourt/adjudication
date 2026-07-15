@@ -1,5 +1,37 @@
 # Development Notes
 
+## 2026-07-15: Judge Rule 51 eval
+
+### References
+
+- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
+- Rule 51 plan: [`evals/judge/rules/rule51/plan.md`](evals/judge/rules/rule51/plan.md)
+- Rule 51 fixtures: [`evals/judge/rules/rule51/fixtures.jsonl`](evals/judge/rules/rule51/fixtures.jsonl)
+- Candidate prompt v1: [`evals/judge/rules/rule51/prompts/candidate-v1.md`](evals/judge/rules/rule51/prompts/candidate-v1.md)
+- Analysis: [`evals/judge/rules/rule51/analysis.md`](evals/judge/rules/rule51/analysis.md)
+- Runner: [`runtime/eval/judge_rule51.go`](runtime/eval/judge_rule51.go)
+- CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
+
+### Decisions
+
+`adc eval judge-rule51` evaluates the judge's `settle_jury_instructions` behavior against fixed JSONL fixtures.  Each fixture builds a jury-charge ADC state with party proposals, objections, completed closings, and a jury configuration, then obtains the real Lean judge opportunity and applies the model's tool call through Lean.  The first fixture set has 16 rows across burden standard, burden shifting, claim elements, argumentative wording, assumptions of disputed fact, excluded evidence, damages, credibility, limiting-purpose evidence, adverse inference, authenticated electronic evidence, sympathy, and neutral complete-charge settlement.
+
+The scorer checks a single settled-instruction summary.  It requires expected concepts or accepted equivalents and rejects prohibited final-charge language when it appears in an unrejected, unnegated context.  The scorer also includes `--rescore-results`, because instruction summaries often quote rejected party language before stating the settled instruction, and deterministic scorer corrections should not require repeating model calls.
+
+Production scored 16/16 after rescoring the completed live run with the corrected scorer.  The initial literal scorer marked quoted rejected wording as prohibited inclusion and missed equivalent required wording such as `breach caused` for causation.  Those were scorer defects, not prompt defects, because the final settled summaries were neutral and complete.
+
+Candidate v1 also scored 16/16 after rescoring.  It gives the judge more explicit instruction-settlement guidance, but the measured set does not show an improvement over production.  The current result supports keeping production prompt text unchanged until a harder Rule 51 set exposes a real failure cluster.
+
+### Verification
+
+- [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule51 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule51-production-dry`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule51 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule51-production-live`
+- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule51 --rescore-results adc/evals/judge/out/rule51-production-live/results.jsonl --out-dir adc/evals/judge/out/rule51-production-live-rescored`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule51 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule51/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule51-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule51 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule51/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule51-candidate-v1-live`
+- [x] Candidate v1 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule51 --rescore-results adc/evals/judge/out/rule51-candidate-v1-live/results.jsonl --out-dir adc/evals/judge/out/rule51-candidate-v1-live-rescored`
+
 ## 2026-07-15: Judge Rule 12 eval
 
 ### References

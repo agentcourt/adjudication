@@ -181,7 +181,9 @@ This eval can use deterministic state fixtures more than free-form text.  Many j
 | Rule 56 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 30/30 with no false grants or invalid responses. |
 | Rule 12 dismissal and jurisdiction screening | Implemented under `rules/rule12/`, with an 18-row fixture set and two eval-local prompt candidates. |
 | Rule 12 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 18/18 with no false dismissals, false denials, posture mismatches, or invalid responses. |
-| Next eval | Rule 51 jury instructions or Rule 47 for-cause juror challenges. |
+| Rule 51 jury-instruction settlement | Implemented under `rules/rule51/`, with a 16-row fixture set and one eval-local prompt candidate. |
+| Rule 51 prompt iteration | Production and candidate v1 both scored 16/16 after deterministic scorer correction, so no production prompt change is justified by the current set. |
+| Next eval | Rule 47 for-cause juror challenges. |
 
 ## Reporting Rules
 
