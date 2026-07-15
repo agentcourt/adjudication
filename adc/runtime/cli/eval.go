@@ -35,6 +35,8 @@ func RunEval(args []string, stdout io.Writer, stderr io.Writer) error {
 		return RunEvalJudgeRule11(args[1:], stdout, stderr)
 	case "judge-rule52":
 		return RunEvalJudgeRule52(args[1:], stdout, stderr)
+	case "judge-rule58":
+		return RunEvalJudgeRule58(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		if len(args) == 1 {
 			printEvalUsage(stdout)
@@ -57,6 +59,8 @@ func RunEval(args []string, stdout io.Writer, stderr io.Writer) error {
 			return RunEvalJudgeRule11([]string{"-h"}, stdout, stderr)
 		case "judge-rule52":
 			return RunEvalJudgeRule52([]string{"-h"}, stdout, stderr)
+		case "judge-rule58":
+			return RunEvalJudgeRule58([]string{"-h"}, stdout, stderr)
 		default:
 			printEvalUsage(stderr)
 			return fmt.Errorf("unknown eval help topic %q", args[1])
@@ -587,6 +591,57 @@ func RunEvalJudgeRule52(args []string, stdout io.Writer, stderr io.Writer) error
 	return err
 }
 
+func RunEvalJudgeRule58(args []string, stdout io.Writer, stderr io.Writer) error {
+	var fs *flag.FlagSet
+	fs = newFlagSet("eval judge-rule58", stderr, func() {
+		fmt.Fprintf(stderr, "Usage: adc eval judge-rule58 [options]\n\n")
+		fs.PrintDefaults()
+	})
+	fixtures := fs.String("fixtures", defaultADCPath("evals", "judge", "rules", "rule58", "fixtures.jsonl"), "Judge Rule 58 fixture JSONL file")
+	outDir := fs.String("out-dir", defaultADCPath("evals", "judge", "out", "rule58-latest"), "Directory for eval results and summary")
+	opportunityPromptFile := fs.String("opportunity-prompt-file", "", "Eval-local opportunity prompt template file")
+	opportunityPromptName := fs.String("opportunity-prompt-name", "", "Name to record for the eval-local opportunity prompt")
+	model := fs.String("model", "openrouter://openai/gpt-5", "Judge model in endpoint://model form")
+	dryRun := fs.Bool("dry-run", false, "Use expected Rule 58 judgment entries as synthetic model responses")
+	online := fs.Bool("online", false, "Enable online model tool conversion behavior")
+	limit := fs.Int("limit", 0, "Maximum number of fixtures to run; 0 means all")
+	timeoutSeconds := fs.Int("timeout-seconds", defaultLLMTimeoutSeconds, "LLM and fixture timeout in seconds")
+	temperature := fs.String("temperature", "", "Override judge model temperature")
+	engineCommand := fs.String("engine", defaultEngineCommand(), "Engine command string")
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return nil
+		}
+		return err
+	}
+	tempPtr, err := parseOptionalFloat(*temperature)
+	if err != nil {
+		return fmt.Errorf("parse --temperature: %w", err)
+	}
+	summary, err := adceval.RunJudgeRule58(context.Background(), adceval.JudgeRule58Options{
+		FixturesPath:          strings.TrimSpace(*fixtures),
+		OutputDir:             strings.TrimSpace(*outDir),
+		OpportunityPromptPath: strings.TrimSpace(*opportunityPromptFile),
+		OpportunityPromptName: strings.TrimSpace(*opportunityPromptName),
+		Engine:                lean.New(strings.Fields(strings.TrimSpace(*engineCommand))),
+		Model:                 strings.TrimSpace(*model),
+		Online:                *online,
+		DryRun:                *dryRun,
+		Limit:                 *limit,
+		Timeout:               time.Duration(*timeoutSeconds) * time.Second,
+		Temperature:           tempPtr,
+	})
+	if err != nil {
+		return err
+	}
+	raw, err := json.MarshalIndent(summary, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal eval summary: %w", err)
+	}
+	_, err = fmt.Fprintln(stdout, string(raw))
+	return err
+}
+
 func printEvalUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: adc eval <eval> [options]")
 	fmt.Fprintln(w)
@@ -598,6 +653,7 @@ func printEvalUsage(w io.Writer) {
 	fmt.Fprintln(w, "  judge-rule37     Evaluate judge dispositions of Rule 37 motions")
 	fmt.Fprintln(w, "  judge-rule51     Evaluate judge settlement of jury instructions")
 	fmt.Fprintln(w, "  judge-rule52     Evaluate judge Rule 52 bench opinions")
+	fmt.Fprintln(w, "  judge-rule58     Evaluate judge Rule 58 judgment entry")
 	fmt.Fprintln(w, "  judge-rule56     Evaluate judge dispositions of Rule 56 motions")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Use 'adc eval help <eval>' for eval flags.")

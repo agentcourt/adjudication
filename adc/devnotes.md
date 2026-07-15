@@ -1,5 +1,34 @@
 # Development Notes
 
+## 2026-07-15: Judge Rule 58 eval
+
+### References
+
+- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
+- Rule 58 plan: [`evals/judge/rules/rule58/plan.md`](evals/judge/rules/rule58/plan.md)
+- Rule 58 fixtures: [`evals/judge/rules/rule58/fixtures.jsonl`](evals/judge/rules/rule58/fixtures.jsonl)
+- Candidate prompt v1: [`evals/judge/rules/rule58/prompts/candidate-v1.md`](evals/judge/rules/rule58/prompts/candidate-v1.md)
+- Analysis: [`evals/judge/rules/rule58/analysis.md`](evals/judge/rules/rule58/analysis.md)
+- Runner: [`runtime/eval/judge_rule58.go`](runtime/eval/judge_rule58.go)
+- CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
+- ARCP Rule 58: [`docs/ARCP.md`](docs/ARCP.md)
+
+### Decisions
+
+`adc eval judge-rule58` evaluates the judge's `enter_judgment` behavior against fixed JSONL fixtures.  Each fixture builds an eligible post-verdict ADC state: jury rows set `jury_verdict`, while bench rows include a `Bench Opinion` docket entry and an existing `monetary_judgment`.  The runner obtains the real Lean opportunity, asks for the model's `enter_judgment` tool call, validates it through `apply_decision`, and then executes the returned action through Lean `step`.
+
+The first fixture set has 16 rows across jury plaintiff verdicts, jury defense verdicts, zero-dollar plaintiff verdicts, limited damages, large awards, bench plaintiff opinions, and bench defense opinions.  The scorer checks claim id, basis concepts, prohibited basis concepts, reason tags, opportunity acceptance, step execution, final `judgment_entered` status, and final monetary judgment.  It scores amount from the post-step state because Rule 58 derives the amount from the verdict or existing bench judgment state rather than from a model payload field.
+
+Production and candidate v1 both scored 16/16 live.  Both returned valid payloads, used the correct claim id and basis, passed Lean validation, executed through Lean step, and produced the expected final status and amount.  The measured result supports keeping production Rule 58 prompt text unchanged and moving the next judge eval to Rule 59 or Rule 60.
+
+### Verification
+
+- [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule58 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule58-production-dry-v2`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule58 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule58-production-live`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule58 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule58/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule58-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule58 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule58/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule58-candidate-v1-live`
+
 ## 2026-07-15: Judge Rule 52 eval
 
 ### References

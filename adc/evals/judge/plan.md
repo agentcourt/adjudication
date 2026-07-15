@@ -191,7 +191,9 @@ This eval can use deterministic state fixtures more than free-form text.  Many j
 | Rule 11 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 16/16 with no invalid sanction payloads, false grants, false denials, or sanction mismatches. |
 | Rule 52 bench findings and conclusions | Implemented under `rules/rule52/`, with a 16-row fixture set and one eval-local prompt candidate. |
 | Rule 52 prompt iteration | Production and candidate v1 both scored 16/16 after deterministic scorer correction, so no production prompt change is justified by the current set. |
-| Next eval | Rule 58 judgment entry, followed by Rule 59 and Rule 60 post-judgment relief. |
+| Rule 58 judgment entry | Implemented under `rules/rule58/`, with a 16-row fixture set and one eval-local prompt candidate. |
+| Rule 58 prompt iteration | Production and candidate v1 both scored 16/16 live, including final status and monetary-judgment checks after Lean step execution. |
+| Next eval | Rule 59 and Rule 60 post-judgment relief. |
 
 ## Reporting Rules
 
