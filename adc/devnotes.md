@@ -1,5 +1,38 @@
 # Development Notes
 
+## 2026-07-15: Judge Rule 60 eval
+
+### References
+
+- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
+- Rule 60 plan: [`evals/judge/rules/rule60/plan.md`](evals/judge/rules/rule60/plan.md)
+- Rule 60 fixtures: [`evals/judge/rules/rule60/fixtures.jsonl`](evals/judge/rules/rule60/fixtures.jsonl)
+- Candidate prompt v1: [`evals/judge/rules/rule60/prompts/candidate-v1.md`](evals/judge/rules/rule60/prompts/candidate-v1.md)
+- Analysis: [`evals/judge/rules/rule60/analysis.md`](evals/judge/rules/rule60/analysis.md)
+- Runner: [`runtime/eval/judge_rule60.go`](runtime/eval/judge_rule60.go)
+- CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
+- ARCP Rule 60: [`docs/ARCP.md`](docs/ARCP.md)
+
+### Decisions
+
+`adc eval judge-rule60` evaluates the judge's `resolve_rule60_motion` behavior against fixed JSONL fixtures.  Each fixture builds a judgment-entered ADC state with a pending Rule 60 motion, an opposition, and decision traces that Lean recognizes when producing the judge opportunity.  The runner validates the model's tool decision through `apply_decision`, then executes the accepted action through Lean `step`, matching the post-judgment pattern used by the Rule 58 eval.
+
+The first fixture set has 16 rows across excusable neglect, void judgment, satisfied judgment, newly discovered evidence, fraud, impeachment-only motions, timeliness, reasonable-time limits, extraordinary prospective change, legal reargument, clerical name correction, and buyer's remorse.  The scorer checks grant or denial, required concepts, prohibited concepts, reason tags, Lean acceptance, and step acceptance.  Prohibited-concept scoring is negation-aware because correct denials often state absent grounds, including "no extraordinary circumstances," "does not show fraud," and lists of Rule 60 grounds that are not shown.
+
+Iteration corrected one under-specified fixture and several deterministic scorer aliases.  The first new-evidence grant row lacked materiality and likely-effect facts, and the production model denied it for that legitimate Rule 60(b)(2) reason.  The revised fixture now states that the unavailable server logs bear directly on access, liability, and damages, while the scorer accepts equivalent legal wording observed in live results.
+
+Production and candidate v1 both scored 16/16 after scorer correction.  Both made the correct grant or denial decision on all 16 live rows, returned no invalid payloads, passed Lean validation, and executed through Lean step.  The measured result supports keeping production Rule 60 prompt text unchanged and adding harder Rule 60 rows before considering a production prompt update.
+
+### Verification
+
+- [x] `go test ./adc/runtime/eval -run JudgeRule60`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule60 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule60-production-dry-v3`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule60 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule60-production-live-v2`
+- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule60 --rescore-results adc/evals/judge/out/rule60-production-live-v2/results.jsonl --out-dir adc/evals/judge/out/rule60-production-live-v2-rescored2`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule60 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule60/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule60-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule60 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule60/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule60-candidate-v1-live`
+- [x] Candidate v1 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule60 --rescore-results adc/evals/judge/out/rule60-candidate-v1-live/results.jsonl --out-dir adc/evals/judge/out/rule60-candidate-v1-live-rescored3`
+
 ## 2026-07-15: Judge Rule 58 eval
 
 ### References

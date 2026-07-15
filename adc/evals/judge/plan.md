@@ -193,7 +193,10 @@ This eval can use deterministic state fixtures more than free-form text.  Many j
 | Rule 52 prompt iteration | Production and candidate v1 both scored 16/16 after deterministic scorer correction, so no production prompt change is justified by the current set. |
 | Rule 58 judgment entry | Implemented under `rules/rule58/`, with a 16-row fixture set and one eval-local prompt candidate. |
 | Rule 58 prompt iteration | Production and candidate v1 both scored 16/16 live, including final status and monetary-judgment checks after Lean step execution. |
-| Next eval | Rule 59 and Rule 60 post-judgment relief. |
+| Rule 60 relief from judgment | Implemented under `rules/rule60/`, with a 16-row fixture set and one eval-local prompt candidate. |
+| Rule 60 prompt iteration | Production and candidate v1 both scored 16/16 after deterministic scorer correction and one fixture correction, so no production prompt change is justified by the current set. |
+| Rule 59 post-trial relief | Deferred until Lean exposes a meaningful grant-or-deny Rule 59 opportunity; the current opportunity path observed during planning is deterministic denial and therefore weak for prompt iteration. |
+| Next eval | Add harder Rule 60 rows or implement Rule 59 once the engine exposes a real Rule 59 decision opportunity. |
 
 ## Reporting Rules
 
