@@ -172,6 +172,15 @@ This eval can use deterministic state fixtures more than free-form text.  Many j
 | 7 | Implement `judge-rule37` and `judge-rule11` after the first four evals prove the shared helper shape. |
 | 8 | Implement bench-trial and post-judgment evals once the richer trial and verdict state builders exist. |
 
+## Current Status
+
+| Area | Status |
+|---|---|
+| Rule 47 voir dire question screening | Implemented, reorganized under `rules/rule47/`, and committed. |
+| Rule 56 summary judgment | Implemented under `rules/rule56/`, with a 30-row fixture set and two eval-local prompt candidates. |
+| Rule 56 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 30/30 with no false grants or invalid responses. |
+| Next eval | Rule 12 dismissal and jurisdiction screening. |
+
 ## Reporting Rules
 
 Generated reports should stay under `adc/evals/judge/out/`, which is ignored.  Committed materials should include fixture sets, prompt candidates, analysis documents, and runner code.  Each analysis document should state whether a candidate prompt beats production, preserves production behavior, or exposes a failure cluster that needs more fixtures.

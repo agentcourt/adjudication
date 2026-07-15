@@ -1,5 +1,37 @@
 # Development Notes
 
+## 2026-07-15: Judge Rule 56 eval
+
+### References
+
+- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
+- Rule 56 plan: [`evals/judge/rules/rule56/plan.md`](evals/judge/rules/rule56/plan.md)
+- Rule 56 fixtures: [`evals/judge/rules/rule56/fixtures.jsonl`](evals/judge/rules/rule56/fixtures.jsonl)
+- Candidate prompt v1: [`evals/judge/rules/rule56/prompts/candidate-v1.md`](evals/judge/rules/rule56/prompts/candidate-v1.md)
+- Candidate prompt v2: [`evals/judge/rules/rule56/prompts/candidate-v2.md`](evals/judge/rules/rule56/prompts/candidate-v2.md)
+- Analysis: [`evals/judge/rules/rule56/analysis.md`](evals/judge/rules/rule56/analysis.md)
+- Runner: [`runtime/eval/judge_rule56.go`](runtime/eval/judge_rule56.go)
+- CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
+
+### Decisions
+
+`adc eval judge-rule56` evaluates the judge's `decide_rule56_motion` behavior against fixed JSONL fixtures.  Each fixture builds a pretrial ADC state with a Rule 56 motion, opposition, and optional reply in the docket, obtains the real Lean judge opportunity, asks for a single tool call, applies the decision through Lean, and scores the resulting disposition.  The first fixture set has 30 rows across clean grants, clean denials, partial dispositions, credibility disputes, competing inferences, authentication disputes, unsupported damages theories, movant burden failures, and legal bars.
+
+Production scored 29 correct dispositions, 30 reason matches, one false grant, and no invalid responses on the full live run.  The false grant was `r56-009`: the motion attacked consequential lost profits only, but the model returned `granted` rather than `partial`, overresolving the claim while direct damages and liability remained.  Candidate v1 fixed that row by emphasizing motion scope, but it introduced a false grant on `r56-027` by granting partial summary judgment on an immaterial deposition subpoint despite a genuine dispute on the material reliance issue.
+
+Candidate v2 is the best measured Rule 56 prompt.  It preserves the scope rule for damages-only and issue-only motions, and it blocks partial grants on isolated document sentences, deposition answers, or subfacts when the full record supports a competing inference on the material issue.  Candidate v2 scored 30 correct dispositions, 30 reason matches, no false grants, no false denials, and no invalid responses on the full live run.
+
+### Verification
+
+- [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule56 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule56-production-dry`
+- [x] Short live run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --limit 2 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule56-production-live-short`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule56-production-live`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule56/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule56-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule56/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule56-candidate-v1-live`
+- [x] Candidate v2 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule56/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule56-candidate-v2-dry`
+- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule56/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule56-candidate-v2-live`
+
 ## 2026-07-14: Judge voir dire eval
 
 ### References

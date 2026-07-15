@@ -820,6 +820,10 @@ func judgeVoirDireRoles() []map[string]any {
 }
 
 func defaultJudgeVoirDirePolicy() map[string]any {
+	return defaultJudgeEvalPolicy()
+}
+
+func defaultJudgeEvalPolicy() map[string]any {
 	return map[string]any{
 		"max_opening_chars":                           6000,
 		"max_trial_theory_chars":                      4000,
@@ -854,6 +858,10 @@ func defaultJudgeVoirDirePolicy() map[string]any {
 }
 
 func defaultJudgeVoirDireClaim() map[string]any {
+	return defaultJudgeEvalClaim()
+}
+
+func defaultJudgeEvalClaim() map[string]any {
 	return map[string]any{
 		"claim_id":          "claim-1",
 		"label":             "Digital contract dispute",
