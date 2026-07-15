@@ -45,7 +45,7 @@ func RunEvalJudgeVoirDire(args []string, stdout io.Writer, stderr io.Writer) err
 		fmt.Fprintf(stderr, "Usage: adc eval judge-voir-dire [options]\n\n")
 		fs.PrintDefaults()
 	})
-	fixtures := fs.String("fixtures", defaultADCPath("evals", "judge", "voir_dire_questions.jsonl"), "Judge voir dire fixture JSONL file")
+	fixtures := fs.String("fixtures", defaultADCPath("evals", "judge", "rules", "rule47", "voir_dire_questions.jsonl"), "Judge voir dire fixture JSONL file")
 	outDir := fs.String("out-dir", defaultADCPath("evals", "judge", "out", "latest"), "Directory for eval results and summary")
 	opportunityPromptFile := fs.String("opportunity-prompt-file", "", "Eval-local opportunity prompt template file")
 	opportunityPromptName := fs.String("opportunity-prompt-name", "", "Name to record for the eval-local opportunity prompt")
