@@ -24,3 +24,7 @@ Candidate v1 preserved production behavior but did not improve measured results.
 ## Recommendation
 
 Do not update the production Rule 51 opportunity prompt from this eval alone.  Production and candidate v1 both scored 16/16 on the measured live fixture set after deterministic scorer corrections.  The next iteration should add a hard set before any prompt change, especially rows where ruling language and final-charge language are close enough to stress the scorer and the judge prompt.
+
+## Next Work
+
+The next Rule 51 set should include close ruling-versus-final-charge language, excluded settlement communications, mitigation instructions, verdict-threshold errors, and limiting instructions that quote defective proposals near the final charge summary.  A later `deliver_jury_instructions` eval should score complete charge text after the settlement-summary scorer remains stable on harder fixtures.  That second eval should verify full-charge structure, neutral wording, and consistency with the settled instruction summary.

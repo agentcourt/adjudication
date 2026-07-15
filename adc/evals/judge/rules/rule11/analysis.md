@@ -28,3 +28,7 @@ Candidate v2 added that distinction.  It uses `admonition` for a first limited l
 ## Recommendation
 
 Candidate v2 is the best measured Rule 11 opportunity prompt on this fixture set.  It improves production from 5/16 to 16/16 live and removes every invalid sanction payload observed in the production run.  Keep the prompt eval-local until the project makes a separate production prompt update decision, but treat candidate v2 as the current best text for Rule 11 prompt iteration.
+
+## Next Work
+
+The next Rule 11 set should add harder sanction-proportionality rows before any production prompt update.  Useful additions include repeated misconduct, mixed valid and invalid contentions in one filing, attorney-versus-party sanction allocation, and records where fees are requested but only partly tied to the Rule 11 violation.  Those rows would test whether candidate v2 preserves restraint once the sanction choice becomes less mechanical.

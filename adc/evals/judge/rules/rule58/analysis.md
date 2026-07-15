@@ -26,3 +26,7 @@ The implementation exposed a useful harness distinction.  `apply_decision` valid
 ## Recommendation
 
 Do not update the production Rule 58 opportunity prompt from this eval alone.  Production and candidate v1 both scored 16/16 with no invalid payloads, no Lean rejections, and no post-step state mismatches.  The next eval should move to Rule 59 or Rule 60, where the judge must decide whether to disturb an entered judgment rather than enter a mechanically determined judgment.
+
+## Next Work
+
+Future Rule 58 rows should focus on multiple claims, partial judgment, Rule 68 acceptance, default judgment under Rule 55, and unavailable-opportunity states such as pre-verdict or hung-jury postures.  Post-judgment work should continue in Rule 60 and Rule 59, where the judge must decide whether to disturb an entered judgment rather than enter a mechanically determined one.  Rule 58 should keep scoring the post-step state because judgment entry correctness depends on the state transition as well as the payload.

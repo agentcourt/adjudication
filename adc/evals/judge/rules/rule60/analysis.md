@@ -26,3 +26,7 @@ Candidate v1 matched production on the measured decision behavior.  It made all 
 ## Recommendation
 
 Do not update the production Rule 60 opportunity prompt from this eval alone.  The production prompt reached 16/16 after the deterministic scorer and the under-specified fixture were corrected.  The next Rule 60 work should add harder rows before any prompt promotion decision, especially multiple motions, mixed prospective and monetary relief, jurisdictional voidness, fraud on the court, and Rule 60(b)(6) attempts to avoid Rule 59 or appeal deadlines.
+
+## Next Work
+
+The next Rule 60 set should add harder finality rows, including multiple motions, partial relief, mistake versus legal error, independent action language, fraud on the court, jurisdictional voidness, and prospective relief with mixed monetary and nonmonetary terms.  Rows where Lean should produce no Rule 60 opportunity should live in a separate transition eval because this runner assumes an available required judge opportunity.  The scorer should keep its negation-aware prohibited-concept checks, since correct denials often name the absent Rule 60 ground.

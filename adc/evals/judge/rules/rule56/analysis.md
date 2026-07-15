@@ -28,3 +28,7 @@ Candidate v2 fixed both observed clusters.  It preserved the rule that damages-o
 ## Recommendation
 
 Candidate v2 is the best measured Rule 56 opportunity prompt on this fixture set.  It improved production from 29/30 to 30/30 live without introducing invalid responses, false denials, or explanation-score loss.  Keep it eval-local until broader judge evals test whether the same scope language interacts well with Rule 12, jury instructions, and for-cause challenge decisions.
+
+## Next Work
+
+The next Rule 56 set should test partial summary judgment across multiple claims, affirmative defenses, damages categories, and issue-only motions.  Paired Rule 12 and Rule 56 themes should also be added to verify that the judge applies different procedural standards to the same factual setting.  Those rows should preserve the current emphasis on false grants, because a wrong grant remains the highest-risk Rule 56 failure.

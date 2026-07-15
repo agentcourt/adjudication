@@ -30,3 +30,7 @@ The fixture set was corrected during iteration.  Several plaintiff-win rows need
 ## Recommendation
 
 Do not update the production Rule 52 opportunity prompt from this eval alone.  Production and candidate v1 both scored 16/16 after deterministic scorer corrections, so the candidate prompt does not show a measured improvement.  The next Rule 52 iteration should add harder fixtures before prompt changes, especially mixed-claim bench trials, counterclaims, nominal damages, equitable relief, admitted-but-low-weight evidence, and credibility findings that affect only one element.
+
+## Next Work
+
+The next Rule 52 set should add harder bench-trial rows.  Useful additions include mixed claims, counterclaims, nominal damages, equitable relief, adverse inference, admitted evidence assigned low weight, and credibility findings that affect only one element.  A later runner can test separate findings and conclusions if Lean exposes `add_bench_finding` and `add_bench_conclusion` before `file_bench_opinion`.  Those rows should keep winner and amount scoring separate from the quality of the Rule 52 reasoning.

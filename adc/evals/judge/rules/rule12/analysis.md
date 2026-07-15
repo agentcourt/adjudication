@@ -26,3 +26,7 @@ Candidate v2 is the best measured Rule 12 prompt.  It preserves leave to amend f
 ## Recommendation
 
 Candidate v2 should be the production prompt candidate if ADC updates the Rule 12 opportunity text.  The measured improvement is narrow: it fixes complete prefiling satisfaction without changing the treatment of amendable jurisdiction, standing, ripeness, or pleading defects.  The next test set should add more mootness and amendment rows before changing production text, because the current live evidence for v2 comes from one full 18-row pass.
+
+## Next Work
+
+The next Rule 12 set should add more mootness and amendment-posture rows before prompt promotion.  Paired Rule 12 and Rule 56 rows would also test whether the judge preserves the pleading-stage standard when the same factual setting later appears as an evidence-sufficiency problem.  Court-driven subject-matter jurisdiction screening should be added if ADC exposes a judge opportunity for dismissal without a party Rule 12 motion.

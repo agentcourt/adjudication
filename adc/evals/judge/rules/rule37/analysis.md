@@ -28,3 +28,7 @@ Candidate v1 addressed the main sanction-type defect but still omitted `sanction
 ## Recommendation
 
 Candidate v2 is the best measured Rule 37 opportunity prompt on this fixture set.  It improves production from 9/16 to 16/16 live and eliminates the invalid denied-motion sanction payloads.  Keep the candidate eval-local until the project makes a separate production prompt update decision, but treat its payload rule as the current best text for Rule 37 prompt iteration.
+
+## Next Work
+
+The next Rule 37 set should test close fee awards, partial grants, mixed justified and unjustified objections, repeated violation of a prior discovery order, and proportional sanctions after late cure.  Those rows would determine whether the prompt still handles sanction limits when the grant decision and the fee decision diverge.  They should also keep the denied-motion payload rule under pressure, because that rule was the main production failure.
