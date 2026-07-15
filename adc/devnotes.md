@@ -1,5 +1,37 @@
 # Development Notes
 
+## 2026-07-15: Judge Rule 11 eval
+
+### References
+
+- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
+- Rule 11 plan: [`evals/judge/rules/rule11/plan.md`](evals/judge/rules/rule11/plan.md)
+- Rule 11 fixtures: [`evals/judge/rules/rule11/fixtures.jsonl`](evals/judge/rules/rule11/fixtures.jsonl)
+- Candidate prompt v1: [`evals/judge/rules/rule11/prompts/candidate-v1.md`](evals/judge/rules/rule11/prompts/candidate-v1.md)
+- Candidate prompt v2: [`evals/judge/rules/rule11/prompts/candidate-v2.md`](evals/judge/rules/rule11/prompts/candidate-v2.md)
+- Analysis: [`evals/judge/rules/rule11/analysis.md`](evals/judge/rules/rule11/analysis.md)
+- Runner: [`runtime/eval/judge_rule11.go`](runtime/eval/judge_rule11.go)
+- CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
+- ARCP Rule 11: [`docs/ARCP.md`](docs/ARCP.md)
+
+### Decisions
+
+`adc eval judge-rule11` evaluates the judge's `decide_rule11_motion` behavior against fixed JSONL fixtures.  Each fixture builds a filed-stage ADC state with a complaint trace, challenged filing text, safe-harbor notice, optional correction text, Rule 11 motion, and opposition text, then obtains the real Lean judge opportunity and applies the returned tool call through Lean.  The state builder uses `status=filed` because Lean currently generates the judge Rule 11 opportunity from the filed-stage candidate set, and it records `file_complaint` because Lean recognizes complaints from decision traces rather than docket titles.
+
+The first fixture set has 16 rows across frivolous legal contentions, unsupported factual contentions, factual denials contradicted by records, improper purpose, reasonable extension arguments, likely discovery support, weak merits positions, safe-harbor defects, timely correction, discovery exclusions, and sanction proportionality.  The scorer checks grant or denial, sanction type, sanction amount, sanction detail, reason tags, and Lean acceptance.  It treats denied motions with nonempty sanction fields and monetary sanctions without positive amounts as invalid because Lean rejects those Rule 11 payloads.
+
+Production scored 5/16 live because 11 payloads were invalid.  Nine denied motions included `sanction_type: "none"` and no-sanctions text in `sanction_detail`, while two granted rows selected `fee_shift` without a positive amount.  Candidate v2 is the best measured prompt: it states the denied-motion payload rule, limits monetary sanctions to records with identified amounts, and narrows the sanction ladder so first limited legal defects receive admonitions unless the motion record asks for a correction directive.
+
+### Verification
+
+- [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule11 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule11-production-dry`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule11-production-live`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule11/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule11-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule11/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule11-candidate-v1-live`
+- [x] Candidate v2 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule11/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule11-candidate-v2-dry`
+- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule11/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule11-candidate-v2-live`
+
 ## 2026-07-15: Judge Rule 37 eval
 
 ### References

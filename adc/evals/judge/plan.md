@@ -187,7 +187,9 @@ This eval can use deterministic state fixtures more than free-form text.  Many j
 | Rule 47 for-cause prompt iteration | Production and candidate v1 both scored 16/16 after deterministic explanation rescoring, so no production prompt change is justified by the current set. |
 | Rule 37 discovery sanctions | Implemented under `rules/rule37/`, with a 16-row fixture set and two eval-local prompt candidates. |
 | Rule 37 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 16/16 with no invalid sanction payloads. |
-| Next eval | Rule 11 sanctions. |
+| Rule 11 sanctions | Implemented under `rules/rule11/`, with a 16-row fixture set and two eval-local prompt candidates. |
+| Rule 11 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 16/16 with no invalid sanction payloads, false grants, false denials, or sanction mismatches. |
+| Next eval | Rule 52 bench findings and conclusions. |
 
 ## Reporting Rules
 
