@@ -1,5 +1,42 @@
 # Development Notes
 
+## 2026-07-15: Judge Rule 37 eval
+
+### References
+
+- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
+- Rule 37 plan: [`evals/judge/rules/rule37/plan.md`](evals/judge/rules/rule37/plan.md)
+- Rule 37 fixtures: [`evals/judge/rules/rule37/fixtures.jsonl`](evals/judge/rules/rule37/fixtures.jsonl)
+- Candidate prompt v1: [`evals/judge/rules/rule37/prompts/candidate-v1.md`](evals/judge/rules/rule37/prompts/candidate-v1.md)
+- Candidate prompt v2: [`evals/judge/rules/rule37/prompts/candidate-v2.md`](evals/judge/rules/rule37/prompts/candidate-v2.md)
+- Analysis: [`evals/judge/rules/rule37/analysis.md`](evals/judge/rules/rule37/analysis.md)
+- Runner: [`runtime/eval/judge_rule37.go`](runtime/eval/judge_rule37.go)
+- CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
+- ARCP discovery rules: [`docs/ARCP.md`](docs/ARCP.md)
+
+### Decisions
+
+`adc eval judge-rule37` evaluates the judge's `decide_rule37_motion` behavior against fixed JSONL fixtures.  Each fixture builds a pretrial ADC state in discovery with a request, a response record, meet-and-confer text when relevant, a Rule 37 motion, and opposition text, then obtains the real Lean judge opportunity and applies the model's tool call through Lean.  The first fixture set has 16 rows across no response, complete response, evasive response, privilege and work-product objections, overbreadth, proportionality, harmless cure, initial-disclosure failure, prior-order violation, RFA nonresponse under Rule 36, premature motion practice, grant without fees, and fee-only requests after production.
+
+The scorer checks both the discovery ruling and sanction payload.  It treats a denied motion with `sanction_type: fees`, a fee award without a positive amount, or a missing required sanction type as invalid.  This matched the observed failure cluster: production often denied the motion for the right substantive reason but returned a payload Lean could not accept.
+
+The RFA fixture was corrected during iteration.  ARCP Rule 36 says an unanswered RFA is admitted, so the correct Rule 37 ruling is denial rather than compulsion.  That correction removed a mislabeled false-denial result and left denied-motion sanction typing as the production failure cluster.
+
+Candidate v2 is the best measured Rule 37 prompt.  It requires `sanction_type` in every payload, requires `none` on denied motions, and limits `fees` to granted motions with an identified reasonable amount.  It scored 16 correct decisions, 16 reason matches, no invalid payloads, no false grants, no false denials, and no sanction mismatches on the live fixture set.
+
+### Verification
+
+- [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule37 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule37-production-dry-v2`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule37-production-live-v2`
+- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule37 --rescore-results adc/evals/judge/out/rule37-production-live-v2/results.jsonl --out-dir adc/evals/judge/out/rule37-production-live-v2-rescored`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule37/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule37-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule37/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule37-candidate-v1-live`
+- [x] Candidate v1 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule37 --rescore-results adc/evals/judge/out/rule37-candidate-v1-live/results.jsonl --out-dir adc/evals/judge/out/rule37-candidate-v1-live-rescored`
+- [x] Candidate v2 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule37/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule37-candidate-v2-dry`
+- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule37/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule37-candidate-v2-live`
+- [x] Candidate v2 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule37 --rescore-results adc/evals/judge/out/rule37-candidate-v2-live/results.jsonl --out-dir adc/evals/judge/out/rule37-candidate-v2-live-rescored`
+
 ## 2026-07-15: Judge Rule 47 for-cause eval
 
 ### References
