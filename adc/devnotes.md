@@ -1,5 +1,58 @@
 # Development Notes
 
+## 2026-07-14: Judge voir dire eval
+
+### References
+
+- Eval plan: [`../judge-eval.md`](../judge-eval.md)
+- CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
+- Eval package: [`runtime/eval/judge_voir_dire.go`](runtime/eval/judge_voir_dire.go)
+- Fixtures: [`evals/judge/voir_dire_questions.jsonl`](evals/judge/voir_dire_questions.jsonl)
+- Hard fixtures: [`evals/judge/voir_dire_questions_hard_v1.jsonl`](evals/judge/voir_dire_questions_hard_v1.jsonl)
+- Candidate prompt v1: [`evals/judge/prompts/candidate-v1.md`](evals/judge/prompts/candidate-v1.md)
+- Candidate prompt v2: [`evals/judge/prompts/candidate-v2.md`](evals/judge/prompts/candidate-v2.md)
+- Candidate prompt v3: [`evals/judge/prompts/candidate-v3.md`](evals/judge/prompts/candidate-v3.md)
+- Analysis: [`evals/judge/analysis.md`](evals/judge/analysis.md)
+
+### Decisions
+
+`adc eval judge-voir-dire` evaluates the judge's `decide_voir_dire_question` behavior against fixed JSONL fixtures.  The Go implementation lives under `runtime/eval`, and the fixture and report paths live under `evals/judge`, matching the planned boundary between eval code and eval data.  Each fixture builds a minimal ADC `voir_dire` state with one pending `VoirDireExchange`, asks the Lean engine for the current judge opportunity, builds the judge prompt from the real opportunity text and judge runtime brief, and scores the resulting `decide_voir_dire_question` tool call.
+
+The initial fixture set has 60 questions.  The set covers allowed bias, burden, digital-evidence, damages-skepticism, attention, and instruction-following questions, and disallowed liability precommitment, damages precommitment, specific-evidence sufficiency, assumed-disputed-fact, merits-argument, inadmissible-material, and compound-precommitment questions.  Severity weights are higher for disallowed questions because a false allow can expose the juror to a prohibited question; false disallows remain separate summary fields because overblocking weakens jury selection.
+
+The runner writes `results.jsonl` and `summary.json`.  Dry-run mode uses the expected ruling as a synthetic tool call, which validates fixture loading, state construction, Lean opportunity generation, prompt construction, scoring, report writing, and Lean acceptance without an external model request.  Live model runs use `endpoint://model` syntax through the existing OpenAI/OpenRouter client.  The command also supports `--rescore-results` so deterministic scorer changes can be applied to an existing live result file without repeating model calls.
+
+Prompt iteration now has an eval-local path.  `--opportunity-prompt-file` reads a Markdown template under `evals/judge/prompts`, renders fixture placeholders, and uses the rendered text as the model-facing opportunity objective.  The Lean opportunity still supplies the phase, role, allowed tool, constraints, and transition id, so candidate wording can be evaluated without changing the production opportunity text in `engine/Main.lean`.  Each report records the prompt source and copies the prompt file into the output directory.  Generated report data under `evals/judge/out/` is ignored and should not be committed.
+
+The first two prompt candidates do not justify a production prompt change.  Candidate v1 preserved ruling outcomes on the live run, with 60 correct rulings, no false allows, no false disallows, and no invalid responses, but its explanation matches dropped from 60 to 55 because the prompt encouraged generic category wording such as “class of evidence.”  Candidate v2 required concrete ruling categories and improved explanation matches to 58, but it allowed fixture `jvd-053`, a tier-3 damages-precommitment question asking whether the candidate would be comfortable returning an $80,000 to $120,000 damages range if liability were proven.  That false allow is disqualifying for this prompt candidate.
+
+`voir_dire_questions_hard_v1.jsonl` adds 30 tier-3 boundary rows without changing the original 60-row baseline.  The added rows concentrate on damages-range comfort questions, digital-evidence sufficiency, limiting-instruction phrasing that embeds disputed facts, missing-witness sufficiency, insurance references, and “could you still find” formulations.  Production scored 30 correct rulings, 30 reason matches, no false allows, and no invalid responses after the deterministic scorer accepted the singular phrase “limiting instruction” as instruction-following wording.
+
+Candidate v1 failed the hard set by allowing `jvdh-002`, a prohibited damages-range comfort question.  Candidate v2 scored 30/30 on the hard set but had already failed the original baseline on `jvd-053`, another damages-range comfort question.  Candidate v3 adds a focused damages-number rule: bias or proof-discipline questions remain allowed, but questions asking whether the candidate would be comfortable with, willing to return, able to award, or inclined to reject a named damages amount, range, minimum, maximum, or nominal result are disallowed.  Candidate v3 scored 60 correct rulings, 59 reason matches, no false allows, and no invalid responses on the original set, and 30 correct rulings, 30 reason matches, no false allows, and no invalid responses on the hard set.  Production remains the best measured prompt on these two sets because it scored 60/60 and 30/30 on both ruling outcome and deterministic reason matching.
+
+### Verification
+
+- [x] `go test ./adc/runtime/eval`
+- [x] `go test ./adc/runtime/cli`
+- [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/latest`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/candidate-v1-dry`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/candidate-v2-dry`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/prompts/candidate-v3.md --opportunity-prompt-name candidate-v3 --out-dir adc/evals/judge/out/candidate-v3-dry`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --fixtures adc/evals/judge/voir_dire_questions_hard_v1.jsonl --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/hard-v1-dry`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --fixtures adc/evals/judge/voir_dire_questions_hard_v1.jsonl --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/prompts/candidate-v3.md --opportunity-prompt-name candidate-v3 --out-dir adc/evals/judge/out/hard-v1-candidate-v3-dry`
+- [x] `go test ./adc/runtime/...`
+- [x] Short live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --limit 2 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/live-short`
+- [x] Full live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/live-full`
+- [x] Rescore completed live results after expanding deterministic reason-tag vocabulary for accepted wording on attention and instruction-following questions.
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/candidate-v1-live`
+- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/candidate-v2-live`
+- [x] Candidate v3 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/prompts/candidate-v3.md --opportunity-prompt-name candidate-v3 --out-dir adc/evals/judge/out/candidate-v3-live`
+- [x] Hard production live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --fixtures adc/evals/judge/voir_dire_questions_hard_v1.jsonl --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/hard-v1-production-live`
+- [x] Hard candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --fixtures adc/evals/judge/voir_dire_questions_hard_v1.jsonl --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/hard-v1-candidate-v1-live`
+- [x] Hard candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --fixtures adc/evals/judge/voir_dire_questions_hard_v1.jsonl --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/hard-v1-candidate-v2-live`
+- [x] Hard candidate v3 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --fixtures adc/evals/judge/voir_dire_questions_hard_v1.jsonl --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/prompts/candidate-v3.md --opportunity-prompt-name candidate-v3 --out-dir adc/evals/judge/out/hard-v1-candidate-v3-live`
+
 ## 2026-07-14: `adc juror` probe command
 
 ### References
@@ -90,7 +143,7 @@ Importing the closed-case opportunity theorem into the certificate proof path ex
 - [x] `lake build Proofs.RecentExhibitLimits`
 - [x] `lake build Proofs.CertificateOutcomeFacts Proofs.CertificateOutcomeExamples`
 - [x] `lake build Proofs adcengine`
-- [x] Real no-LLM smoke run with `adc scenario`, followed by `adc verify-certificate`
+- [x] Real no-LLM run with `adc scenario`, followed by `adc verify-certificate`
 
 ## 2026-07-10: Service process record reconciliation
 

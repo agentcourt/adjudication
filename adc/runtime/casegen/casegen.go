@@ -65,6 +65,10 @@ func DefaultNonJurorModel() string {
 	return defaultNonJurorModel
 }
 
+func JudgeRuntimeBrief() string {
+	return strings.TrimSpace(judgeRuntimeBrief)
+}
+
 type LinkedFile struct {
 	Label         string `json:"label"`
 	ReferencePath string `json:"reference_path,omitempty"`

@@ -5,6 +5,7 @@
 .lake/
 /build/
 /out/
+evals/judge/out/
 *~
 .DS_Store
 reviews.md
