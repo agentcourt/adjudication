@@ -1,7 +1,7 @@
 # ADC Attorney Guide
 
 This draft distills the experiment-1 findings (cycles 1 through 9,
-2026-07-14, [journal](../../experiment1-journal.md)) into guidance for
+2026-07-14, [journal](voir-dire-journal.md)) into guidance for
 lawyers in ADC jury trials.  Scope limits: everything below comes
 from single-call probes on the current 25-record pool with the
 generic persona, on one fact family (civil misrepresentation with a
