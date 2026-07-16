@@ -4,7 +4,7 @@
 
 The voir dire question eval covers `decide_voir_dire_question`.  The baseline fixture set contains 60 voir dire questions across allowed screening questions and prohibited precommitment, sufficiency, assumed-fact, merits-argument, and inadmissible-material questions.  The hard fixture set adds 30 tier-3 boundary questions focused on damages ranges, digital-evidence sufficiency, limiting-instruction phrasing with embedded disputed facts, missing-witness sufficiency, insurance references, and “could you still find” formulations.
 
-The prompt-iteration path uses eval-local Markdown templates under [Judge Prompt Candidates](prompts/) and leaves the production Lean opportunity text unchanged.  Each live run records the prompt source, copied prompt text, results JSONL, and summary JSON under `evals/judge/out/`, which is generated local data and should not be committed.  The scorer uses deterministic reason tags, so explanation scores measure whether the ruling reason names an accepted category rather than whether a separate model agrees with the explanation.
+The prompt-iteration path uses eval-local Markdown templates under [Judge Prompt Candidates](prompts/) and leaves the production Lean opportunity text unchanged.  Each live run records the prompt source, copied prompt text, results JSONL, and summary JSON under `evals/out/adc/judge/`, which is generated local data and should not be committed.  The scorer uses deterministic reason tags, so explanation scores measure whether the ruling reason names an accepted category rather than whether a separate model agrees with the explanation.
 
 ### Results
 

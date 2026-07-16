@@ -1,8 +1,8 @@
 # Adjudication Evals Manual
 
-`evals/` selects OpenRouter provider endpoints for juror and council model pools.  It evaluates endpoints with JSON-scored question sets, filters endpoints by provider-error count and deliberation score, samples behavior prompts from accepted endpoints, clusters response embeddings, and samples endpoint/persona records for pool use.  Scripts write generated files under `results/`, while checked-in inputs live in `sets/`, `schemas/`, `rubrics/`, `prompts/`, `personas/`, `config/`, `genes.json`, and `sampled-genes.json`.
+`evals/model-pool/` selects OpenRouter provider endpoints for juror and council model pools.  It evaluates endpoints with JSON-scored question sets, filters endpoints by provider-error count and deliberation score, samples behavior prompts from accepted endpoints, clusters response embeddings, and samples endpoint/persona records for pool use.  Scripts write generated files under `results/`, while checked-in inputs live in `sets/`, `schemas/`, `rubrics/`, `prompts/`, `personas/`, `config/`, `genes.json`, and `sampled-genes.json`.
 
-Use `evals/` as the working directory unless a command says otherwise.  OpenRouter calls require `OPENROUTER_API_KEY` in the environment or an ignored `secrets/openrouter.api.txt` file.  Gene-response embedding calls also require `OPENAI_API_KEY` in the environment or an ignored `secrets/openai.api.txt` file.
+Use `evals/model-pool/` as the working directory unless a command says otherwise.  OpenRouter calls require `OPENROUTER_API_KEY` in the environment or an ignored `secrets/openrouter.api.txt` file.  Gene-response embedding calls also require `OPENAI_API_KEY` in the environment or an ignored `secrets/openai.api.txt` file.
 
 The runner requests strict JSON responses and records raw outputs, parsed responses, tool traces, provider metadata, timing data, and cost data.  Treat each directory under `results/` as a run record with enough data to audit the model behavior and reconstruct the command shape.  The current checked-in accepted endpoint set lives under `variants/filtered-20260529/`, and current-provider claims require a refreshed inventory and fresh evals.
 

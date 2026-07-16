@@ -343,7 +343,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fetch OpenRouter model endpoint inventory.")
     parser.add_argument("--sample-models", type=int, default=None, help="Sample N models but include all endpoint variants for each sampled model.")
     parser.add_argument("--sample-seed", type=int, default=0, help="Deterministic sampling seed. Default: 0.")
-    parser.add_argument("--out-root", type=Path, default=ROOT / "results", help="Output root. Default: adjudication-evals/results.")
+    parser.add_argument("--out-root", type=Path, default=ROOT / "results", help="Output root. Default: evals/model-pool/results.")
     parser.add_argument("--run-id", default=None, help="Output run id. Default: model-inventory-<UTC timestamp>.")
     parser.add_argument("--request-timeout", type=int, default=60, help="HTTP request timeout seconds. Default: 60.")
     parser.add_argument("--retries", type=int, default=2, help="Retry count for transient HTTP errors. Default: 2.")

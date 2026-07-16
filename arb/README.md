@@ -78,7 +78,7 @@ jq --arg member "$member" '
   --source-output "$source" \
   --member-id "$member" \
   --model-config "/tmp/aar-juror-replay-$member-model.json" \
-  --persona "../evals/personas/experiments/attorneys/Brandeis.txt" \
+  --persona "../evals/model-pool/personas/experiments/attorneys/Brandeis.txt" \
   --out-dir "out/juror-replays/ex13-run-03-$member-brandeis" \
   --podman docker \
   --pi-image agentcourt-pi-sandbox:latest

@@ -42,58 +42,98 @@ The runner should record the same artifacts for every judge eval.  Each result s
 
 ## Directory Organization
 
-Judge evals should be organized by the governing procedural rule.  The current flat `adc/evals/judge/` layout worked for the first Rule 47 eval, but it will not scale once Rule 56, Rule 12, Rule 51, sanctions, bench-trial, and post-judgment evals exist.  The top-level judge directory should hold cross-rule planning and shared conventions, while rule-specific fixtures, prompt candidates, and analysis documents should live under a rule directory.
+Judge evals are organized by governing procedural rule and evaluated behavior under `evals/adc/judge/`.  The earlier ADC-local judge layout worked for the first Rule 47 eval, but it did not scale once Rule 56, Rule 12, Rule 51, sanctions, bench-trial, and post-judgment evals existed.  The top-level judge directory holds cross-rule planning and shared conventions, while rule-specific fixture sets, prompt candidates, and analysis documents live under a behavior directory.
 
-The proposed structure is:
+The current structure is:
 
 ```text
-adc/evals/judge/
+evals/adc/judge/
+  README.md
   plan.md
   rules/
     rule47/
-      analysis.md
-      voir_dire_questions.jsonl
-      voir_dire_questions_hard_v1.jsonl
-      prompts/
-        candidate-v1.md
-        candidate-v2.md
-        candidate-v3.md
+      voir-dire-question/
+        analysis.md
+        fixtures.jsonl
+        hard-fixtures.jsonl
+        prompts/
+      for-cause-challenge/
+        analysis.md
+        fixtures.jsonl
+        plan.md
+        prompts/
     rule56/
-      plan.md
-      fixtures.jsonl
-      prompts/
+      summary-judgment/
+        analysis.md
+        fixtures.jsonl
+        plan.md
+        prompts/
     rule12/
-      plan.md
-      fixtures.jsonl
-      prompts/
+      dismissal-jurisdiction/
+        analysis.md
+        fixtures.jsonl
+        plan.md
+        prompts/
     rule51/
-      plan.md
-      fixtures.jsonl
-      prompts/
+      jury-instructions/
+        analysis.md
+        fixtures.jsonl
+        plan.md
+        prompts/
+    rule52/
+      bench-opinion/
+        analysis.md
+        fixtures.jsonl
+        plan.md
+        prompts/
+    rule58/
+      judgment-entry/
+        analysis.md
+        fixtures.jsonl
+        plan.md
+        prompts/
+    rule60/
+      relief-from-judgment/
+        analysis.md
+        fixtures.jsonl
+        plan.md
+        prompts/
+    rule37/
+      discovery-sanctions/
+        analysis.md
+        fixtures.jsonl
+        plan.md
+        prompts/
+    rule11/
+      sanctions/
+        analysis.md
+        fixtures.jsonl
+        plan.md
+        prompts/
 ```
 
-Rule 47 covers voir dire and jury selection in ADC's ARCP rules.  The existing voir dire question-screening fixtures, hard fixtures, analysis, and prompt candidates should therefore move under `adc/evals/judge/rules/rule47/`.  The for-cause challenge eval should also live under Rule 47 because it tests whether a juror should be excused for good cause after voir dire answers.
+Rule 47 covers voir dire and jury selection in ADC's ARCP rules.  The voir dire question-screening fixtures, hard fixtures, analysis, and prompt candidates live under `rules/rule47/voir-dire-question/`.  The for-cause challenge eval also lives under Rule 47 because it tests whether a juror should be excused for good cause after voir dire answers.
 
 | Eval Area | Directory |
 |---|---|
-| Voir dire question screening | `rules/rule47/` |
-| For-cause juror challenges | `rules/rule47/` |
-| Jury instructions | `rules/rule51/` |
-| Rule 56 summary judgment | `rules/rule56/` |
-| Rule 12 dismissal and jurisdiction | `rules/rule12/` |
-| Rule 37 discovery sanctions | `rules/rule37/` |
-| Rule 11 sanctions | `rules/rule11/` |
-| Bench findings and conclusions | `rules/rule52/` |
-| Judgment entry | `rules/rule58/` |
+| Voir dire question screening | `rules/rule47/voir-dire-question/` |
+| For-cause juror challenges | `rules/rule47/for-cause-challenge/` |
+| Jury instructions | `rules/rule51/jury-instructions/` |
+| Rule 56 summary judgment | `rules/rule56/summary-judgment/` |
+| Rule 12 dismissal and jurisdiction | `rules/rule12/dismissal-jurisdiction/` |
+| Rule 37 discovery sanctions | `rules/rule37/discovery-sanctions/` |
+| Rule 11 sanctions | `rules/rule11/sanctions/` |
+| Bench findings and conclusions | `rules/rule52/bench-opinion/` |
+| Judgment entry | `rules/rule58/judgment-entry/` |
 | Default and default judgment | `rules/rule55/` |
 | Rule 59 post-trial relief | `rules/rule59/` |
-| Rule 60 relief from judgment | `rules/rule60/` |
+| Rule 60 relief from judgment | `rules/rule60/relief-from-judgment/` |
 | Stays and bonds | `rules/rule62/` |
 | Protective orders | `rules/rule26/` |
 
-Some judge evals will cross rule boundaries.  Judgment and post-judgment relief should split into Rule 58, Rule 59, and Rule 60 once the fixtures become concrete.  ADC-specific judge powers that do not map cleanly to a federal rule should either use the closest practice rule, such as Rule 83 for local-rule overrides, or live under `adc/evals/judge/adc-specific/` when the eval mainly tests ADC policy rather than a procedural rule.
+Some judge evals will cross rule boundaries.  Judgment and post-judgment relief should split into Rule 58, Rule 59, and Rule 60 once the fixtures become concrete.  ADC-specific judge powers that do not map cleanly to a federal rule should either use the closest practice rule, such as Rule 83 for local-rule overrides, or live under `evals/adc/judge/adc-specific/` when the eval mainly tests ADC policy rather than a procedural rule.
 
-The reorganization should happen before adding the next eval.  Existing CLI defaults and documentation should either follow the new Rule 47 paths or accept both the old and new fixture paths during a short transition.  Generated report data should remain under ignored `out/` directories and should not move into committed rule directories.
+CLI defaults and documentation should follow these suite paths.  Generated report data should remain under ignored `evals/out/adc/judge/` directories.  Committed rule directories should contain fixtures, prompt candidates, plans, and analysis rather than generated report data.
 
 ## Rule 56 Summary Judgment
 
@@ -163,12 +203,12 @@ This eval can use deterministic state fixtures more than free-form text.  Many j
 
 | Step | Work |
 |---:|---|
-| 1 | Reorganize current voir dire materials under `adc/evals/judge/rules/rule47/`, update CLI defaults and docs, and keep generated reports ignored. |
+| 1 | Reorganize current voir dire materials under `evals/adc/judge/rules/rule47/voir-dire-question/`, update CLI defaults and docs, and keep generated reports ignored. |
 | 2 | Generalize shared eval helpers for fixture loading, report writing, summary slices, prompt metadata, and Lean opportunity validation. |
-| 3 | Implement `judge-rule56` fixtures, runner, scorer, and analysis report under `rules/rule56/`. |
-| 4 | Implement `judge-rule12` fixtures, including jurisdiction-screen rows and amendment/prejudice scoring under `rules/rule12/`. |
-| 5 | Implement `judge-jury-instructions` with `settle_jury_instructions` first and `deliver_jury_instructions` second under `rules/rule51/`. |
-| 6 | Implement `judge-for-cause` under `rules/rule47/` by extending the voir dire state builder to include answered exchanges and pending challenges. |
+| 3 | Implement `judge-rule56` fixtures, runner, scorer, and analysis report under `rules/rule56/summary-judgment/`. |
+| 4 | Implement `judge-rule12` fixtures, including jurisdiction-screen rows and amendment/prejudice scoring under `rules/rule12/dismissal-jurisdiction/`. |
+| 5 | Implement `judge-jury-instructions` with `settle_jury_instructions` first and `deliver_jury_instructions` second under `rules/rule51/jury-instructions/`. |
+| 6 | Implement `judge-for-cause` under `rules/rule47/for-cause-challenge/` by extending the voir dire state builder to include answered exchanges and pending challenges. |
 | 7 | Implement `judge-rule37` and `judge-rule11` after the first four evals prove the shared helper shape. |
 | 8 | Implement bench-trial and post-judgment evals once the richer trial and verdict state builders exist. |
 
@@ -176,28 +216,28 @@ This eval can use deterministic state fixtures more than free-form text.  Many j
 
 | Area | Status |
 |---|---|
-| Rule 47 voir dire question screening | Implemented, reorganized under `rules/rule47/`, and committed. |
-| Rule 56 summary judgment | Implemented under `rules/rule56/`, with a 30-row fixture set and two eval-local prompt candidates. |
+| Rule 47 voir dire question screening | Implemented under `rules/rule47/voir-dire-question/`. |
+| Rule 56 summary judgment | Implemented under `rules/rule56/summary-judgment/`, with a 30-row fixture set and two eval-local prompt candidates. |
 | Rule 56 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 30/30 with no false grants or invalid responses. |
-| Rule 12 dismissal and jurisdiction screening | Implemented under `rules/rule12/`, with an 18-row fixture set and two eval-local prompt candidates. |
+| Rule 12 dismissal and jurisdiction screening | Implemented under `rules/rule12/dismissal-jurisdiction/`, with an 18-row fixture set and two eval-local prompt candidates. |
 | Rule 12 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 18/18 with no false dismissals, false denials, posture mismatches, or invalid responses. |
-| Rule 51 jury-instruction settlement | Implemented under `rules/rule51/`, with a 16-row fixture set and one eval-local prompt candidate. |
+| Rule 51 jury-instruction settlement | Implemented under `rules/rule51/jury-instructions/`, with a 16-row fixture set and one eval-local prompt candidate. |
 | Rule 51 prompt iteration | Production and candidate v1 both scored 16/16 after deterministic scorer correction, so no production prompt change is justified by the current set. |
-| Rule 47 for-cause juror challenges | Implemented under `rules/rule47/`, with a 16-row fixture set and one eval-local prompt candidate. |
+| Rule 47 for-cause juror challenges | Implemented under `rules/rule47/for-cause-challenge/`, with a 16-row fixture set and one eval-local prompt candidate. |
 | Rule 47 for-cause prompt iteration | Production and candidate v1 both scored 16/16 after deterministic explanation rescoring, so no production prompt change is justified by the current set. |
-| Rule 37 discovery sanctions | Implemented under `rules/rule37/`, with a 16-row fixture set and two eval-local prompt candidates. |
+| Rule 37 discovery sanctions | Implemented under `rules/rule37/discovery-sanctions/`, with a 16-row fixture set and two eval-local prompt candidates. |
 | Rule 37 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 16/16 with no invalid sanction payloads. |
-| Rule 11 sanctions | Implemented under `rules/rule11/`, with a 16-row fixture set and two eval-local prompt candidates. |
+| Rule 11 sanctions | Implemented under `rules/rule11/sanctions/`, with a 16-row fixture set and two eval-local prompt candidates. |
 | Rule 11 prompt iteration | Candidate v2 outperformed production on the measured live set, scoring 16/16 with no invalid sanction payloads, false grants, false denials, or sanction mismatches. |
-| Rule 52 bench findings and conclusions | Implemented under `rules/rule52/`, with a 16-row fixture set and one eval-local prompt candidate. |
+| Rule 52 bench findings and conclusions | Implemented under `rules/rule52/bench-opinion/`, with a 16-row fixture set and one eval-local prompt candidate. |
 | Rule 52 prompt iteration | Production and candidate v1 both scored 16/16 after deterministic scorer correction, so no production prompt change is justified by the current set. |
-| Rule 58 judgment entry | Implemented under `rules/rule58/`, with a 16-row fixture set and one eval-local prompt candidate. |
+| Rule 58 judgment entry | Implemented under `rules/rule58/judgment-entry/`, with a 16-row fixture set and one eval-local prompt candidate. |
 | Rule 58 prompt iteration | Production and candidate v1 both scored 16/16 live, including final status and monetary-judgment checks after Lean step execution. |
-| Rule 60 relief from judgment | Implemented under `rules/rule60/`, with a 16-row fixture set and one eval-local prompt candidate. |
+| Rule 60 relief from judgment | Implemented under `rules/rule60/relief-from-judgment/`, with a 16-row fixture set and one eval-local prompt candidate. |
 | Rule 60 prompt iteration | Production and candidate v1 both scored 16/16 after deterministic scorer correction and one fixture correction, so no production prompt change is justified by the current set. |
 | Rule 59 post-trial relief | Deferred until Lean exposes a meaningful grant-or-deny Rule 59 opportunity; the current opportunity path observed during planning is deterministic denial and therefore weak for prompt iteration. |
 | Next eval | Add harder Rule 60 rows or implement Rule 59 once the engine exposes a real Rule 59 decision opportunity. |
 
 ## Reporting Rules
 
-Generated reports should stay under `adc/evals/judge/out/`, which is ignored.  Committed materials should include fixture sets, prompt candidates, analysis documents, and runner code.  Each analysis document should state whether a candidate prompt beats production, preserves production behavior, or exposes a failure cluster that needs more fixtures.
+Generated reports should stay under `evals/out/adc/judge/`, which is ignored.  Committed materials should include fixture sets, prompt candidates, analysis documents, and runner code.  Each analysis document should state whether a candidate prompt beats production, preserves production behavior, or exposes a failure cluster that needs more fixtures.

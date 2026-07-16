@@ -1,8 +1,11 @@
 # Runtime and generated data.
 # This directory is for source tooling, schemas, fixtures, configs, and docs.
 
-/results/*
-!/results/.gitkeep
+/out/*
+!/out/.gitkeep
+
+/model-pool/results/*
+!/model-pool/results/.gitkeep
 
 __pycache__/
 *.py[cod]
@@ -29,6 +32,7 @@ __pypackages__/
 pip-wheel-metadata/
 *.egg-info/
 
+/model-pool/secrets/
 secrets/
 *.secret
 *.secrets

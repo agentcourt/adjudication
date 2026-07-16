@@ -11,7 +11,7 @@ Live-agent runs use case-owned HTTP APIs and MCP adapters.  OpenClaw lawyers con
 | [adc/](adc/README.md) | `adc` | [Agent District Court Manual](adc/manual.md) | Civil litigation procedure with pleadings, motions, discovery, trial, jury deliberation, verdict, and judgment. |
 | [arb/](arb/README.md) | `aar` | [Agent Arbitration Manual](arb/manual.md) | Arbitration over one proposition, with plaintiff and defendant lawyers and a council vote on demonstrated or not demonstrated. |
 | [arbd/](arbd/README.md) | `aard` | [Agent Arbitration Degree Manual](arbd/manual.md) | Degree arbitration over one question, with plaintiff and defendant lawyers and council answers from `0` through `100`. |
-| [evals/](evals/README.md) | `uv run tools/COMMAND.py` | [Adjudication Evals Manual](evals/manual.md) | Core and deliberation eval sets, endpoint-variant inventory, scoring, clustering, and pool sampling tools. |
+| [evals/model-pool/](evals/model-pool/README.md) | `cd evals/model-pool && uv run tools/COMMAND.py` | [Model-Pool Evals Manual](evals/model-pool/manual.md) | Core and deliberation eval sets, endpoint-variant inventory, scoring, clustering, and pool sampling tools. |
 
 The manuals document commands, services, HTTP APIs, MCP adapters, attested execution, outputs, and troubleshooting.  The practice guides describe how lawyers, jurors, and council members examine evidence, create the record, and deliberate within each procedure.
 
@@ -53,8 +53,8 @@ The repository root has no top-level `Makefile`.  Shared packages build through 
 | ADC | [README](adc/README.md), [manual](adc/manual.md), [practice guide](adc/docs/practice.md), [rules](adc/docs/ARCP.md), [attested runbook](adc/Dockerfile.md), [dev-host requirements](adc/docs/attested-dev-host.md). |
 | AAR | [README](arb/README.md), [manual](arb/manual.md), [council and juror replay guide](arb/docs/council-replay.md), [practice guide](arb/docs/practice.md), [rules](arb/docs/ARAP.md), [attested runbook](arb/Dockerfile.md), [dev-host requirements](arb/docs/attested-dev-host.md). |
 | AARD | [README](arbd/README.md), [manual](arbd/manual.md), [practice guide](arbd/docs/practice.md), [rules](arbd/docs/ARAP.md), [attested runbook](arbd/Dockerfile.md), [dev-host requirements](arbd/docs/attested-dev-host.md). |
-| Evals | [README](evals/README.md), [manual](evals/manual.md), [sampling runbook](evals/docs/sampling-runbook.md), [model inventory notes](evals/docs/model-inventory.md). |
-| Shared model pools | [Jury and council pool generation](evals/docs/jury-pool-generation.md). |
+| Evals | [README](evals/README.md), [model-pool manual](evals/model-pool/manual.md), [sampling runbook](evals/model-pool/docs/sampling-runbook.md), [model inventory notes](evals/model-pool/docs/model-inventory.md), [judge eval plan](evals/adc/judge/plan.md). |
+| Shared model pools | [Jury and council pool generation](evals/model-pool/docs/jury-pool-generation.md). |
 
 ## License
 

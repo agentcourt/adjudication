@@ -1,6 +1,6 @@
 # Scratch Notes
 
-`scratch/` holds archived notes, old API drafts, run observations, and investigation records.  Active operating guidance lives in the system manuals for [ADC](../adc/manual.md), [AAR](../arb/manual.md), [AARD](../arbd/manual.md), and [evals](../evals/manual.md).  Active practice guidance lives in the [ADC practice guide](../adc/docs/practice.md), [AAR practice guide](../arb/docs/practice.md), and [AARD practice guide](../arbd/docs/practice.md).
+`scratch/` holds archived notes, old API drafts, run observations, and investigation records.  Active operating guidance lives in the system manuals for [ADC](../adc/manual.md), [AAR](../arb/manual.md), [AARD](../arbd/manual.md), and [evals](../evals/model-pool/manual.md).  Active practice guidance lives in the [ADC practice guide](../adc/docs/practice.md), [AAR practice guide](../arb/docs/practice.md), and [AARD practice guide](../arbd/docs/practice.md).
 
 | Path | Contents |
 | --- | --- |

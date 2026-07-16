@@ -1420,7 +1420,7 @@ The implementation adds a strict persona override to the local replay config loa
 
 Replay cleanup now runs through a deferred secret cleanup path after the replay run state exists.  This covers successful replay, failed model calls, failed Pi process exit, and Pi startup errors after `writePiConfig` has created `.mcp.json` or Pi auth files.  The focused startup-failure test forces the container command to fail and verifies that generated replay secret files are absent afterward.
 
-Focused tests cover persona override loading, missing and empty persona failures, snapshot discovery by member id, ambiguous snapshot rejection, and fallback to reconstructed replay when no snapshot directory exists.  The first real test should use one existing `ex*` output with `council-turns/`, a model config derived from that run's `council.json`, and one persona from `evals/personas/experiments`.
+Focused tests cover persona override loading, missing and empty persona failures, snapshot discovery by member id, ambiguous snapshot rejection, and fallback to reconstructed replay when no snapshot directory exists.  The first real test should use one existing `ex*` output with `council-turns/`, a model config derived from that run's `council.json`, and one persona from `evals/model-pool/personas/experiments`.
 
 ## 2026-07-09
 

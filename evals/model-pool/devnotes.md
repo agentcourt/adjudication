@@ -1,5 +1,9 @@
 # Development Notes
 
+## 2026-07-16 Eval Directory Reorganization
+
+Moved the model-pool eval system under `evals/model-pool/` as part of the repository-wide eval layout.  The Python tools still run from that directory and write generated output under `results/`.  ADC judge behavior eval assets moved into `evals/adc/judge/`, while ADC judge run output moved under ignored `evals/out/adc/judge/`.
+
 ## 2026-07-16 README Consolidation
 
 Consolidated the duplicate eval README content into `README.md` and removed `README-better.md`.  The README now describes stable scope, credentials, documentation, validation commands, deterministic local testing, layout, and run-data boundaries.  Run-specific counts, endpoint identities, pass rates, dated filter details, and run IDs remain in the manual, runbooks, variant summaries, analysis notes, or generated run artifacts instead of the README.

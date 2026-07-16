@@ -1,6 +1,6 @@
 # Sampling Runbook
 
-This runbook starts with OpenRouter root-model sampling and ends with a JSONL pool sampled from variant/persona cluster vectors.  Run every command from `evals/`.
+This runbook starts with OpenRouter root-model sampling and ends with a JSONL pool sampled from variant/persona cluster vectors.  Run every command from `evals/model-pool/`.
 
 ## Scope
 

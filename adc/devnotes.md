@@ -4,11 +4,11 @@
 
 ### References
 
-- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
-- Rule 60 plan: [`evals/judge/rules/rule60/plan.md`](evals/judge/rules/rule60/plan.md)
-- Rule 60 fixtures: [`evals/judge/rules/rule60/fixtures.jsonl`](evals/judge/rules/rule60/fixtures.jsonl)
-- Candidate prompt v1: [`evals/judge/rules/rule60/prompts/candidate-v1.md`](evals/judge/rules/rule60/prompts/candidate-v1.md)
-- Analysis: [`evals/judge/rules/rule60/analysis.md`](evals/judge/rules/rule60/analysis.md)
+- Judge eval plan: [`evals/adc/judge/plan.md`](../evals/adc/judge/plan.md)
+- Rule 60 plan: [`evals/adc/judge/rules/rule60/relief-from-judgment/plan.md`](../evals/adc/judge/rules/rule60/relief-from-judgment/plan.md)
+- Rule 60 fixtures: [`evals/adc/judge/rules/rule60/relief-from-judgment/fixtures.jsonl`](../evals/adc/judge/rules/rule60/relief-from-judgment/fixtures.jsonl)
+- Candidate prompt v1: [`evals/adc/judge/rules/rule60/relief-from-judgment/prompts/candidate-v1.md`](../evals/adc/judge/rules/rule60/relief-from-judgment/prompts/candidate-v1.md)
+- Analysis: [`evals/adc/judge/rules/rule60/relief-from-judgment/analysis.md`](../evals/adc/judge/rules/rule60/relief-from-judgment/analysis.md)
 - Runner: [`runtime/eval/judge_rule60.go`](runtime/eval/judge_rule60.go)
 - CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
 - ARCP Rule 60: [`docs/ARCP.md`](docs/ARCP.md)
@@ -26,22 +26,22 @@ Production and candidate v1 both scored 16/16 after scorer correction.  Both mad
 ### Verification
 
 - [x] `go test ./adc/runtime/eval -run JudgeRule60`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-rule60 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule60-production-dry-v3`
-- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule60 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule60-production-live-v2`
-- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule60 --rescore-results adc/evals/judge/out/rule60-production-live-v2/results.jsonl --out-dir adc/evals/judge/out/rule60-production-live-v2-rescored2`
-- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule60 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule60/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule60-candidate-v1-dry`
-- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule60 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule60/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule60-candidate-v1-live`
-- [x] Candidate v1 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule60 --rescore-results adc/evals/judge/out/rule60-candidate-v1-live/results.jsonl --out-dir adc/evals/judge/out/rule60-candidate-v1-live-rescored3`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule60 --dry-run --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule60-production-dry-v3`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule60 --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule60-production-live-v2`
+- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule60 --rescore-results evals/out/adc/judge/rule60-production-live-v2/results.jsonl --out-dir evals/out/adc/judge/rule60-production-live-v2-rescored2`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule60 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule60/relief-from-judgment/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule60-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule60 --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule60/relief-from-judgment/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule60-candidate-v1-live`
+- [x] Candidate v1 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule60 --rescore-results evals/out/adc/judge/rule60-candidate-v1-live/results.jsonl --out-dir evals/out/adc/judge/rule60-candidate-v1-live-rescored3`
 
 ## 2026-07-15: Judge Rule 58 eval
 
 ### References
 
-- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
-- Rule 58 plan: [`evals/judge/rules/rule58/plan.md`](evals/judge/rules/rule58/plan.md)
-- Rule 58 fixtures: [`evals/judge/rules/rule58/fixtures.jsonl`](evals/judge/rules/rule58/fixtures.jsonl)
-- Candidate prompt v1: [`evals/judge/rules/rule58/prompts/candidate-v1.md`](evals/judge/rules/rule58/prompts/candidate-v1.md)
-- Analysis: [`evals/judge/rules/rule58/analysis.md`](evals/judge/rules/rule58/analysis.md)
+- Judge eval plan: [`evals/adc/judge/plan.md`](../evals/adc/judge/plan.md)
+- Rule 58 plan: [`evals/adc/judge/rules/rule58/judgment-entry/plan.md`](../evals/adc/judge/rules/rule58/judgment-entry/plan.md)
+- Rule 58 fixtures: [`evals/adc/judge/rules/rule58/judgment-entry/fixtures.jsonl`](../evals/adc/judge/rules/rule58/judgment-entry/fixtures.jsonl)
+- Candidate prompt v1: [`evals/adc/judge/rules/rule58/judgment-entry/prompts/candidate-v1.md`](../evals/adc/judge/rules/rule58/judgment-entry/prompts/candidate-v1.md)
+- Analysis: [`evals/adc/judge/rules/rule58/judgment-entry/analysis.md`](../evals/adc/judge/rules/rule58/judgment-entry/analysis.md)
 - Runner: [`runtime/eval/judge_rule58.go`](runtime/eval/judge_rule58.go)
 - CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
 - ARCP Rule 58: [`docs/ARCP.md`](docs/ARCP.md)
@@ -57,20 +57,20 @@ Production and candidate v1 both scored 16/16 live.  Both returned valid payload
 ### Verification
 
 - [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-rule58 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule58-production-dry-v2`
-- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule58 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule58-production-live`
-- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule58 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule58/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule58-candidate-v1-dry`
-- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule58 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule58/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule58-candidate-v1-live`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule58 --dry-run --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule58-production-dry-v2`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule58 --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule58-production-live`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule58 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule58/judgment-entry/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule58-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule58 --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule58/judgment-entry/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule58-candidate-v1-live`
 
 ## 2026-07-15: Judge Rule 52 eval
 
 ### References
 
-- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
-- Rule 52 plan: [`evals/judge/rules/rule52/plan.md`](evals/judge/rules/rule52/plan.md)
-- Rule 52 fixtures: [`evals/judge/rules/rule52/fixtures.jsonl`](evals/judge/rules/rule52/fixtures.jsonl)
-- Candidate prompt v1: [`evals/judge/rules/rule52/prompts/candidate-v1.md`](evals/judge/rules/rule52/prompts/candidate-v1.md)
-- Analysis: [`evals/judge/rules/rule52/analysis.md`](evals/judge/rules/rule52/analysis.md)
+- Judge eval plan: [`evals/adc/judge/plan.md`](../evals/adc/judge/plan.md)
+- Rule 52 plan: [`evals/adc/judge/rules/rule52/bench-opinion/plan.md`](../evals/adc/judge/rules/rule52/bench-opinion/plan.md)
+- Rule 52 fixtures: [`evals/adc/judge/rules/rule52/bench-opinion/fixtures.jsonl`](../evals/adc/judge/rules/rule52/bench-opinion/fixtures.jsonl)
+- Candidate prompt v1: [`evals/adc/judge/rules/rule52/bench-opinion/prompts/candidate-v1.md`](../evals/adc/judge/rules/rule52/bench-opinion/prompts/candidate-v1.md)
+- Analysis: [`evals/adc/judge/rules/rule52/bench-opinion/analysis.md`](../evals/adc/judge/rules/rule52/bench-opinion/analysis.md)
 - Runner: [`runtime/eval/judge_rule52.go`](runtime/eval/judge_rule52.go)
 - CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
 - ARCP Rule 52: [`docs/ARCP.md`](docs/ARCP.md)
@@ -88,23 +88,23 @@ Production and candidate v1 both scored 16/16 after deterministic scorer correct
 ### Verification
 
 - [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-rule52 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule52-production-dry-v2`
-- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule52 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule52-production-live-v2`
-- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule52 --rescore-results adc/evals/judge/out/rule52-production-live-v2/results.jsonl --out-dir adc/evals/judge/out/rule52-production-live-v2-rescored2`
-- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule52 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule52/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule52-candidate-v1-dry-v2`
-- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule52 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule52/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule52-candidate-v1-live-v2`
-- [x] Candidate v1 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule52 --rescore-results adc/evals/judge/out/rule52-candidate-v1-live-v2/results.jsonl --out-dir adc/evals/judge/out/rule52-candidate-v1-live-v2-rescored`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule52 --dry-run --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule52-production-dry-v2`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule52 --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule52-production-live-v2`
+- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule52 --rescore-results evals/out/adc/judge/rule52-production-live-v2/results.jsonl --out-dir evals/out/adc/judge/rule52-production-live-v2-rescored2`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule52 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule52/bench-opinion/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule52-candidate-v1-dry-v2`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule52 --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule52/bench-opinion/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule52-candidate-v1-live-v2`
+- [x] Candidate v1 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule52 --rescore-results evals/out/adc/judge/rule52-candidate-v1-live-v2/results.jsonl --out-dir evals/out/adc/judge/rule52-candidate-v1-live-v2-rescored`
 
 ## 2026-07-15: Judge Rule 11 eval
 
 ### References
 
-- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
-- Rule 11 plan: [`evals/judge/rules/rule11/plan.md`](evals/judge/rules/rule11/plan.md)
-- Rule 11 fixtures: [`evals/judge/rules/rule11/fixtures.jsonl`](evals/judge/rules/rule11/fixtures.jsonl)
-- Candidate prompt v1: [`evals/judge/rules/rule11/prompts/candidate-v1.md`](evals/judge/rules/rule11/prompts/candidate-v1.md)
-- Candidate prompt v2: [`evals/judge/rules/rule11/prompts/candidate-v2.md`](evals/judge/rules/rule11/prompts/candidate-v2.md)
-- Analysis: [`evals/judge/rules/rule11/analysis.md`](evals/judge/rules/rule11/analysis.md)
+- Judge eval plan: [`evals/adc/judge/plan.md`](../evals/adc/judge/plan.md)
+- Rule 11 plan: [`evals/adc/judge/rules/rule11/sanctions/plan.md`](../evals/adc/judge/rules/rule11/sanctions/plan.md)
+- Rule 11 fixtures: [`evals/adc/judge/rules/rule11/sanctions/fixtures.jsonl`](../evals/adc/judge/rules/rule11/sanctions/fixtures.jsonl)
+- Candidate prompt v1: [`evals/adc/judge/rules/rule11/sanctions/prompts/candidate-v1.md`](../evals/adc/judge/rules/rule11/sanctions/prompts/candidate-v1.md)
+- Candidate prompt v2: [`evals/adc/judge/rules/rule11/sanctions/prompts/candidate-v2.md`](../evals/adc/judge/rules/rule11/sanctions/prompts/candidate-v2.md)
+- Analysis: [`evals/adc/judge/rules/rule11/sanctions/analysis.md`](../evals/adc/judge/rules/rule11/sanctions/analysis.md)
 - Runner: [`runtime/eval/judge_rule11.go`](runtime/eval/judge_rule11.go)
 - CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
 - ARCP Rule 11: [`docs/ARCP.md`](docs/ARCP.md)
@@ -120,23 +120,23 @@ Production scored 5/16 live because 11 payloads were invalid.  Nine denied motio
 ### Verification
 
 - [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-rule11 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule11-production-dry`
-- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule11-production-live`
-- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule11/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule11-candidate-v1-dry`
-- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule11/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule11-candidate-v1-live`
-- [x] Candidate v2 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule11/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule11-candidate-v2-dry`
-- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule11/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule11-candidate-v2-live`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule11 --dry-run --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule11-production-dry`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule11-production-live`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule11/sanctions/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule11-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule11/sanctions/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule11-candidate-v1-live`
+- [x] Candidate v2 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule11/sanctions/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir evals/out/adc/judge/rule11-candidate-v2-dry`
+- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-rule11 --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule11/sanctions/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir evals/out/adc/judge/rule11-candidate-v2-live`
 
 ## 2026-07-15: Judge Rule 37 eval
 
 ### References
 
-- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
-- Rule 37 plan: [`evals/judge/rules/rule37/plan.md`](evals/judge/rules/rule37/plan.md)
-- Rule 37 fixtures: [`evals/judge/rules/rule37/fixtures.jsonl`](evals/judge/rules/rule37/fixtures.jsonl)
-- Candidate prompt v1: [`evals/judge/rules/rule37/prompts/candidate-v1.md`](evals/judge/rules/rule37/prompts/candidate-v1.md)
-- Candidate prompt v2: [`evals/judge/rules/rule37/prompts/candidate-v2.md`](evals/judge/rules/rule37/prompts/candidate-v2.md)
-- Analysis: [`evals/judge/rules/rule37/analysis.md`](evals/judge/rules/rule37/analysis.md)
+- Judge eval plan: [`evals/adc/judge/plan.md`](../evals/adc/judge/plan.md)
+- Rule 37 plan: [`evals/adc/judge/rules/rule37/discovery-sanctions/plan.md`](../evals/adc/judge/rules/rule37/discovery-sanctions/plan.md)
+- Rule 37 fixtures: [`evals/adc/judge/rules/rule37/discovery-sanctions/fixtures.jsonl`](../evals/adc/judge/rules/rule37/discovery-sanctions/fixtures.jsonl)
+- Candidate prompt v1: [`evals/adc/judge/rules/rule37/discovery-sanctions/prompts/candidate-v1.md`](../evals/adc/judge/rules/rule37/discovery-sanctions/prompts/candidate-v1.md)
+- Candidate prompt v2: [`evals/adc/judge/rules/rule37/discovery-sanctions/prompts/candidate-v2.md`](../evals/adc/judge/rules/rule37/discovery-sanctions/prompts/candidate-v2.md)
+- Analysis: [`evals/adc/judge/rules/rule37/discovery-sanctions/analysis.md`](../evals/adc/judge/rules/rule37/discovery-sanctions/analysis.md)
 - Runner: [`runtime/eval/judge_rule37.go`](runtime/eval/judge_rule37.go)
 - CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
 - ARCP discovery rules: [`docs/ARCP.md`](docs/ARCP.md)
@@ -154,25 +154,25 @@ Candidate v2 is the best measured Rule 37 prompt.  It requires `sanction_type` i
 ### Verification
 
 - [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-rule37 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule37-production-dry-v2`
-- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule37-production-live-v2`
-- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule37 --rescore-results adc/evals/judge/out/rule37-production-live-v2/results.jsonl --out-dir adc/evals/judge/out/rule37-production-live-v2-rescored`
-- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule37/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule37-candidate-v1-dry`
-- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule37/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule37-candidate-v1-live`
-- [x] Candidate v1 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule37 --rescore-results adc/evals/judge/out/rule37-candidate-v1-live/results.jsonl --out-dir adc/evals/judge/out/rule37-candidate-v1-live-rescored`
-- [x] Candidate v2 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule37/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule37-candidate-v2-dry`
-- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule37/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule37-candidate-v2-live`
-- [x] Candidate v2 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule37 --rescore-results adc/evals/judge/out/rule37-candidate-v2-live/results.jsonl --out-dir adc/evals/judge/out/rule37-candidate-v2-live-rescored`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule37 --dry-run --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule37-production-dry-v2`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule37-production-live-v2`
+- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule37 --rescore-results evals/out/adc/judge/rule37-production-live-v2/results.jsonl --out-dir evals/out/adc/judge/rule37-production-live-v2-rescored`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule37/discovery-sanctions/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule37-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule37/discovery-sanctions/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule37-candidate-v1-live`
+- [x] Candidate v1 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule37 --rescore-results evals/out/adc/judge/rule37-candidate-v1-live/results.jsonl --out-dir evals/out/adc/judge/rule37-candidate-v1-live-rescored`
+- [x] Candidate v2 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule37/discovery-sanctions/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir evals/out/adc/judge/rule37-candidate-v2-dry`
+- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-rule37 --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule37/discovery-sanctions/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir evals/out/adc/judge/rule37-candidate-v2-live`
+- [x] Candidate v2 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule37 --rescore-results evals/out/adc/judge/rule37-candidate-v2-live/results.jsonl --out-dir evals/out/adc/judge/rule37-candidate-v2-live-rescored`
 
 ## 2026-07-15: Judge Rule 47 for-cause eval
 
 ### References
 
-- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
-- For-cause plan: [`evals/judge/rules/rule47/for_cause_plan.md`](evals/judge/rules/rule47/for_cause_plan.md)
-- For-cause fixtures: [`evals/judge/rules/rule47/for_cause_challenges.jsonl`](evals/judge/rules/rule47/for_cause_challenges.jsonl)
-- Candidate prompt v1: [`evals/judge/rules/rule47/prompts/for-cause-candidate-v1.md`](evals/judge/rules/rule47/prompts/for-cause-candidate-v1.md)
-- Analysis: [`evals/judge/rules/rule47/for_cause_analysis.md`](evals/judge/rules/rule47/for_cause_analysis.md)
+- Judge eval plan: [`evals/adc/judge/plan.md`](../evals/adc/judge/plan.md)
+- For-cause plan: [`evals/adc/judge/rules/rule47/for-cause-challenge/plan.md`](../evals/adc/judge/rules/rule47/for-cause-challenge/plan.md)
+- For-cause fixtures: [`evals/adc/judge/rules/rule47/for-cause-challenge/fixtures.jsonl`](../evals/adc/judge/rules/rule47/for-cause-challenge/fixtures.jsonl)
+- Candidate prompt v1: [`evals/adc/judge/rules/rule47/for-cause-challenge/prompts/candidate-v1.md`](../evals/adc/judge/rules/rule47/for-cause-challenge/prompts/candidate-v1.md)
+- Analysis: [`evals/adc/judge/rules/rule47/for-cause-challenge/analysis.md`](../evals/adc/judge/rules/rule47/for-cause-challenge/analysis.md)
 - Runner: [`runtime/eval/judge_for_cause.go`](runtime/eval/judge_for_cause.go)
 - CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
 
@@ -189,21 +189,21 @@ Candidate v1 also scored 16/16 on the live run.  It states the for-cause boundar
 ### Verification
 
 - [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-for-cause --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/for-cause-production-dry`
-- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-for-cause --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/for-cause-production-live`
-- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-for-cause --rescore-results adc/evals/judge/out/for-cause-production-live/results.jsonl --out-dir adc/evals/judge/out/for-cause-production-live-rescored`
-- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-for-cause --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/for-cause-candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/for-cause-candidate-v1-dry`
-- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-for-cause --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/for-cause-candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/for-cause-candidate-v1-live`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-for-cause --dry-run --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/for-cause-production-dry`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-for-cause --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/for-cause-production-live`
+- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-for-cause --rescore-results evals/out/adc/judge/for-cause-production-live/results.jsonl --out-dir evals/out/adc/judge/for-cause-production-live-rescored`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-for-cause --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule47/for-cause-challenge/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/for-cause-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-for-cause --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule47/for-cause-challenge/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/for-cause-candidate-v1-live`
 
 ## 2026-07-15: Judge Rule 51 eval
 
 ### References
 
-- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
-- Rule 51 plan: [`evals/judge/rules/rule51/plan.md`](evals/judge/rules/rule51/plan.md)
-- Rule 51 fixtures: [`evals/judge/rules/rule51/fixtures.jsonl`](evals/judge/rules/rule51/fixtures.jsonl)
-- Candidate prompt v1: [`evals/judge/rules/rule51/prompts/candidate-v1.md`](evals/judge/rules/rule51/prompts/candidate-v1.md)
-- Analysis: [`evals/judge/rules/rule51/analysis.md`](evals/judge/rules/rule51/analysis.md)
+- Judge eval plan: [`evals/adc/judge/plan.md`](../evals/adc/judge/plan.md)
+- Rule 51 plan: [`evals/adc/judge/rules/rule51/jury-instructions/plan.md`](../evals/adc/judge/rules/rule51/jury-instructions/plan.md)
+- Rule 51 fixtures: [`evals/adc/judge/rules/rule51/jury-instructions/fixtures.jsonl`](../evals/adc/judge/rules/rule51/jury-instructions/fixtures.jsonl)
+- Candidate prompt v1: [`evals/adc/judge/rules/rule51/jury-instructions/prompts/candidate-v1.md`](../evals/adc/judge/rules/rule51/jury-instructions/prompts/candidate-v1.md)
+- Analysis: [`evals/adc/judge/rules/rule51/jury-instructions/analysis.md`](../evals/adc/judge/rules/rule51/jury-instructions/analysis.md)
 - Runner: [`runtime/eval/judge_rule51.go`](runtime/eval/judge_rule51.go)
 - CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
 
@@ -220,23 +220,23 @@ Candidate v1 also scored 16/16 after rescoring.  It gives the judge more explici
 ### Verification
 
 - [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-rule51 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule51-production-dry`
-- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule51 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule51-production-live`
-- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule51 --rescore-results adc/evals/judge/out/rule51-production-live/results.jsonl --out-dir adc/evals/judge/out/rule51-production-live-rescored`
-- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule51 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule51/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule51-candidate-v1-dry`
-- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule51 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule51/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule51-candidate-v1-live`
-- [x] Candidate v1 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule51 --rescore-results adc/evals/judge/out/rule51-candidate-v1-live/results.jsonl --out-dir adc/evals/judge/out/rule51-candidate-v1-live-rescored`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule51 --dry-run --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule51-production-dry`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule51 --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule51-production-live`
+- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule51 --rescore-results evals/out/adc/judge/rule51-production-live/results.jsonl --out-dir evals/out/adc/judge/rule51-production-live-rescored`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule51 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule51/jury-instructions/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule51-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule51 --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule51/jury-instructions/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule51-candidate-v1-live`
+- [x] Candidate v1 rescore: `go run ./adc/runtime/cmd/adc eval judge-rule51 --rescore-results evals/out/adc/judge/rule51-candidate-v1-live/results.jsonl --out-dir evals/out/adc/judge/rule51-candidate-v1-live-rescored`
 
 ## 2026-07-15: Judge Rule 12 eval
 
 ### References
 
-- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
-- Rule 12 plan: [`evals/judge/rules/rule12/plan.md`](evals/judge/rules/rule12/plan.md)
-- Rule 12 fixtures: [`evals/judge/rules/rule12/fixtures.jsonl`](evals/judge/rules/rule12/fixtures.jsonl)
-- Candidate prompt v1: [`evals/judge/rules/rule12/prompts/candidate-v1.md`](evals/judge/rules/rule12/prompts/candidate-v1.md)
-- Candidate prompt v2: [`evals/judge/rules/rule12/prompts/candidate-v2.md`](evals/judge/rules/rule12/prompts/candidate-v2.md)
-- Analysis: [`evals/judge/rules/rule12/analysis.md`](evals/judge/rules/rule12/analysis.md)
+- Judge eval plan: [`evals/adc/judge/plan.md`](../evals/adc/judge/plan.md)
+- Rule 12 plan: [`evals/adc/judge/rules/rule12/dismissal-jurisdiction/plan.md`](../evals/adc/judge/rules/rule12/dismissal-jurisdiction/plan.md)
+- Rule 12 fixtures: [`evals/adc/judge/rules/rule12/dismissal-jurisdiction/fixtures.jsonl`](../evals/adc/judge/rules/rule12/dismissal-jurisdiction/fixtures.jsonl)
+- Candidate prompt v1: [`evals/adc/judge/rules/rule12/dismissal-jurisdiction/prompts/candidate-v1.md`](../evals/adc/judge/rules/rule12/dismissal-jurisdiction/prompts/candidate-v1.md)
+- Candidate prompt v2: [`evals/adc/judge/rules/rule12/dismissal-jurisdiction/prompts/candidate-v2.md`](../evals/adc/judge/rules/rule12/dismissal-jurisdiction/prompts/candidate-v2.md)
+- Analysis: [`evals/adc/judge/rules/rule12/dismissal-jurisdiction/analysis.md`](../evals/adc/judge/rules/rule12/dismissal-jurisdiction/analysis.md)
 - Runner: [`runtime/eval/judge_rule12.go`](runtime/eval/judge_rule12.go)
 - CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
 
@@ -253,24 +253,24 @@ Candidate v2 is the best measured Rule 12 prompt.  It narrows the no-leave rule 
 ### Verification
 
 - [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-rule12 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule12-production-dry`
-- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule12-production-live`
-- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule12 --rescore-results adc/evals/judge/out/rule12-production-live/results.jsonl --out-dir adc/evals/judge/out/rule12-production-live-rescored`
-- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule12/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule12-candidate-v1-dry`
-- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule12/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule12-candidate-v1-live`
-- [x] Candidate v2 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule12/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule12-candidate-v2-dry`
-- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule12/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule12-candidate-v2-live`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule12 --dry-run --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule12-production-dry`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule12-production-live`
+- [x] Production rescore: `go run ./adc/runtime/cmd/adc eval judge-rule12 --rescore-results evals/out/adc/judge/rule12-production-live/results.jsonl --out-dir evals/out/adc/judge/rule12-production-live-rescored`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule12/dismissal-jurisdiction/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule12-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule12/dismissal-jurisdiction/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule12-candidate-v1-live`
+- [x] Candidate v2 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule12/dismissal-jurisdiction/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir evals/out/adc/judge/rule12-candidate-v2-dry`
+- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-rule12 --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule12/dismissal-jurisdiction/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir evals/out/adc/judge/rule12-candidate-v2-live`
 
 ## 2026-07-15: Judge Rule 56 eval
 
 ### References
 
-- Judge eval plan: [`evals/judge/plan.md`](evals/judge/plan.md)
-- Rule 56 plan: [`evals/judge/rules/rule56/plan.md`](evals/judge/rules/rule56/plan.md)
-- Rule 56 fixtures: [`evals/judge/rules/rule56/fixtures.jsonl`](evals/judge/rules/rule56/fixtures.jsonl)
-- Candidate prompt v1: [`evals/judge/rules/rule56/prompts/candidate-v1.md`](evals/judge/rules/rule56/prompts/candidate-v1.md)
-- Candidate prompt v2: [`evals/judge/rules/rule56/prompts/candidate-v2.md`](evals/judge/rules/rule56/prompts/candidate-v2.md)
-- Analysis: [`evals/judge/rules/rule56/analysis.md`](evals/judge/rules/rule56/analysis.md)
+- Judge eval plan: [`evals/adc/judge/plan.md`](../evals/adc/judge/plan.md)
+- Rule 56 plan: [`evals/adc/judge/rules/rule56/summary-judgment/plan.md`](../evals/adc/judge/rules/rule56/summary-judgment/plan.md)
+- Rule 56 fixtures: [`evals/adc/judge/rules/rule56/summary-judgment/fixtures.jsonl`](../evals/adc/judge/rules/rule56/summary-judgment/fixtures.jsonl)
+- Candidate prompt v1: [`evals/adc/judge/rules/rule56/summary-judgment/prompts/candidate-v1.md`](../evals/adc/judge/rules/rule56/summary-judgment/prompts/candidate-v1.md)
+- Candidate prompt v2: [`evals/adc/judge/rules/rule56/summary-judgment/prompts/candidate-v2.md`](../evals/adc/judge/rules/rule56/summary-judgment/prompts/candidate-v2.md)
+- Analysis: [`evals/adc/judge/rules/rule56/summary-judgment/analysis.md`](../evals/adc/judge/rules/rule56/summary-judgment/analysis.md)
 - Runner: [`runtime/eval/judge_rule56.go`](runtime/eval/judge_rule56.go)
 - CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
 
@@ -285,13 +285,13 @@ Candidate v2 is the best measured Rule 56 prompt.  It preserves the scope rule f
 ### Verification
 
 - [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-rule56 --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule56-production-dry`
-- [x] Short live run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --limit 2 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule56-production-live-short`
-- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/rule56-production-live`
-- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule56/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule56-candidate-v1-dry`
-- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule56/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/rule56-candidate-v1-live`
-- [x] Candidate v2 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule56/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule56-candidate-v2-dry`
-- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule56/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/rule56-candidate-v2-live`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-rule56 --dry-run --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule56-production-dry`
+- [x] Short live run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --limit 2 --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule56-production-live-short`
+- [x] Production live run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/rule56-production-live`
+- [x] Candidate v1 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule56/summary-judgment/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule56-candidate-v1-dry`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule56/summary-judgment/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/rule56-candidate-v1-live`
+- [x] Candidate v2 dry run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule56/summary-judgment/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir evals/out/adc/judge/rule56-candidate-v2-dry`
+- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-rule56 --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule56/summary-judgment/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir evals/out/adc/judge/rule56-candidate-v2-live`
 
 ## 2026-07-14: Judge voir dire eval
 
@@ -300,26 +300,26 @@ Candidate v2 is the best measured Rule 56 prompt.  It preserves the scope rule f
 - Eval plan: [`../judge-eval.md`](../judge-eval.md)
 - CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
 - Eval package: [`runtime/eval/judge_voir_dire.go`](runtime/eval/judge_voir_dire.go)
-- Fixtures: [`evals/judge/rules/rule47/voir_dire_questions.jsonl`](evals/judge/rules/rule47/voir_dire_questions.jsonl)
-- Hard fixtures: [`evals/judge/rules/rule47/voir_dire_questions_hard_v1.jsonl`](evals/judge/rules/rule47/voir_dire_questions_hard_v1.jsonl)
-- Candidate prompt v1: [`evals/judge/rules/rule47/prompts/candidate-v1.md`](evals/judge/rules/rule47/prompts/candidate-v1.md)
-- Candidate prompt v2: [`evals/judge/rules/rule47/prompts/candidate-v2.md`](evals/judge/rules/rule47/prompts/candidate-v2.md)
-- Candidate prompt v3: [`evals/judge/rules/rule47/prompts/candidate-v3.md`](evals/judge/rules/rule47/prompts/candidate-v3.md)
-- Analysis: [`evals/judge/rules/rule47/analysis.md`](evals/judge/rules/rule47/analysis.md)
+- Fixtures: [`evals/adc/judge/rules/rule47/voir-dire-question/fixtures.jsonl`](../evals/adc/judge/rules/rule47/voir-dire-question/fixtures.jsonl)
+- Hard fixtures: [`evals/adc/judge/rules/rule47/voir-dire-question/hard-fixtures.jsonl`](../evals/adc/judge/rules/rule47/voir-dire-question/hard-fixtures.jsonl)
+- Candidate prompt v1: [`evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v1.md`](../evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v1.md)
+- Candidate prompt v2: [`evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v2.md`](../evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v2.md)
+- Candidate prompt v3: [`evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v3.md`](../evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v3.md)
+- Analysis: [`evals/adc/judge/rules/rule47/voir-dire-question/analysis.md`](../evals/adc/judge/rules/rule47/voir-dire-question/analysis.md)
 
 ### Decisions
 
-`adc eval judge-voir-dire` evaluates the judge's `decide_voir_dire_question` behavior against fixed JSONL fixtures.  The Go implementation lives under `runtime/eval`, and the fixture and report paths live under `evals/judge`, matching the planned boundary between eval code and eval data.  Rule 47 voir dire materials now live under `evals/judge/rules/rule47`, leaving the top-level judge directory for cross-rule planning and generated reports.  Each fixture builds a minimal ADC `voir_dire` state with one pending `VoirDireExchange`, asks the Lean engine for the current judge opportunity, builds the judge prompt from the real opportunity text and judge runtime brief, and scores the resulting `decide_voir_dire_question` tool call.
+`adc eval judge-voir-dire` evaluates the judge's `decide_voir_dire_question` behavior against fixed JSONL fixtures.  The Go implementation lives under `runtime/eval`, and the fixture paths live under `evals/adc/judge`, matching the boundary between eval code and eval data.  Rule 47 voir dire materials now live under `evals/adc/judge/rules/rule47/voir-dire-question`, leaving the top-level judge directory for cross-rule planning and generated reports.  Each fixture builds a minimal ADC `voir_dire` state with one pending `VoirDireExchange`, asks the Lean engine for the current judge opportunity, builds the judge prompt from the real opportunity text and judge runtime brief, and scores the resulting `decide_voir_dire_question` tool call.
 
 The initial fixture set has 60 questions.  The set covers allowed bias, burden, digital-evidence, damages-skepticism, attention, and instruction-following questions, and disallowed liability precommitment, damages precommitment, specific-evidence sufficiency, assumed-disputed-fact, merits-argument, inadmissible-material, and compound-precommitment questions.  Severity weights are higher for disallowed questions because a false allow can expose the juror to a prohibited question; false disallows remain separate summary fields because overblocking weakens jury selection.
 
 The runner writes `results.jsonl` and `summary.json`.  Dry-run mode uses the expected ruling as a synthetic tool call, which validates fixture loading, state construction, Lean opportunity generation, prompt construction, scoring, report writing, and Lean acceptance without an external model request.  Live model runs use `endpoint://model` syntax through the existing OpenAI/OpenRouter client.  The command also supports `--rescore-results` so deterministic scorer changes can be applied to an existing live result file without repeating model calls.
 
-Prompt iteration now has an eval-local path.  `--opportunity-prompt-file` reads a Markdown template under `evals/judge/rules/rule47/prompts`, renders fixture placeholders, and uses the rendered text as the model-facing opportunity objective.  The Lean opportunity still supplies the phase, role, allowed tool, constraints, and transition id, so candidate wording can be evaluated without changing the production opportunity text in `engine/Main.lean`.  Each report records the prompt source and copies the prompt file into the output directory.  Generated report data under `evals/judge/out/` is ignored and should not be committed.
+Prompt iteration now has an eval-local path.  `--opportunity-prompt-file` reads a Markdown template under `evals/adc/judge/rules/rule47/voir-dire-question/prompts`, renders fixture placeholders, and uses the rendered text as the model-facing opportunity objective.  The Lean opportunity still supplies the phase, role, allowed tool, constraints, and transition id, so candidate wording can be evaluated without changing the production opportunity text in `engine/Main.lean`.  Each report records the prompt source and copies the prompt file into the output directory.  Generated report data under `evals/out/adc/judge/` is ignored and should not be committed.
 
 The first two prompt candidates do not justify a production prompt change.  Candidate v1 preserved ruling outcomes on the live run, with 60 correct rulings, no false allows, no false disallows, and no invalid responses, but its explanation matches dropped from 60 to 55 because the prompt encouraged generic category wording such as “class of evidence.”  Candidate v2 required concrete ruling categories and improved explanation matches to 58, but it allowed fixture `jvd-053`, a tier-3 damages-precommitment question asking whether the candidate would be comfortable returning an $80,000 to $120,000 damages range if liability were proven.  That false allow is disqualifying for this prompt candidate.
 
-`voir_dire_questions_hard_v1.jsonl` adds 30 tier-3 boundary rows without changing the original 60-row baseline.  The added rows concentrate on damages-range comfort questions, digital-evidence sufficiency, limiting-instruction phrasing that embeds disputed facts, missing-witness sufficiency, insurance references, and “could you still find” formulations.  Production scored 30 correct rulings, 30 reason matches, no false allows, and no invalid responses after the deterministic scorer accepted the singular phrase “limiting instruction” as instruction-following wording.
+`hard-fixtures.jsonl` adds 30 tier-3 boundary rows without changing the original 60-row baseline.  The added rows concentrate on damages-range comfort questions, digital-evidence sufficiency, limiting-instruction phrasing that embeds disputed facts, missing-witness sufficiency, insurance references, and “could you still find” formulations.  Production scored 30 correct rulings, 30 reason matches, no false allows, and no invalid responses after the deterministic scorer accepted the singular phrase “limiting instruction” as instruction-following wording.
 
 Candidate v1 failed the hard set by allowing `jvdh-002`, a prohibited damages-range comfort question.  Candidate v2 scored 30/30 on the hard set but had already failed the original baseline on `jvd-053`, another damages-range comfort question.  Candidate v3 adds a focused damages-number rule: bias or proof-discipline questions remain allowed, but questions asking whether the candidate would be comfortable with, willing to return, able to award, or inclined to reject a named damages amount, range, minimum, maximum, or nominal result are disallowed.  Candidate v3 scored 60 correct rulings, 59 reason matches, no false allows, and no invalid responses on the original set, and 30 correct rulings, 30 reason matches, no false allows, and no invalid responses on the hard set.  Production remains the best measured prompt on these two sets because it scored 60/60 and 30/30 on both ruling outcome and deterministic reason matching.
 
@@ -328,23 +328,23 @@ Candidate v1 failed the hard set by allowing `jvdh-002`, a prohibited damages-ra
 - [x] `go test ./adc/runtime/eval`
 - [x] `go test ./adc/runtime/cli`
 - [x] `go test ./adc/runtime/eval ./adc/runtime/cli`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/latest`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/candidate-v1-dry`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/candidate-v2-dry`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/candidate-v3.md --opportunity-prompt-name candidate-v3 --out-dir adc/evals/judge/out/candidate-v3-dry`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --fixtures adc/evals/judge/rules/rule47/voir_dire_questions_hard_v1.jsonl --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/hard-v1-dry`
-- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --fixtures adc/evals/judge/rules/rule47/voir_dire_questions_hard_v1.jsonl --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/candidate-v3.md --opportunity-prompt-name candidate-v3 --out-dir adc/evals/judge/out/hard-v1-candidate-v3-dry`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/latest`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/candidate-v1-dry`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir evals/out/adc/judge/candidate-v2-dry`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v3.md --opportunity-prompt-name candidate-v3 --out-dir evals/out/adc/judge/candidate-v3-dry`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --fixtures evals/adc/judge/rules/rule47/voir-dire-question/hard-fixtures.jsonl --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/hard-v1-dry`
+- [x] `go run ./adc/runtime/cmd/adc eval judge-voir-dire --dry-run --fixtures evals/adc/judge/rules/rule47/voir-dire-question/hard-fixtures.jsonl --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v3.md --opportunity-prompt-name candidate-v3 --out-dir evals/out/adc/judge/hard-v1-candidate-v3-dry`
 - [x] `go test ./adc/runtime/...`
-- [x] Short live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --limit 2 --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/live-short`
-- [x] Full live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/live-full`
+- [x] Short live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --limit 2 --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/live-short`
+- [x] Full live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/live-full`
 - [x] Rescore completed live results after expanding deterministic reason-tag vocabulary for accepted wording on attention and instruction-following questions.
-- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/candidate-v1-live`
-- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/candidate-v2-live`
-- [x] Candidate v3 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/candidate-v3.md --opportunity-prompt-name candidate-v3 --out-dir adc/evals/judge/out/candidate-v3-live`
-- [x] Hard production live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --fixtures adc/evals/judge/rules/rule47/voir_dire_questions_hard_v1.jsonl --engine adc/.bin/adcengine --out-dir adc/evals/judge/out/hard-v1-production-live`
-- [x] Hard candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --fixtures adc/evals/judge/rules/rule47/voir_dire_questions_hard_v1.jsonl --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir adc/evals/judge/out/hard-v1-candidate-v1-live`
-- [x] Hard candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --fixtures adc/evals/judge/rules/rule47/voir_dire_questions_hard_v1.jsonl --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir adc/evals/judge/out/hard-v1-candidate-v2-live`
-- [x] Hard candidate v3 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --fixtures adc/evals/judge/rules/rule47/voir_dire_questions_hard_v1.jsonl --engine adc/.bin/adcengine --opportunity-prompt-file adc/evals/judge/rules/rule47/prompts/candidate-v3.md --opportunity-prompt-name candidate-v3 --out-dir adc/evals/judge/out/hard-v1-candidate-v3-live`
+- [x] Candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/candidate-v1-live`
+- [x] Candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir evals/out/adc/judge/candidate-v2-live`
+- [x] Candidate v3 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v3.md --opportunity-prompt-name candidate-v3 --out-dir evals/out/adc/judge/candidate-v3-live`
+- [x] Hard production live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --fixtures evals/adc/judge/rules/rule47/voir-dire-question/hard-fixtures.jsonl --engine adc/.bin/adcengine --out-dir evals/out/adc/judge/hard-v1-production-live`
+- [x] Hard candidate v1 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --fixtures evals/adc/judge/rules/rule47/voir-dire-question/hard-fixtures.jsonl --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v1.md --opportunity-prompt-name candidate-v1 --out-dir evals/out/adc/judge/hard-v1-candidate-v1-live`
+- [x] Hard candidate v2 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --fixtures evals/adc/judge/rules/rule47/voir-dire-question/hard-fixtures.jsonl --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v2.md --opportunity-prompt-name candidate-v2 --out-dir evals/out/adc/judge/hard-v1-candidate-v2-live`
+- [x] Hard candidate v3 live run: `go run ./adc/runtime/cmd/adc eval judge-voir-dire --fixtures evals/adc/judge/rules/rule47/voir-dire-question/hard-fixtures.jsonl --engine adc/.bin/adcengine --opportunity-prompt-file evals/adc/judge/rules/rule47/voir-dire-question/prompts/candidate-v3.md --opportunity-prompt-name candidate-v3 --out-dir evals/out/adc/judge/hard-v1-candidate-v3-live`
 
 ## 2026-07-14: `adc juror` probe command
 
@@ -721,7 +721,7 @@ The ACP prompt now names current limits instead of relying only on static docume
 - [x] Make `defaultACPServerPath` return the relative wrapper path directly.
 - [ ] Add a dedicated test if this area changes again.
 
-## 2026-03-18: `../evals/tools/cluster-personas.py`
+## 2026-03-18: `../evals/model-pool/tools/cluster-personas.py`
 
 ### References
 
@@ -774,6 +774,6 @@ The ACP prompt now names current limits instead of relying only on static docume
 
 ### Results
 
-- Live test: `uv run ../evals/tools/cluster-personas.py --personas-file /tmp/persona-sample-test.csv --genes-file /tmp/persona-sample-genes.json --num-samples 3 --gene-dim 3`
+- Live test: `uv run ../evals/model-pool/tools/cluster-personas.py --personas-file /tmp/persona-sample-test.csv --genes-file /tmp/persona-sample-genes.json --num-samples 3 --gene-dim 3`
 - Live output: three `MP,G,C` rows for one persona and one gene through local xproxy plus direct embeddings.
 - Follow-up fix: `adc xproxy` initially returned an error on clean shutdown because the listener was already closed.  `runtime/xproxy/xproxy.go` now ignores `net.ErrClosed` in that path, and a live `Ctrl-C` shutdown now exits with status `0`.
