@@ -297,7 +297,7 @@ Candidate v2 is the best measured Rule 56 prompt.  It preserves the scope rule f
 
 ### References
 
-- Eval plan: [`../judge-eval.md`](../judge-eval.md)
+- Eval suite: [Rule 47 Voir Dire Question Screening](../evals/adc/judge/rules/rule47/voir-dire-question/README.md)
 - CLI entry point: [`runtime/cli/eval.go`](runtime/cli/eval.go)
 - Eval package: [`runtime/eval/judge_voir_dire.go`](runtime/eval/judge_voir_dire.go)
 - Fixtures: [`evals/adc/judge/rules/rule47/voir-dire-question/fixtures.jsonl`](../evals/adc/judge/rules/rule47/voir-dire-question/fixtures.jsonl)
@@ -352,7 +352,7 @@ Candidate v1 failed the hard set by allowing `jvdh-002`, a prohibited damages-ra
 
 - New command: [`runtime/cli/juror.go`](runtime/cli/juror.go)
 - Persona record loading: [`../common/persona/persona.go`](../common/persona/persona.go)
-- Voir dire experiment plan: [`../experiments-1.md`](../experiments-1.md)
+- Voir dire experiment plan: [Voir Dire Experiments, Plan 1](docs/voir-dire-experiment-plan.md)
 
 ### Decisions
 
@@ -408,7 +408,7 @@ behavior on the request-spec path.  Verified live with
 - Exhibit action boundary: [`engine/Main.lean`](engine/Main.lean)
 - Service artifact route: [`runtime/service/service.go`](runtime/service/service.go)
 - ADC manual output section: [`manual.md`](manual.md#output-artifacts)
-- Certificate plan: [`../plan-2026-07-13-certificates.md`](../plan-2026-07-13-certificates.md)
+- Certificate and proof status: [Proof Work Status](../docs/proof-notes.md)
 
 ### Decisions
 

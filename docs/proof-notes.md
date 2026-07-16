@@ -31,17 +31,17 @@ The certificate plan has been carried across all three current adjudication proc
 | ADC | Writes `state.json` and `certificate.json`; `adc verify-certificate` checks final-state hashes and replays accepted transitions. | Accepted certificates expose exact replay, replay-start reachability, closed-terminal accounting, verdict facts, juror-failure verdict facts, juror-failure hung-jury facts, judgment facts, a combined outcome package, and concrete replayed examples. |
 | AARD | Writes `state.json` and `certificate.json`; `aard verify-certificate` replays initialization and accepted actions. | Accepted terminal certificates expose exact replay, reachability, terminal accounting, closed answer-pair replay, failed-case failure-record replay, and checked closed and failed examples. |
 
-## Remaining Candidates
+## Remaining Direction
 
-The remaining useful proof work supports operational or adjudicative claims that the system already makes.  The next items avoid abstract rule spaces or shared certificate schemas unless the runtime has a concrete output that needs that proof.  The table below orders candidates by current value against expected proof and design cost.
+Future proof work should support operational or adjudicative claims that the system already exposes.  The current branch does not need a new ARB removal-interleaving theorem.  ARB already exposes the relevant council-failure boundary through ordered accepted actions, current-round-voter protection, failure recording, and rule-governed continuation after failure.
 
-| Priority | Candidate | Reason |
+| Area | Direction | Reason |
 | --- | --- | --- |
-| 1 | ARB removal-interleaving step theorem | `ClosedCertificateFacts.closed_resolution_agrees_with_matched_case` covers the matched-state decision-rule claim.  A step-level theorem should wait for a runtime claim about accepted action order, because removals alter the denominator and may change closure timing. |
+| ARB council failure and removal | Defer a step-commutation theorem. | `ClosedCertificateFacts.closed_resolution_agrees_with_matched_case` covers the matched-state decision-rule claim.  Existing step theorems cover accepted failure recording, current-round-voter protection, vote preservation, seated-set shrinkage, and terminal outcome soundness.  A commutation theorem should wait until the runtime or API intentionally promises order independence. |
 
 AARD now covers the current certificate report boundary for both terminal shapes.  ADC now covers both verdict and hung-jury outcomes that derive from a deliberating-juror timeout.  ARB closed certificates now carry the existing decision-rule package and expose a matched-case closed-resolution theorem: when another case has the same current-round vote multiset, seated count, and deliberation round, the executable closed-resolution summary agrees for the same required-vote and max-round values.
 
-That theorem supports a narrow operational statement about removals: after the removal effects have been matched at the decision-rule inputs, ordering artifacts do not change the closed-resolution summary.  It does not prove that `submit_council_answer` and `remove_council_member` commute as engine steps, that two action orders reach the same seated set, or that they close at the same time.  A step-level theorem should specify the accepted action pair, distinct member ids, no current-round answer for the removed member, the same final seated set, and the same final current-round vote multiset.
+The matched-case theorem supports a narrow operational statement about removals: after the removal effects have been matched at the decision-rule inputs, ordering artifacts do not change the closed-resolution summary.  A step-level theorem for action order would require a different claim and tighter hypotheses.  If ARB later promises order independence, the theorem should specify the accepted action pair, distinct member ids, no current-round vote for the removed member, the same final seated set, and the same final current-round vote multiset.
 
 ## Current Limits
 

@@ -20,6 +20,7 @@ The manuals document commands, services, HTTP APIs, MCP adapters, attested execu
 | Path | Purpose |
 | --- | --- |
 | `common/` | Shared Go packages, model-request types, persona data, Pi container support, and common tools. |
+| [docs/](docs/README.md) | Cross-system proof and repository notes. |
 | [scratch/](scratch/README.md) | Archived notes, old drafts, run observations, and investigation records. |
 | `skills/` | Local analysis notes for proof review. |
 
@@ -54,6 +55,7 @@ The repository root has no top-level `Makefile`.  Shared packages build through 
 | AAR | [README](arb/README.md), [manual](arb/manual.md), [council and juror replay guide](arb/docs/council-replay.md), [practice guide](arb/docs/practice.md), [rules](arb/docs/ARAP.md), [attested runbook](arb/Dockerfile.md), [dev-host requirements](arb/docs/attested-dev-host.md). |
 | AARD | [README](arbd/README.md), [manual](arbd/manual.md), [practice guide](arbd/docs/practice.md), [rules](arbd/docs/ARAP.md), [attested runbook](arbd/Dockerfile.md), [dev-host requirements](arbd/docs/attested-dev-host.md). |
 | Evals | [README](evals/README.md), [model-pool manual](evals/model-pool/manual.md), [sampling runbook](evals/model-pool/docs/sampling-runbook.md), [model inventory notes](evals/model-pool/docs/model-inventory.md), [judge eval plan](evals/adc/judge/plan.md). |
+| Proofs | [Proof work status](docs/proof-notes.md). |
 | Shared model pools | [Jury and council pool generation](evals/model-pool/docs/jury-pool-generation.md). |
 
 ## License

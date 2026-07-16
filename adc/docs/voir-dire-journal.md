@@ -2,7 +2,7 @@
 
 Goal: learn what voir dire questions reveal about ADC jurors, and how
 an attorney should use the answers for strikes and argument.  Plan:
-[Voir Dire Experiments, Plan 1](../../experiments-1.md).  Tool:
+[Voir Dire Experiments, Plan 1](voir-dire-experiment-plan.md).  Tool:
 `adc juror` (see [ADC development notes](../devnotes.md),
 2026-07-14).  Raw outputs live under `scratch/experiment1/` at the
 repository root; they are not committed.
