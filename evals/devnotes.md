@@ -1,5 +1,9 @@
 # Development Notes
 
+## 2026-07-16 README Consolidation
+
+Consolidated the duplicate eval README content into `README.md` and removed `README-better.md`.  The README now describes stable scope, credentials, documentation, validation commands, deterministic local testing, layout, and run-data boundaries.  Run-specific counts, endpoint identities, pass rates, dated filter details, and run IDs remain in the manual, runbooks, variant summaries, analysis notes, or generated run artifacts instead of the README.
+
 ## 2026-06-19 Without-Replacement Pool Sampling
 
 Added `--without-replacement` to `tools/sample-tuple-pool.py`.  The flag keeps tuple-uniform sampling but removes a selected row from the available frame, so a pool cannot repeat an endpoint representative.  With equivalent-endpoint deduplication enabled, the maximum pool size is the number of equivalence classes.
