@@ -9,11 +9,12 @@ Use `evals/model-pool/` as the working directory unless a command says otherwise
 | Document | Use |
 | --- | --- |
 | [Adjudication Evals Manual](manual.md) | Detailed command reference, terminology, scoring model, endpoint-variant procedures, pool construction, and troubleshooting. |
+| [Model-Pool Analysis](analysis.md) | Current human analysis tied to eval results or pool construction work. |
+| [Model-Pool Documentation Index](docs/README.md) | Stable model-pool design notes, runbooks, and historical planning documents. |
 | [Sampling Runbook](docs/sampling-runbook.md) | Staged procedure from root-model inventory through tuple-uniform pool sampling. |
 | [Model Inventory Notes](docs/model-inventory.md) | OpenRouter provider-endpoint identity, routing constraints, metadata fields, and interpretation limits. |
 | [Jury Pool Generation](docs/jury-pool-generation.md) | Legacy CSV pipeline for persona clustering, clustering charts, and council CSV selection. |
 | [Core20 Rubric](rubrics/core20.md) | Response schemas, deterministic checks, deliberation score, and operational metrics. |
-| [Analysis Notes](analysis.md) | Current human analysis tied to eval results or pool construction work. |
 | [Development Notes](devnotes.md) | Development history, rationale, and follow-up notes for eval tooling. |
 
 ## Quick Checks
@@ -35,7 +36,7 @@ uv run tools/score_eval.py score --run results/mock-perfect
 
 ## Run Data
 
-Run outputs, model responses, score files, manifests, provider inventories, sampled pools, and run-specific summaries belong under `results/`, or under an intentional snapshot directory in `variants/` when the repository needs a checked-in survivor set.  `results/` is ignored except for `results/.gitkeep`, and credentials are ignored under `secrets/`.  README content should stay limited to stable workflow, file locations, and entry points; run IDs, endpoint counts, pass rates, accepted endpoint lists, and dated filter details belong in run artifacts, snapshot summaries, analysis notes, or the manual.
+Run outputs, model responses, score files, manifests, provider inventories, sampled pools, and run-specific summaries belong under `results/`, or under an intentional snapshot directory in `variants/` when the repository needs a checked-in survivor set.  `results/` is ignored except for `results/.gitkeep`, and credentials are ignored under `secrets/`.  README content stays limited to stable workflow, file locations, and entry points; run IDs, endpoint counts, pass rates, accepted endpoint lists, and dated filter details belong in run artifacts, snapshot summaries, analysis notes, or the manual.
 
 ## Layout
 
