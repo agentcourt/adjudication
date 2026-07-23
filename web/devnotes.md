@@ -14,6 +14,8 @@ Markdown rendering uses an internal minimal renderer (`markdown.go`) instead of 
 
 Path handling: URL paths must satisfy `filepath.IsLocal`, then resolve through `filepath.EvalSymlinks` and must stay under the resolved root, so a symbolic link inside a tree cannot expose files outside it.  Run summaries read `run.json` first and fall back to `state.json`; vote tallies come from `state.json` `case.council_votes`.  System classification reads `certificate.json` `procedure`, falling back to the `state.json` schema-version prefix.
 
+Operating notes for both servers moved to [the web runbook](runbook.md), `README.md` shrank to an overview, and the root README documentation table links both.
+
 Review fixes: the run page now skips parsing `events.ndjson` above the 8 MB view limit and shows a notice pointing at the file table, `LoadConfig` rejects a root path configured twice, and `RenderMarkdown` strips NUL bytes before the code-span placeholder pass so crafted input cannot displace span content.  Each fix has a test.
 
 ### Verification
