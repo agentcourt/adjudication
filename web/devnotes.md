@@ -1,5 +1,28 @@
 # Development Notes
 
+## 2026-07-23
+
+### Run report server
+
+Reference: `report/`, `cmd/adjudication-report/main.go`, `README.md`
+
+The run report is a second web server, separate from the service console because the data sources differ: the console reads live service APIs and offers control actions, while the report reads run output directories from disk and only serves GET routes.  The visual style comes from the reconometrics dashboard, and `static/sort.js` is a copy of its table-sorting script.  Roots come from repeated `--root [name=]path` flags, a JSON config file, or both, so one process can report across several trees at once.
+
+The scanner treats a directory as a run when it contains any known artifact file (`run.json`, `state.json`, `local-run.json`, `events.ndjson`, `certificate.json`, `transcript.md`, `digest.md`, `aar-stdout.log`, `aar-stderr.log`) and does not descend further, so artifacts inside a run never register as runs.  It skips hidden directories, Pi agent home directories (`pi-C<n>`), and symbolic links, stops at a depth limit, and reports unreadable or depth-limited directories in a scan problems table on the index page instead of hiding them.  The skip rules exist because juror-model experiment trees under `arb/out/juror-model-experiments/` contain Pi agent homes with `.npm` caches and extension trees that produced depth-limit noise; with the filter, both real trees scan with no problems and the same 180 runs.  Failed reconometrics attempts that wrote only `aar` logs appear as `incomplete` runs.
+
+Markdown rendering uses an internal minimal renderer (`markdown.go`) instead of a dependency, per discussion: ATX headings, paragraphs, both list kinds, blockquotes, fenced code, rules, inline code, bold, single-star emphasis, and links with http, https, mailto, or relative targets.  All input is HTML-escaped first and unhandled constructs fall through as literal text, which is the safe behavior for model-written filings.  Underscore emphasis is deliberately unsupported because snake_case identifiers pervade the artifacts.  File views cap at 8 MB and point to the raw route, which preserves the service of byte ranges through `http.ServeFile`.
+
+Path handling: URL paths must satisfy `filepath.IsLocal`, then resolve through `filepath.EvalSymlinks` and must stay under the resolved root, so a symbolic link inside a tree cannot expose files outside it.  Run summaries read `run.json` first and fall back to `state.json`; vote tallies come from `state.json` `case.council_votes`.  System classification reads `certificate.json` `procedure`, falling back to the `state.json` schema-version prefix.
+
+Review fixes: the run page now skips parsing `events.ndjson` above the 8 MB view limit and shows a notice pointing at the file table, `LoadConfig` rejects a root path configured twice, and `RenderMarkdown` strips NUL bytes before the code-span placeholder pass so crafted input cannot displace span content.  Each fix has a test.
+
+### Verification
+
+- [x] `go test ./web/...`
+- [x] `gofmt -l web/` clean, `go vet ./web/...` clean
+- [x] Manual test against real trees: index listed 180 runs across `arbattest=/media/hd2/src/arbattest/adjudication` and `recon=/media/hd2/src/reconometrics/var/packets` (cold scan 2.2 s, warm 0.4 s).  Run page for `arb-20260716192658` showed facts, three council votes with rationales, events, and the file table.  `digest.md` and `transcript.md` rendered as HTML with working text and raw toggles, `run.json` pretty-printed, `events.ndjson` rendered per-record, the evidence store rendered as a directory listing, and an incomplete reconometrics attempt reported status `incomplete` with its `aar` logs listed.
+- [x] Confinement tests cover dot-dot paths, encoded dot-dot segments, unknown roots, and a symbolic link pointing outside the tree.
+
 ## 2026-07-10
 
 ### Service API web console

@@ -1,6 +1,23 @@
 # Adjudication Web Console
 
-`web/` contains a small server-rendered console for the ADC, ARB, and AARD service APIs.  The console talks to configured service base URLs over HTTP.  It does not read case output directories, import runtime packages, or fetch artifacts from the filesystem.
+`web/` contains two separate servers: a service console for the ADC, ARB, and AARD service APIs, and a read-only report over run output directories on disk.
+
+## Run Report
+
+`adjudication-report` scans one or more root directories for run output directories and serves a read-only report: an index of runs across all roots, run pages with facts, council votes, events, and file listings, and views of every artifact.  Markdown artifacts render as HTML through an internal minimal renderer, with text and raw views one link away.  JSON artifacts pretty-print, NDJSON artifacts render one record per line, and every file is also served raw with HTTP range support.
+
+```bash
+go run ./web/cmd/adjudication-report \
+  --listen 127.0.0.1:19980 \
+  --root arbattest=/media/hd2/src/arbattest/adjudication \
+  --root recon=/media/hd2/src/reconometrics/var/packets
+```
+
+Roots can also come from a JSON config file: `{"listen": "127.0.0.1:19980", "roots": [{"name": "arbattest", "path": "..."}]}` passed as `--config path`.  Command-line roots append to config-file roots.  A directory counts as a run when it holds a known artifact such as `run.json`, `state.json`, `events.ndjson`, or `certificate.json`; the scanner skips `.git` and symbolic links and reports directories it cannot read on the index page.  The server only reads files, and every request path is confined to its configured root.
+
+## Service Console
+
+The console talks to configured service base URLs over HTTP.  The console talks to configured service base URLs over HTTP.  It does not read case output directories, import runtime packages, or fetch artifacts from the filesystem.
 
 Run it from the repository root:
 
