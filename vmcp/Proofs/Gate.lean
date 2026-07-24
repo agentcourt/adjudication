@@ -29,7 +29,7 @@ theorem toolsFor_sound
     (g : GateState) (a : Actor) (t : String)
     (h : t ∈ toolsFor g a) :
     ∃ ob ∈ obligations g.engine,
-      ob.tool = t ∧ ob.role = a.role ∧ (ob.role = .council → ob.member_id = a.member_id) := by
+      ob.tool = t ∧ ob.role = a.role ∧ (ob.member_id ≠ "" → ob.member_id = a.member_id) := by
   unfold toolsFor at h
   rw [List.mem_filterMap] at h
   obtain ⟨ob, hmem, hcond⟩ := h
@@ -37,12 +37,12 @@ theorem toolsFor_sound
   split at hcond
   · rename_i hguard
     cases hcond
-    simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true, bne_iff_ne] at hguard
+    simp only [bindingMatches, Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true] at hguard
     obtain ⟨hrole, hmemb⟩ := hguard
     refine ⟨rfl, hrole, ?_⟩
-    intro hc
+    intro hne
     cases hmemb with
-    | inl hne => exact absurd hc hne
+    | inl hempty => exact absurd (by simpa using hempty) hne
     | inr heq => simpa using heq
   · cases hcond
 
@@ -50,14 +50,14 @@ theorem toolsFor_complete
     (g : GateState) (a : Actor) (ob : Obligation)
     (hmem : ob ∈ obligations g.engine)
     (hrole : ob.role = a.role)
-    (hmemb : ob.role = .council → ob.member_id = a.member_id) :
+    (hmemb : ob.member_id ≠ "" → ob.member_id = a.member_id) :
     ob.tool ∈ toolsFor g a := by
   unfold toolsFor
   rw [List.mem_filterMap]
   refine ⟨ob, hmem, ?_⟩
-  have hguard :
-      (ob.role = a.role && (ob.role != .council || ob.member_id = a.member_id)) = true := by
-    by_cases hc : ob.role = .council <;> simp_all
+  have hguard : bindingMatches ob a = true := by
+    unfold bindingMatches
+    by_cases hc : ob.member_id = "" <;> simp_all
   simp [hguard]
 
 theorem findSession_id

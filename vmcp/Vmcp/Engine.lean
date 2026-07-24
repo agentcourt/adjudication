@@ -44,11 +44,66 @@ instance : FromJson Role :=
     | some r => pure r
     | none => throw s!"unknown role: {s}"⟩
 
+/-
+Codec conventions.  Every wire type has a hand-written encoder and
+decoder in explicit match style, an instance pair built from them, and
+a round-trip lemma in `Proofs/Codec.lean`.  The encodings match what
+the previously derived instances produced, so stored logs and states
+stay readable.
+-/
+
+def encNat (n : Nat) : Json :=
+  Json.num ⟨n, 0⟩
+
+def decNat (j : Json) : Except String Nat :=
+  match j with
+  | .num ⟨m, 0⟩ =>
+      if h : 0 ≤ m then .ok m.toNat else .error "number must be a natural"
+  | _ => .error "natural number expected"
+
+def decStr (j : Json) : Except String String :=
+  match j with
+  | .str s => .ok s
+  | _ => .error "string expected"
+
+def decBool (j : Json) : Except String Bool :=
+  match j with
+  | .bool b => .ok b
+  | _ => .error "boolean expected"
+
+def encList (f : α → Json) (xs : List α) : Json :=
+  Json.arr (xs.map f).toArray
+
+def decList (f : Json → Except String α) (j : Json) : Except String (List α) :=
+  match j with
+  | .arr a => a.toList.mapM f
+  | _ => .error "array expected"
+
+/-- Look up a field and decode it. -/
+def decField (j : Json) (k : String) (f : Json → Except String α) : Except String α :=
+  match j.getObjVal? k with
+  | .error e => .error e
+  | .ok v => f v
+
 /-- The actor of an action: a role, plus a member id for council. -/
 structure Actor where
   role : Role
   member_id : String := ""
-  deriving Inhabited, DecidableEq, Repr, ToJson, FromJson
+  deriving Inhabited, DecidableEq, Repr
+
+def Actor.enc (a : Actor) : Json :=
+  Json.mkObj [("role", toJson a.role), ("member_id", Json.str a.member_id)]
+
+def Actor.dec (j : Json) : Except String Actor :=
+  match decField j "role" fromJson? with
+  | .error e => .error e
+  | .ok role =>
+      match decField j "member_id" decStr with
+      | .error e => .error e
+      | .ok m => .ok { role := role, member_id := m }
+
+instance : ToJson Actor := ⟨Actor.enc⟩
+instance : FromJson Actor := ⟨Actor.dec⟩
 
 inductive Vote where
   | demonstrated
@@ -123,24 +178,89 @@ instance : FromJson Resolution :=
 structure Statement where
   role : Role
   text : String
-  deriving Inhabited, DecidableEq, Repr, ToJson, FromJson
+  deriving Inhabited, DecidableEq, Repr
+
+def Statement.enc (s : Statement) : Json :=
+  Json.mkObj [("role", toJson s.role), ("text", Json.str s.text)]
+
+def Statement.dec (j : Json) : Except String Statement :=
+  match decField j "role" fromJson? with
+  | .error e => .error e
+  | .ok role =>
+      match decField j "text" decStr with
+      | .error e => .error e
+      | .ok text => .ok { role := role, text := text }
+
+instance : ToJson Statement := ⟨Statement.enc⟩
+instance : FromJson Statement := ⟨Statement.dec⟩
 
 structure CouncilMember where
   member_id : String
   seated : Bool := true
   failure_reason : String := ""
-  deriving Inhabited, DecidableEq, Repr, ToJson, FromJson
+  deriving Inhabited, DecidableEq, Repr
+
+def CouncilMember.enc (m : CouncilMember) : Json :=
+  Json.mkObj [("member_id", Json.str m.member_id), ("seated", Json.bool m.seated),
+    ("failure_reason", Json.str m.failure_reason)]
+
+def CouncilMember.dec (j : Json) : Except String CouncilMember :=
+  match decField j "member_id" decStr with
+  | .error e => .error e
+  | .ok memberId =>
+      match decField j "seated" decBool with
+      | .error e => .error e
+      | .ok seated =>
+          match decField j "failure_reason" decStr with
+          | .error e => .error e
+          | .ok reason => .ok { member_id := memberId, seated := seated, failure_reason := reason }
+
+instance : ToJson CouncilMember := ⟨CouncilMember.enc⟩
+instance : FromJson CouncilMember := ⟨CouncilMember.dec⟩
 
 structure CastVote where
   member_id : String
   vote : Vote
   rationale : String := ""
-  deriving Inhabited, DecidableEq, Repr, ToJson, FromJson
+  deriving Inhabited, DecidableEq, Repr
+
+def CastVote.enc (v : CastVote) : Json :=
+  Json.mkObj [("member_id", Json.str v.member_id), ("vote", toJson v.vote),
+    ("rationale", Json.str v.rationale)]
+
+def CastVote.dec (j : Json) : Except String CastVote :=
+  match decField j "member_id" decStr with
+  | .error e => .error e
+  | .ok memberId =>
+      match decField j "vote" fromJson? with
+      | .error e => .error e
+      | .ok vote =>
+          match decField j "rationale" decStr with
+          | .error e => .error e
+          | .ok rationale => .ok { member_id := memberId, vote := vote, rationale := rationale }
+
+instance : ToJson CastVote := ⟨CastVote.enc⟩
+instance : FromJson CastVote := ⟨CastVote.dec⟩
 
 structure Policy where
   required_votes : Nat
   max_statement_chars : Nat := 4000
-  deriving Inhabited, DecidableEq, Repr, ToJson, FromJson
+  deriving Inhabited, DecidableEq, Repr
+
+def Policy.enc (p : Policy) : Json :=
+  Json.mkObj [("required_votes", encNat p.required_votes),
+    ("max_statement_chars", encNat p.max_statement_chars)]
+
+def Policy.dec (j : Json) : Except String Policy :=
+  match decField j "required_votes" decNat with
+  | .error e => .error e
+  | .ok required =>
+      match decField j "max_statement_chars" decNat with
+      | .error e => .error e
+      | .ok maxChars => .ok { required_votes := required, max_statement_chars := maxChars }
+
+instance : ToJson Policy := ⟨Policy.enc⟩
+instance : FromJson Policy := ⟨Policy.dec⟩
 
 structure CaseState where
   case_id : String
@@ -152,7 +272,63 @@ structure CaseState where
   votes : List CastVote := []
   resolution : Resolution := .pending
   state_version : Nat := 0
-  deriving Inhabited, DecidableEq, Repr, ToJson, FromJson
+  deriving Inhabited, DecidableEq, Repr
+
+def CaseState.enc (c : CaseState) : Json :=
+  Json.mkObj [
+    ("case_id", Json.str c.case_id),
+    ("proposition", Json.str c.proposition),
+    ("policy", Policy.enc c.policy),
+    ("phase", toJson c.phase),
+    ("members", encList CouncilMember.enc c.members),
+    ("statements", encList Statement.enc c.statements),
+    ("votes", encList CastVote.enc c.votes),
+    ("resolution", toJson c.resolution),
+    ("state_version", encNat c.state_version)
+  ]
+
+def CaseState.dec (j : Json) : Except String CaseState :=
+  match decField j "case_id" decStr with
+  | .error e => .error e
+  | .ok caseId =>
+    match decField j "proposition" decStr with
+    | .error e => .error e
+    | .ok proposition =>
+      match decField j "policy" Policy.dec with
+      | .error e => .error e
+      | .ok policy =>
+        match decField j "phase" fromJson? with
+        | .error e => .error e
+        | .ok phase =>
+          match decField j "members" (decList CouncilMember.dec) with
+          | .error e => .error e
+          | .ok members =>
+            match decField j "statements" (decList Statement.dec) with
+            | .error e => .error e
+            | .ok statements =>
+              match decField j "votes" (decList CastVote.dec) with
+              | .error e => .error e
+              | .ok votes =>
+                match decField j "resolution" fromJson? with
+                | .error e => .error e
+                | .ok resolution =>
+                  match decField j "state_version" decNat with
+                  | .error e => .error e
+                  | .ok version =>
+                      .ok {
+                        case_id := caseId
+                        proposition := proposition
+                        policy := policy
+                        phase := phase
+                        members := members
+                        statements := statements
+                        votes := votes
+                        resolution := resolution
+                        state_version := version
+                      }
+
+instance : ToJson CaseState := ⟨CaseState.enc⟩
+instance : FromJson CaseState := ⟨CaseState.dec⟩
 
 /-- One action against the engine.  The actor comes from the session
 binding, never from client input. -/
@@ -174,19 +350,33 @@ def Action.toJson : Action → Json
 
 instance : ToJson Action := ⟨Action.toJson⟩
 
-def Action.fromJson? (j : Json) : Except String Action := do
-  let kind ← (← j.getObjVal? "action").getStr?
-  let actor ← j.getObjValAs? Actor "actor"
-  match kind with
-  | "submit_statement" =>
-      pure <| .submitStatement actor (← (← j.getObjVal? "text").getStr?)
-  | "submit_vote" =>
-      pure <| .submitVote actor (← j.getObjValAs? Vote "vote")
-        (← (← j.getObjVal? "rationale").getStr?)
-  | "fail_member" =>
-      pure <| .failMember actor (← (← j.getObjVal? "member_id").getStr?)
-        (← (← j.getObjVal? "reason").getStr?)
-  | other => throw s!"unknown action: {other}"
+def Action.fromJson? (j : Json) : Except String Action :=
+  match decField j "action" decStr with
+  | .error e => .error e
+  | .ok kind =>
+      match decField j "actor" Actor.dec with
+      | .error e => .error e
+      | .ok actor =>
+          match kind with
+          | "submit_statement" =>
+              match decField j "text" decStr with
+              | .error e => .error e
+              | .ok text => .ok (.submitStatement actor text)
+          | "submit_vote" =>
+              match decField j "vote" (FromJson.fromJson? (α := Vote)) with
+              | .error e => .error e
+              | .ok vote =>
+                  match decField j "rationale" decStr with
+                  | .error e => .error e
+                  | .ok rationale => .ok (.submitVote actor vote rationale)
+          | "fail_member" =>
+              match decField j "member_id" decStr with
+              | .error e => .error e
+              | .ok memberId =>
+                  match decField j "reason" decStr with
+                  | .error e => .error e
+                  | .ok reason => .ok (.failMember actor memberId reason)
+          | other => .error s!"unknown action: {other}"
 
 instance : FromJson Action := ⟨Action.fromJson?⟩
 

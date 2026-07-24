@@ -27,6 +27,7 @@ structure GateConfig where
 
 structure Session where
   session_id : String
+  token : String
   actor : Actor
   deriving Inhabited, DecidableEq, Repr, ToJson, FromJson
 
@@ -67,11 +68,17 @@ def findSession (g : GateState) (sessionId : String) : Option Session :=
 def findPrincipal (g : GateState) (token : String) : Option Principal :=
   g.config.principals.find? (fun p => p.token = token)
 
+/-- An obligation matches a binding when the roles agree and, when the
+obligation names a member, the member agrees.  The rule reads only the
+obligation's own fields, so the gate carries no procedure knowledge. -/
+def bindingMatches (ob : Obligation) (actor : Actor) : Bool :=
+  ob.role = actor.role && (ob.member_id = "" || ob.member_id = actor.member_id)
+
 /-- Tool definitions offered to a session, derived from the engine's
 current obligations filtered by the session's binding. -/
 def toolsFor (g : GateState) (actor : Actor) : List String :=
   (obligations g.engine).filterMap (fun ob =>
-    if ob.role = actor.role && (ob.role != .council || ob.member_id = actor.member_id) then
+    if bindingMatches ob actor then
       some ob.tool
     else
       none)
@@ -104,6 +111,15 @@ def getStringField (j : Json) (k : String) : Except String String :=
       | .error e => .error e
       | .ok s => .ok s
 
+/-- An absent field is "", and a present field must be a string. -/
+def optionalString (j : Json) (k : String) : Except String String :=
+  match j.getObjVal? k with
+  | .error _ => .ok ""
+  | .ok v =>
+      match v.getStr? with
+      | .error _ => .error s!"{k} must be a string"
+      | .ok s => .ok s
+
 def optionalStringField (j : Json) (k : String) : String :=
   match getStringField j k with
   | .ok s => s
@@ -123,7 +139,10 @@ def parseCall (actor : Actor) (name : String) (args : Json) : Except String Acti
       | .ok raw =>
           match Vote.fromString? raw with
           | none => .error s!"unknown vote: {raw}"
-          | some vote => .ok (.submitVote actor vote (optionalStringField args "rationale"))
+          | some vote =>
+              match optionalString args "rationale" with
+              | .error e => .error e
+              | .ok rationale => .ok (.submitVote actor vote rationale)
   | "fail_member" =>
       match getStringField args "member_id" with
       | .error e => .error e
@@ -215,17 +234,25 @@ def gateStep (g : GateState) (i : Inbound) : GateState × List Command :=
   else
   match msgMethod i.payload with
   | "initialize" =>
-      match findPrincipal g (optionalStringField (msgParams i.payload) "token") with
-      | none => (g, [.reply i.session (jsonrpcError (msgId i.payload) (-32001) "unknown token")])
-      | some p =>
-          let sessions := (g.sessions.filter (fun s => s.session_id != i.session)).concat
-            { session_id := i.session, actor := { role := p.role, member_id := p.member_id } }
-          let result := Json.mkObj [
-            ("protocolVersion", "2025-06-18"),
-            ("capabilities", Json.mkObj [("tools", Json.mkObj [("listChanged", true)])]),
-            ("serverInfo", Json.mkObj [("name", "vmcp"), ("version", "0.1.0")])
-          ]
-          ({ g with sessions := sessions }, [.reply i.session (jsonrpcResult (msgId i.payload) result)])
+      match getStringField (msgParams i.payload) "token" with
+      | .error e => (g, [.reply i.session (jsonrpcError (msgId i.payload) (-32602) s!"token: {e}")])
+      | .ok token =>
+          match findPrincipal g token with
+          | none => (g, [.reply i.session (jsonrpcError (msgId i.payload) (-32001) "unknown token")])
+          | some p =>
+              if g.sessions.any (fun s => s.token = token && s.session_id != i.session) then
+                (g, [.reply i.session (jsonrpcError (msgId i.payload) (-32001)
+                  "token is bound to another live session")])
+              else
+                let sessions := (g.sessions.filter (fun s => s.session_id != i.session)).concat
+                  { session_id := i.session, token := token,
+                    actor := { role := p.role, member_id := p.member_id } }
+                let result := Json.mkObj [
+                  ("protocolVersion", "2025-06-18"),
+                  ("capabilities", Json.mkObj [("tools", Json.mkObj [("listChanged", true)])]),
+                  ("serverInfo", Json.mkObj [("name", "vmcp"), ("version", "0.1.0")])
+                ]
+                ({ g with sessions := sessions }, [.reply i.session (jsonrpcResult (msgId i.payload) result)])
   | "tools/list" => gateStepList g i.session (msgId i.payload)
   | "tools/call" => gateStepCall g i.session (msgId i.payload) (msgParams i.payload)
   | "" =>
