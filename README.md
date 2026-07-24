@@ -67,6 +67,7 @@ The manuals document commands, services, HTTP APIs, MCP adapters, attested execu
 | [docs/](docs/README.md) | Cross-system proof and repository notes. |
 | [scratch/](scratch/README.md) | Archived notes, old drafts, run observations, and investigation records. |
 | `skills/` | Local analysis notes for proof review. |
+| [web/](web/README.md) | Service console, run report, and ARB management web servers. |
 
 ## Requirements
 
@@ -100,7 +101,7 @@ The repository root has no top-level `Makefile`.  Shared packages build through 
 | Arbitration of Degree | [README](arbd/README.md), [manual](arbd/manual.md), [practice guide](arbd/docs/practice.md), [rules](arbd/docs/ARAP.md), [attested runbook](arbd/Dockerfile.md), [dev-host requirements](arbd/docs/attested-dev-host.md). |
 | Evals | [README](evals/README.md), [model-pool manual](evals/model-pool/manual.md), [sampling runbook](evals/model-pool/docs/sampling-runbook.md), [model inventory notes](evals/model-pool/docs/model-inventory.md), [judge eval plan](evals/adc/judge/plan.md). |
 | Proofs | [Proof work status](docs/proof-notes.md). |
-| Web | [Web console and report](web/README.md), [web runbook](web/runbook.md). |
+| Web | [Web servers overview](web/README.md), [web runbook](web/runbook.md). |
 | Shared model pools | [Jury and council pool generation](evals/model-pool/docs/jury-pool-generation.md). |
 
 ## License

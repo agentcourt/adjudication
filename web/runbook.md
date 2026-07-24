@@ -68,7 +68,7 @@ A missing run means its directory holds none of the marker files, sits under a h
 
 ## ARB Management
 
-The management UI starts, monitors, and stops ARB cases through one `aar service`.  Clerk cases are full `aar run` children, attested cases are clerk cases with `execution.mode` `attested`, and direct cases are `aar case` children whose roles are driven over HTTP.  The UI holds no case state: every page reads the service, and every action posts to it.  It triggers runs and has no authentication of its own, so bind it to `127.0.0.1` unless the host network is trusted.
+The management UI starts, monitors, and stops ARB cases through one `aar service`.  Clerk cases are full `aar run` children, attested cases are clerk cases with `execution.mode` `attested`, and direct cases are `aar case` children whose roles are driven over HTTP.  The UI holds no case state: every page reads the service, and every action posts to it.  It triggers runs and has no authentication of its own, so bind it to `127.0.0.1` unless the host network is trusted.  POST routes reject cross-origin browser senders by their `Sec-Fetch-Site` and `Origin` headers, so a hostile page in an operator's browser cannot submit actions; requests without those headers, such as curl, pass.
 
 ```sh
 go run ./web/cmd/adjudication-manage \

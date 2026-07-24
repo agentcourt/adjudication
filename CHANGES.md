@@ -1,5 +1,19 @@
 # Changes
 
+## July 23-24, 2026
+
+### Run Report Web UI
+
+The repository gained a read-only web report over run output directories on disk.  `adjudication-report` scans configured root trees for run directories, so one process reports across several checkouts and data trees at once.  It serves an index of runs with status, resolution, and vote tallies, run pages with facts, council votes, events, and complete file tables, and views of every artifact: markdown rendered by an internal minimal renderer with text and raw toggles, JSON pretty-printed, NDJSON one record per line, and raw bytes with range support.  The server confines request paths to their configured roots, including through symbolic links.
+
+The scanner treats a directory holding a known artifact file as a run, stops descending at run directories, skips hidden directories and Pi agent homes, and reports unreadable or depth-limited directories in a scan problems table instead of hiding them.  Failed attempts that wrote only logs appear with status `incomplete`.  The visual style follows the reconometrics dashboard: server-rendered monospace tables with client-side sorting and no other scripting.
+
+### ARB Management Web UI
+
+`adjudication-manage` starts, monitors, and stops ARB cases through one `aar service`: clerk and attested cases through the Clerk API, direct cases through the direct case API.  The overview, list, and case pages read the service records, show results for terminal cases and attestation events for attested cases, and offer kill and cancel actions only while a case runs.  Each case links to its report run page through configured mappings from case output directories to report roots, so reading stays in the report server.
+
+A single field-descriptor table drives both the grouped start form and the create payload, one entry per documented create field, with a raw JSON page for requests the form cannot express.  The attested form sends only case selectors plus the attestation object because the service rejects runtime overrides in attested mode.  POST routes reject cross-origin browser senders, so a hostile page in an operator's browser cannot start or kill runs.
+
 ## July 3-16, 2026
 
 ### Judge Voir Dire Evals
