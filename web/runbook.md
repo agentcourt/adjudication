@@ -1,6 +1,6 @@
 # Web Runbook
 
-Operating notes for the two web servers in `web/`.  The service console is `adjudication-web`, and the run report is `adjudication-report`.  Both are single-binary Go HTTP servers with no state of their own, so a restart is safe at any time and loses nothing but the open pages.
+Operating notes for the three web servers in `web/`.  The service console is `adjudication-web`, the run report is `adjudication-report`, and the ARB management UI is `adjudication-manage`.  All three are single-binary Go HTTP servers with no state of their own, so a restart is safe at any time and loses nothing but the open pages.
 
 ## Service Console
 
@@ -65,3 +65,27 @@ View pages refuse files above 8 MB and link to the raw route, which always serve
 ### Troubleshooting
 
 A missing run means its directory holds none of the marker files, sits under a hidden or `pi-C<n>` directory, or lies deeper than sixteen levels; the scan problems table reports the unreadable and depth-limited cases.  A 404 on a file that exists on disk means the path resolves outside the configured root, which happens when a symbolic link points out of the tree; the report refuses those.  Check a suspect markdown rendering against the `text` and `raw` views of the same file, which show the source.
+
+## ARB Management
+
+The management UI starts, monitors, and stops ARB cases through one `aar service`.  Clerk cases are full `aar run` children, attested cases are clerk cases with `execution.mode` `attested`, and direct cases are `aar case` children whose roles are driven over HTTP.  The UI holds no case state: every page reads the service, and every action posts to it.  It triggers runs and has no authentication of its own, so bind it to `127.0.0.1` unless the host network is trusted.
+
+```sh
+go run ./web/cmd/adjudication-manage \
+  --listen 127.0.0.1:9091 \
+  --arb-url http://127.0.0.1:19770 \
+  --report-url http://127.0.0.1:9090 \
+  --report-root svc=/media/hd2/src/adjudication/arb/out/service
+```
+
+| Flag | Meaning |
+|------|---------|
+| `--listen` | Listen address, default `127.0.0.1:9091`. |
+| `--arb-url` | `aar service` base URL, default `http://127.0.0.1:19770`. |
+| `--arb-token` | Service bearer token. |
+| `--report-url` | Report server base URL for read links. |
+| `--report-root name=path` | Absolute path prefix mapped to a report root name, repeatable.  Use the same names and paths as the report server's `--root` flags. |
+
+The overview shows both collections with status counts and recent rows.  The clerk and direct lists filter by status.  A case page shows the service record, the result for terminal cases, attestation events for attested cases, and a `kill` or `cancel` button while the case runs; each page links to the report run page when a `--report-root` prefix contains the case's `out_dir`.  The start form offers clerk, attested, and direct kinds with the create fields grouped by area; blank fields are omitted from the payload.  The attested form sends only case selectors plus the attestation object, because the service rejects runtime overrides in attested mode, and missing attested configuration surfaces as the service's own error on the form.  The raw page posts a JSON payload unchanged to either create endpoint for requests the form cannot express.
+
+The [ARB manual](../arb/manual.md) documents the Clerk API, the direct case API, attested execution, and the service flags, including the attested defaults the service needs before attested creates succeed.

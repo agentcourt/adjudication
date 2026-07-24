@@ -1,5 +1,25 @@
 # Development Notes
 
+## 2026-07-24
+
+### ARB management UI
+
+Reference: `manage/`, `cmd/adjudication-manage/main.go`, `runbook.md`
+
+The management UI is a third web server for starting, monitoring, and stopping ARB cases.  It talks to one `aar service`: clerk and attested cases through `/clerk/v1/cases`, direct cases through `/api/v1/cases`.  It holds no case state and decodes the service's `{ok, case, cases, error}` envelopes into generic maps, so service record changes do not break the pages.  Read links go to the report server through `--report-url` and repeatable `--report-root name=path` mappings from a case's `out_dir` to a report run URL.
+
+A single field-descriptor table (`fields.go`) drives both the start form's grouped fieldsets and the payload builder, one descriptor per documented create field with a display group, a type, and the kinds it applies to.  The attested kind builds only case selectors plus the `execution.attestation` object because the service rejects runtime overrides in attested mode.  The raw page posts JSON unchanged to either create endpoint, covering requests outside the form, and the attested option is always offered with missing service configuration surfacing as the service's own create error.  Stop actions redirect back to the case page with the outcome in a notice parameter, so a refresh does not repeat the POST.
+
+Tests cover payload building and typing, report-link prefix mapping, and the handlers against a fake service that records creates, kills, and cancels.
+
+Review fixes: every POST route now rejects cross-origin browser senders by `Sec-Fetch-Site` and `Origin` checks, because a hostile page in a browser reaching the UI could otherwise start or kill runs with an auto-submitted form; non-browser clients without those headers pass.  Case pages keep refreshing through the `killing` and `canceling` statuses, which also gained the active color, so the operator sees the stop finish without a manual reload.  The stop form action is now built in Go with `url.PathEscape` like the other case links.  Each fix has a test.
+
+### Verification
+
+- [x] `go test ./web/...`
+- [x] `gofmt -l web/` clean, `go vet ./web/...` clean
+- [x] Manual test without a running service: the overview, start, and raw pages render, and the overview shows the connection error from the configured service URL.
+
 ## 2026-07-23
 
 ### Run report server
