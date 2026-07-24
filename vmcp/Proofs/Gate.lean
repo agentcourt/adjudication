@@ -46,6 +46,27 @@ theorem toolsFor_sound
     | inr heq => simpa using heq
   · cases hcond
 
+theorem toolsFor_complete
+    (g : GateState) (a : Actor) (ob : Obligation)
+    (hmem : ob ∈ obligations g.engine)
+    (hrole : ob.role = a.role)
+    (hmemb : ob.role = .council → ob.member_id = a.member_id) :
+    ob.tool ∈ toolsFor g a := by
+  unfold toolsFor
+  rw [List.mem_filterMap]
+  refine ⟨ob, hmem, ?_⟩
+  have hguard :
+      (ob.role = a.role && (ob.role != .council || ob.member_id = a.member_id)) = true := by
+    by_cases hc : ob.role = .council <;> simp_all
+  simp [hguard]
+
+theorem findSession_id
+    (g : GateState) (sessionId : String) (s : Session)
+    (h : findSession g sessionId = some s) : s.session_id = sessionId := by
+  unfold findSession at h
+  have := List.find?_some h
+  simpa using this
+
 theorem handleCall_no_bypass
     (g : GateState) (s : Session) (id params : Json) :
     (handleCall g s id params).1.engine = g.engine ∨
@@ -83,6 +104,42 @@ theorem gateStepCall_no_bypass
           right
           obtain ⟨a, hActor, hOk⟩ := hEx
           exact ⟨s, rfl, a, hActor, hOk⟩
+
+/-- An engine change carries its log record: when a call changes the
+engine state, the commands include the appended record for the stamped
+action that produced it. -/
+theorem handleCall_change_logged
+    (g : GateState) (s : Session) (id params : Json)
+    (hChange : (handleCall g s id params).1.engine ≠ g.engine) :
+    ∃ a : Action, a.actor = s.actor ∧
+      step g.engine a = .ok (handleCall g s id params).1.engine ∧
+      Command.appendLog (logRecord s.session_id a (handleCall g s id params).1.engine)
+        ∈ (handleCall g s id params).2 := by
+  cases hParse : parseCall s.actor (callName params) (callArgs params) with
+  | error e => exact absurd (by simp [handleCall, hParse]) hChange
+  | ok action =>
+      cases hStep : step g.engine action with
+      | error e => exact absurd (by simp [handleCall, hParse, hStep]) hChange
+      | ok engine1 =>
+          refine ⟨action, parseCall_actor s.actor _ _ action hParse, ?_, ?_⟩
+          · simp [handleCall, hParse, hStep]
+          · simp [handleCall, hParse, hStep]
+
+theorem gateStepCall_change_logged
+    (g : GateState) (sessionId : String) (id params : Json)
+    (hChange : (gateStepCall g sessionId id params).1.engine ≠ g.engine) :
+    ∃ s : Session, findSession g sessionId = some s ∧
+      ∃ a : Action, a.actor = s.actor ∧
+        step g.engine a = .ok (gateStepCall g sessionId id params).1.engine ∧
+        Command.appendLog (logRecord sessionId a (gateStepCall g sessionId id params).1.engine)
+          ∈ (gateStepCall g sessionId id params).2 := by
+  cases hFound : findSession g sessionId with
+  | none => exact absurd (by simp [gateStepCall, hFound]) hChange
+  | some s =>
+      simp only [gateStepCall, hFound] at hChange ⊢
+      obtain ⟨a, hActor, hOk, hLog⟩ := handleCall_change_logged g s id params hChange
+      exact ⟨s, rfl, a, hActor, hOk,
+        findSession_id g sessionId s hFound ▸ hLog⟩
 
 theorem gateStep_no_bypass
     (g : GateState) (i : Inbound) :

@@ -14,6 +14,8 @@ rm -f work/demo.log.ndjson work/demo.state.json
   echo '{"session":"d","payload":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"token":"tok-d"}}}'
   echo '{"session":"c1","payload":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"token":"tok-c1"}}}'
   echo '{"session":"c2","payload":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"token":"tok-c2"}}}'
+  # A notification: the server sends no response for it.
+  echo '{"session":"p","payload":{"jsonrpc":"2.0","method":"notifications/initialized"}}'
   # The plaintiff sees its statement tool; the defendant sees none yet.
   echo '{"session":"p","payload":{"jsonrpc":"2.0","id":2,"method":"tools/list"}}'
   echo '{"session":"d","payload":{"jsonrpc":"2.0","id":2,"method":"tools/list"}}'

@@ -154,6 +154,13 @@ def msgId (payload : Json) : Json :=
   | .ok v => v
   | .error _ => Json.null
 
+/-- A JSON-RPC message without an id is a notification.  Notifications
+never receive a response. -/
+def isRequest (payload : Json) : Bool :=
+  match payload.getObjVal? "id" with
+  | .ok _ => true
+  | .error _ => false
+
 def msgMethod (payload : Json) : String :=
   optionalStringField payload "method"
 
@@ -200,8 +207,12 @@ def gateStepCall (g : GateState) (sessionId : String) (id params : Json) :
   | none => (g, [.reply sessionId (jsonrpcError id (-32002) "session is not initialized")])
   | some s => handleCall g s id params
 
-/-- Handle one inbound message. -/
+/-- Handle one inbound message.  Notifications are ignored without a
+response, as JSON-RPC requires; the engine acts only on requests. -/
 def gateStep (g : GateState) (i : Inbound) : GateState × List Command :=
+  if !isRequest i.payload then
+    (g, [])
+  else
   match msgMethod i.payload with
   | "initialize" =>
       match findPrincipal g (optionalStringField (msgParams i.payload) "token") with

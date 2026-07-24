@@ -3,129 +3,142 @@ import Vmcp.Engine
 namespace Vmcp
 
 /-
-Engine proofs.  The invariant `resSound` states that a substantive
-resolution is backed by the vote threshold.  It is established at
-initialization, preserved by `step`, and transferred to any state an
-accepted certificate claims.
+Engine proofs.  The invariant `outcomeSound` ties every resolution to
+its ground: a substantive resolution reached the vote threshold, a
+`no_majority` resolution reached neither, and any settled resolution
+means the case is closed.  It is established at initialization,
+preserved by `step`, and transferred to any state an accepted
+certificate claims.
 -/
 
-/-- A substantive resolution is backed by the configured threshold. -/
-def resSound (c : CaseState) : Prop :=
+/-- Every resolution is backed by its ground. -/
+def outcomeSound (c : CaseState) : Prop :=
   (c.resolution = .demonstrated → c.policy.required_votes ≤ voteCount c .demonstrated) ∧
-  (c.resolution = .not_demonstrated → c.policy.required_votes ≤ voteCount c .not_demonstrated)
+  (c.resolution = .not_demonstrated → c.policy.required_votes ≤ voteCount c .not_demonstrated) ∧
+  (c.resolution = .no_majority →
+    voteCount c .demonstrated < c.policy.required_votes ∧
+    voteCount c .not_demonstrated < c.policy.required_votes) ∧
+  (c.resolution ≠ .pending → c.phase = .closed)
 
-theorem initializeCase_resSound
+theorem outcomeSound_of_pending (c : CaseState)
+    (h : c.resolution = .pending) : outcomeSound c := by
+  simp [outcomeSound, h]
+
+theorem initializeCase_outcomeSound
     (cfg : InitConfig) (c : CaseState)
-    (h : initializeCase cfg = .ok c) : resSound c := by
+    (h : initializeCase cfg = .ok c) : outcomeSound c := by
   unfold initializeCase at h
   repeat' split at h
   any_goals simp at h
   cases h
-  simp [resSound]
+  simp [outcomeSound]
 
-theorem resolveDeliberation_votes (c : CaseState) :
-    (resolveDeliberation c).votes = c.votes := by
+/-- Deliberation resolution from a pending state grounds whatever
+resolution it sets. -/
+theorem resolveDeliberation_outcomeSound (c : CaseState)
+    (hPending : c.resolution = .pending) : outcomeSound (resolveDeliberation c) := by
   unfold resolveDeliberation
   repeat' split
-  all_goals rfl
+  all_goals simp_all [outcomeSound, voteCount]
+  all_goals omega
 
-theorem resolveDeliberation_policy (c : CaseState) :
-    (resolveDeliberation c).policy = c.policy := by
-  unfold resolveDeliberation
-  repeat' split
-  all_goals rfl
-
-theorem voteCount_eq_of_votes_eq (c c' : CaseState)
-    (h : c'.votes = c.votes) (v : Vote) : voteCount c' v = voteCount c v := by
-  simp [voteCount, h]
-
-theorem resolveDeliberation_resSound (c : CaseState)
-    (h : resSound c) : resSound (resolveDeliberation c) := by
-  have hv := resolveDeliberation_votes c
-  have hp := resolveDeliberation_policy c
-  unfold resSound at h ⊢
-  rw [voteCount_eq_of_votes_eq _ _ hv, voteCount_eq_of_votes_eq _ _ hv, hp]
-  unfold resolveDeliberation
-  repeat' split
-  all_goals simp_all
-
-theorem afterStatement_resSound
-    (c : CaseState) (role : Role) (text : String)
-    (h : resSound c) : resSound (afterStatement c role text) := by
-  unfold resSound at h ⊢
-  unfold afterStatement
-  split
-  all_goals simp_all [withStatement, voteCount]
-
-theorem voteCount_concat (c : CaseState) (x : CastVote) (v : Vote) :
-    voteCount { c with votes := c.votes.concat x } v =
-      if x.vote = v then voteCount c v + 1 else voteCount c v := by
-  simp [voteCount, List.concat_eq_append, List.foldl_append]
-
-theorem submitStatementCore_resSound
+/-- Success facts: each accepted core action ran in its phase. -/
+theorem submitStatementCore_phase
     (c c' : CaseState) (actor : Actor) (text : String)
-    (h : resSound c)
-    (hStep : submitStatementCore c actor text = .ok c') : resSound c' := by
+    (hStep : submitStatementCore c actor text = .ok c') : c.phase = .openings := by
   unfold submitStatementCore at hStep
   repeat' split at hStep
   any_goals simp at hStep
   cases hStep
-  exact afterStatement_resSound c (expectedSide c) (trimString text) h
+  simp_all
 
-theorem submitVoteCore_resSound
+theorem submitVoteCore_phase
     (c c' : CaseState) (actor : Actor) (vote : Vote) (rationale : String)
-    (h : resSound c)
-    (hStep : submitVoteCore c actor vote rationale = .ok c') : resSound c' := by
+    (hStep : submitVoteCore c actor vote rationale = .ok c') : c.phase = .deliberation := by
   unfold submitVoteCore at hStep
   repeat' split at hStep
   any_goals simp at hStep
   cases hStep
-  apply resolveDeliberation_resSound
-  unfold resSound at h ⊢
-  constructor
-  · intro hres
-    have hc := h.1 hres
-    simp [voteCount, List.concat_eq_append, List.foldl_append] at hc ⊢
-    split <;> omega
-  · intro hres
-    have hc := h.2 hres
-    simp [voteCount, List.concat_eq_append, List.foldl_append] at hc ⊢
-    split <;> omega
+  simp_all
 
-theorem failMemberCore_resSound
+theorem failMemberCore_phase
     (c c' : CaseState) (actor : Actor) (memberId reason : String)
-    (h : resSound c)
-    (hStep : failMemberCore c actor memberId reason = .ok c') : resSound c' := by
+    (hStep : failMemberCore c actor memberId reason = .ok c') : c.phase = .deliberation := by
   unfold failMemberCore at hStep
   repeat' split at hStep
   any_goals simp at hStep
   cases hStep
-  apply resolveDeliberation_resSound
-  unfold resSound at h ⊢
-  simp_all [voteCount]
+  simp_all
 
-theorem step_resSound
+/-- An open phase under `outcomeSound` means the resolution is pending. -/
+theorem pending_of_open (c : CaseState)
+    (h : outcomeSound c) (hPhase : c.phase ≠ .closed) : c.resolution = .pending := by
+  by_cases hres : c.resolution = .pending
+  · exact hres
+  · exact absurd (h.2.2.2 hres) hPhase
+
+theorem afterStatement_resolution (c : CaseState) (role : Role) (text : String) :
+    (afterStatement c role text).resolution = c.resolution := by
+  unfold afterStatement withStatement
+  split <;> rfl
+
+theorem submitStatementCore_outcomeSound
+    (c c' : CaseState) (actor : Actor) (text : String)
+    (h : outcomeSound c)
+    (hStep : submitStatementCore c actor text = .ok c') : outcomeSound c' := by
+  have hPhase := submitStatementCore_phase c c' actor text hStep
+  have hPending := pending_of_open c h (by simp [hPhase])
+  unfold submitStatementCore at hStep
+  repeat' split at hStep
+  any_goals simp at hStep
+  cases hStep
+  exact outcomeSound_of_pending _ (by rw [afterStatement_resolution]; exact hPending)
+
+theorem submitVoteCore_outcomeSound
+    (c c' : CaseState) (actor : Actor) (vote : Vote) (rationale : String)
+    (h : outcomeSound c)
+    (hStep : submitVoteCore c actor vote rationale = .ok c') : outcomeSound c' := by
+  have hPhase := submitVoteCore_phase c c' actor vote rationale hStep
+  have hPending := pending_of_open c h (by simp [hPhase])
+  unfold submitVoteCore at hStep
+  repeat' split at hStep
+  any_goals simp at hStep
+  cases hStep
+  exact resolveDeliberation_outcomeSound _ hPending
+
+theorem failMemberCore_outcomeSound
+    (c c' : CaseState) (actor : Actor) (memberId reason : String)
+    (h : outcomeSound c)
+    (hStep : failMemberCore c actor memberId reason = .ok c') : outcomeSound c' := by
+  have hPhase := failMemberCore_phase c c' actor memberId reason hStep
+  have hPending := pending_of_open c h (by simp [hPhase])
+  unfold failMemberCore at hStep
+  repeat' split at hStep
+  any_goals simp at hStep
+  cases hStep
+  exact resolveDeliberation_outcomeSound _ hPending
+
+theorem step_outcomeSound
     (c c' : CaseState) (a : Action)
-    (h : resSound c)
-    (hStep : step c a = .ok c') : resSound c' := by
+    (h : outcomeSound c)
+    (hStep : step c a = .ok c') : outcomeSound c' := by
   unfold step at hStep
   split at hStep
   · cases hStep
-  · rename_i hOpen
-    cases hDispatch : dispatch c a with
+  · cases hDispatch : dispatch c a with
     | error e => rw [hDispatch] at hStep; cases hStep
     | ok next =>
         rw [hDispatch] at hStep
         cases hStep
-        have hNext : resSound next := by
+        have hNext : outcomeSound next := by
           cases a with
           | submitStatement actor text =>
-              exact submitStatementCore_resSound c next actor text h hDispatch
+              exact submitStatementCore_outcomeSound c next actor text h hDispatch
           | submitVote actor vote rationale =>
-              exact submitVoteCore_resSound c next actor vote rationale h hDispatch
+              exact submitVoteCore_outcomeSound c next actor vote rationale h hDispatch
           | failMember actor memberId reason =>
-              exact failMemberCore_resSound c next actor memberId reason h hDispatch
-        unfold resSound at hNext ⊢
+              exact failMemberCore_outcomeSound c next actor memberId reason h hDispatch
+        unfold outcomeSound at hNext ⊢
         simp_all [bumpVersion, voteCount]
 
 /-- A state is reachable when some accepted action sequence produces it. -/
@@ -151,18 +164,18 @@ theorem replaySteps_preserves
           rw [hStep] at hFold
           exact ih next (hPres start a next hStart hStep) hFold
 
-theorem reachable_resSound
+theorem reachable_outcomeSound
     (cfg : InitConfig) (c : CaseState)
-    (h : Reachable cfg c) : resSound c := by
+    (h : Reachable cfg c) : outcomeSound c := by
   obtain ⟨actions, hReplay⟩ := h
   unfold replay at hReplay
   cases hInit : initializeCase cfg with
   | error e => rw [hInit] at hReplay; cases hReplay
   | ok start =>
       rw [hInit] at hReplay
-      exact replaySteps_preserves resSound
-        (fun c a c' hP hs => step_resSound c c' a hP hs) actions start c
-        (initializeCase_resSound cfg start hInit) hReplay
+      exact replaySteps_preserves outcomeSound
+        (fun c a c' hP hs => step_outcomeSound c c' a hP hs) actions start c
+        (initializeCase_outcomeSound cfg start hInit) hReplay
 
 theorem checkCertificate_ok_reachable
     (cfg : InitConfig) (actions : List Action) (claimed : CaseState)
@@ -177,11 +190,11 @@ theorem checkCertificate_ok_reachable
       · rw [if_neg hEq] at h
         simp at h
 
-/-- An accepted certificate's substantive resolution is backed by the
-vote threshold in the claimed state. -/
-theorem checkCertificate_resSound
+/-- Every resolution an accepted certificate claims is backed by its
+ground in the claimed state. -/
+theorem checkCertificate_outcomeSound
     (cfg : InitConfig) (actions : List Action) (claimed : CaseState)
-    (h : checkCertificate cfg actions claimed = .ok ()) : resSound claimed :=
-  reachable_resSound cfg claimed (checkCertificate_ok_reachable cfg actions claimed h)
+    (h : checkCertificate cfg actions claimed = .ok ()) : outcomeSound claimed :=
+  reachable_outcomeSound cfg claimed (checkCertificate_ok_reachable cfg actions claimed h)
 
 end Vmcp
