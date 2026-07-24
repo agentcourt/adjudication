@@ -7,3 +7,4 @@ This directory contains cross-system notes spanning more than one runtime.  Syst
 | Document | Use |
 | --- | --- |
 | [Proof Work Status](proof-notes.md) | Current proof surface, certificate status, remaining proof direction, and proof limits. |
+| [VMCP Design](vmcp.md) | Design proposal for a verified MCP gate: architecture, roles, state, trusted base, and development plan. |
