@@ -33,7 +33,7 @@ The append-only event log on disk is the authoritative state.  Memory holds the 
 
 Records carry framing with length and checksum, so torn-tail detection is a pure predicate, and a hash chain over records makes tampering detectable by a pure verifier.  Recovery correctness is conditional on a stated crash model: single writer, append-only, corruption confined to the final record.  That model is an assumption about the shell and the filesystem.  The accurate claim is recovery verified under the stated disk model; a claim of proved crash safety would be wrong.
 
-The certificate is the log's terminal form: initialize request, accepted actions with recorded observations, and final state.  Verification is the same fold.  The default deployment is one process per case, matching the one-run-one-directory artifact layout; a supervisor owns spawning.
+The certificate is the log's terminal form: initialize request, accepted actions with recorded observations, and final state.  Verification is the same fold.  The name overstates the artifact: it is a replayable record with no signature, "certificate" only in the complexity-theory sense of a witness that removes search from checking, and the check re-executes every engine transition; a fabricated but internally legal record passes verification.  Replay establishes that the claimed outcome follows from the record; attested execution establishes that the record is real, and the two cover different failures.  The default deployment is one process per case, matching the one-run-one-directory artifact layout; a supervisor owns spawning.
 
 ## Transport
 

@@ -23,6 +23,8 @@ ARB is the most complete proof target.  Its proof library has 38 proof files, 66
 
 ## Certificate Work
 
+The term "certificate" in these systems names a package of a run's input, its accepted-action record, and its claimed final state, bound together by hashes.  The package carries no signature and no endorsement, and verification is recomputation: the verifier replays the recorded actions through the engine and compares the result with the claim.  The word is borrowed from complexity theory, where a certificate is a witness that makes a claim checkable without search; the check here re-executes every engine transition, and it saves work only because the recorded actions remove any search and the model calls are not repeated.  Readers who expect the ordinary sense of an authority's attestation will be misled.  A passing package shows the claimed outcome follows from the recorded history under the rules; whether the recorded history is what actually happened is outside its scope and is covered, when needed, by attested execution.
+
 The certificate plan has been carried across all three current adjudication procedures.  ARB remains the reference implementation because its proof package is deepest, but ADC and AARD now have runtime certificates, explicit verifier commands, service artifact exposure, and Lean replay facts.  Services list and fetch certificate artifacts; they do not run replay verification during case creation, listing, polling, or artifact reads.
 
 | System | Runtime boundary | Proof boundary |

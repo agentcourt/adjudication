@@ -471,6 +471,8 @@ The replay output directory contains `input.json`, `prompt.txt`, `result.json`, 
 
 The certificate contains the engine-visible transition record.  `initialize_request` contains the exact initial state, proposition, and council roster sent to `initialize_case`.  `actions` contains the public actions the engine accepted, in order, with `action_type`, `actor_role`, and `payload`.  `claimed_final_state_sha256` is the SHA-256 hash of the compact JSON encoding of `claimed_final_state`.
 
+The name "certificate" overstates what this file is.  It is a package of the run's input, its accepted-action record, and its claimed final state, with hashes tying the package to the packet.  It carries no signature and no endorsement.  The word is borrowed from complexity theory, where a certificate is a witness that makes a claim checkable without search; here the check is a full re-execution of every engine transition, and it saves work only because the recorded actions remove any search and the model calls are not repeated.  A passing verification shows that the claimed outcome follows from the recorded history under the engine's rules.  It does not show that the recorded history is what actually happened: any internally legal history yields a passing package.  Establishing that the record is genuine requires attested execution or records held by the participants themselves.
+
 Verification checks four conditions:
 
 | Check | Failure reported |

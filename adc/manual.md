@@ -538,6 +538,8 @@ Use `run.json` for machine inspection and `state.json` when a tool needs the ter
 
 `adc verify-certificate` checks a completed packet's replay certificate.  The command reads `certificate.json`, replays the recorded initialization and accepted engine transitions through the configured Lean engine, and compares the replayed final state to the certificate's claimed final-state hash.  It also reads `state.json` from the same packet and requires that file to match the certificate hash.
 
+The name "certificate" overstates what this file is.  It is a package of the run's input, its accepted-transition record, and its claimed final state, with hashes tying the package to the packet.  It carries no signature and no endorsement.  The word is borrowed from complexity theory, where a certificate is a witness that makes a claim checkable without search; here the check is a full re-execution of every engine transition, and it saves work only because the recorded actions remove any search and the model calls are not repeated.  A passing verification shows that the claimed outcome follows from the recorded history under the engine's rules.  It does not show that the recorded history is what actually happened: any internally legal history yields a passing package.  Establishing that the record is genuine requires attested execution or records held by the participants themselves.
+
 ```bash
 .bin/adc verify-certificate --dir out/ex1-direct
 ```
