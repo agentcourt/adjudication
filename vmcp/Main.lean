@@ -17,11 +17,17 @@ Usage:
 def envelope (session : String) (payload : Json) : Json :=
   Json.mkObj [("session", session), ("payload", payload)]
 
+/-- Replies must flush: stdout to a file or pipe is fully buffered, and
+a buffered reply deadlocks a live client that waits for it. -/
+def printFlushed (j : Json) : IO Unit := do
+  IO.println j.compress
+  (← IO.getStdout).flush
+
 def runCommand (logPath : String) (statePath : String) (g : GateState) : Vmcp.Command → IO Unit
   | .reply session payload =>
-      IO.println (envelope session payload).compress
+      printFlushed (envelope session payload)
   | .notify session payload =>
-      IO.println (envelope session payload).compress
+      printFlushed (envelope session payload)
   | .appendLog record => do
       IO.FS.withFile logPath IO.FS.Mode.append fun h => do
         h.putStrLn record.compress

@@ -20,6 +20,10 @@ lake build
 drive/demo.sh
 ```
 
+## Real Clients
+
+`drive/agents.sh` runs one full case with real LLM agents as the participants: five one-shot `claude -p` runs (plaintiff, defendant, three jurors) whose only tools come from the gate.  Each client spawns `drive/mcp-adapter.sh` as its MCP server command.  The adapter is the transport identity: it wraps every client message in this session's envelope, adds the session's token to the client's `initialize`, forwards over the shared control pipe with a lock so lines never interleave, and follows the server's output log for this session's replies.  The client never handles its own identity, which keeps the stamping theorems meaningful for real connections.  The orchestrator carries the public record into juror prompts, since the procedure has no read tools.  Two operational facts from making this work: server replies must flush stdout, because a buffered reply deadlocks a waiting client, and the adapter's log-following poll must be fast, because a client builds its toolset at startup and a slow reply means the agent sees no tools.
+
 The server reads envelope lines from stdin: `{"session": "s1", "payload": <JSON-RPC message>}`.  The envelope multiplexes several participants over one stdio pipe for ad hoc driving; it is the test transport, and one standard MCP stdio connection per participant can replace it without touching the pure layers.  A session authenticates through `initialize` with a `token` named in the config, which binds it to a role and, for council members, a member id.  Tool calls are stamped from that binding; client-supplied identity is ignored.  `vmcp verify --config C --log L --state S` replays the log through the engine and compares the result with the state file.
 
 ## Theorems
