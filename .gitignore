@@ -33,13 +33,6 @@ arb/task.md
 arb/scratch/
 
 common/pi-container/state/
-common/submodules/pi-acp/node_modules/
-common/submodules/pi-acp/.dist/
-common/submodules/pi-acp/.dist-cache/
-common/submodules/pi-acp/dist/
-common/submodules/pi-acp/*.log
-common/submodules/pi-acp/.eslintcache
-common/submodules/pi-acp/agentDocs/
 
 common/data/personas/*.log
 
