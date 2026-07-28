@@ -160,6 +160,36 @@ func renderDigest(result Result, rc *runContext) string {
 	b.WriteString(renderReports(mapList(caseObj["technical_reports"])))
 	b.WriteString("\n\n## Council Votes\n\n")
 	b.WriteString(renderVoteRounds(mapList(caseObj["council_votes"])))
+	b.WriteString(renderCouncilFailures(mapList(caseObj["council_members"])))
+	return b.String()
+}
+
+// renderCouncilFailures reports council members that did not complete an
+// opportunity.  A resolution can turn on how many members were able to act, so
+// the digest states that count rather than leaving it to the event log.
+func renderCouncilFailures(members []map[string]any) string {
+	failed := make([]map[string]any, 0, len(members))
+	for _, member := range members {
+		if mapString(member["status"]) == "failed" {
+			failed = append(failed, member)
+		}
+	}
+	if len(failed) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n\n## Council Failures\n\n")
+	b.WriteString(fmt.Sprintf("%d of %d council members failed before completing an opportunity.\n\n", len(failed), len(members)))
+	for _, member := range failed {
+		b.WriteString(fmt.Sprintf("- %s: %s", mapString(member["member_id"]), mapString(member["model"])))
+		if reason := mapString(member["failure_reason"]); reason != "" {
+			b.WriteString(fmt.Sprintf(" (%s)", reason))
+		}
+		b.WriteString("\n")
+		if message := mapString(member["failure_message"]); message != "" {
+			b.WriteString(fmt.Sprintf("  %s\n", message))
+		}
+	}
 	return b.String()
 }
 

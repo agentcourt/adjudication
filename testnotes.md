@@ -69,23 +69,40 @@ one endpoint is gone and three more seats cannot do the work.  The manual alread
 says current-provider claims require a refreshed inventory and fresh evals; this
 run is evidence of how quickly that becomes true.
 
-## The outcome is not explained by the artifacts that report it
+## The outcome was not explained by the artifacts that report it
 
-`ex03` resolved `no_majority` on a single vote from a five-member council.
-Neither of the two summary artifacts says why.
+`ex03` resolved `no_majority` on a single vote from a five-member council, and the
+summary artifacts did not say why.  Two of the three places I first reported are
+now fixed; the third was my error.
 
-`run.json` lists all five council members with `member_id`, `model`,
-`persona_file`, and `request_spec`, and no status field.  The failure record lives
-in `state.json` as `council_members[].status` and `failure_message`, and in the
-event log as `opportunity_failed` and `council_member_removed`.  The manual
-presents `run.json` as the artifact for machine inspection, so a tool reading it
-alone sees a full council and an unexplained `no_majority`.
+`run.json` was never the problem.  `Result.FinalState` embeds the whole terminal
+state, so `final_state.case.council_members[]` carries `status`, `failure_reason`,
+and `failure_message` for every seat.  My first report said the failure record
+lived only in `state.json` and that a tool reading `run.json` alone could not see
+it.  That was wrong.  What is true is narrower: the top-level `Result.Council`
+array repeats the roster without status, so a reader who goes to the obvious field
+sees a clean council while the truth sits elsewhere in the same file.  That array
+is left alone deliberately — it records the council as constituted, and
+constitution and outcome are different facts.
 
-`digest.md` is the concise written account.  It carries every filing, exhibit,
-submitted-evidence entry, technical report, and the vote tally, and it lists all
-five council members without marking any of them failed.  The strings "fail",
-"removed", and "error" do not appear in it.  A reader sees "Tally: 1
-demonstrated" against a five-member roster and is left to infer the rest.
+`digest.md` carried every filing, exhibit, submitted-evidence entry, technical
+report, and the vote tally, listed all five council members without marking any
+failed, and contained no instance of "fail", "removed", or "error".
+`renderDigest` already bound the case object holding `council_members`, but
+`appendCouncilSection` iterated the status-free roster.  It now ends with a
+`Council Failures` section stating the count and listing each failed member with
+its model, failure reason, and message.  The section is omitted when every member
+acted.  Rendered against the real `ex03` state it reads "4 of 5 council members
+failed before completing an opportunity", followed by the four members and their
+causes.
+
+The Clerk `result` route omitted council membership entirely.  I first reported it
+as returning `council_members: []`; there was no such field and my script defaulted
+to empty.  `finalResultResponse` builds its payload from the case object, so the
+data was one line away.  It now returns `council_members`, verified against the
+completed `ex01` case: `C1 seated, C2 failed, C3 failed, C4 seated, C5 failed`.
+An API caller can now tell "the council disagreed" from "the council could not
+act".
 
 ## What held up
 

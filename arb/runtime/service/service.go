@@ -931,6 +931,7 @@ func finalResultResponse(caseID string, roleID string, run map[string]any) map[s
 			"case_status":        mapString(caseObj["status"]),
 			"final_reason":       mapString(run["final_reason"]),
 			"council_votes":      votes,
+			"council_members":    mapList(caseObj["council_members"]),
 			"vote_tally":         voteTally(votes),
 			"deliberation_round": intNumber(caseObj["deliberation_round"]),
 		},

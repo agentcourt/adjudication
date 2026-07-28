@@ -45,6 +45,45 @@ func TestRenderDigestUsesExhibitIndex(t *testing.T) {
 	if !strings.Contains(out, "Tally: 2 demonstrated, 1 not_demonstrated") {
 		t.Fatalf("digest missing vote tally:\n%s", out)
 	}
+	if strings.Contains(out, "## Council Failures") {
+		t.Fatalf("digest should omit the failures section when every member acted:\n%s", out)
+	}
+}
+
+func TestRenderDigestReportsCouncilFailures(t *testing.T) {
+	result, rc := sampleRenderResult()
+	caseObj := result.FinalState["case"].(map[string]any)
+	caseObj["council_members"] = []any{
+		map[string]any{"member_id": "C1", "model": "m1", "status": "seated"},
+		map[string]any{
+			"member_id":       "C2",
+			"model":           "m2",
+			"status":          "failed",
+			"failure_reason":  "agent_exited",
+			"failure_message": "no endpoints found that support tool use",
+		},
+		map[string]any{"member_id": "C3", "model": "m3", "status": "failed", "failure_reason": "timeout"},
+	}
+	out := renderDigest(result, rc)
+	if !strings.Contains(out, "## Council Failures") {
+		t.Fatalf("digest missing failures section:\n%s", out)
+	}
+	if !strings.Contains(out, "2 of 3 council members failed") {
+		t.Fatalf("digest missing failure count:\n%s", out)
+	}
+	if !strings.Contains(out, "C2: m2 (agent_exited)") {
+		t.Fatalf("digest missing failed member line:\n%s", out)
+	}
+	if !strings.Contains(out, "no endpoints found that support tool use") {
+		t.Fatalf("digest missing failure message:\n%s", out)
+	}
+	if !strings.Contains(out, "C3: m3 (timeout)") {
+		t.Fatalf("digest missing member without a failure message:\n%s", out)
+	}
+	failures := out[strings.Index(out, "## Council Failures"):]
+	if strings.Contains(failures, "C1") {
+		t.Fatalf("digest should not list a seated member as failed:\n%s", failures)
+	}
 }
 
 func TestExportAttorneyWorkProduct(t *testing.T) {
