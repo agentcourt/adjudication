@@ -20,7 +20,7 @@ The eval sets are sized for manual review.  A high score shows that a model beha
 | Build a pool from OpenRouter model IDs. | [Full Selection Procedure](#full-selection-procedure) |
 | Refresh or inspect the accepted provider endpoint set. | [Provider Endpoint Selection](#provider-endpoint-selection) |
 | Understand behavior prompts, embeddings, PCA, clusters, and pool sampling. | [Behavior Clustering And Pool Sampling](#behavior-clustering-and-pool-sampling) |
-| Rebuild the legacy CSV persona-clustering pool or render the juror-clustering chart. | [Jury Pool Generation](docs/jury-pool-generation.md) |
+| Render a chart of the per-gene clusters. | [Behavior Clustering And Pool Sampling](#behavior-clustering-and-pool-sampling) |
 | Interpret score fields. | [Score Model](#score-model) |
 | Diagnose failed validation, endpoint, batch, or clustering runs. | [Troubleshooting](#troubleshooting) |
 | Find the meaning and purpose of a repository term. | [Glossary](#glossary) |
@@ -446,7 +446,7 @@ If gene-response, PCA, clustering, aggregation, or pool sampling fails, check ro
 | `tools/run_gene_pca_clustering.py` | Per-gene K-means clustering |
 | `tools/aggregate_variant_persona_clusters.py` | Aggregation from sample-level clusters to endpoint/persona cluster records |
 | `tools/sample-pool.py`, `tools/sample-diverse-pool.py`, and `tools/sample-tuple-pool.py` | Pool samplers for variant/persona cluster rows |
-| `tools/cluster-personas.py`, `tools/clusters-graph.py`, `tools/generate-council.py`, and `tools/select-council.py` | Legacy CSV persona-clustering, chart rendering, and council-selection tools |
+| `tools/clusters-graph.py` | Renders `clusters.csv` from the per-gene clustering stage as a faceted chart |
 | `variants/filtered-20260529/` | Checked-in accepted endpoint snapshot |
 | `genes.json` and `sampled-genes.json` | Source gene list and sampled gene subset used by the clustering procedure |
 | `results/` | Generated evaluation and pool-construction files.  Git ignores this directory except for `.gitkeep`. |

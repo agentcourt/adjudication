@@ -321,10 +321,10 @@ func locateCommonRootFrom(start string) string {
 	}
 	for {
 		candidate := filepath.Join(base, "common")
-		if fileExists(filepath.Join(candidate, "etc", "personas.csv")) || fileExists(filepath.Join(candidate, "data", "personas", "pool.jsonl")) {
+		if fileExists(filepath.Join(candidate, "data", "personas", "pool.jsonl")) {
 			return candidate
 		}
-		if filepath.Base(base) == "common" && (fileExists(filepath.Join(base, "etc", "personas.csv")) || fileExists(filepath.Join(base, "data", "personas", "pool.jsonl"))) {
+		if filepath.Base(base) == "common" && fileExists(filepath.Join(base, "data", "personas", "pool.jsonl")) {
 			return base
 		}
 		next := filepath.Dir(base)

@@ -11,7 +11,7 @@ Use `model-pool/` as the working directory unless a command says otherwise.  Ope
 | Document | Use |
 | --- | --- |
 | [Model Pool Manual](manual.md) | Command reference, terminology, scoring model, endpoint-variant procedures, pool construction, and troubleshooting. |
-| [Documentation Index](docs/README.md) | Sampling runbook, model inventory notes, and the legacy CSV pool pipeline. |
+| [Documentation Index](docs/README.md) | Sampling runbook and model inventory notes. |
 | [Core20 Rubric](rubrics/core20.md) | Response schemas, deterministic checks, deliberation score, and operational metrics. |
 | [Development Notes](devnotes.md) | Development journal, rationale, and follow-up notes. |
 
@@ -51,5 +51,5 @@ Run outputs, model responses, score files, manifests, provider inventories, samp
 | `tools/model_inventory.py`, `tools/run_variant_batch.py`, `tools/run_end_to_end.py` | Provider inventory, endpoint-variant evaluation, and full pool-pipeline execution. |
 | `tools/run_first_gene_inference_embeddings.py`, `tools/run_embedding_pca.py`, `tools/run_gene_pca_clustering.py` | Gene-response collection, embedding reduction, and clustering. |
 | `tools/aggregate_variant_persona_clusters.py`, `tools/sample-tuple-pool.py` | Cluster aggregation and tuple-uniform pool sampling. |
-| `tools/cluster-personas.py`, `tools/clusters-graph.py`, `tools/generate-council.py`, `tools/select-council.py` | Legacy CSV persona-clustering and council-selection tools. |
+| `tools/clusters-graph.py` | Renders per-gene cluster rows as a faceted chart. |
 | `results/` | Generated eval and pool-construction files. |

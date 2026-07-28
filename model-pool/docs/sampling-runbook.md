@@ -446,6 +446,14 @@ Expected files:
 | `summary.json` | Chosen `k`, silhouette scores, counts, and validation data. |
 | `cluster-fit.json` | Cluster centers and candidate scores by gene. |
 
+Render `clusters.csv` when a visual check helps.  The chart puts one row per serving provider and one column per gene, colors each point by its cluster, and gives each model within a provider row its own marker.  It plots `pc1` against `pc2`, so it shows two of the three reduced dimensions.
+
+```bash
+env MPLBACKEND=Agg uv run --script tools/clusters-graph.py \
+  --clusters results/gene-clusters-YYYYMMDDTHHMMSSZ/clusters.csv \
+  --out results/gene-clusters-YYYYMMDDTHHMMSSZ/clusters.png
+```
+
 ## Cluster Vector Aggregation
 
 Aggregate sample-level clusters into one variant/persona cluster vector per endpoint variant and persona.  For each variant, persona, and gene, the aggregator chooses a unanimous cluster when all three samples agree, a majority cluster when two samples agree, and the cluster for the sample nearest to its assigned K-means center when all three differ.  The output `clusters` array is ordered by ascending `gene_index`.

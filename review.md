@@ -103,8 +103,9 @@ and `ex2/situation.md`, produced by the adjacent `sign.sh` and excluded by the
 example `.gitignore`; `ex1/README.md` already runs `sign.sh` first and its Inputs
 table now marks both files as generated.  `situation.md` is fed to the complaint
 drafter, so build notes do not belong in it.  The fifth is
-`adc/runtime/casegen/prompts/complaint_draft_system.md:8`, where `[label](path)`
-appears inside backticks as a format template for the model.  My checker matched
+`adc/runtime/casegen/prompts/complaint_draft_system.md:8`, where a
+`[label](path)` placeholder appears inside backticks as a format template for
+the model.  My checker matched
 inside the code span; this is a false positive, and my first report of it as a
 defect was wrong.
 
@@ -217,8 +218,48 @@ rather than configuration.
 repository.  The two will drift.  The alternative was a dead link, but the
 duplication is worth knowing about.
 
-`model-pool/docs/jury-pool-generation.md` describes the legacy CSV pipeline, run
-from the repository root and writing into `common/data/personas/`, while
-`docs/sampling-runbook.md` describes the current pipeline, run from `model-pool/`.
-Two entry conventions remain, distinguished only by the word "legacy" in the index
-description.
+## The second pool pipeline
+
+`model-pool/` carried two pipelines that did the same job by different means.
+Both picked a diverse set of model-and-persona pairs by sampling completions on
+gene prompts, embedding them, reducing with PCA, and clustering per gene.  They
+differed everywhere else: the legacy pipeline selected on the OpenRouter model
+ID, screened with a metadata filter and a latency probe, chose by farthest-first
+on PCA vectors, ran from the repository root, wrote CSV into
+`common/data/personas/`, and produced a `council.csv` that its own document
+called "not a current runtime pool, because it omits provider endpoint and
+quantization constraints".  The current pipeline selects on the provider endpoint
+variant, screens with a scored question set, samples tuple-uniformly over cluster
+tuples, runs from `model-pool/`, and writes `pool.jsonl` records the runtimes
+consume directly.
+
+The current pipeline tools were last changed 2026-07-09, in the commit that
+produced the active `common/data/personas/pool.jsonl`.  The legacy tools were
+last touched 2026-06-02, the chart renderer 2026-04-03, and every legacy output
+file was last regenerated 2026-05-21.
+
+One dependency had to be settled first.  `adc pool` was a live Go subcommand with
+a test, and it sampled `persona-clusters.csv`, a legacy artifact.  Its documented
+usage wrote `common/data/personas/pool.jsonl` — the same runtime file the current
+pipeline produces — while sampling on model ID and cluster alone, so it could not
+carry the provider endpoint or quantization that a request spec needs.  Two
+commands writing the same file under different rules was the root problem.  `adc
+pool` is removed, along with `pool.go`, `pool_test.go`, and its manual section.
+
+Removed with it: `filter-models.py`, `model-speed.sh`, `cluster-personas.py`,
+`generate-council.py`, `select-council.py`, `docs/jury-pool-generation.md`, and
+every file under `common/data/personas/` except `pool.jsonl`, plus
+`common/etc/personas.csv`.  Three Go files used `personas.csv` as an alternate
+marker for locating the common root; each now checks `pool.jsonl` alone, so no
+code names a deleted file.
+
+`clusters-graph.py` was the one capability only the legacy side had, and it is
+kept.  It read a headerless positional CSV that only the legacy tools produced.
+It now reads the headered `clusters.csv` that `run_gene_pca_clustering.py`
+already writes, by column name.  Because that file carries `provider_name` and
+`openrouter_model_id` as separate columns, the chart faceting changed meaning:
+rows were the model author parsed out of the model string, and are now the
+serving provider.  For endpoint-variant work that is the more useful reading.  I
+verified the rewrite by generating a CSV in the real output format and rendering
+it.  The [Sampling Runbook](model-pool/docs/sampling-runbook.md) carries the
+command.

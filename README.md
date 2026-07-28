@@ -104,7 +104,7 @@ The repository root has no top-level `Makefile`.  Shared packages build through 
 | Arbitration | [README](arb/README.md), [manual](arb/manual.md), [council and juror replay guide](arb/docs/council-replay.md), [practice guide](arb/docs/practice.md), [rules](arb/docs/ARAP.md), [attested runbook](arb/Dockerfile.md), [dev-host requirements](arb/docs/attested-dev-host.md). |
 | Arbitration of Degree | [README](arbd/README.md), [manual](arbd/manual.md), [practice guide](arbd/docs/practice.md), [rules](arbd/docs/ARAP.md), [attested runbook](arbd/Dockerfile.md), [dev-host requirements](arbd/docs/attested-dev-host.md). |
 | Evals | [README](evals/README.md), [judge evals](evals/adc/judge/README.md), [judge eval plan](evals/adc/judge/plan.md). |
-| Model pools | [README](model-pool/README.md), [manual](model-pool/manual.md), [sampling runbook](model-pool/docs/sampling-runbook.md), [model inventory notes](model-pool/docs/model-inventory.md), [legacy CSV pipeline](model-pool/docs/jury-pool-generation.md). |
+| Model pools | [README](model-pool/README.md), [manual](model-pool/manual.md), [sampling runbook](model-pool/docs/sampling-runbook.md), [model inventory notes](model-pool/docs/model-inventory.md). |
 | Proofs | [Proof work status](docs/proof-notes.md), [VMCP design](docs/vmcp.md). |
 | Web | [Web servers overview](web/README.md), [web runbook](web/runbook.md). |
 

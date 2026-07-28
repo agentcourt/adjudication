@@ -44,7 +44,7 @@ Treat each output directory as the record for one case.  Preserve `run.json`, `s
 | Create and manage child cases over HTTP. | `adc service` |
 | Validate an existing scenario JSON. | `adc validate --scenario FILE` |
 | Replay-check a completed packet against its final state. | `adc verify-certificate --dir DIR` |
-| Sample a juror pool from persona clusters. | `adc pool --size N` |
+| Build a juror pool. | [Model Pool](../model-pool/README.md) |
 | Query the run database as PACER-style documents. | `adc pacer --db FILE` |
 | Send one prompt through the model client for development checks. | `adc llm --prompt TEXT` |
 
@@ -370,11 +370,7 @@ Juror pools use JSONL request-spec records.  The active full-run path expects re
 
 The pool record is a request spec, not a short model string.  ADC reads the upstream OpenRouter model and applies provider routing and quantization settings through Pi's OpenRouter compatibility field.  The runner binds the same pool record's persona text to the juror opportunity prompt.  A pool record that requires temperature or top-p fails before the juror starts, because the Pi config produced here cannot enforce those settings.
 
-The pool command samples records from `../common/data/personas/persona-clusters.csv` relative to the `adc/` working directory.  It emits JSONL records to stdout.  Save the result into a file and pass that file through `--juror-personas` when a run should use that pool.
-
-```bash
-.bin/adc pool --size 50 > ../common/data/personas/pool.jsonl
-```
+Pools are built by the [Model Pool](../model-pool/README.md) pipeline, which selects on the provider endpoint rather than the model ID.  It writes `pool.jsonl` with the provider routing and quantization a request spec needs.  Pass a pool file through `--juror-personas`, or rely on the default at `common/data/personas/pool.jsonl`.
 
 `adc run` starts a Pi juror process only when that juror first appears in the active opportunity.  It does not restart a juror process after it exits.  If the same juror receives an active opportunity after its process exited, `adc run` reports failure to the case API and lets the case owner apply the juror failure rule.  During deliberation, that rule removes the failed juror from the effective concurrence count.
 
@@ -386,7 +382,6 @@ ADC includes utility commands that produce or inspect inputs and outputs without
 | --- | --- |
 | `adc case-packet` | Build `case.tar.gz` and `case-packet.json` from a complaint for attested complaint input. |
 | `adc validate` | Validate an existing scenario JSON. |
-| `adc pool` | Sample a JSONL juror request-spec pool from shared persona-cluster data. |
 | `adc pacer` | Read PACER-style documents from a run SQLite database. |
 | `adc llm` | Send one prompt or prompt file through the model client. |
 | `adc juror` | Ask one pool member a question outside a case. |
@@ -394,7 +389,7 @@ ADC includes utility commands that produce or inspect inputs and outputs without
 
 `adc case-packet` packages the complaint and linked local files into the deterministic packet format used by the attested ADC driver.  The packet contains the complaint and linked files with relative paths preserved, while the manifest records hashes for later verification.  Run this command when an attested complaint run fails before launch because a linked file is outside the complaint directory or cannot be resolved.
 
-`adc pacer` reads `run.db` and returns structured document JSON, either for the latest case in the database or for the requested case and document id.  `adc llm` is a narrow model-client check that can use a literal prompt, a prompt file, a persona record, and a timeout.  `adc pool` writes JSONL to stdout; redirect that output when a run needs a repeatable pool file.
+`adc pacer` reads `run.db` and returns structured document JSON, either for the latest case in the database or for the requested case and document id.  `adc llm` is a narrow model-client check that can use a literal prompt, a prompt file, a persona record, and a timeout.
 
 ## `adc juror`
 

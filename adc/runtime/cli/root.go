@@ -25,8 +25,6 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) error {
 		return RunLLM(args[1:], stdout, stderr)
 	case "mcp":
 		return RunMCP(args[1:], stdout, stderr)
-	case "pool":
-		return RunPool(args[1:], stdout, stderr)
 	case "run":
 		return RunLocal(args[1:], stdout, stderr)
 	case "scenario":
@@ -59,8 +57,6 @@ func Run(args []string, stdout io.Writer, stderr io.Writer) error {
 			return RunLLM([]string{"-h"}, stdout, stderr)
 		case "mcp":
 			return RunMCP([]string{"-h"}, stdout, stderr)
-		case "pool":
-			return RunPool([]string{"-h"}, stdout, stderr)
 		case "run":
 			return RunLocal([]string{"-h"}, stdout, stderr)
 		case "scenario":
@@ -94,7 +90,6 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "  juror      Ask a juror pool member one question, with optional transcript continuation")
 	fmt.Fprintln(w, "  llm        Send one prompt through the runtime model client")
 	fmt.Fprintln(w, "  mcp        Run the ADC MCP adapter")
-	fmt.Fprintln(w, "  pool       Sample an experimental juror pool from persona clusters")
 	fmt.Fprintln(w, "  run        Run a scenario with OpenClaw lawyers and Pi jurors")
 	fmt.Fprintln(w, "  scenario   Run an existing scenario JSON without starting agents")
 	fmt.Fprintln(w, "  service    Run the ADC clerk service")

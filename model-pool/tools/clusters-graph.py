@@ -29,17 +29,28 @@ class Point:
 MARKERS = ["o", "s", "^", "D", "P", "X", "v", "<", ">", "h", "8", "p"]
 
 
+REQUIRED_COLUMNS = (
+    "gene_index",
+    "openrouter_model_id",
+    "provider_name",
+    "pc1",
+    "pc2",
+    "cluster",
+)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Read PCA rows and write a faceted cluster plot. Run from the "
-            "repository root unless you pass explicit paths."
+            "Read a clusters.csv from run_gene_pca_clustering.py and write a "
+            "faceted cluster plot. One row per serving provider, one column "
+            "per gene."
         )
     )
     parser.add_argument(
-        "--pca",
-        default="common/data/personas/personas-pca.csv",
-        help="Path to the PCA CSV file, resolved against the working directory.",
+        "--clusters",
+        required=True,
+        help="clusters.csv from the per-gene clustering stage.",
     )
     parser.add_argument(
         "--out",
@@ -52,44 +63,31 @@ def parse_args() -> argparse.Namespace:
 def load_points(path: Path) -> list[Point]:
     points: list[Point] = []
     with path.open(encoding="utf-8", newline="") as f:
-        reader = csv.reader(f)
-        for row_num, row in enumerate(reader, start=1):
-            if len(row) < 6:
-                raise SystemExit(f"{path}:{row_num}: expected at least 6 columns")
+        reader = csv.DictReader(f)
+        missing = [name for name in REQUIRED_COLUMNS if name not in (reader.fieldnames or ())]
+        if missing:
+            raise SystemExit(f"{path}: missing columns {', '.join(missing)}")
+        for row_num, row in enumerate(reader, start=2):
             try:
-                model = row[0]
-                gene = int(row[2])
-                x1 = float(row[3])
-                x2 = float(row[4])
-                cluster = int(row[-1])
-            except ValueError as exc:
-                raise SystemExit(f"{path}:{row_num}: {exc}") from exc
-            points.append(
-                Point(
-                    model=model,
-                    source=model_source(model),
-                    gene=gene,
-                    x1=x1,
-                    x2=x2,
-                    cluster=cluster,
+                points.append(
+                    Point(
+                        model=row["openrouter_model_id"],
+                        source=row["provider_name"],
+                        gene=int(row["gene_index"]),
+                        x1=float(row["pc1"]),
+                        x2=float(row["pc2"]),
+                        cluster=int(row["cluster"]),
+                    )
                 )
-            )
+            except (TypeError, ValueError) as exc:
+                raise SystemExit(f"{path}:{row_num}: {exc}") from exc
     if not points:
-        raise SystemExit(f"no PCA rows found in {path}")
+        raise SystemExit(f"no cluster rows found in {path}")
     return points
 
 
-def model_source(model: str) -> str:
-    rest = model.split("://", 1)[1] if "://" in model else model
-    return rest.split("/", 1)[0]
-
-
 def model_name(model: str) -> str:
-    rest = model.split("://", 1)[1] if "://" in model else model
-    parts = rest.split("/", 1)
-    if len(parts) == 1:
-        return parts[0]
-    return parts[1]
+    return model.split("/", 1)[1] if "/" in model else model
 
 
 def cluster_colors(points: list[Point]) -> dict[int, tuple[float, float, float, float]]:
@@ -196,9 +194,9 @@ def plot_points(points: list[Point], out_path: Path) -> None:
 
 def main() -> int:
     args = parse_args()
-    pca_path = Path(args.pca)
+    clusters_path = Path(args.clusters)
     out_path = Path(args.out)
-    points = load_points(pca_path)
+    points = load_points(clusters_path)
     plot_points(points, out_path)
     return 0
 
