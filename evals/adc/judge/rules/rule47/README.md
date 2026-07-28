@@ -1,6 +1,6 @@
 # Rule 47
 
-Rule 47 evals cover voir dire and jury-selection decisions.  The current suites separate pre-answer question screening from post-answer for-cause challenges because they exercise different judge tools.  Both suites use real ADC voir dire state and deterministic reason-tag scoring.
+ARCP Rule 47 lets the court examine prospective jurors or permit the parties to do so, requires the peremptory challenges federal law provides, and lets the court excuse a juror for good cause.  Two judge decisions fall under it at different points: screening a proposed voir dire question before any juror sees it, and ruling on a for-cause challenge after the answers are in.  They use different ADC tools and different scoring boundaries, so this directory holds two suites rather than one.  The failures with consequences are seating a juror who cannot follow the law, and excusing one whose lawful attitudes merely favor a side.
 
 ## Suites
 

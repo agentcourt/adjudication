@@ -36,4 +36,4 @@ These documents cover ADC rules, practice guidance, technical references, and pr
 | [Proof Statistics](proofstats.md) | Proof count and coverage notes. |
 | [Theorems](theorems.md) | Theorem catalog. |
 
-Short notes such as [Clusters](clusters.md), [Features](features.md), and [Logic](logic.md) remain focused references.  The diagram files and update workflow live under `../analysis/`.  Historical development notes live in `../devnotes.md` and `../../scratch/adc/`.
+Short notes such as [Clusters](clusters.md), [Features](features.md), and [Logic](logic.md) remain focused references.  The diagram files and update workflow live under `../analysis/`.  Development notes live in `../devnotes.md`.

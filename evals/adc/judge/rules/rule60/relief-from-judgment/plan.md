@@ -29,9 +29,7 @@ The prohibited-concept scorer is negation-aware.  Rule 60 denials often state th
 
 ## Prompt Iteration
 
-Prompt candidates live under `prompts/` and run outside production ADC opportunity text.  Candidate v1 gives the judge a compact Rule 60 checklist: grant only recognized Rule 60 grounds supported by the motion record, deny ordinary reargument and untimely motions, and avoid changing damages or retrying liability through the Rule 60 tool.  This isolates prompt experiments from production ADC behavior while retaining the same state, tool schema, model path, and Lean validation.
-
-Production and candidate v1 both reached 16/16 after deterministic scorer correction.  Both made the correct grant or denial decision on all 16 live rows, returned no invalid payloads, passed Lean validation, and executed through Lean step.  The measured results support keeping production prompt text unchanged and adding harder Rule 60 rows before considering a production prompt update.
+Candidate v1 gives the judge a compact Rule 60 checklist: grant only recognized grounds supported by the motion record, deny ordinary reargument and untimely motions, and leave damages and liability alone.  Measured results are in [Rule 60 Analysis](analysis.md).
 
 ## Next Extensions
 

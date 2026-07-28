@@ -74,7 +74,7 @@ Jury-facing content should remain concise and structured.  Length limits on clos
 
 Timing limits should be represented as explicit intervals in case policy, not implicit by runtime clock behavior.  The system should validate deadlines using recorded filing timestamps and policy windows.
 
-Useful timing controls now include response windows for Rule 12 oppositions/replies, Rule 56 oppositions/replies, discovery response windows, and extension-request caps per side.  Extension requests should require reason text and either consent flag or judicial decision.
+The timing controls worth defining are response windows for Rule 12 oppositions and replies, response windows for Rule 56 oppositions and replies, discovery response windows, and a per-side cap on extension requests.  Extension requests should require reason text and either a consent flag or a judicial decision.
 
 A practical model is one stipulated extension per item up to a short cap, with further extensions requiring judicial findings.  This mirrors ordinary scheduling-order practice while keeping automation deterministic.
 

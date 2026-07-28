@@ -1,23 +1,12 @@
 # Evals
 
-`evals/` is the repository root for committed eval assets and local eval output.  [Model-Pool Evals](model-pool/README.md) contains the provider-endpoint, question-set, embedding, clustering, and pool-sampling eval system.  [ADC Evals](adc/README.md) contains ADC behavior evals organized by actor, with [Judge Evals](adc/judge/README.md) under `adc/judge/`.
+`evals/` holds behavior evals for the adjudication systems: fixture sets that put a system actor in a controlled state, prompt candidates that can be compared against the production prompt, and the analysis that records what a run measured.  The runners are Go code inside the system runtimes, so an eval exercises the same state construction, tool schema, model path, and Lean validation as a live case.  [ADC Evals](adc/README.md) is the only actor tree so far, and [Judge Evals](adc/judge/README.md) is the only suite family within it.
 
-Generated output belongs under `out/` for ADC behavior eval runs and under `model-pool/results/` for model-pool tools that run from `evals/model-pool/`.  Those directories are ignored except for `.gitkeep` files.  Committed eval directories contain fixtures, prompt candidates, plans, analysis, schemas, rubrics, and source tooling.
+Committed eval directories hold fixtures, prompt candidates, plans, and analysis.  Generated run output belongs under `out/`, which is ignored except for `out/.gitkeep`.  Model and provider-endpoint selection is a separate concern and lives in [Model Pool](../model-pool/README.md); it builds the juror and council pools that live runs draw from rather than measuring actor behavior.
 
-## Documentation
-
-| Document | Use |
-| --- | --- |
-| [Model-Pool Evals](model-pool/README.md) | Model and provider-endpoint eval tooling, checked-in question sets, schemas, rubrics, prompts, personas, variants, and docs. |
-| [Model-Pool Analysis](model-pool/analysis.md) | Human analysis tied to model-pool eval results or pool-construction work. |
-| [ADC Evals](adc/README.md) | ADC behavior eval organization and output conventions. |
-| [Judge Evals](adc/judge/README.md) | Judge eval suites, runner locations, and cross-rule planning. |
-| [Judge Rule Index](adc/judge/rules/README.md) | Rule-grouped judge eval suites. |
-
-## Layout
+## Contents
 
 | Path | Contents |
 | --- | --- |
-| `model-pool/` | Model-pool eval tooling, inputs, prompt files, schemas, rubrics, personas, variants, and documentation. |
-| `adc/judge/` | Judge behavior eval fixtures, prompt candidates, plans, and analysis, grouped by rule and behavior. |
-| `out/` | Ignored local output from ADC behavior evals. |
+| [adc/](adc/README.md) | ADC behavior evals, grouped by actor. |
+| `out/` | Ignored generated output from eval runs. |

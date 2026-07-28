@@ -28,9 +28,7 @@ Ground-specific scoring checks the fields that ADC expects the judge to supply. 
 
 ## Prompt Iteration
 
-Prompt candidates live under `prompts/` and run outside production ADC opportunity text.  The runner renders the candidate text into the model-facing opportunity prompt while preserving the real Lean opportunity, allowed tool, constraints, role view, and tool schema.  Each run records the prompt source and copies the prompt file into the generated output directory, which remains ignored.
-
-The first candidate targeted a production failure on mootness amendment posture, but it stated the no-amendment rule too broadly.  It fixed the complete prefiling satisfaction row and introduced wrong no-leave decisions for curable standing, ripeness, and diversity-amount defects.  The second candidate narrows the rule to mootness cases where the complaint admits full prefiling satisfaction of all requested relief and seeks no remaining live relief.
+Candidate v1 addresses mootness amendment posture by stating when leave to amend should be refused.  Candidate v2 narrows that rule to mootness cases where the complaint admits full prefiling satisfaction of all requested relief and seeks no remaining live relief, which leaves curable standing, ripeness, and diversity-amount defects amendable.  Measured results are in [Rule 12 Analysis](analysis.md).
 
 ## Next Extensions
 

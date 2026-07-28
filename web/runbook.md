@@ -72,7 +72,7 @@ The management UI starts, monitors, and stops ARB cases through one `aar service
 
 ```sh
 go run ./web/cmd/adjudication-manage \
-  --listen 127.0.0.1:9091 \
+  --listen 127.0.0.1:19970 \
   --arb-url http://127.0.0.1:19770 \
   --report-url http://127.0.0.1:9090 \
   --report-root svc=/media/hd2/src/adjudication/arb/out/service
@@ -80,7 +80,7 @@ go run ./web/cmd/adjudication-manage \
 
 | Flag | Meaning |
 |------|---------|
-| `--listen` | Listen address, default `127.0.0.1:9091`. |
+| `--listen` | Listen address, default `127.0.0.1:19970`. |
 | `--arb-url` | `aar service` base URL, default `http://127.0.0.1:19770`. |
 | `--arb-token` | Service bearer token. |
 | `--report-url` | Report server base URL for read links. |

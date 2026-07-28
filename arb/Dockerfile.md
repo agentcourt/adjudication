@@ -29,7 +29,7 @@ Use the `arbattest` branch in both `jsmorph/adjudication` and `jsmorph/attest`. 
 
 ## Dev Host And AWS Requirements
 
-The generic `dev` host requirements for the exec AMI launcher live in [Dev Host Requirements](../../attest/dev-host.md).  Read that document before building or launching through `attest/exec.sh`.  It covers the base x86_64 host, Nix daemon setup, AWS CLI, EC2 permissions, EBS direct snapshot permissions, role passing, default VPC assumptions, disk requirements, and verification commands.
+The generic `dev` host requirements for the exec AMI launcher live in [Dev Host Requirements](../docs/attest-host.md).  Read that document before building or launching through `attest/exec.sh`.  It covers the base x86_64 host, Nix daemon setup, AWS CLI, EC2 permissions, EBS direct snapshot permissions, role passing, default VPC assumptions, disk requirements, and verification commands.
 
 The AAR-specific requirements live in [Attested AAR Dev Host Requirements](docs/attested-dev-host.md).  That document adds the Docker build checkout, launcher directory, secret file locations, S3 prefixes, S3 permissions, `ec2-nix-builder` instance profile, expected PCR values, and operational checks for attested AAR runs.  The short form is that `dev` must build and upload `arb-glue:poc`, stage `auth.json` and `keys.sh` under `s3://agentcourt-data/arbattest/aar-inputs/`, launch the exec AMI, poll `s3://agentcourt-data/arbattest/aar-runs/`, download terminal artifacts, and support verification.
 

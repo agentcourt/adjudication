@@ -1,6 +1,6 @@
 # Rule 51
 
-Rule 51 evals test jury-instruction settlement.  The current suite covers burden shifting, missing elements, argumentative phrasing, assumed disputed facts, limiting instructions, damages instructions, authentication instructions, adverse-inference requests, and instructions based on excluded evidence.  It scores settled-instruction summaries before any later full-charge delivery eval.
+ARCP Rule 51 lets a party request jury instructions and object on the record to requested, proposed, or given instructions, and it fixes how a claim of instructional error is preserved.  The judge settles the instructions the jury will hear, which makes the settled charge the last filter between the trial record and deliberation.  An instruction that argues one side's theory, assumes a disputed fact, or repeats excluded evidence carries that defect into the verdict.  The failure with consequences is contamination of the final charge, because the jury has no way to discount it.
 
 ## Suites
 

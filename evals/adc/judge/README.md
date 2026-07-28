@@ -4,6 +4,8 @@ Judge evals are grouped first by ARCP rule and then by the judge behavior under 
 
 The Go runners live under `adc/runtime/eval`, with CLI defaults in `adc/runtime/cli/eval.go`.  Generated reports belong under `evals/out/adc/judge/`, which is ignored except for `.gitkeep` files.  The cross-rule plan is [Judge Eval Plan](plan.md), and the rule-grouped suite index is [Judge Rule Index](rules/README.md).
 
+Prompt candidates live under each suite's `prompts/` and run outside the production ADC opportunity text.  The runner renders a candidate into the model-facing prompt while preserving the real Lean opportunity, allowed tool, constraints, role view, and tool schema, and it records the prompt source and copies the prompt file into the ignored output directory.  A candidate therefore changes nothing about ADC execution, and each suite's `analysis.md` is the single record of what a run measured; the suite `plan.md` describes the fixture design and what each candidate says.
+
 ## Suites
 
 | Rule | Suite | Runner | Analysis |

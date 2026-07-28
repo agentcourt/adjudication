@@ -38,6 +38,6 @@ The summary reports total accuracy, grant accuracy, weighted accuracy, invalid r
 
 ## Prompt Iteration
 
-Production made correct grant-or-denial decisions for the grant rows but returned invalid sanction payloads on most denial rows.  The repeated error was `granted: false` paired with `sanction_type: fees`, which Lean rejects and which fails the eval before order reasoning can be considered.  The first live production run also exposed a mislabeled RFA fixture; ARCP Rule 36 treats an unanswered RFA as admitted, so that row now expects denial rather than a compelled response.
+Candidate v1 addresses denial-row sanction handling, where an invalid `granted: false` paired with `sanction_type: fees` fails Lean before the order reasoning can be scored.  Candidate v2 makes the payload requirement explicit: every tool call includes `sanction_type`, a denied motion uses `none`, and `fees` applies only to a granted motion with a fee award.  Measured results are in [Rule 37 Analysis](analysis.md).
 
-Candidate v1 fixed most denial-row sanction handling and improved the measured set from 9/16 to 15/16, but it omitted `sanction_type` on the fee-only denial row.  Candidate v2 makes the payload requirement explicit: every tool call must include `sanction_type`, denied motions must use `none`, and `fees` applies only to granted motions with a fee award.  Candidate v2 is the best measured Rule 37 prompt on this fixture set.
+One fixture was mislabeled in the first live run.  ARCP Rule 36 treats an unanswered request for admission as admitted, so that row expects denial rather than a compelled response.  The fixture set carries the correction.

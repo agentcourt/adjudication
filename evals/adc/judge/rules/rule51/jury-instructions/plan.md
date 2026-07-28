@@ -29,9 +29,7 @@ The summary output reports total accuracy, weighted accuracy, invalid rate, miss
 
 ## Prompt Iteration
 
-Prompt candidates live under `prompts/` and run outside production ADC opportunity text.  The first candidate gives the judge explicit fixture context and general rules for neutral settlement, but it does not expose expected required or prohibited terms.  It is meant to test whether extra instruction-specific guidance improves settlement summaries without changing production ADC behavior.
-
-Production scored 16/16 after deterministic scorer corrections.  Candidate v1 also scored 16/16 after rescoring the same live output for accepted equivalent wording.  The current evidence does not justify a production prompt change, because the candidate preserved production behavior but did not improve measured outcomes.
+Candidate v1 gives the judge explicit fixture context and general rules for neutral settlement, while withholding the expected required and prohibited terms so the scorer still tests the judgment rather than recall.  It exists to measure whether instruction-specific guidance improves settlement summaries.  Measured results are in [Rule 51 Analysis](analysis.md).
 
 ## Next Extensions
 

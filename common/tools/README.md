@@ -11,4 +11,4 @@ This directory contains shared maintenance tools for the `arb` and `arbd` trees.
 | `llm_graph.py` | Render model and request graphs. |
 | `proofstats.sh` | Summarize proof statistics. |
 
-Model-pool evaluation, clustering, graphing, and selection tools live under [Adjudication Evals](../../evals/README.md).
+Model and provider-endpoint evaluation, clustering, graphing, and pool-selection tools live under [Model Pool](../../model-pool/README.md).

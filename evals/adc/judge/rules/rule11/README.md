@@ -1,6 +1,6 @@
 # Rule 11
 
-Rule 11 evals test sanctions decisions for filings, legal contentions, factual contentions, improper-purpose claims, safe-harbor posture, and sanction proportionality.  The current suite focuses on the judge decision to grant or deny sanctions and to choose an allowed sanction type.  It keeps fixture inputs, prompt candidates, plan, and analysis in the behavior directory.
+ARCP Rule 11 requires a signature on every pleading, written motion, and other paper, and makes the signer responsible for its legal and factual representations after an inquiry reasonable under the circumstances.  An agent may draft or transmit a paper, but Rule 11 responsibility stays with the signer.  The judge decision under test is whether to sanction and, on a grant, which sanction the rule allows.  The failure with consequences is sanctioning advocacy the rules permit, because that penalizes a party for arguing within them.
 
 ## Suites
 

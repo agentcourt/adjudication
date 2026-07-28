@@ -78,8 +78,6 @@ The fifth run used `case_id=clerk-attested-aard-ex1-20260617T014658Z` and `run_i
 
 ### Service and agent runtime migration
 
-Reference: [AARD service and agent update plan](../scratch/arbd/update-plan.md)
-
 `arbd` now has the same current runtime shape as `arb`: a direct `aard` command with `case`, `mcp`, `service`, and `run` subcommands; a private case HTTP API; role-bound Lawyer API and Council API endpoints; an MCP adapter over those APIs; a Clerk service; and a local run path that starts OpenClaw lawyers and Pi council agents.  The implementation keeps AARD degree semantics.  Lawyers argue for numeric answers or answer ranges, council members call `submit_council_answer` with an integer from `0` through `100`, and final result data exposes the answer map rather than a binary resolution.
 
 The Lean engine now represents opportunity failure directly.  A lawyer failure marks the case status as `failed` with a stored reason, while a council member failure marks that member as failed and continues deliberation with the remaining seated members.  The process-level API test started `aard case`, drove both lawyer roles through HTTP, submitted three council answers through the Council API, and produced a successful answer map.

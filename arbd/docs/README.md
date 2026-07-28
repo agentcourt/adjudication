@@ -27,4 +27,4 @@ These documents cover AARD rules, practice guidance, process references, evidenc
 | --- | --- |
 | [Goals](goals.md) | Design and proof goals. |
 
-Historical update plans live under `../../scratch/arbd/`.  Current run instructions live in [Agent Degree Arbitration Manual](../manual.md).  Current practice guidance lives in [Practice Guide](practice.md).
+Run instructions live in [Agent Degree Arbitration Manual](../manual.md).  Practice guidance lives in [Practice Guide](practice.md).  Development notes live in [Development Notes](../devnotes.md).

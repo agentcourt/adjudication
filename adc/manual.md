@@ -389,10 +389,26 @@ ADC includes utility commands that produce or inspect inputs and outputs without
 | `adc pool` | Sample a JSONL juror request-spec pool from shared persona-cluster data. |
 | `adc pacer` | Read PACER-style documents from a run SQLite database. |
 | `adc llm` | Send one prompt or prompt file through the model client. |
+| `adc juror` | Ask one pool member a question outside a case. |
+| `adc eval` | Run a judge behavior eval suite against fixtures. |
 
 `adc case-packet` packages the complaint and linked local files into the deterministic packet format used by the attested ADC driver.  The packet contains the complaint and linked files with relative paths preserved, while the manifest records hashes for later verification.  Run this command when an attested complaint run fails before launch because a linked file is outside the complaint directory or cannot be resolved.
 
 `adc pacer` reads `run.db` and returns structured document JSON, either for the latest case in the database or for the requested case and document id.  `adc llm` is a narrow model-client check that can use a literal prompt, a prompt file, a persona record, and a timeout.  `adc pool` writes JSONL to stdout; redirect that output when a run needs a repeatable pool file.
+
+## `adc juror`
+
+`adc juror` puts one question to one member of a juror pool without running a case.  `adc juror --list` prints the pool with a 1-based index per member, and `--member` then selects by that index or by a unique substring of the listed line.  The question comes from `--prompt` or `--prompt-file`, `--repeat` takes independent samples of the same question, and `--vote` requires the member to answer through one `submit_juror_vote` tool call and prints its arguments.  `--transcript` names an NDJSON conversation file whose prior turns are replayed before this turn is appended, which is how a multi-question exchange with one member is carried forward.
+
+The command exists to make juror interrogation cheap enough to iterate on.  A full case run is a slow and expensive way to learn how a pool member answers a question, and the answers are entangled with the rest of the proceeding.  [Experiment 1 Journal](docs/voir-dire-journal.md) records what this command revealed about pool members and which observations still need confirmation against vote behavior.
+
+## `adc eval`
+
+`adc eval` runs one judge behavior eval suite.  Each suite puts the judge in a fixture state, asks for the decision the rule governs, and scores the response deterministically, using the same state construction, tool schema, model path, and Lean validation as a live case.  The suites are `judge-voir-dire`, `judge-for-cause`, `judge-rule11`, `judge-rule12`, `judge-rule37`, `judge-rule51`, `judge-rule52`, `judge-rule56`, `judge-rule58`, and `judge-rule60`.
+
+Every suite takes the same shape of options.  `--fixtures` defaults to that suite's committed fixture file under `evals/adc/judge/rules/`, and `--out-dir` defaults to a path under ignored `evals/out/adc/judge/`.  `--opportunity-prompt-file` and `--opportunity-prompt-name` substitute an eval-local prompt candidate for the production prompt, which is how a candidate is compared without changing ADC execution.  `--dry-run` answers from the expected rulings instead of calling a model, `--rescore-results` re-scores an existing results file without model calls, and `--limit` caps the number of fixtures.
+
+Fixture sets, prompt candidates, plans, and analysis live under [Judge Evals](../evals/adc/judge/README.md).  The runners are in `adc/runtime/eval` with CLI defaults in `adc/runtime/cli/eval.go`.
 
 ## Service API
 

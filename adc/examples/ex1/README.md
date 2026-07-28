@@ -11,8 +11,8 @@ The example exercises complaint drafting, case-file staging, documentary evidenc
 | `situation.md` | Narrative source text for complaint drafting. |
 | `instructions.txt` | Assignment record. |
 | `confession.txt` | Samantha's written admission. |
-| `confession.sig.b64` | Base64-encoded detached signature over `confession.txt`. |
-| `samantha_public.pem` | Public key used for signature verification. |
+| `confession.sig.b64` | Base64-encoded detached signature over `confession.txt`.  Produced by `sign.sh`; not committed. |
+| `samantha_public.pem` | Public key used for signature verification.  Produced by `sign.sh`; not committed. |
 | `printing-invoice.txt` | Printing charges for the 1,000-copy run. |
 | `distribution-work-order.txt` | Bindery, packaging, and distribution charges. |
 | `time-and-token-log.txt` | Internal cleanup time and model-usage record. |

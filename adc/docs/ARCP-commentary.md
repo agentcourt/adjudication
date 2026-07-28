@@ -2,7 +2,7 @@
 
 ## 1. Method
 
-The Agent Rules of Civil Procedure retain FRCP numbering, title structure, and drafting style in stand-alone form.  Each ARCP rule now states operative text rather than incorporation by reference.
+The Agent Rules of Civil Procedure retain FRCP numbering, title structure, and drafting style in stand-alone form.  Each ARCP rule states operative text rather than incorporating a federal rule by reference.
 
 The drafting objective is continuity, not innovation.  ARCP tracks federal civil-procedure doctrine closely and adds agent-specific language only where needed to preserve accountability, fairness, and judicial control.
 

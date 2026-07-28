@@ -83,7 +83,7 @@ The full test command for the Go runtime is:
 go test -count=1 ./runtime/...
 ```
 
-`aar run` uses Docker for OpenClaw lawyer containers and Podman for Pi council agents.  The default OpenClaw image is `ghcr.io/openclaw/openclaw:latest`.  The default Pi image is `agentcourt-pi-sandbox`, unless `PI_CONTAINER_IMAGE` is set and `--pi-image` is omitted.  The default Pi MCP adapter path is `/opt/pi-extensions/pi-mcp-adapter/node_modules/pi-mcp-adapter`, which the shared Pi image builds from pinned `pi-mcp-adapter@2.11.0`.
+`aar run` uses Docker for OpenClaw lawyer containers and Podman for Pi council agents.  The default OpenClaw image is `ghcr.io/openclaw/openclaw:latest`; the default OpenClaw model is `gpt-5.5` with thinking set to `low`.  The default Pi image is `agentcourt-pi-sandbox`, unless `PI_CONTAINER_IMAGE` is set and `--pi-image` is omitted.  The default Pi MCP adapter path is `/opt/pi-extensions/pi-mcp-adapter/node_modules/pi-mcp-adapter`, which the shared Pi image builds from pinned `pi-mcp-adapter@2.11.0`.
 
 Pi council agents require `OPENROUTER_API_KEY`.  `aar run` validates that the variable exists before starting.  Council model, provider, quantization, and persona come from the selected entries in `pool.jsonl`; AAR passes those request-spec entries to Pi without deriving a separate model string.
 
@@ -536,7 +536,7 @@ Run from `arb/` with an experimental persona:
   --source-output "$source" \
   --member-id "$member" \
   --model-config "/tmp/aar-juror-replay-$member-model.json" \
-  --persona "../evals/model-pool/personas/experiments/attorneys/Brandeis.txt" \
+  --persona "../common/etc/personas/attorneys/Brandeis.txt" \
   --out-dir "out/juror-replays/ex13-run-03-$member-brandeis" \
   --podman docker \
   --pi-image agentcourt-pi-sandbox:latest
@@ -549,7 +549,7 @@ go run ./arb/runtime/cmd/aar juror-replay \
   --source-output arb/out/local-direct-three-per-ex-only-20260629/ex13/run-03 \
   --member-id C1 \
   --model-config /tmp/aar-juror-replay-C1-model.json \
-  --persona evals/model-pool/personas/experiments/attorneys/Brandeis.txt \
+  --persona common/etc/personas/attorneys/Brandeis.txt \
   --out-dir arb/out/juror-replays/ex13-run-03-C1-brandeis \
   --prompt-dir arb/prompts \
   --council-instructions arb/agent-instructions/pi-council.md.tmpl \
@@ -595,7 +595,7 @@ Common failures have specific causes:
 | Message or symptom | Cause | Fix |
 | --- | --- | --- |
 | `OPENROUTER_API_KEY is required` | The selected Pi model config uses OpenRouter. | Export `OPENROUTER_API_KEY` in the environment that runs `aar juror-replay`. |
-| `stat persona ...` or `empty persona text` | `--persona` points to a missing, directory, or empty file. | Pass the intended persona text file, usually under `../evals/model-pool/personas/experiments/` from `arb/`. |
+| `stat persona ...` or `empty persona text` | `--persona` points to a missing, directory, or empty file. | Pass the intended persona text file, usually under `../common/etc/personas/` from `arb/`. |
 | `source output has multiple council-turn snapshots` | The source run has more than one captured turn and the command cannot infer the target turn. | Pass `--member-id MEMBER` or `--snapshot PATH`. |
 | `member MEMBER has N council-turn snapshots` | The same member has more than one captured turn, usually after later deliberation rounds. | Pass the exact `--snapshot` directory. |
 | `operation not permitted` while binding `127.0.0.1:0` | The process cannot open the local replay HTTP listener in the current environment. | Run the command in a local shell with permission to bind loopback ports. |

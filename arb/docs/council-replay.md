@@ -116,7 +116,7 @@ Run the replay with an experimental persona:
   --source-output "$source" \
   --member-id "$member" \
   --model-config "/tmp/aar-juror-replay-$member-model.json" \
-  --persona "../evals/model-pool/personas/experiments/attorneys/Brandeis.txt" \
+  --persona "../common/etc/personas/attorneys/Brandeis.txt" \
   --out-dir "out/juror-replays/ex13-run-03-$member-brandeis" \
   --podman docker \
   --pi-image agentcourt-pi-sandbox:latest
@@ -129,7 +129,7 @@ go run ./arb/runtime/cmd/aar juror-replay \
   --source-output arb/out/local-direct-three-per-ex-only-20260629/ex13/run-03 \
   --member-id C1 \
   --model-config /tmp/aar-juror-replay-C1-model.json \
-  --persona evals/model-pool/personas/experiments/attorneys/Brandeis.txt \
+  --persona common/etc/personas/attorneys/Brandeis.txt \
   --out-dir arb/out/juror-replays/ex13-run-03-C1-brandeis \
   --prompt-dir arb/prompts \
   --council-instructions arb/agent-instructions/pi-council.md.tmpl \
@@ -174,7 +174,7 @@ rg -n 'Persona:|You are an attorney' out/juror-replays/ex13-run-03-C1-brandeis/p
 | Message or symptom | Cause | Fix |
 | --- | --- | --- |
 | `OPENROUTER_API_KEY is required` | The selected Pi model config uses OpenRouter. | Export `OPENROUTER_API_KEY` before running replay. |
-| `stat persona ...` or `empty persona text` | `--persona` points to a missing, directory, or empty file. | Pass the intended persona text file, usually under `../evals/model-pool/personas/experiments/` from `arb/`. |
+| `stat persona ...` or `empty persona text` | `--persona` points to a missing, directory, or empty file. | Pass the intended persona text file, usually under `../common/etc/personas/` from `arb/`. |
 | `source output has multiple council-turn snapshots` | The source run has more than one captured turn and no target turn was specified. | Pass `--member-id MEMBER` or `--snapshot PATH`. |
 | `member MEMBER has N council-turn snapshots` | The same member has more than one captured turn. | Pass the exact `--snapshot` directory. |
 | `operation not permitted` while binding `127.0.0.1:0` | The process cannot open the local replay HTTP listener in the current environment. | Run the command in a local shell with permission to bind loopback ports. |

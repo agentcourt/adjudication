@@ -627,7 +627,6 @@ A fresh deliberation process gets the deliberation prompt, which includes the tr
 
 ### References
 
-- ADC update plan: [`../scratch/adc/update-plan.md`](../scratch/adc/update-plan.md)
 - Role API: [`runtime/runner/roleapi.go`](runtime/runner/roleapi.go)
 - MCP adapter: [`runtime/mcp/mcp.go`](runtime/mcp/mcp.go)
 - Clerk service: [`runtime/service/service.go`](runtime/service/service.go)
@@ -662,7 +661,6 @@ Entries below this section are historical development notes.  ACP and xproxy ent
 - ACP role runtime: `runtime/runner/acp_role.go`
 - PI-home staging: `runtime/runner/pi_container_home.go`
 - Agent documentation: [`docs/agents.md`](docs/agents.md)
-- Porting inventory: [`../scratch/adc/update.md`](../scratch/adc/update.md)
 
 ### Decisions
 
@@ -721,7 +719,7 @@ The ACP prompt now names current limits instead of relying only on static docume
 - [x] Make `defaultACPServerPath` return the relative wrapper path directly.
 - [ ] Add a dedicated test if this area changes again.
 
-## 2026-03-18: `../evals/model-pool/tools/cluster-personas.py`
+## 2026-03-18: `../model-pool/tools/cluster-personas.py`
 
 ### References
 
@@ -774,6 +772,6 @@ The ACP prompt now names current limits instead of relying only on static docume
 
 ### Results
 
-- Live test: `uv run ../evals/model-pool/tools/cluster-personas.py --personas-file /tmp/persona-sample-test.csv --genes-file /tmp/persona-sample-genes.json --num-samples 3 --gene-dim 3`
+- Live test: `uv run ../model-pool/tools/cluster-personas.py --personas-file /tmp/persona-sample-test.csv --genes-file /tmp/persona-sample-genes.json --num-samples 3 --gene-dim 3`
 - Live output: three `MP,G,C` rows for one persona and one gene through local xproxy plus direct embeddings.
 - Follow-up fix: `adc xproxy` initially returned an error on clean shutdown because the listener was already closed.  `runtime/xproxy/xproxy.go` now ignores `net.ErrClosed` in that path, and a live `Ctrl-C` shutdown now exits with status `0`.

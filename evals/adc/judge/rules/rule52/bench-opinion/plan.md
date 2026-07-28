@@ -29,9 +29,7 @@ The scorer includes `--rescore-results` because bench opinions use varied but va
 
 ## Prompt Iteration
 
-Prompt candidates live under `prompts/` and run outside production ADC opportunity text.  Candidate v1 gives the judge explicit fixture context and asks for labeled `Findings of Fact`, `Conclusions of Law`, and `Judgment` sections.  It also states record-confinement rules for excluded evidence, lawyer argument, failed elements, proved damages, and damages limited to direct losses.
-
-Production and candidate v1 both scored 16/16 after deterministic scorer correction.  Both selected the correct winner and amount in all 16 live cases, returned no invalid payloads, and passed Lean application.  The current evidence supports keeping production prompt text unchanged until a harder Rule 52 set exposes a real failure cluster.
+Candidate v1 gives the judge explicit fixture context and asks for labeled `Findings of Fact`, `Conclusions of Law`, and `Judgment` sections.  It states record-confinement rules for excluded evidence, lawyer argument, failed elements, proved damages, and damages limited to direct losses.  Measured results are in [Rule 52 Analysis](analysis.md).
 
 ## Next Extensions
 

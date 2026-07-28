@@ -2,7 +2,7 @@
 
 ## Scope
 
-Attested AARD runs use the generic exec AMI launcher from the `attest` repository and add AARD-specific Docker, S3, secret, and verification requirements.  Start with [Dev Host Requirements](../../../attest/dev-host.md), which defines the generic `dev` host, Nix, EC2, IAM, and launched-instance assumptions for `attest`.  This document adds the requirements for building the AARD attested workload image, staging inputs, launching the Docker-enabled exec AMI, collecting S3 artifacts, and verifying an AARD attestation.
+Attested AARD runs use the generic exec AMI launcher from the `attest` repository and add AARD-specific Docker, S3, secret, and verification requirements.  Start with [Dev Host Requirements](../../docs/attest-host.md), which defines the generic `dev` host, Nix, EC2, IAM, and launched-instance assumptions for `attest`.  This document adds the requirements for building the AARD attested workload image, staging inputs, launching the Docker-enabled exec AMI, collecting S3 artifacts, and verifying an AARD attestation.
 
 The attested AARD path supports checked-in examples and Clerk-style local case inputs.  Example mode selects a case inside the AARD Docker image with `AARD_EXAMPLE`.  Case-packet mode packages a local `complaint_path` and optional `case_files` into `case.tar.gz` and `case-packet.json`, uploads them under the S3 input prefix through `dev`, and records their hashes in the attestation manifest.
 
@@ -81,7 +81,7 @@ The `dev` host role needs all generic `attest` runner permissions because the lo
 
 | Actor | Required AWS actions |
 | --- | --- |
-| `dev` host role | Generic `attest` build and runner actions from [Dev Host Requirements](../../../attest/dev-host.md), plus the S3 actions above. |
+| `dev` host role | Generic `attest` build and runner actions from [Dev Host Requirements](../../docs/attest-host.md), plus the S3 actions above. |
 | `dev` host role when passing `ec2-nix-builder` | `iam:PassRole` on the role attached to the `ec2-nix-builder` instance profile. |
 | Launched exec instance profile | S3 read/write actions above; no EC2 launch action is required by the current AARD exec path. |
 
@@ -150,4 +150,4 @@ rm -f /tmp/arbattest-s3-probe.txt
 
 ## References
 
-The generic host and AMI requirements live in [Dev Host Requirements](../../../attest/dev-host.md).  The AARD image build and run sequence lives in [AARD Docker Image Runbook](../Dockerfile.md).  The lower-level attested runner is `arbd/tools/run-arbd-attested.py`, and the one-example wrapper is `arbd/tools/run-one-attested-arbd.sh`.
+The generic host and AMI requirements live in [Dev Host Requirements](../../docs/attest-host.md).  The AARD image build and run sequence lives in [AARD Docker Image Runbook](../Dockerfile.md).  The lower-level attested runner is `arbd/tools/run-arbd-attested.py`, and the one-example wrapper is `arbd/tools/run-one-attested-arbd.sh`.

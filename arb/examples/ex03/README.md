@@ -1,6 +1,6 @@
 # Example 3
 
-This example starts from [`scratch/ronaldo.md`](../../scratch/ronaldo.md), but it is narrower and more source-grounded than [`examples/ex02`](../ex02).  The point of `ex03` is to place the dispute inside the Kalshi market and contract language that govern it.
+This example starts from the same draft complaint as [`examples/ex02`](../ex02) and is narrower and more source-grounded.  The point of `ex03` is to place the dispute inside the Kalshi market and contract language that govern it.
 
 I rebuilt the file set around four sources.  First, I used the market URL the user supplied and recorded the public title visible at that URL.  Second, I fetched Kalshi's `PRESMENTION.pdf` and placed the full extracted text in `presmention-terms.txt`, instead of a summary.  Third, I fetched the American Presidency Project transcript for Trump's pre-event exchange with reporters before the FIFA World Cup Draw and extracted the transcript text into `pre-event-reporter-exchange.txt`, again without reducing it to a short paraphrase.  Fourth, I checked the Roll Call / Factba.se formal-draw transcript URL from the draft complaint.  The archive page exists and its title matches the event, but the full transcript is password-protected from this session.  I recorded that limit plainly instead of pretending to have a full formal-program transcript.
 

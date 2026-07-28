@@ -39,6 +39,4 @@ Granted motions require a nonempty sanction type and sanction detail.  `monetary
 
 ## Prompt Iteration
 
-Production made several correct substantive denials but returned invalid denial payloads.  The repeated denial payload included `sanction_type: "none"` and a no-sanctions explanation in `sanction_detail`, which Lean rejects because denied Rule 11 orders cannot include sanction fields.  Production also chose fee shifting on two granted rows without an amount, producing invalid monetary-sanction payloads.
-
-Candidate v1 fixed the invalid payload cluster by stating the denial payload rule and monetary-sanction amount rule directly.  It scored 15/16 live, with no invalid payloads and no grant-or-denial errors, but it used `non_monetary_directive` on a first limited legal defect that the fixture expected to receive an admonition.  Candidate v2 narrowed the sanction ladder by reserving directives for correction-focused records or motion-specific requests, and it is the best measured Rule 11 prompt on this fixture set.
+Candidate v1 states the payload rules directly: a denied Rule 11 order carries no sanction fields, and a monetary sanction carries an amount.  Candidate v2 keeps those rules and narrows the sanction ladder, reserving non-monetary directives for correction-focused records or motion-specific requests.  Measured results are in [Rule 11 Sanctions Analysis](analysis.md).

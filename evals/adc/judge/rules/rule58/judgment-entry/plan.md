@@ -28,9 +28,7 @@ The summary reports total accuracy, weighted accuracy, invalid rate, Lean decisi
 
 ## Prompt Iteration
 
-Prompt candidates live under `prompts/` and run outside production ADC opportunity text.  Candidate v1 gives the judge explicit Rule 58 constraints: use the current opportunity's claim id and basis, enter judgment once, and do not redecide liability, damages, default, settlement, or post-judgment relief.  It is meant to test whether additional judgment-entry guidance improves schema discipline without changing production ADC behavior.
-
-Production and candidate v1 both scored 16/16 on the measured live fixture set.  Both returned valid `enter_judgment` payloads, used the correct claim id and basis, passed Lean opportunity validation, executed through Lean step, and produced the expected judgment status and amount.  The current evidence supports keeping production prompt text unchanged.
+Candidate v1 gives the judge explicit Rule 58 constraints: use the current opportunity's claim id and basis, enter judgment once, and leave liability, damages, default, settlement, and post-judgment relief alone.  It exists to measure whether judgment-entry guidance improves schema discipline.  Measured results are in [Rule 58 Analysis](analysis.md).
 
 ## Next Extensions
 

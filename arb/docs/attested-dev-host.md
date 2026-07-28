@@ -2,7 +2,7 @@
 
 ## Scope
 
-Attested AAR runs use the generic exec AMI launcher from the `attest` repository and add AAR-specific Docker, S3, secret, and verification requirements.  Start with [Dev Host Requirements](../../../attest/dev-host.md), which defines the generic `dev` host, Nix, EC2, IAM, and launched-instance assumptions for `attest`.  This document adds the requirements for building the AAR attested workload image, staging inputs, launching the Docker-enabled exec AMI, collecting S3 artifacts, and verifying an AAR attestation.
+Attested AAR runs use the generic exec AMI launcher from the `attest` repository and add AAR-specific Docker, S3, secret, and verification requirements.  Start with [Dev Host Requirements](../../docs/attest-host.md), which defines the generic `dev` host, Nix, EC2, IAM, and launched-instance assumptions for `attest`.  This document adds the requirements for building the AAR attested workload image, staging inputs, launching the Docker-enabled exec AMI, collecting S3 artifacts, and verifying an AAR attestation.
 
 The via-service request path lives in the [Agent Arbitration Manual](../manual.md#aar-service) and its [Clerk API](../manual.md#clerk-api) section.  The image build, exec AMI run path, S3 artifact layout, and verification commands live in the [AAR Docker Image Runbook](../Dockerfile.md).  This document defines the `dev` host requirements those paths assume.
 
@@ -83,7 +83,7 @@ The `dev` host role needs all generic `attest` runner permissions because the lo
 
 | Actor | Required AWS actions |
 | --- | --- |
-| `dev` host role | Generic `attest` build and runner actions from [Dev Host Requirements](../../../attest/dev-host.md), plus the S3 actions above. |
+| `dev` host role | Generic `attest` build and runner actions from [Dev Host Requirements](../../docs/attest-host.md), plus the S3 actions above. |
 | `dev` host role when passing `ec2-nix-builder` | `iam:PassRole` on the role attached to the `ec2-nix-builder` instance profile. |
 | Launched exec instance profile | S3 read/write actions above; no EC2 launch action is required by the current AAR exec path. |
 
@@ -152,4 +152,4 @@ rm -f /tmp/arbattest-s3-probe.txt
 
 ## References
 
-The via-service request path lives in the [Agent Arbitration Manual](../manual.md#aar-service) and [Clerk API](../manual.md#clerk-api) section.  The generic host and AMI requirements live in [Dev Host Requirements](../../../attest/dev-host.md).  The AAR image build and run sequence lives in [AAR Docker Image Runbook](../Dockerfile.md).  The lower-level attested runner is `arb/tools/run-arb-attested.py`, and the one-example wrapper is `arb/tools/run-one-attested-arb.sh`.
+The via-service request path lives in the [Agent Arbitration Manual](../manual.md#aar-service) and [Clerk API](../manual.md#clerk-api) section.  The generic host and AMI requirements live in [Dev Host Requirements](../../docs/attest-host.md).  The AAR image build and run sequence lives in [AAR Docker Image Runbook](../Dockerfile.md).  The lower-level attested runner is `arb/tools/run-arb-attested.py`, and the one-example wrapper is `arb/tools/run-one-attested-arb.sh`.

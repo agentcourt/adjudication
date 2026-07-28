@@ -31,6 +31,4 @@ The explanation scorer uses deterministic phrase matching rather than model grad
 
 ## Prompt Iteration
 
-Prompt candidates live under `prompts/` and run outside production ADC opportunity text.  Candidate v1 adds explicit for-cause boundary language, including grant categories for inability to be impartial or follow law and denial categories for lawful attitudes, inconvenience, remote relationships, and credible rehabilitation.  The runner renders that candidate into the model-facing opportunity prompt while preserving the real Lean opportunity, allowed tool, constraints, role view, and tool schema.
-
-Production and candidate v1 both scored 16/16 on the first live fixture set after deterministic explanation rescoring.  Candidate v1 preserved production behavior but did not improve measured outcomes.  The current evidence supports keeping the production opportunity prompt unchanged while keeping candidate v1 as a reference prompt for harder Rule 47 for-cause fixtures.
+Candidate v1 adds explicit for-cause boundary language.  It names grant categories for inability to be impartial or to follow law, and denial categories for lawful attitudes, inconvenience, remote relationships, and credible rehabilitation.  Measured results are in [Rule 47 For-Cause Analysis](analysis.md).

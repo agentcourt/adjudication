@@ -1,6 +1,6 @@
 # Rule 52
 
-Rule 52 evals test bench-trial findings, conclusions, and filed bench opinions.  The current suite uses the exposed `file_bench_opinion` opportunity and checks whether the judge confines findings to admitted evidence, separates facts from law, covers claim elements, and enters a consistent judgment.  Later suites can split findings and conclusions if the engine exposes separate opportunities before the filed opinion.
+ARCP Rule 52 requires the court, in an action tried on the facts without a jury, to find the facts specially and state its conclusions of law separately.  A bench trial has no jury to separate fact from law, so the judge's own opinion is the entire factfinding record.  The judge must confine findings to admitted evidence, cover the elements of each claim, and enter a judgment consistent with those findings.  The failure with consequences is a finding resting on material never admitted, because nothing else in the proceeding will catch it.
 
 ## Suites
 

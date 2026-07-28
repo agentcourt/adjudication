@@ -1,6 +1,6 @@
 # Rule 37
 
-Rule 37 evals test discovery-sanctions decisions.  The current suite covers failures to respond, evasive responses, justified objections, proportionality disputes, late supplementation, failure to obey a discovery order, harmless delay, and fee-shifting constraints.  It treats invalid sanction payloads as separate failures because the sanction tool has more schema-dependent fields than the earlier voir dire eval.
+ARCP Rule 37 bars a party from using information or a witness it failed to disclose unless the failure was substantially justified or harmless, and it lets the court impose sanctions for failures to disclose, respond, or obey a discovery order.  The judge decides whether the failure is excused and, if not, which sanction the rule authorizes.  Substantial justification and proportionality carry most of the difficulty, because a justified objection and an evasive response can look alike on the face of a record.  The failure with consequences is sanctioning a party whose objection the rules allow.
 
 ## Suites
 

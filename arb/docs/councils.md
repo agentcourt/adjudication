@@ -53,7 +53,7 @@ When the case reaches deliberation, the Lean engine chooses the next voting memb
 
 The default council backend calls the selected provider directly and gives the model a rendered record plus one function, `submit_council_vote`.  With `--council-backend councilapi`, the runtime waits for an external council member to call the Council API.  The external path preserves the same Lean vote transition and gives the member read-only evidence tools during deliberation: get case, list evidence, stat evidence, bounded byte-range read, and vote submission.  Council members do not receive upload or evidence-submission tools.  The procedural boundary is: lawyers build the record; council members decide from the admitted record.
 
-The procedure now waits for all seated members to vote in a round before resolving that round.  [The deliberation continuation rule](../engine/Main.lean) compares the current-round vote count to the number of seated members, and only then resolves to `demonstrated`, `not_demonstrated`, or `no_majority`, or advances to the next round.  The strict-majority policy check established earlier keeps the two substantive outcomes mutually exclusive within a valid policy.
+The procedure waits for all seated members to vote in a round before resolving that round.  [The deliberation continuation rule](../engine/Main.lean) compares the current-round vote count to the number of seated members, and only then resolves to `demonstrated`, `not_demonstrated`, or `no_majority`, or advances to the next round.  The strict-majority policy check keeps the two substantive outcomes mutually exclusive within a valid policy.
 
 ## Status Changes
 

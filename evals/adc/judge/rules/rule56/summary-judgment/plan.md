@@ -28,6 +28,4 @@ The first fixture set focuses on the core Rule 56 boundary.  It covers undispute
 
 ## Prompt Iteration
 
-Production scored well but made one serious error in the initial live run.  It granted a damages-category motion as if the entire claim were resolved, even though direct damages and liability remained.  That failure led to candidate v1, which corrected the damages-scope row but encouraged an over-narrow partial ruling on a selective deposition quotation.
-
-Candidate v2 keeps the scope correction and adds a limit on partial rulings.  It tells the judge to use `partial` for severable claim elements, defenses, or damages categories, and to deny motions that rely on evidentiary fragments when the full record creates a genuine dispute on the material issue.  The candidate remains eval-local until a separate decision updates ADC's production Rule 56 opportunity text.
+Candidate v1 emphasizes motion scope, so a damages-category motion does not become a whole-claim judgment.  Candidate v2 keeps that scope rule and adds a limit on partial rulings: use `partial` for severable claim elements, defenses, or damages categories, and deny a motion resting on an evidentiary fragment when the full record creates a reasonable competing inference on the material issue.  Measured results are in [Rule 56 Analysis](analysis.md).
